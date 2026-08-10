@@ -1,3 +1,6 @@
 .env
 node-modules/
 pycache/
+__pycache__/**/*
+__pycache__/
+.venv/
