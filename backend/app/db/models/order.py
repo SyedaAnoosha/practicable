@@ -1,6 +1,6 @@
-from sqlalchemy import String, ForeignKey, Integer, Enum as SQLEnum
+from sqlalchemy import String, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base, IdMixin, TimestampMixin
+from app.db.base import Base, IdMixin, TimestampMixin, str_enum
 import enum
 import uuid
 
@@ -19,7 +19,7 @@ class Order(Base, IdMixin, TimestampMixin):
     stripe_session_id: Mapped[str] = mapped_column(String(255), nullable=False)
     stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     
-    status: Mapped[OrderStatus] = mapped_column(SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
+    status: Mapped[OrderStatus] = mapped_column(str_enum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
     total_amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     

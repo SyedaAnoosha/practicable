@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+from jwt import PyJWKClient
 from app.core.config import settings
 
 
@@ -18,15 +19,27 @@ class VerifiedToken:
 # ourselves below is what keeps that distinction correct.
 security = HTTPBearer(auto_error=False)
 
+# This Supabase project signs JWTs asymmetrically (ES256, via Supabase's newer "JWT
+# Signing Keys" feature) rather than the legacy scheme of one shared HS256 secret
+# (settings.supabase_jwt_secret, which is NOT what verifies these tokens and is now
+# unused here — confirmed by decoding a real session token: header alg is ES256, with
+# a `kid` matching a key at this JWKS endpoint, not any HMAC secret). PyJWKClient
+# fetches Supabase's public signing keys and picks the right one by the token's `kid`,
+# so there is no shared secret to keep in sync with the dashboard at all — key
+# rotation on Supabase's side just works.
+_jwks_client = PyJWKClient(f"{settings.supabase_url}/auth/v1/.well-known/jwks.json")
+
+
 def _decode(token: str) -> VerifiedToken:
     try:
+        signing_key = _jwks_client.get_signing_key_from_jwt(token)
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
+            signing_key.key,
+            algorithms=["ES256"],
             audience=settings.supabase_jwt_audience,
         )
-    except JWTError as e:
+    except jwt.PyJWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}"

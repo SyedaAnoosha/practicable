@@ -1,6 +1,6 @@
-from sqlalchemy import String, Text, ForeignKey, Integer, Enum as SQLEnum
+from sqlalchemy import String, Text, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base, IdMixin, TimestampMixin
+from app.db.base import Base, IdMixin, TimestampMixin, str_enum
 import enum
 import uuid
 
@@ -16,7 +16,7 @@ class Lesson(Base, IdMixin, TimestampMixin):
     slug: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    lesson_type: Mapped[LessonType] = mapped_column(SQLEnum(LessonType), default=LessonType.VIDEO, nullable=False)
+    lesson_type: Mapped[LessonType] = mapped_column(str_enum(LessonType), default=LessonType.VIDEO, nullable=False)
     
     module_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("modules.id"), nullable=True)
     sort_order: Mapped[int] = mapped_column(default=0)
