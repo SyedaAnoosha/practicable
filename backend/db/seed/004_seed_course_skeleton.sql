@@ -26,17 +26,12 @@ VALUES (
 )
 ON CONFLICT (slug) DO NOTHING;
 
--- Insert module skeleton
+-- Insert module skeleton (no natural unique key on modules — guard on id instead so
+-- re-running this file doesn't duplicate it)
 INSERT INTO modules (id, title, description, sort_order, course_id, created_at, updated_at)
-VALUES (
-  '550e8400-e29b-41d4-a716-446655440301',
-  'Module 1',
-  'Introduction to risk registers',
-  0,
-  '550e8400-e29b-41d4-a716-446655440300',
-  NOW(),
-  NOW()
-);
+SELECT '550e8400-e29b-41d4-a716-446655440301', 'Module 1', 'Introduction to risk registers', 0,
+  '550e8400-e29b-41d4-a716-446655440300', NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM modules WHERE id = '550e8400-e29b-41d4-a716-446655440301');
 
 -- Insert lesson skeleton (video type)
 INSERT INTO lessons (id, slug, title, description, lesson_type, module_id, sort_order, published, created_at, updated_at)
@@ -48,7 +43,8 @@ VALUES (
   'video',
   '550e8400-e29b-41d4-a716-446655440301',
   0,
-  false, -- Will be published on Day 3
+  false, -- Flip true once the real Mux asset + media row exist (Phase 3) — still pending real content
   NOW(),
   NOW()
-);
+)
+ON CONFLICT (slug) DO NOTHING;
