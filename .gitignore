@@ -4,3 +4,15 @@ pycache/
 __pycache__/**/*
 __pycache__/
 .venv/
+*.pyc
+py.*
+docs/videos/*
+docs/templates/*
+*.xlsx
+*.pdf
+*.csv
+*.docx
+*.pptx
+*.zip
+*.dotx
+*.mp4
