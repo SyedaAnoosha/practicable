@@ -800,7 +800,7 @@ Never a permanent heavy shadow on every card. In dark mode, elevation reads from
 | Duration | `Clock` |
 | Cost | `Banknote` |
 | Effort | `Gauge` |
-| Payback | `TrendingUp` |
+| ROI horizon | `TrendingUp` |
 | Tier | `Layers` |
 | Leadership traits | `Users` |
 | Search | `Search` |
@@ -994,7 +994,7 @@ Mobile:   [ Results ] + sticky [Filters · 3] button → bottom sheet
 
 A strict `WHERE` across three constraints will return nothing, at exactly the moment the product is meant to prove itself. So the filter is a *ranking*, not a gate.
 
-1. Each ordinal tag maps to a numeric scale: effort/cost/payback/regulator pressure `low=1, medium=2, high=3`; duration `days=1, weeks=2, months=3, quarters=4`.
+1. Each ordinal tag maps to a numeric scale, per `week1_plan.md` decision #3 and the live 100-question content (effectiverm.com/knowledge/100-questions) — not a generic low/medium/high placeholder: cost `low=1, medium=2, high=3`; effort `quick=1, moderate=2, project=3, transformation=4`; regulator pressure `none=1, low=2, moderate=3, high=4`; duration `under_2_weeks=1, 2_6_weeks=2, 6_12_weeks=3, 3_6_months=4, over_6_months=5`; ROI horizon `quick=1, mid=2, strategic=3` (renamed from "payback").
 2. With filters active, each question gets a **match score**: 2 points per exact match, 1 point for an adjacent value, 0 beyond that.
 3. A question is **exact** only when it matches *every active constraint* exactly. (See §57 — v1's implementation had this wrong.)
 4. Results are sorted by score and split into two zones with a divider.
@@ -1015,7 +1015,7 @@ This is application-layer logic. No new tables, no AI, no opaque relevance. The 
 │ 7 close matches                             │
 │ Relax one filter to see these as exact      │
 │ ─────────────────────────────────────────── │
-│ [Question row — with "Duration: months"]    │
+│ [Question row — with "Duration: 3-6 months"]│
 │ [Question row — with "Cost: medium"]        │
 │ [Show all 7 close matches]                  │
 └─────────────────────────────────────────────┘
@@ -1023,7 +1023,7 @@ This is application-layer logic. No new tables, no AI, no opaque relevance. The 
 
 **Close-match rows** differ from exact rows by:
 - `border-border` instead of `border-border-strong` on the left rule
-- A small `Badge` naming the dimension that missed and its actual value — `Duration: months` when the user asked for weeks
+- A small `Badge` naming the dimension that missed and its actual value — `Duration: 3-6 months` when the user asked for `2-6 weeks`
 - Nothing else. **Text opacity is never reduced** — that would be a contrast failure and would make a perfectly good answer look broken.
 
 The badge is informational. It is not an error state, does not use `--destructive`, and does not carry a warning icon.
@@ -1033,7 +1033,7 @@ The badge is informational. It is not an error state, does not use `--destructiv
 ```
 No questions match all four filters.
 
-The tightest constraint is Duration: days —
+The tightest constraint is Duration: under 2 weeks —
 only 6 of 100 questions are that fast.
 
 [Relax Duration]  [Relax Regulator pressure]  [Clear all]
@@ -1050,8 +1050,8 @@ Seven groups, in the order a practitioner actually reasons:
 3. **Cost** — what can I spend
 4. **Effort** — how much of my own time
 5. **Regulator pressure** — does anyone external care
-6. **Payback** — how quickly does it pay off
-7. **Tier** — strategic / operational / project
+6. **ROI horizon** — how quickly does it pay off
+7. **Tier** — foundational / tactical / strategic / transformational
 
 `[OWNER]` The authoritative value list for each tag is an open decision (Research 12.2, Appendix J). The UI renders whatever the API returns; **no tag value is hard-coded in a component.**
 
@@ -1079,11 +1079,11 @@ One-tap filter presets, phrased as goals rather than parameters:
 
 | Chip | Preset |
 |---|---|
-| Do it in a fortnight | `duration: days,weeks` + `effort: low` |
-| Do it cheaply | `cost: free,low` |
+| Do it in a fortnight | `duration: under_2_weeks` + `effort: quick` |
+| Do it cheaply | `cost: low` |
 | Show your regulator | `regulator_pressure: high` |
 | Build leadership support | `tier: strategic` + `leadership_traits: any` |
-| Quick wins | `effort: low` + `payback: immediate` |
+| Quick wins | `effort: quick` + `roi_horizon: quick` |
 
 They are toggles, not links. Tapping one sets its filters and visibly ticks the corresponding rail controls, so the user learns what the chip did.
 
@@ -1092,7 +1092,7 @@ They are toggles, not links. Tapping one sets its filters and visibly ticks the 
 Filter state lives in **the URL** and is mirrored into Zustand, not the other way round.
 
 ```
-/questions?duration=weeks&cost=low&regulator_pressure=high&q=third+party
+/questions?duration=2_6_weeks&cost=low&regulator_pressure=high&q=third+party
 ```
 
 This gives, free: browser back works, refresh works, the state is shareable and linkable, and a practitioner can bookmark "my constraints". Zustand holds the same state for components that need it without prop-drilling, and is rehydrated from the URL on mount.
@@ -1130,7 +1130,7 @@ Read the answer →
 
 ### 20.2 Tag display rules
 
-- **Three tags on a card, never seven.** Show the three most decision-relevant: duration, cost, and whichever of regulator pressure / payback / effort is highest-signal for that question. All seven appear on the detail page.
+- **Three tags on a card, never seven.** Show the three most decision-relevant: duration, cost, and whichever of regulator pressure / ROI horizon / effort is highest-signal for that question. All seven appear on the detail page.
 - **When filters are active, show the tags that were filtered on** — so the user can verify the match without opening the question.
 - Tags are labelled, not colour-coded (§7.6). The semantic mapping:
 
@@ -1139,7 +1139,7 @@ Read the answer →
 | Duration | `secondary` |
 | Cost | `secondary` |
 | Effort | `muted` |
-| Payback | `outline` with `--primary` text |
+| ROI horizon | `outline` with `--primary` text |
 | Regulator pressure | `accent` — the only dimension that gets emphasis, because it is the one that creates urgency |
 | Tier | `muted` |
 | Leadership traits | `muted`, and only on the detail page |
@@ -1741,12 +1741,12 @@ Guidance *              [rich text — the author's full text]
 What to do next         [rich text]
 
 The seven dimensions
-  Effort *              ( ) Low  ( ) Medium  ( ) High
-  Duration *            ( ) Days ( ) Weeks ( ) Months ( ) Quarters
-  Cost *                ( ) Free ( ) Low ( ) Medium ( ) High
-  Payback *             ( ) Immediate ( ) Short ( ) Medium ( ) Long
-  Tier *                [ ] Strategic [ ] Operational [ ] Project
-  Regulator pressure *  ( ) Low ( ) Medium ( ) High
+  Effort *              ( ) Quick ( ) Moderate ( ) Project ( ) Transformation
+  Duration *            ( ) Under 2 weeks ( ) 2-6 weeks ( ) 6-12 weeks ( ) 3-6 months ( ) Over 6 months
+  Cost *                ( ) Low ( ) Medium ( ) High
+  ROI horizon *         ( ) Quick ( ) Mid ( ) Strategic
+  Tier *                [ ] Foundational [ ] Tactical [ ] Strategic [ ] Transformational
+  Regulator pressure *  ( ) None ( ) Low ( ) Moderate ( ) High
   Leadership traits     [ ] … multi-select from the controlled list
 
 Related questions       [searchable multi-select]
@@ -1960,7 +1960,7 @@ Every card answers three questions in this order: **what is this, why should I c
 |---|---|
 | `secondary` | Duration, cost — neutral facts |
 | `muted` | Effort, tier, leadership traits |
-| `outline` | Payback |
+| `outline` | ROI horizon |
 | `accent` | Regulator pressure — the only emphasised dimension |
 | `success` | Owned, completed, published |
 | `warning` | Draft, in review, processing |
@@ -2547,7 +2547,7 @@ export const dimensionLabels: Record<TagDimension, { label: string; icon: Lucide
   effort:             { label: 'Effort',             icon: Gauge },
   duration:           { label: 'Duration',           icon: Clock },
   cost:               { label: 'Cost',               icon: Banknote },
-  payback:            { label: 'Payback',            icon: TrendingUp },
+  roi_horizon:        { label: 'ROI horizon',         icon: TrendingUp },
   tier:               { label: 'Tier',               icon: Layers },
   regulator_pressure: { label: 'Regulator pressure', icon: Landmark },
   leadership_traits:  { label: 'Leadership traits',  icon: Users },
@@ -2975,7 +2975,7 @@ export interface QuestionFilters {
   effort: string | null
   duration: string | null
   cost: string | null
-  payback: string | null
+  roi_horizon: string | null
   regulator_pressure: string | null
   tier: string[]
   leadership_traits: string[]
@@ -3084,7 +3084,7 @@ v1's implementation ended with:
 isExact: close === 0 && exact > 0
 ```
 
-Consider a user filtering on `effort: low` and `duration: weeks`, and a question tagged `effort: low, duration: quarters`. The effort match scores exact (`exact = 1`); the duration is three steps away, so it contributes nothing and does **not** increment `close`. The result is `exact = 1, close = 0` → `isExact = true`. A question that misses one of the user's two constraints entirely is presented as an exact match.
+Consider a user filtering on `effort: quick` and `duration: 2_6_weeks`, and a question tagged `effort: quick, duration: over_6_months`. The effort match scores exact (`exact = 1`); the duration is three steps away, so it contributes nothing and does **not** increment `close`. The result is `exact = 1, close = 0` → `isExact = true`. A question that misses one of the user's two constraints entirely is presented as an exact match.
 
 This is the failure mode the whole two-zone design exists to prevent, and it would present at the exact moment the product's headline claim is being tested.
 
@@ -3093,17 +3093,22 @@ This is the failure mode the whole two-zone design exists to prevent, and it wou
 ```ts
 // src/lib/scoring.ts
 
-type Ordinal  = 'low' | 'medium' | 'high'
-type Cost     = 'free' | 'low' | 'medium' | 'high'
-type Duration = 'days' | 'weeks' | 'months' | 'quarters'
-type Payback  = 'immediate' | 'short' | 'medium' | 'long'
+// Value sets match week1_plan.md decision #3 and the live 100-question content
+// (effectiverm.com/knowledge/100-questions) exactly — not a generic low/medium/high
+// placeholder. Effort and Regulator pressure each have their own scale; they no
+// longer share one generic `Ordinal` type.
+type Effort             = 'quick' | 'moderate' | 'project' | 'transformation'
+type RegulatorPressure  = 'none' | 'low' | 'moderate' | 'high'
+type Cost                = 'low' | 'medium' | 'high'
+type Duration            = 'under_2_weeks' | '2_6_weeks' | '6_12_weeks' | '3_6_months' | 'over_6_months'
+type RoiHorizon           = 'quick' | 'mid' | 'strategic'
 
 const scales = {
-  effort:             { low: 1, medium: 2, high: 3 },
-  regulator_pressure: { low: 1, medium: 2, high: 3 },
-  cost:               { free: 0, low: 1, medium: 2, high: 3 },
-  duration:           { days: 1, weeks: 2, months: 3, quarters: 4 },
-  payback:            { immediate: 1, short: 2, medium: 3, long: 4 },
+  effort:             { quick: 1, moderate: 2, project: 3, transformation: 4 },
+  regulator_pressure: { none: 1, low: 2, moderate: 3, high: 4 },
+  cost:               { low: 1, medium: 2, high: 3 },
+  duration:           { under_2_weeks: 1, '2_6_weeks': 2, '6_12_weeks': 3, '3_6_months': 4, over_6_months: 5 },
+  roi_horizon:        { quick: 1, mid: 2, strategic: 3 },
 } as const
 
 type OrdinalDimension = keyof typeof scales
@@ -3330,13 +3335,14 @@ Then, in this order:
 2. Fonts loaded and the type scale applied (§9, §10)
 3. Six components built properly, not copy-pasted: Button, Card, Input+Label+error, Badge, EmptyState, PageTitle
 4. Header, footer, marketing layout
-5. **The discovery page, functional** — filters, live count, two-zone results. Ugly is acceptable; missing is not (Research 12.4)
-6. One question detail page with a real paywall
-7. Sign-in / sign-up
-8. One product page → hosted checkout → success → entitlement
-9. One lesson with a real video that plays
-10. One gated template download
-11. One receipt email that arrives
+5. One question detail page with a real paywall
+6. Sign-in / sign-up
+7. One product page → hosted checkout → success → entitlement
+8. One lesson with a real video that plays
+9. One gated template download
+10. One receipt email that arrives
+
+**[RECONCILED with `week1_plan.md`]** An earlier version of this list put the functional discovery page (filters, live count, two-zone results) in Week 1, on the reasoning that "missing is not acceptable" (Research 12.4). `week1_plan.md`'s Scope guardrails deliberately exclude it — Week 1 needs exactly one reachable question page, not the filter UI — to protect the five-day budget for the higher-risk commerce chain (auth → purchase → entitlement → signed video → gated download → receipt email), which is Week 1's actual non-negotiable per the brief. The owner confirmed keeping that exclusion. The discovery page moves to Week 2 alongside gating; build `theme.css`, the six core components, and the header/footer/layout in Week 1 regardless, since the discovery page depends on all three and this order still front-loads them correctly.
 
 **Ugly is acceptable this week. Inconsistent is not.** Plainness does not need retrofitting; inconsistency does. If the slice is not working end to end by Friday, that is a scope conversation on Friday, not a late night.
 

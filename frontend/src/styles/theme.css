@@ -1,0 +1,205 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (we toggle .dark on <html>, we do not follow the OS blindly) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --font-family-sans: var(--font-sans);
+  --font-family-serif: var(--font-serif);
+  --font-family-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 0.75rem);
+  --radius-md: calc(var(--radius) - 0.5rem);
+  --radius-lg: calc(var(--radius) - 0.25rem);
+  --radius-xl: var(--radius);
+
+  /* Type scale - fluid clamp() tokens per DESIGN.md §10 */
+  --text-display: clamp(2.75rem, 1.6rem + 4.6vw, 4.5rem);
+  --text-h1: clamp(2.25rem, 1.6rem + 2.6vw, 3.25rem);
+  --text-h2: clamp(1.75rem, 1.4rem + 1.4vw, 2.375rem);
+  --text-h3: clamp(1.375rem, 1.2rem + 0.7vw, 1.75rem);
+  --text-h4: 1.25rem;
+  --text-lead: 1.1875rem;
+  --text-body: 1rem;
+  --text-read: 1.0625rem;
+  --text-sm: 0.875rem;
+  --text-xs: 0.75rem;
+
+  /* Motion tokens */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-entrance: cubic-bezier(0, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+}
+
+:root {
+  /* Surfaces */
+  --background: #FDFCFE;
+  --foreground: #0A050D;
+  --card: #FFFFFF;
+  --card-foreground: #0A050D;
+  --popover: #FFFFFF;
+  --popover-foreground: #0A050D;
+
+  /* Brand */
+  --primary: #03035e;
+  --primary-foreground: #FFFFFF;
+  --secondary: #e2ebfd;
+  --secondary-foreground: #0248d4;
+  --accent: #e5e8ff;
+  --accent-foreground: #0248d4;
+
+  /* Quiet */
+  --muted: #F0EEF2;
+  --muted-foreground: #635D69;
+
+  /* Lines and fields */
+  --border: #E6E1E9;
+  --border-strong: #8F8896;
+  --input: #E6E1E9;
+  --ring: #2F6BF0;
+
+  /* Status */
+  --destructive: #E11D48;
+  --destructive-foreground: #FFFFFF;
+  --success: #067647;
+  --success-foreground: #FFFFFF;
+  --warning: #8A5300;
+  --warning-foreground: #FFFFFF;
+
+  /* Sidebar */
+  --sidebar: #e2ebfd;
+  --sidebar-foreground: #02173b;
+  --sidebar-primary: #03035e;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #D3E0FB;
+  --sidebar-accent-foreground: #02173b;
+  --sidebar-border: #C3D6F7;
+  --sidebar-ring: #2F6BF0;
+
+  /* Charts — data visualisation only */
+  --chart-1: #0248d4;
+  --chart-2: #6D3BD6;
+  --chart-3: #B02BC4;
+  --chart-4: #F43F5E;
+  --chart-5: #B4530C;
+
+  /* Type */
+  --font-sans: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --letter-spacing: -0.01em;
+
+  /* Geometry */
+  --radius: 1.25rem;
+  --spacing: 0.25rem;
+
+  /* Elevation */
+  --shadow-color: 0 0 0;
+  --shadow-opacity: 0.10;
+  --shadow-blur: 10px;
+  --shadow-offset-x: 0px;
+  --shadow-offset-y: 4px;
+  --shadow-spread: 0px;
+}
+
+.dark {
+  /* Surfaces */
+  --background: #020409;
+  --foreground: #FDFCFE;
+  --card: #060a13;
+  --card-foreground: #FDFCFE;
+  --popover: #060913;
+  --popover-foreground: #FDFCFE;
+
+  /* Brand */
+  --primary: #2F5BD8;
+  --primary-foreground: #FFFFFF;
+  --secondary: #11172c;
+  --secondary-foreground: #FDFCFE;
+  --accent: #1a1f42;
+  --accent-foreground: #FDFCFE;
+
+  /* Quiet */
+  --muted: #0c1022;
+  --muted-foreground: #9999a8;
+
+  /* Lines and fields */
+  --border: #232A52;
+  --border-strong: #6D74A8;
+  --input: #232A52;
+  --ring: #5F78F7;
+
+  /* Status */
+  --destructive: #E11D48;
+  --destructive-foreground: #FFFFFF;
+  --success: #2CC08A;
+  --success-foreground: #04140D;
+  --warning: #E9A13B;
+  --warning-foreground: #150C02;
+
+  /* Sidebar */
+  --sidebar: #0a0e1e;
+  --sidebar-foreground: #A9ACC4;
+  --sidebar-primary: #2F5BD8;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #171D3C;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #232A52;
+  --sidebar-ring: #5F78F7;
+
+  /* Charts */
+  --chart-1: #5f78f7;
+  --chart-2: #ef9b4d;
+  --chart-3: #F43F5E;
+  --chart-4: #F97316;
+  --chart-5: #A78BFA;
+
+  /* Elevation — dark surfaces read depth from a lighter surface, not a darker shadow */
+  --shadow-opacity: 0.5;
+  --shadow-blur: 20px;
+  --shadow-offset-y: 10px;
+}

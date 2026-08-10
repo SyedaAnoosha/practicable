@@ -1,0 +1,31 @@
+import { Button } from '@/components/ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+
+// DESIGN.md §29.3: never "Oops", never blame the user. State affirmatively that no
+// money moved — that's the thing they're anxious about when checkout is abandoned
+// or declined.
+export function CheckoutCancel() {
+  return (
+    <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment wasn't completed.</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <p className="text-foreground">Your card has not been charged.</p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button className="sm:flex-1" onClick={() => window.history.back()}>
+              Try checkout again
+            </Button>
+          </div>
+          <p className="text-center text-sm text-muted-foreground">
+            Still stuck?{' '}
+            <a href="mailto:hello@practicable.com.au" className="underline">
+              Contact us
+            </a>
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

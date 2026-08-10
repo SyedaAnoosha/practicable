@@ -1,15 +1,18 @@
 # Week 1 Implementation Plan — "Deciding in the Dark" Platform
 **The Slice · Days 1–5 · v1.1**
 
-*Derived from `Deciding_in_the_Dark_Platform_Intern_Brief.md` (Week 1 — the slice) and `Deciding_in_the_Dark_Research_Specification.md` (Executive Summary, Parts Five–Seven, Ten, Twelve, Thirteen, Appendices A, B, C, F, G, J, M).*
+*Derived from `Deciding_in_the_Dark_Platform_Intern_Brief.md` (Week 1 — the slice), `Deciding_in_the_Dark_Research_Specification.md` (Executive Summary, Parts Five–Seven, Ten, Twelve, Thirteen, Appendices A, B, C, F, G, J, M), `DESIGN.md` (§7–§10, §33–34, §51, §60, §80–82) and `BACKEND.md` (§1–§2, §4, §8, §15).*
 
 ---
 
 ## Stack
 
-Per your direction: **React (Vite, TypeScript) + FastAPI (Python) + Tailwind CSS**, as a decoupled frontend/backend rather than a single integrated framework.
+Per your direction: **React (Vite, TypeScript) + FastAPI (Python) + Tailwind CSS**, as a decoupled frontend/backend rather than a single integrated framework. The frontend package list below is `DESIGN.md` §51's `[DECIDED]` stack, not a placeholder — install it in full on Day 1, not incrementally as each screen needs a new library.
 
-- **Frontend:** React (Vite, TypeScript), Tailwind CSS — deployed on **Vercel**
+- **Frontend:** React 19 (Vite 7, TypeScript, strict mode) — deployed on **Vercel**
+  - Styling: Tailwind CSS v4 (`@tailwindcss/vite`, CSS-first `@theme`, no `tailwind.config.js`) + shadcn/ui (New York, CSS variables, neutral base) + `class-variance-authority` + `clsx`/`tailwind-merge` + `lucide-react` + `motion` (`motion/react`)
+  - Routing: **`react-router` v8** (data mode, `createBrowserRouter`) — **not** `react-router-dom`, which was removed in v8; see `DESIGN.md` §51.6
+  - Data/state: `@tanstack/react-query` v5 (server state) + `zustand` v5 (client-only UI state) + `axios` (HTTP, JWT interceptor) + `zod` + `react-hook-form`/`@hookform/resolvers` (forms)
 - **Backend/API:** FastAPI (Python) — deployed on **Render**, owning all entitlement checks, the Stripe webhook, Mux signed-JWT generation, and R2 presigned-URL generation. This is the sole source of truth for access control; React renders only what this API returns.
 - **Database/Auth:** Supabase (PostgreSQL, Row-Level Security, Auth) — React calls Supabase Auth directly for sign-up/sign-in; FastAPI verifies the resulting JWT on every call rather than relying on a Next.js-style SSR helper.
 
@@ -39,35 +42,35 @@ Nothing below is a formality. Each row blocks a specific, named task later in th
    - **Brand name:** Practicable
    - **Tagline:** "Practicable: Practical answers for risk practitioners" | Vercel project, GitHub repo(s), Render service name, Stripe account display name, email sending domain, and every public-facing string depend on this. |
 | 2 | **The five domain names** (the book's five risk domains — exact titles as they should appear to a buyer). **PROVIDED:**
-   - Governance & Leadership
-   - Risk Management & Decision-Making
-   - Compliance & Regulatory
-   - Technology, Security & Resilience
-   - AI Governance & Emerging Technology | The database schema (`domains` table) is built Day 1–2. Changing a domain name after content is loaded is a migration, not an edit. |
-| 3 | **Authoritative values for all seven tags** (the exact enum values for effort, duration, cost, payback, tier, regulator pressure, leadership traits — the actual finalised lists, not examples). **PROVIDED:**
-   - **Effort:** low, medium, high, very_high
-   - **Duration:** days, fortnight, 1_3_months, 3_6_months, 6_12_months, 12_plus_months
-   - **Cost:** one, two, three, four, five (displayed as $, $$, $$$, $$$$, $$$$$)
-   - **Payback:** immediate, short_term, medium_term, long_term, indirect
-   - **Tier:** baseline, improve, advance, reimagine
-   - **Regulator pressure:** none, low, moderate, high, direct_requirement
-   - **Leadership traits (multi-select):** accountability, courage, clarity, collaboration, curiosity, discipline, empathy, judgement, influence, resilience | The `questions` table schema is committed Day 1–2 with these as enums. |
+   - Risk (Enterprise & op.)
+   - Cyber (Tech & security)
+   - Compliance (Regulatory)
+   - Resilience (Continuity)
+   - AI (Governance) | The database schema (`domains` table) is built Day 1–2. Changing a domain name after content is loaded is a migration, not an edit. |
+| 3 | **Authoritative values for all seven tags** (the exact enum values for effort, duration, cost, ROI horizon, tier, regulator pressure, leadership traits — the actual finalised lists, not examples; renamed from "payback" to "ROI horizon" to match the label actually used in the 100 real questions, `Deciding_in_the_Dark_100_Questions.md`). **PROVIDED:**
+   - **Effort:** Quick (Days to weeks), Mod. (Weeks to months), Project (Multi-month), Trans. (Year+ change)
+   - **Duration:** XS (Under 2 weeks), S (2–6 weeks), M (6–12 weeks), L (3–6 months), XL (Over 6 months)
+   - **Cost:** $ (Low investment), $$ (Medium investment), $$$ (High investment)
+   - **ROI horizon:** Quick, Mid, Strategic *(matches the 100-question content exactly; note "Strategic" is also a Tier value and a Leadership trait — a deliberate, accepted overlap, not a typo — so it must stay dimension-scoped in `tag_values`, never rendered as a bare unlabelled badge)*
+   - **Tier:** F (Foundational basics), T (Tactical improvements), S (Strategic uplift), X (Transformational)
+   - **Regulator pressure:** N (None), L (Low), M (Moderate), H (High pressure)
+   - **Leadership traits:** 1 (Accountability), 2 (Change), 3 (Collaboration), 4 (Technical), 5 (Strategic) | The `questions` table schema is committed Day 1–2 with these as enums. |
 | 4 | **Contracting entity** — who legally accepts payment? **PROVIDED:** I personally | Determines the Stripe account country/entity, the name on receipts and the terms of service, and cannot be changed trivially after the Stripe account exists and has processed transactions. |
 | 5 | **Currency** (AUD by default given the Australian context, unless you specify otherwise). **PROVIDED:** AUD by default, with options for USD, GBP, EUR | Set once at Stripe Checkout and product-price configuration; changing it later means re-creating every Stripe Price object. |
 | 6 | **One real question, with real guidance text and all seven tag values filled in** — the single question that goes into the Week 1 slice. Not a placeholder. **PROVIDED:**
    - **Question ID:** Q001
-   - **Domain:** Risk Management & Decision-Making
+   - **Domain:** Risk (Enterprise & op.)
    - **Title:** We Have a Risk Register, But No One Uses It
    - **Subtitle:** How do you make a risk register that people actually use?
    - **Body:** Most risk registers fail because they live in a spreadsheet that is owned by the risk team and read by no-one. The fix is to make the register useful in decisions people are already making, not a parallel artefact for compliance. Five moves change the dynamic. First, link every risk to a live business objective so it ties to something the executive cares about. Second, assign business owners, not risk team members - risk facilitates, the business owns. Third, surface the top risks in monthly operating meetings with trend arrows, not in a quarterly risk-only forum. Fourth, embed the register where decisions happen - strategy reviews, project gates, investment committees. Fifth, archive stale risks ruthlessly; a register of 400 risks signals nothing, a register of 25 live risks demands attention. ISO 31000 frames this as integrating risk into governance and decision-making rather than treating it as a process. Practitioners who get this right keep the register short, current, and visibly used by the people whose names are on it.
-   - **Tags (using new taxonomy):**
-     - Effort: medium
-     - Duration: 3_6_months
-     - Tier: baseline
-     - Cost: one ($)
-     - Payback: short_term
-     - Regulator pressure: low
-     - Leadership traits: accountability, collaboration, courage | The brief explicitly prohibits "test test," "asdf," or placeholder content — it hides bugs in overflow, gating, and checkout that only show up with real-length text. |
+   - **Tags:**
+     - Effort: Mod. (Weeks to months)
+     - Duration: M (6–12 weeks)
+     - Tier: F (Foundational basics)
+     - Cost: $ (Low investment)
+     - ROI horizon: Quick
+     - Regulator pressure: L (Low)
+     - Leadership traits: 1 (Accountability), 3 (Collaboration), 2 (Change) | The brief explicitly prohibits "test test," "asdf," or placeholder content — it hides bugs in overflow, gating, and checkout that only show up with real-length text. |
 | 7 | **One real lesson's worth of content** — the actual video (or a script/talking points I can film informally if a polished video isn't ready) and the actual template file (a real PDF/Excel artefact, not a stub), plus its real price. **STATUS:** Will provide before starting | This is what gets uploaded to Mux and Cloudflare R2 on Day 3 and sold through Stripe on Day 4. A stand-in file with a placeholder price does not prove the commerce path the brief is testing. |
 
 **If any of #1–3, 6, or 7 are not available by Day 1 morning, Day 1 does not proceed as planned** — this is a scope conversation to have immediately, per the brief's own instruction, not something to work around with a placeholder.
@@ -130,7 +133,7 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 ## Scope guardrails — what NOT to build this week
 
 - Multiple courses, modules, or lessons — one of each only.
-- The full question-discovery / multi-tag filter UI. Week 1 needs exactly one question page to exist and be reachable.
+- The full question-discovery / multi-tag filter UI. Week 1 needs exactly one question page to exist and be reachable. **[RECONCILED]** `DESIGN.md` §60 originally listed the functional discovery page as a Week 1 item too — the owner confirmed keeping this exclusion instead, deferring it to Week 2 so the five-day budget stays protected for the commerce chain. `theme.css`, the six core components, and header/footer/layout (also §60) remain Week 1 work regardless, since Day 1's design-tokens step (Phase 1, step 7) already covers them.
 - Admin CRUD interface (Week 3). Content goes in via Supabase Studio directly this week.
 - Progress tracking / resume (Week 2).
 - Multiple products, bundles, or pricing tiers — one template product only.
@@ -151,6 +154,7 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 5. **No test/placeholder content in anything a reviewer might see** — real question text, real price, real file.
 6. **CORS on FastAPI restricted to the known frontend origin(s) only** — never a wildcard `*`.
 7. **The system must always be scalable and extensible.** Any shortcut that would compromise this needs the owner's explicit sign-off before it ships, not a silent trade-off under deadline pressure.
+8. **Accessibility basics are not deferred to Week 4.** `DESIGN.md` §42 states WCAG 2.2 AA as "the floor... requirements, not aspirations." The full audit (VoiceOver/NVDA pass, 200% zoom, forced dark mode) is genuinely Week 4 (§42.9) — but semantic HTML, one `<h1>` per page, labelled inputs, contrast per the §7.4/§7.5 tokens, alt text, and keyboard operability (§34.1's Definition of Done, item 4) are Day-1-of-that-component requirements, because retrofitting them into six components built without them is slower than building them in.
 
 ---
 
@@ -162,14 +166,18 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 1. **Confirm decisions #1–7** from the Open Decisions section above. Do not proceed past this step without them.
 2. **Create accounts** (or confirm access, per decision #9): Vercel, Render, Supabase, GitHub, Stripe (test mode), Mux, Cloudflare (R2 bucket), Resend.
-3. **Scaffold the frontend:** `npm create vite@latest` (React, TypeScript); install Tailwind CSS per Vite's official setup, plus `@supabase/supabase-js` and a fetch wrapper for calling FastAPI. Push to GitHub, connect to Vercel.
-4. **Scaffold the backend:** Python virtual environment; install `fastapi`, `uvicorn`, `supabase` (or `psycopg2`/`sqlalchemy`), `python-jose`/`pyjwt` (JWT verification), `stripe`, `mux-python`, `boto3` (R2), `resend`. A minimal `/health` endpoint. Push to GitHub, connect to Render.
+3. **Scaffold the frontend:** `npm create vite@latest` (`react-ts` template); install the full `DESIGN.md` §51 stack now, not incrementally — Tailwind v4 (`tailwindcss` + `@tailwindcss/vite`), shadcn/ui (`New York` style, CSS variables, neutral base, Lucide icons — see §51.2), `react-router` v8 (**not** `react-router-dom`, removed in v8 — §51.6), `@tanstack/react-query`, `zustand`, `axios`, `zod`, `react-hook-form` + `@hookform/resolvers`, `motion`, `class-variance-authority`, `clsx` + `tailwind-merge`, `@supabase/supabase-js`. Push to GitHub, connect to Vercel.
+4. **Scaffold the backend:** Python virtual environment; install `fastapi`, `uvicorn`, `sqlalchemy` + `asyncpg` (async ORM/driver) + `alembic` (migrations — `BACKEND.md` §8.1), `supabase` (service-role client, admin ops only — `BACKEND.md` §6), `python-jose` (JWT verification), `stripe`, `mux-python`, `boto3` (R2), `resend`. A minimal `/health` endpoint. This scaffold and the full 22-model schema already exist in `backend/` — this step is confirming `pip install -r requirements.txt` actually installs everything the models import (it didn't, until this pass added `sqlalchemy`/`asyncpg`/`alembic`), not building from zero. Push to GitHub, connect to Render.
 5. **Set up environment variables**, split correctly (never mixed):
    - **Frontend (`.env.local` → Vercel):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL`.
    - **Backend (`.env` → Render):** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `RESEND_API_KEY`, `ALLOWED_ORIGIN`.
 6. **Configure FastAPI's CORS middleware** immediately, restricted to the Vercel URL and `localhost:5173` — do this Day 1, not when the first cross-origin error appears.
-7. **Establish the Week 1 design tokens** in the Tailwind config — type scale (12/14/16/20/25/31/39px), 4px-based spacing scale, a placeholder 1 primary + 1 accent + neutral-grey + success/warning/error colour set, **sans-heading/serif-body typeface pairing** (Bricolage Grotesque for display/UI, Source Serif 4 for long-form reading — the `[DECIDED]` pairing in `DESIGN.md` §7/§9, chosen over the research spec's original serif-heading placeholder). Placeholder hex values, swappable for real brand colours later, not redesigned later.
-8. **Draft the full database schema** — every entity (`users`, `sections`, `authors`, `domains`, `questions`, `question_relations`, `tag_values`, `courses`, `modules`, `lessons`, `templates`, `question_templates`, `question_lessons`, `products`, `product_contents`, `orders`, `order_items`, `entitlements`, `lesson_progress`), even the ones Week 1 won't populate — this is what makes a second course in Week 2 configuration instead of a migration (see Scalability, above). Note `tag_values` and `product_contents`, not a `bundle_items` table: per `BACKEND.md` §1.4/§8, the seven tag dimensions are **rows in a `tag_values` reference table, not Postgres/Python enums**, so the owner can add or rename a value without a deploy; and a bundle is just a `product` with multiple `product_contents` rows, needing no separate mechanism.
+7. **Establish `theme.css` first, per `DESIGN.md` §60's own Week 1 sequence** ("half a day, and it governs everything after") — this is not a placeholder step to revisit later, it is a `[DECIDED]`, contrast-audited system:
+   - **Colour**: the full light/dark token set in `DESIGN.md` §7.4/§7.5 verbatim — not the placeholder hex values from earlier drafts. It has already been through a WCAG 2.2 contrast audit (six dark-mode pairs, including the focus ring, were corrected there); do not re-derive or simplify it.
+   - **Type scale**: the fluid `clamp()`-based token set in §10 (`--text-display` through `--text-xs`), not fixed pixel breakpoints.
+   - **Typefaces**: Bricolage Grotesque (display/UI, sans) + Source Serif 4 (long-form reading body) + JetBrains Mono (data/IDs) — §9's three-face system, self-hosted via `vite-plugin-webfont-dl` per §9.5 (not linked from Google Fonts — a live third-party font request is a privacy/performance issue this product's own buyers would notice).
+   - **Spacing**: 4px-based scale, as before.
+8. **Draft the full database schema** — every entity (`users`, `sections`, `authors`, `domains`, `questions`, `question_relations`, `question_templates`, `question_lessons`, `tag_values`, `courses`, `modules`, `lessons`, `templates`, `products`, `product_contents`, `orders`, `order_items`, `entitlements`, `lesson_progress`), even the ones Week 1 won't populate — this is what makes a second course in Week 2 configuration instead of a migration (see Scalability, above). All 22 model classes already exist as SQLAlchemy models in `backend/app/db/models/` — this step is running `alembic revision --autogenerate`, hand-reviewing the diff (`BACKEND.md` §8.1 — autogenerate misses constraint/index changes and happily drops columns), and migrating, not drafting from scratch. Two things to specifically confirm are present: `entitlements.granted_via` (`'purchase' | 'manual' | 'free'` — Phase 4 step 6 depends on it) and the `question_relations`/`question_templates`/`question_lessons` join tables (added to the models this pass; not yet in a migration). Note `tag_values` and `product_contents`, not a `bundle_items` table: per `BACKEND.md` §1.4/§8, the seven tag dimensions are **rows in a `tag_values` reference table, not Postgres/Python enums**, so the owner can add or rename a value without a deploy; and a bundle is just a `product` with multiple `product_contents` rows, needing no separate mechanism.
 9. **Review the schema with you** — specifically the `questions` table's seven tag **reference values** (decision #3, seeded into `tag_values`, not hard-coded as enums) and the `domains` seed rows (decision #2). Get explicit sign-off before running the migration.
 10. **Run the migration** in Supabase; enable Row-Level Security on every user-data table immediately.
 
@@ -191,15 +199,23 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 ### Step-by-step
 
-1. **Implement Supabase Auth in React**: sign-up, sign-in, sign-out, calling Supabase's JS client directly. Attach the resulting JWT as `Authorization: Bearer <jwt>` on every FastAPI call.
-2. **Implement the FastAPI auth dependency**: verifies the JWT against `SUPABASE_JWT_SECRET`, extracts the user ID — used by every protected endpoint from here on. Build and test this in isolation first.
-3. **Build the auth pages using the Week 1 design tokens** — Button, Card, Form-input components built once, reused everywhere.
-4. **Insert the one real domain row and the one real question row** with its real guidance text and all seven real tag values — via Supabase Studio directly; no admin UI yet.
-5. **Insert the one real course → module → lesson (type: video)** skeleton rows.
-6. **Smoke-test auth end to end**: sign up, session persists on refresh, a protected FastAPI test endpoint returns the correct user ID when called with a valid token, sign out, and — critically — calling the protected FastAPI endpoint **without** a token returns 401.
+1. **Build the shared frontend layer first, in `DESIGN.md` §60's order — components and layout before pages, pages before auth logic:**
+   - **The route tree** (`DESIGN.md` §51.6, §52): `src/App.tsx` with `createBrowserRouter` in data mode, and the layout shells under `src/routes/_layouts/` — `RootLayout` (providers, skip link), `MarketingLayout` (public header + footer), `AuthLayout`, `MemberLayout` (auth guard). Week 1 only needs these four, not the Admin layout (Week 3).
+   - **The six core components** named explicitly in §60's Week 1 sequence — `Button`, `Card`, `Input`+`Label`+error, `Badge`, `EmptyState`, `PageTitle` — each built to the nine-point Definition of Done in §34.1 (all interactive states, both themes, keyboard-operable, semantic tokens only), not copy-pasted from a shadcn example and left unaudited.
+   - **Header, footer, and the marketing layout shell** that wraps the question page — this is what's missing if Day 2 jumps straight to auth pages with nowhere to put them.
+   - **`src/lib/api/client.ts`** — the single Axios instance with the Supabase-JWT request interceptor and the 401-redirect response interceptor (`DESIGN.md` §81), and **`src/lib/query/queryClient.ts`** — the TanStack Query client (§79). Every FastAPI call from here on goes through this client; no raw `fetch`.
+   - **`src/stores/useAuthStore.ts`** — the Zustand store holding `user`/`loading`/`signOut` (§80), which `MemberLayout`'s guard reads.
+2. **Implement Supabase Auth in React**: sign-up, sign-in, sign-out, calling Supabase's JS client directly, writing the resulting session into `useAuthStore`. The Axios client's interceptor (step 1) attaches the JWT as `Authorization: Bearer <jwt>` on every FastAPI call — do not hand-roll a second way of attaching it.
+3. **Implement the FastAPI auth dependency**: verifies the JWT against `SUPABASE_JWT_SECRET`, extracts the user ID — used by every protected endpoint from here on. Build and test this in isolation first.
+4. **Build the auth pages** (`SignInPage`, `SignUpPage`) inside `AuthLayout`, using the step-1 components — no new one-off inputs or buttons.
+5. **Insert the one real domain row and the one real question row** with its real guidance text and all seven real tag values — via Supabase Studio directly; no admin UI yet.
+6. **Insert the one real course → module → lesson (type: video)** skeleton rows.
+7. **Smoke-test auth end to end**: sign up, session persists on refresh, a protected FastAPI test endpoint returns the correct user ID when called with a valid token, sign out, and — critically — calling the protected FastAPI endpoint **without** a token returns 401.
 
 ### Definition of Done — Day 2
 
+- [ ] The route tree, the four Week 1 layout shells, and the six core components exist and meet the §34.1 Definition of Done — not stubs to be hardened later.
+- [ ] The Axios client, TanStack Query client, and Zustand auth store exist as the single, named way to call FastAPI and hold session state — no parallel `fetch` calls or ad-hoc state elsewhere.
 - [ ] A real account can be created, signed into, and signed out of via Supabase Auth, session surviving a refresh.
 - [ ] A logged-out visit to a placeholder member-area route redirects to sign-in.
 - [ ] A logged-out direct call to the protected FastAPI test endpoint returns 401 — proven with a real request, not assumed from the UI.
@@ -215,21 +231,27 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 ### Step-by-step
 
-1. **Upload the one real video** to Mux; confirm it finishes processing and returns a playback ID.
-2. **Build `GET /lessons/{id}/playback-token`** in FastAPI — will verify the JWT and generate a signed Mux JWT (15–30 min expiry) once entitlement checking is wired Day 4. Build the shape now.
-3. **Build the React lesson page** using `<MuxPlayer>`, calling this endpoint — never call Mux directly from React, never let React hold a Mux secret.
-4. **Upload the one real template file** to R2; create the `templates` row.
-5. **Build `GET /templates/{id}/download-url`** in FastAPI — generates an R2 presigned URL (60-second TTL) once entitlement checking is wired Day 4.
-6. **Build the React question page** — tags visible, body text present, links to the related course.
-7. **Wire the related-question → course → template links** so the journey is clickable end to end.
+1. **Build `GET /questions/{slug}`** in FastAPI — this endpoint was missing from earlier drafts of this plan and it is not optional: per the research spec's own primary user journey (8.2, step 3), *"Body text is blurred/locked"* even for the one demo question — this is not video/download-only gating. Implement the two response shapes from `BACKEND.md` §4.2/§1.2: **not entitled** → 200 with `QuestionPreviewOut` (title, domain, all seven tags, the short answer, related-content names and prices — never the full guidance body, structurally absent from the response model, not hidden in CSS); **entitled** → 200 with `QuestionFullOut` (adds the full guidance + "what to do next"). A paywall is a 200 with a `gated: true` flag, not a 403 — it's a conversion surface, not an error (`DESIGN.md` §21.3).
+2. **Build the React question page** to `DESIGN.md` §21.1's structure — breadcrumb, domain, title, short answer (always visible), the seven tags as a definition grid (not seven loose badges — §21.2), then the guidance section. When ungated: first paragraph visible, second paragraph fades over ~120px, then the lock card (§21.3) naming the product, its contents, its price, and `[See what's included]` / `Already bought it? Sign in`. **Non-negotiable per §21.3: the gated text must never be present in the page's HTML for a non-entitled request** — a CSS blur over data already sent to the browser is defeated by View Source in four seconds, which on a paid product is the product leaking, not a styling bug.
+3. **Upload the one real video** to Mux; confirm it finishes processing and returns a playback ID.
+4. **Build `GET /lessons/{id}/playback-token`** in FastAPI — will verify the JWT and generate a signed Mux JWT (15–30 min expiry) once entitlement checking is wired Day 4. Build the shape now.
+5. **Build the React lesson page** using `<MuxPlayer>` — **dynamically imported** inside the lesson component, not at the app root (`DESIGN.md` §43.1: it's a large dependency most sessions never load) — calling the step-4 endpoint, never Mux directly, never holding a Mux secret. Captions on by default (§25.2 `[DECIDED]` — defaulting them off means most people never discover them).
+6. **Upload the one real template file** to R2; create the `templates` row.
+7. **Build `GET /templates/{id}/download-url`** in FastAPI — generates an R2 presigned URL (60-second TTL) once entitlement checking is wired Day 4.
+8. **Build the download button to the exact state machine in `DESIGN.md` §26.4/§26.5**: click → `Preparing…` (disabled) → fetch the URL → browser fetches the file directly → `Downloaded ✓` for 4 s → back to `Download again`. **Never render the presigned URL as a visible `href`** — a user right-clicking "save link as" or returning to a backgrounded tab will hit an expired 60-second link; fetch on click, use immediately, discard. A failed fetch returns the button to normal with an inline `That link expired. Press download again.` — not an error toast implying something is broken.
+9. **Wire the related-question → course → template links** so the journey is clickable end to end, per §21.4: the related-template card on the question page is itself a full buy surface (name, format, price, `Buy the template`) — it does not route through a catalogue first, which is what keeps the brief's three-step speed-to-answer budget intact.
+
+**Deferred, named rather than silently dropped:** `DESIGN.md` §25.4's mid-playback token-refresh behaviour (silent refresh at 60% of token lifetime, pause-and-resume on failure) is real and `[DECIDED]`, but Week 1's one demo lesson is short enough that a 15–30 min token is unlikely to expire during it. Building the full refresh/resume flow this week would be scope beyond what the slice needs — it's a named Week 2 task, not an oversight.
 
 ### Definition of Done — Day 3
 
-- [ ] The video plays via `<MuxPlayer>` using a signed JWT from the FastAPI endpoint (verify in the network tab — React calls FastAPI, not Mux directly).
-- [ ] The FastAPI presigned-URL endpoint returns a working, time-limited download link when called directly.
-- [ ] The question, course, and lesson pages exist and link to each other correctly.
+- [ ] `GET /questions/{slug}` returns `QuestionPreviewOut` (no guidance body, `gated: true`) for a non-entitled request and `QuestionFullOut` for an entitled one — confirmed by inspecting the raw JSON, not the rendered page.
+- [ ] The question page matches §21.1's structure and the gated guidance fades into a lock card, never present in the HTML when ungated.
+- [ ] The video plays via `<MuxPlayer>` (dynamically imported) using a signed JWT from the FastAPI endpoint, with captions on by default (verify in the network tab — React calls FastAPI, not Mux directly).
+- [ ] The FastAPI presigned-URL endpoint returns a working, time-limited download link when called directly, and the download button follows the Preparing → Downloaded ✓ state machine with no visible `href`.
+- [ ] The question, course, and lesson pages exist and link to each other correctly, and the related-template card on the question page is a direct buy surface.
 
-**Do not proceed to Day 4 if:** the video plays from an unsigned or non-expiring URL, or React ever calls Mux/R2 directly instead of going through FastAPI.
+**Do not proceed to Day 4 if:** the video plays from an unsigned or non-expiring URL, React ever calls Mux/R2 directly instead of going through FastAPI, or the question's guidance body is present in the page source for a logged-out request.
 
 ---
 
@@ -239,27 +261,30 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 ### Step-by-step
 
-1. **Create the Stripe Product and Price** for the one real template, at its real price, in test mode.
-2. **Build `POST /checkout/session`** in FastAPI — creates a Stripe Checkout Session and returns the URL to React, which redirects. Never build a custom card form.
+1. **Create the Stripe Product and Price** for the one real template, at its real price, in test mode. **Create three `product_contents` rows against it**, not one — `content_type: 'template'` (the file), `content_type: 'lesson'` (the video), and `content_type: 'question_set'` pointing at Q001 (research spec 8.2, step 3: the same purchase that unlocks the template also unlocks the question's gated guidance body built in Phase 3). Missing the third row is the one mistake that would make Phase 3's paywall work correctly in isolation and then silently never unlock.
+2. **Build `POST /checkout/session`** in FastAPI — creates a Stripe Checkout Session and returns the URL to React, which redirects. Never build a custom card form. Frontend: the pre-redirect summary per `DESIGN.md` §29.1 — product name, what's included, subtotal, the Stripe-attribution trust line ("Payment is handled by Stripe. We never see your card details.") — not a bare "Buy now" button with no context.
 3. **Build `POST /webhooks/stripe`** — verify the `stripe-signature` header with `stripe.Webhook.construct_event()`; reject anything unsigned.
-4. **Make the webhook handler idempotent** — check for an existing entitlement before inserting.
+4. **Make the webhook handler idempotent, in the order `BACKEND.md` §6.1 specifies** (this order is load-bearing, not incidental): insert the Stripe event ID into `webhook_events` first — on conflict, return early, already handled; then create the order and the `ENTITLEMENT` row(s) **in the same transaction**; commit; **only then** queue the receipt email. Queuing the email inside the transaction, or before it commits, is how a customer gets a receipt for a purchase that then fails to save.
 5. **Test the webhook locally** with the Stripe CLI before testing against the deployed app.
-6. **On success, create the `ENTITLEMENT` row** (`granted_via: 'purchase'`).
-7. **Wire the entitlement check** into both Day 3 endpoints — they now query `entitlements` for the authenticated user before generating the Mux JWT or R2 URL.
+6. **On success, create the `ENTITLEMENT` row(s)** — one per `product_contents` row from step 1 that Week 1's schema actually gates (question, lesson, template) — with `granted_via: 'purchase'`, and **write an `audit_log` row** (`BACKEND.md` §1.5: every entitlement grant is audited — this is a five-line service and it's the difference between "we think the webhook fired" and knowing).
+7. **Wire the entitlement check** into all three gated endpoints now (the question, lesson, and template endpoints from Phase 3) — they query `entitlements` for the authenticated user before returning the full question body, generating the Mux JWT, or generating the R2 URL.
 8. **Wire the "Buy now" button** in React to the Checkout Session endpoint.
-9. **Build and trigger the Resend receipt email** from the webhook handler — plain HTML/Jinja2 rendered in Python, sent via Resend's Python SDK (not a React Email component, which cannot render inside FastAPI). Real subject, amount, product name.
-10. **Configure DKIM/SPF** on the sending domain in Resend.
+9. **Build the purchase-success page's entitlement poll**, per `DESIGN.md` §29.4 `[DECIDED]` — Stripe redirects the user back *before* the webhook necessarily arrives, so the success page cannot assume the entitlement already exists: poll `GET /me/entitlements` every 1.5 s for up to 20 s, showing `Setting up your access…` on the primary action while polling; on success the button becomes `Start the first lesson`; if 20 s elapses with nothing, show the confirmed-payment-but-still-provisioning state (§29.4) with `[Refresh]` and `[Contact us]` — never a bare spinner, and never a locked screen after money has moved. This is what actually protects against the "silent webhook failure" risk already named in the Week 1 risk watchlist below — the risk was named without this being built.
+10. **Build the checkout failure state** per §29.3 — "Payment wasn't completed. Your card has not been charged." with `[Try checkout again]` — never "Oops," never implying the user did something wrong; the FastAPI error contract's `payment_incomplete` (402) code (`BACKEND.md` §9) is what the frontend branches on to show it.
+11. **Build and trigger the Resend receipt email** from the webhook handler, after commit (step 4) — plain HTML/Jinja2 rendered in Python, sent via Resend's Python SDK (not a React Email component, which cannot render inside FastAPI). Real subject, amount, product name, and the contracting-entity name from decision #4 (a receipt without a real company name on it is the thing someone expensing the purchase screenshots and rejects).
+12. **Configure DKIM/SPF** on the sending domain in Resend.
 
 ### Definition of Done — Day 4
 
-- [ ] "Buy now" reaches Stripe's real hosted checkout for the real product/price via the FastAPI-created session.
+- [ ] "Buy now" reaches Stripe's real hosted checkout for the real product/price via the FastAPI-created session, from a pre-redirect summary page that states what's included and the Stripe trust line.
 - [ ] A Stripe **test** card (`4242 4242 4242 4242`) completes checkout and redirects back.
-- [ ] The webhook fires, signature verifies, and an `ENTITLEMENT` row appears in Supabase — checked directly, not inferred.
+- [ ] The webhook fires, signature verifies, and an `ENTITLEMENT` row **per gated resource** (question, lesson, template) appears in Supabase, alongside an `audit_log` row — checked directly, not inferred.
 - [ ] Sending the same webhook event twice does **not** create a second entitlement row.
-- [ ] A receipt email with real details arrives.
-- [ ] Before purchase: both FastAPI endpoints return 403 for that user. After purchase: both succeed, for that user only.
+- [ ] The purchase-success page polls for the entitlement rather than assuming it, and never shows a locked screen or a bare spinner to someone who has already paid.
+- [ ] A receipt email with real details — including the real contracting-entity name — arrives.
+- [ ] Before purchase: all three gated endpoints (question body, video, download) return the correct not-entitled response for that user. After purchase: all three succeed, for that user only.
 
-**Do not proceed to Day 5 if:** a non-entitled logged-in user can still reach the video or download by any route.
+**Do not proceed to Day 5 if:** a non-entitled logged-in user can still reach the full question body, the video, or the download by any route.
 
 ---
 
@@ -334,7 +359,7 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 ## Quick-reference
 
 ### Stack
-React (Vite, TypeScript) + Tailwind CSS, on Vercel · FastAPI (Python), on Render · Supabase (Postgres + Auth + RLS) · Stripe (Checkout + webhooks) · Mux (signed JWT video) · Cloudflare R2 (presigned downloads) · Resend (plain HTML/Jinja2 templates, Python SDK)
+React 19 (Vite, TypeScript) + Tailwind v4 + shadcn/ui + react-router v8 + TanStack Query + Zustand + Axios, on Vercel · FastAPI (Python), on Render · Supabase (Postgres + Auth + RLS) · Stripe (Checkout + webhooks) · Mux (signed JWT video) · Cloudflare R2 (presigned downloads) · Resend (plain HTML/Jinja2 templates, Python SDK)
 
 ### Entity list for the Day 1 schema
 `users` · `sections` · `authors` · `domains` · `questions` · `question_relations` · `tag_values` · `courses` · `modules` · `lessons` · `templates` · `question_templates` · `question_lessons` · `products` · `product_contents` · `orders` · `order_items` · `entitlements` · `lesson_progress`

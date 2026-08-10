@@ -257,7 +257,7 @@ The following platforms were examined for patterns relevant to this build. They 
 
 ## 3.1 The content model is the product
 
-**[FINDING]** The seven-tag taxonomy (effort, duration, cost, payback, tier, regulator pressure, leadership traits) is the primary differentiator. It enables a query that no PDF, book, or standard course catalogue can answer: "Show me questions that are cheap to address, take less than two weeks, and are relevant to APRA-regulated organisations at the operational tier." This is the product's core value proposition, and the information architecture must lead with it — not bury it behind a course catalogue.
+**[FINDING]** The seven-tag taxonomy (effort, duration, cost, ROI horizon, tier, regulator pressure, leadership traits) is the primary differentiator. **[UPDATED]** The sixth tag was originally researched here as "payback"; the owner's 100 finalised questions (`Deciding_in_the_Dark_100_Questions.md`) use "ROI horizon" with three values (Quick / Mid / Strategic) rather than the four-value Immediate/Short/Medium/Long scale proposed below in 3.2 — the schema follows the real content, not this early placeholder. It enables a query that no PDF, book, or standard course catalogue can answer: "Show me questions that are cheap to address, take less than two weeks, and are relevant to APRA-regulated organisations at the operational tier." This is the product's core value proposition, and the information architecture must lead with it — not bury it behind a course catalogue.
 
 **[RECOMMENDATION]** Design the primary discovery interface around multi-dimensional tag filtering, not course browsing. The course structure is how content is *consumed* once discovered; the tag filter is how it is *found*. These are different flows and should not be conflated.
 
@@ -270,7 +270,7 @@ Section  (e.g., "Deciding in the Dark")
   └── Domain  (5 domains, e.g., "Third-Party Risk", "AI Governance")
         └── Question  (100 questions total)
               ├── Body text (guidance, 200–500 words per question)
-              ├── Tags: effort | duration | cost | payback | tier | regulator_pressure | leadership_traits
+              ├── Tags: effort | duration | cost | roi_horizon | tier | regulator_pressure | leadership_traits
               ├── Related questions (many-to-many self-referential)
               ├── Related templates (many-to-many)
               ├── Related lessons (many-to-many)
@@ -288,7 +288,7 @@ Domains are the top-level navigation for the practitioner who knows their proble
 | Effort | Ordinal enum | Low / Medium / High | Filter, sort |
 | Duration | Range or enum | Days / Weeks / Months / Quarters | Filter |
 | Cost | Ordinal enum | Free / Low / Medium / High | Filter |
-| Payback | Ordinal enum | Immediate / Short / Medium / Long | Sort |
+| ROI horizon | Ordinal enum | Quick / Mid / Strategic — **[UPDATED]** supersedes the Immediate/Short/Medium/Long placeholder; see 3.1 | Sort |
 | Tier | Multi-select enum | Strategic / Operational / Project | Filter |
 | Regulator pressure | Boolean or scale | Low / Medium / High (or by regulator name) | Filter |
 | Leadership traits | Multi-select enum | (list of traits) | Filter |
@@ -323,7 +323,7 @@ Domains are the top-level navigation for the practitioner who knows their proble
 
 **[RECOMMENDATION]** Layer a lightweight scoring model on top of the filter, rather than relying on filtering alone:
 
-- Treat each ordinal tag (effort, duration, cost, payback, regulator pressure) as a numeric scale internally (e.g. effort: low=1/medium=2/high=3).
+- Treat each ordinal tag (effort, duration, cost, ROI horizon, regulator pressure) as a numeric scale internally (e.g. effort: low=1/medium=2/high=3; ROI horizon: quick=1/mid=2/strategic=3).
 - When a user sets filter constraints, compute a per-question **match score** = count of exactly-satisfied constraints, with partial credit for adjacent values (e.g. "duration: weeks" requested, question tagged "days" scores higher partial credit than one tagged "quarters").
 - Sort results by match score descending; visually distinguish "exact matches" from "close matches" (e.g. a divider row: "3 exact matches" / "5 close matches — relax one filter to see these").
 - This requires no additional infrastructure beyond the Part 5/Appendix C schema already proposed — it is a query/application-layer concern, not a new table — but it **is** a specific UI and query pattern that must be designed before Week 2, not discovered during it.
@@ -1320,7 +1320,7 @@ questions
   effort       text  (e.g., 'low', 'medium', 'high')
   duration     text  (e.g., 'days', 'weeks', 'months', 'quarters')
   cost         text  (e.g., 'free', 'low', 'medium', 'high')
-  payback      text  (e.g., 'immediate', 'short', 'medium', 'long')
+  roi_horizon  text  (e.g., 'quick', 'mid', 'strategic') -- renamed from 'payback'; see 3.1
   tier         text[] (multi-select: 'strategic', 'operational', 'project')
   regulator_pressure text (e.g., 'low', 'medium', 'high')
   leadership_traits  text[] (multi-select)
