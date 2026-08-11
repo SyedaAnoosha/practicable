@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
@@ -35,6 +35,17 @@ export function ProductBuy() {
     queryFn: () => api.get<ProductData>(`/products/${slug}`).then((res) => res.data),
     enabled: !!slug,
   })
+
+  // Without this check, someone who already bought the product and comes back to
+  // this page (e.g. clicking "See what's included" again from the dashboard) was
+  // always shown "Continue to secure checkout" and sent through Stripe a second
+  // time — reading as "it's asking me to pay/confirm again" even though they
+  // already own it.
+  const { data: entitlements } = useQuery({
+    queryKey: queryKeys.me.entitlements(),
+    queryFn: () => api.get<{ product_ids: string[] }>('/me/entitlements').then((res) => res.data),
+  })
+  const alreadyOwned = !!product && !!entitlements?.product_ids.includes(product.id)
 
   const handleCheckout = async () => {
     if (!product) return
@@ -77,9 +88,20 @@ export function ProductBuy() {
             </span>
           </div>
 
-          <Button onClick={handleCheckout} loading={isRedirecting} className="w-full">
-            Continue to secure checkout
-          </Button>
+          {alreadyOwned ? (
+            <>
+              <p className="text-sm text-foreground" role="status">
+                You already own this — no need to pay again.
+              </p>
+              <Link to="/dashboard">
+                <Button className="w-full">Go to your library</Button>
+              </Link>
+            </>
+          ) : (
+            <Button onClick={handleCheckout} loading={isRedirecting} className="w-full">
+              Continue to secure checkout
+            </Button>
+          )}
 
           {error && (
             <p role="alert" className="text-sm text-destructive">

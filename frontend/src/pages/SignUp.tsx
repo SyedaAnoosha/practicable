@@ -23,10 +23,18 @@ export function SignUp() {
     // reads it back out so app/core/deps.py's get_current_user can set users.name on
     // the row it creates the first time this person calls the API, instead of that
     // column staying permanently NULL for every real signup.
+    // Without emailRedirectTo, Supabase falls back to the project's dashboard-configured
+    // "Site URL" — which for this project is still the Supabase default of
+    // http://localhost:3000, never updated. That's what was sending real signups on the
+    // deployed site to a dead localhost link after they clicked the confirmation email.
+    // Passing it explicitly here makes the redirect correct regardless of that setting —
+    // but Supabase still only allows redirecting to a URL present in its Redirect URLs
+    // allow-list (Authentication -> URL Configuration), so that dashboard entry still
+    // has to include this app's real origin(s) or this will be rejected outright.
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name } },
+      options: { data: { name }, emailRedirectTo: `${window.location.origin}/sign-in` },
     })
     setLoading(false)
 

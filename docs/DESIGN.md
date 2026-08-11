@@ -958,7 +958,7 @@ one you need in about thirty seconds.
 Try:  [Do it in a fortnight]  [Do it cheaply]  [Show your regulator]
 ```
 
-No hero image. No gradient. The type, the claim and a working input are the hero — which is also the fastest possible route to §4's 30-second target.
+No hero image. The type, the claim and a working input are the hero — which is also the fastest possible route to §4's 30-second target.
 
 `[OWNER]` Final hero copy is the owner's and the author's. The structure above is the design constraint: eyebrow, claim in two lines, one qualifying paragraph, a live input, three preset chips.
 

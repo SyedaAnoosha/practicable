@@ -15,7 +15,12 @@ interface ProductData {
 }
 
 const POLL_INTERVAL_MS = 1500
-const POLL_TIMEOUT_MS = 20_000
+// Checked against a real production webhook round-trip (Stripe -> Render -> DB commit):
+// it landed ~20s after the checkout session completed — right at this constant's old
+// value, so a real paying user could hit the "still being set up" fallback moments
+// before their entitlement actually arrived. Given headroom rather than the exact
+// observed number, since that 20s isn't guaranteed to be the worst case.
+const POLL_TIMEOUT_MS = 45_000
 
 // DESIGN.md §29.4 [DECIDED] — "the webhook race". Stripe redirects here before the
 // webhook that actually creates the entitlement necessarily arrives, so this page
@@ -28,7 +33,9 @@ export function CheckoutSuccess() {
   const user = useAuthStore((s) => s.user)
   const [entitled, setEntitled] = useState(false)
   const [timedOut, setTimedOut] = useState(false)
-  const startedAt = useRef(Date.now())
+  // Date.now() is impure — set in the polling effect below (where a side effect is
+  // allowed), not here at render time.
+  const startedAt = useRef<number | null>(null)
 
   const { data: product } = useQuery({
     queryKey: queryKeys.products.detail(productSlug),
@@ -39,6 +46,7 @@ export function CheckoutSuccess() {
   useEffect(() => {
     if (!product || entitled) return
 
+    startedAt.current = Date.now()
     let cancelled = false
     const poll = async () => {
       try {
@@ -51,7 +59,7 @@ export function CheckoutSuccess() {
       } catch {
         // transient failure — the interval below just tries again
       }
-      if (Date.now() - startedAt.current >= POLL_TIMEOUT_MS) {
+      if (Date.now() - (startedAt.current ?? Date.now()) >= POLL_TIMEOUT_MS) {
         if (!cancelled) setTimedOut(true)
         return
       }
