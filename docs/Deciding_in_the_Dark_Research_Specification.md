@@ -367,6 +367,8 @@ Domains are the top-level navigation for the practitioner who knows their proble
 
 **Assessment:** Essential. A free tier that earns an email address is how discovery converts to relationship. Options: one domain's question list freely browsable (body text gated); a free sample template; a PDF guide. Must require email registration.
 
+**[OWNER OVERRIDE, 2026-08-11]** Implemented differently, and more generously, than any option above: *every* published question's full guidance body is public and free (`GET /questions/{slug}` always returns `body`, no server-side purchase check on it at all) — the email address is earned by a client-side blur + capture form over roughly the back half of the text (`EmailGatedBody.tsx`), a conversion device, not an access control. The corresponding tightening: video and lesson content are *never* free, no sample-lesson exception (see the 8.3 and 13.4 annotations below) — the free/paid line in this product is drawn at content type (question vs. lesson/template), not per-item. See `docs/handover.md` §1.
+
 - v1 fit: **Must have** — non-negotiable for list building
 
 ### Subscriptions / memberships
@@ -818,8 +820,8 @@ The brief's security section (§7) asks explicitly for rate limiting, logging, a
 ```
 PUBLIC (no login required)
   /                       — Marketing homepage
-  /questions              — Question discovery (list + filters; body text gated)
-  /questions/[slug]       — Question preview (tags visible; full text gated)
+  /questions              — Question discovery (list + filters; body text gated [OVERRIDDEN 2026-08-11 — full body public])
+  /questions/[slug]       — Question preview (tags visible; full text gated [OVERRIDDEN 2026-08-11 — full body public, email-gated client-side])
   /courses                — Course catalogue
   /courses/[slug]         — Course product page (syllabus, instructor, price)
   /templates              — Template catalogue
@@ -857,7 +859,7 @@ ADMIN (authenticated + admin role)
 
 1. Practitioner searches Google for "risk appetite statement template ISO 31000"
 2. Lands on `/questions?tags=effort:low,duration:weeks,regulator_pressure:high` (or a specific question page)
-3. Sees the question title and tags. Body text is blurred/locked. A clear CTA: "Get full access — $99"
+3. Sees the question title and tags. Body text is blurred/locked. A clear CTA: "Get full access — $99" **[OWNER OVERRIDE, 2026-08-11: body text is not purchase-gated — it's fully public, soft-gated behind an email capture instead; see Part Four §4.1 "Free lead magnet"'s annotation]**
 4. Clicks CTA → `/templates/risk-appetite-template` (product page) → clear description, preview image, price, buy button
 5. Click "Buy now" → Stripe Checkout (hosted)
 6. Payment succeeds → Stripe webhook → entitlement created → redirect to `/downloads`
@@ -871,7 +873,7 @@ ADMIN (authenticated + admin role)
 1. Practitioner registers for the free entry point (one domain freely browsable)
 2. Explores 20 questions in the Third-Party Risk domain; reads the guidance
 3. Sees a "Related Course" card: "Third-Party Risk Foundations — 4 modules, 3 templates — $149"
-4. Clicks → course product page → syllabus, author bio, sample lesson video (30 seconds, ungated)
+4. Clicks → course product page → syllabus, author bio, sample lesson video (30 seconds, ungated) **[OWNER OVERRIDE, 2026-08-11]** No ungated sample: video and lessons are never free, no exceptions, including a marketing preview — a deliberate, explicit reversal of this step and of `DESIGN.md` §23.3's "free preview lesson is not optional" recommendation. A `Lesson.is_free_preview` bypass was built to spec, then the column was dropped the same day on direct owner instruction (migration `005`) so it can't be silently re-enabled later. The syllabus itself (module/lesson titles, types, durations) stays fully visible pre-purchase — only the content behind each lesson is gated.
 5. Buys → checkout → entitlement → redirect to `/learn/third-party-risk`
 6. Progresses through modules; resume tracking persists across sessions
 
@@ -1070,8 +1072,8 @@ A professional-grade knowledge and learning platform for risk practitioners, led
 
 ### Must have
 - Question discovery: all 100 questions filterable by all 7 tags simultaneously
-- Question pages: preview (title + tags) public; full body gated
-- Course with modules and lessons (video, reading, download types)
+- Question pages: preview (title + tags) public; full body gated **[OWNER OVERRIDE, 2026-08-11: full body is public too, soft-gated by an email capture, not a purchase — see Part Four §4.1]**
+- Course with modules and lessons (video, reading, download types) **[BUILT, 2026-08-11]** All three lesson types are live — `lessons.body` (reading), `lessons.download_template_id` (download, reusing the templates table's file rather than duplicating it), plus Mux video. A module can also attach a question as a free syllabus item (`module_questions`) alongside its lessons. See `docs/handover.md` §1/§2.
 - Template store with gated purchase and download
 - Free entry point (one domain freely browsable, email required)
 - Stripe-hosted checkout (one-time purchases only)
@@ -1079,7 +1081,7 @@ A professional-grade knowledge and learning platform for risk practitioners, led
 - Mux video with signed JWT playback and auto-captions
 - Cloudflare R2 for paid downloads with presigned URLs
 - Resend transactional emails (receipt, access, welcome, password reset)
-- Progress tracking (lesson-level completion, course-level % visible to user)
+- Progress tracking (lesson-level completion, course-level % visible to user) **[BUILT, 2026-08-11]** `POST /lessons/{id}/complete` marks `lesson_progress` and live-recomputes `course_progress`'s percentage in the same call — the outline's checkmarks and the catalogue's "% complete" can't drift apart from a background job that hasn't run yet, because there isn't one.
 - Member dashboard (purchases, in-progress courses, downloads)
 - Admin: add/edit questions+tags, lessons, templates, products, view users/orders
 - Legal pages: terms, privacy, refund policy (drafted for owner review)
@@ -1311,7 +1313,9 @@ questions
   id           uuid PK
   domain_id    uuid FK → domains
   title        text
-  body         text (full guidance, gated)
+  body         text (full guidance, gated) -- [OWNER OVERRIDE, 2026-08-11] always returned by
+  -- GET /questions/{slug}, entitled or not — never withheld server-side. Soft-gated
+  -- client-side by an email capture instead (EmailGatedBody.tsx); see Part Four §4.1.
   slug         text UNIQUE
   -- Seven tags: stored as `tag_values` reference-table rows, not Postgres/Python enums
   -- [RESOLVED, per BACKEND.md §1.4/§8] — a reference table lets the owner add or rename a

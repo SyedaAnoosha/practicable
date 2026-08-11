@@ -50,18 +50,32 @@ There's no admin UI yet (see §4) — content is authored as SQL seed files unde
 2. Set `published = true` when it's ready to go live — unpublished questions 404, they don't 403 (there's a difference: 404 doesn't reveal the slug exists at all).
 3. That's it for a standalone question. It's reachable at `/questions/{slug}` immediately, publicly, full body included (per §1's model).
 
-### Adding a new lesson (video) to a course
+### Adding a new course
 
-1. Upload the video through the Mux dashboard (or API) to get an asset + `playback_id`.
-2. Insert into `media` with the `mux_playback_id`, `status = 'ready'`.
-3. Insert into `lessons`, linked to the course and to that `media` row.
-4. The lesson is reachable at `/lessons/{lesson.id}` — but only to someone entitled to it. Entitlement comes from owning a product that includes it (next step), not from the lesson existing.
+1. Insert into `courses` (slug, title, subtitle, description, `section_id`, `author_id`, `published`).
+2. Insert one row per module into `modules` (title, description, `sort_order`, `course_id`).
+3. Add lessons to each module (below). `GET /courses/{slug}` and `GET /courses/{slug}/lessons/{lessonSlug}` need nothing course-specific beyond this — a second course works the moment it's seeded and published, no code change.
+
+### Adding a new lesson — video, reading, or download
+
+`Lesson.lesson_type` is `video` / `reading` / `download` / `mixed`; what to insert depends on which:
+
+1. Always: insert into `lessons` (slug, title, description, `lesson_type`, `module_id`, `sort_order`, `published`).
+2. **video** — upload through the Mux dashboard/API to get an asset + `playback_id`, then insert into `media` with `mux_playback_id`, `status = 'ready'`, linked by `lesson_id`.
+3. **reading** — set `lessons.body` directly (the full text; the frontend renders it as-is, no markdown processing). No admin UI yet, so this is a raw `UPDATE`, same as `008_seed_reading_lesson_body.sql` did.
+4. **download** — the lesson's file *is* a `templates` row (upload to Storage, insert into `templates`, same as the template steps below), then set `lessons.download_template_id` to point at it. This reuses the template's storage/file columns rather than duplicating them, and gates the download by *lesson* entitlement, not a second, separate template purchase.
+5. **mixed** — combine any of the above; the frontend renders whichever pieces are actually present (`has_video`/`body`/`download` in the API response), not a hard switch on `lesson_type`.
+6. The lesson is reachable at `/learn/{courseSlug}/{lessonSlug}` (the outline/sidebar/prev-next interface) once its module/course exist — but, same rule as before, only to someone entitled to it. Entitlement comes from owning a product that includes it, not from the lesson existing. **There is no free-preview mechanic** — an explicit owner decision overriding DESIGN.md §23.3's recommendation; video and lessons are never reachable without a real purchase, full stop.
+
+### Attaching a question to a module
+
+A module's outline can list a question alongside its lessons — e.g. "the write-up this module is built on." Insert into `module_questions` (`module_id`, `question_id`, `sort_order`); it shows up in both the public syllabus and the learning sidebar with no lock/progress state, since questions are always free. `009_seed_module_question_link.sql` is the worked example.
 
 ### Adding a new template (downloadable file)
 
 1. Upload the file to the Supabase Storage bucket (`SUPABASE_STORAGE_BUCKET_NAME`).
 2. Insert into `templates` with the `storage_key`, `file_name`, `file_size_bytes`.
-3. Same rule as lessons: existing ≠ accessible. Needs a product.
+3. Same rule as lessons: existing ≠ accessible. Needs a product (or a `lessons.download_template_id` link, per above).
 
 ### Bundling content into a sellable product
 
@@ -70,9 +84,11 @@ There's no admin UI yet (see §4) — content is authored as SQL seed files unde
 3. Insert one `product_contents` row per included item (`content_type` ∈ `template`/`lesson`/`question_set`, `content_id` = the actual row id). `GET /products/{slug}` resolves these into real labels *and* real hrefs (`/templates/{id}`, `/lessons/{id}`, `/questions/{slug}`) — this is what makes "See what's included" actually clickable rather than a static list, a real bug this session found and fixed.
 4. Buying it (real Stripe Checkout → webhook → `create_order_from_checkout`) grants entitlements to every `product_contents` row at once, in one transaction.
 
-### The two-question Week 1 scope guardrail
+### Discovery is real now; the homepage/dashboard spotlight is still hardcoded
 
-`WEEK1_QUESTION_SLUG` / `WEEK1_PRODUCT_SLUG` constants (duplicated in `Home.tsx`, `Dashboard.tsx`, `MarketingLayout.tsx`) are the entire reason only one question and one product are reachable from the UI today — everything above works for a second question/product the moment you seed it, but nothing surfaces it yet. There's no discovery/search/catalogue UI. That's the single biggest piece of "not built yet," not a missing backend capability.
+Real catalogues exist and need no code change to show new content: `GET /courses` + `/courses/{slug}`, `GET /templates`, `GET /questions` + `/questions/{slug}` are all live, and the public header / member sidebar link to all three. Seed a second question, course, or template and publish it — it appears in its catalogue automatically.
+
+What's still hardcoded: `Home.tsx` and `Dashboard.tsx` each spotlight *one specific* question/product via `WEEK1_QUESTION_SLUG` / `WEEK1_PRODUCT_SLUG` constants — that's a "what do we feature on the landing page" decision, not a reachability gap anymore. A second product doesn't need those constants touched to be *found*; it would need them touched (or replaced with a real "featured" flag) to be *promoted*.
 
 ---
 
@@ -101,7 +117,7 @@ All figures checked live against each provider's current pricing pages, not from
 Ranked roughly by how much they matter, not by when they were found.
 
 1. **Vercel Hobby's commercial-use restriction is currently being violated.** Real Stripe payments are flowing through a Hobby-tier deployment. This is a ToS/compliance gap, not a performance one — Vercel could enforce this at any time. Fix is a $20/month upgrade to Pro; not done because it wasn't identified as a blocker until this handover pass.
-2. **No admin UI.** All content authoring (questions, lessons, templates, products) is raw SQL against Supabase, by hand, per §2. Fine at 1 question / 1 product; not fine at 100.
+2. **No admin UI.** All content authoring (questions, courses, modules, lessons of all three types, templates, products, module-question links) is raw SQL/direct `UPDATE`s against Supabase, by hand, per §2. Fine at 1 question / 1 course / 1 product; not fine at 100 — and the surface area this now covers (module ordering, lesson-type-specific fields, module-question attachments) is bigger than it was in Week 1, which makes this gap more expensive with every new content type, not less.
 3. **Brevo is integrated but not fully live** — its SMTP account activation is pending manual approval from Brevo's team (support ticket submitted). Kept wired up as tier 2 in the email fallback chain rather than ripped out, since it may activate at any time and costs nothing to leave configured.
 4. **Supabase's "Confirm email" project setting** is on (the project default) and has caused real confusion — a real user's sign-up appeared broken because they hadn't clicked the confirmation email yet, and separately a confirmation link redirected to `localhost:3000` until `emailRedirectTo` was added explicitly to the sign-up call. The Supabase Auth "Site URL"/"Redirect URLs" dashboard settings still need a one-time check to make sure they point at the real production origin, not a leftover default.
 5. **No automated test suite.** No `pytest` for the backend, no `vitest`/testing-library for the frontend. Everything verified this session was verified *live* against real Stripe/Supabase/Mux/email-provider APIs rather than against a fixture — genuinely good evidence the thing works, but it's not repeatable/regression-proof the way a test suite would be.
@@ -109,7 +125,8 @@ Ranked roughly by how much they matter, not by when they were found.
 7. **No refund policy defined.** The footer says "one-time purchase, lifetime access" (a confirmed decision) but a specific refund window is explicitly not decided — stated nowhere a buyer can see it as a real policy.
 8. **No entitlement-revocation flow.** Entitlements are granted (purchase, or in principle an admin override via the same `granted_via` enum) but there's no code path to revoke one — relevant the day a refund actually needs to happen.
 9. **The Week 1 scope guardrail is hardcoded, not configured** — `WEEK1_QUESTION_SLUG`/`WEEK1_PRODUCT_SLUG` constants, duplicated across three frontend files (§2). Deliberate for Week 1 (a real discovery/search UI was explicitly out of scope), but it's string literals to change, not a settings toggle.
-10. **`docs/DESIGN.md` §18.2 ("no hero image, no gradient")** was deliberately overridden on the landing page redesign per direct owner feedback ("looks only white, use colour") — the doc itself hasn't been updated to reflect that, so it currently contradicts what's actually built. This is now a deliberate, documented direction rather than an accident: the August 2026 art-direction pass re-materialised the whole token set in `theme.css` as **warm ivory + midnight navy + champagne gold** ("private bank meets editorial publisher"), which adds a static gold/navy radial wash behind the hero type (`.hero-wash`), a 2px gilt hairline atop the marketing header, gold left-rules on featured cards, and gold section eyebrows (`.eyebrow`) — all implemented through semantic tokens, never hardcoded hexes in components. §7's colour-role map still holds (navy = brand/authority, gold = the one sparing accent); what changed is the material itself. The dark side of that system is now reachable, not just defined: a theme toggle (`stores/useThemeStore.ts` + `components/ui/ThemeToggle.tsx`) flips `.dark` on `<html>` from the marketing header, the auth pages, and a fixed top-right corner on member pages; the choice persists to `localStorage['practicable:theme']`, the OS preference is only the first-visit default (§55: "we do not follow the OS blindly" — a manual choice wins and the app never re-reacts to OS changes while open), and an inline script in `index.html` applies the class before first paint so there is no light→dark flash. Toggling also rewrites the `theme-color` meta so mobile browser chrome matches.
+10. **A module's lessons and its attached questions are two separate `sort_order` sequences, not one merged order.** A question attached to a module (`module_questions`) always renders after that module's lessons in both the syllabus and the learning sidebar, regardless of how its `sort_order` compares numerically to a lesson's — there's no single interleaved position field. Fine for "one or two questions per module, always at the end"; would need a real unified-ordering model (or a `kind` + shared `sort_order` namespace) if a question ever needs to sit *between* two lessons.
+11. **`docs/DESIGN.md` §18.2 ("no hero image, no gradient")** was deliberately overridden on the landing page redesign per direct owner feedback ("looks only white, use colour") — the doc itself hasn't been updated to reflect that, so it currently contradicts what's actually built. This is now a deliberate, documented direction rather than an accident: the August 2026 art-direction pass re-materialised the whole token set in `theme.css` as **warm ivory + midnight navy + champagne gold** ("private bank meets editorial publisher"), which adds a static gold/navy radial wash behind the hero type (`.hero-wash`), a 2px gilt hairline atop the marketing header, gold left-rules on featured cards, and gold section eyebrows (`.eyebrow`) — all implemented through semantic tokens, never hardcoded hexes in components. §7's colour-role map still holds (navy = brand/authority, gold = the one sparing accent); what changed is the material itself. The dark side of that system is now reachable, not just defined: a theme toggle (`stores/useThemeStore.ts` + `components/ui/ThemeToggle.tsx`) flips `.dark` on `<html>` from the marketing header, the auth pages, and a fixed top-right corner on member pages; the choice persists to `localStorage['practicable:theme']`, the OS preference is only the first-visit default (§55: "we do not follow the OS blindly" — a manual choice wins and the app never re-reacts to OS changes while open), and an inline script in `index.html` applies the class before first paint so there is no light→dark flash. Toggling also rewrites the `theme-color` meta so mobile browser chrome matches.
 
 ---
 
@@ -123,8 +140,8 @@ Roughly in the order I'd actually do them — each one unblocks or de-risks the 
 - Resolve Brevo's activation (or don't — Mailjet already solves real delivery; Brevo's only value now is redundancy, so this is genuinely optional, not blocking).
 
 **Week 2:**
-- A minimal admin UI — even a plain internal-only page to create/edit questions, lessons, templates, and products would remove the single biggest scaling bottleneck (§2's "everything is raw SQL").
-- Load the real 100-question catalogue (content already exists per `docs/questions/` — this is data entry against the schema already built, not new engineering).
+- A minimal admin UI — even a plain internal-only page to create/edit questions, courses/modules/lessons (all three lesson types), templates, products, and module-question links would remove the single biggest scaling bottleneck (§2's "everything is raw SQL"), and it's a bigger bottleneck today than it was in Week 1 now that courses have real internal structure to author.
+- Load the real 100-question catalogue (content already exists per `docs/questions/` — this is data entry against the schema already built, not new engineering). Same applies to a second real course, now that the learning system is live end to end.
 
 **Week 3:**
 - Real discovery: search/filter UI across the full question catalogue, replacing the hardcoded single-question guardrail. The tag dimensions (effort, cost, duration, ROI horizon, regulator pressure, leadership traits) already exist in the schema specifically to support this — they're just not surfaced as filters yet.

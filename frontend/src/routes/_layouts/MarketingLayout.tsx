@@ -28,9 +28,6 @@ export default function MarketingLayout() {
   // Mobile slide-over (§17.1's menu-collapse rule at five items — the nav is too
   // wide for phones, so it becomes a sheet, same pattern as MemberLayout's).
   const [menuOpen, setMenuOpen] = useState(false)
-  // Close the sheet on navigation (and on the hash-scroll below, which navigates
-  // home first) so it never lingers after a tap.
-  useEffect(() => setMenuOpen(false), [location.pathname, location.hash])
   // DESIGN.md §13.3: the public header gains shadow-sm after 8px of scroll — the
   // one surface that earns a permanent hairline border plus a scroll shadow.
   // Initialised from the current scroll position so a mid-page reload doesn't
@@ -139,6 +136,7 @@ export default function MarketingLayout() {
                 <Link
                   key={item.to}
                   to={item.to}
+                  onClick={() => setMenuOpen(false)}
                   className="rounded-lg px-3 py-3 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted"
                 >
                   {item.label}
@@ -147,17 +145,17 @@ export default function MarketingLayout() {
             </nav>
             <div className="flex flex-col gap-2 border-t border-border p-4">
               {user ? (
-                <Link to="/dashboard">
+                <Link to="/dashboard" onClick={() => setMenuOpen(false)}>
                   <Button className="w-full">My account</Button>
                 </Link>
               ) : (
                 <>
-                  <Link to="/sign-in">
+                  <Link to="/sign-in" onClick={() => setMenuOpen(false)}>
                     <Button variant="outline" className="w-full">
                       Log in
                     </Button>
                   </Link>
-                  <Link to="/#free-pack">
+                  <Link to="/#free-pack" onClick={() => setMenuOpen(false)}>
                     <Button className="w-full">Get started</Button>
                   </Link>
                 </>

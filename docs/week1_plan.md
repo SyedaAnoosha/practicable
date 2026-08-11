@@ -103,6 +103,24 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 ### Definition of Done for Week 1 (all must be true)
 
+**[POST-WEEK-1 UPDATE, 2026-08-11]** Several items this plan explicitly deferred to
+Week 2 (Scope guardrails, below) have since been pulled forward and built: multiple
+lessons per course with all three lesson types (video/reading/download), a real
+learning interface (`/learn/:courseSlug/:lessonSlug` — sticky outline sidebar,
+prev/next, progress), and lesson-level progress tracking with a live course-percentage
+rollup. A module can also attach a question as a free syllabus item. Full detail in
+`docs/handover.md` §1/§2 — this document's own Day 1–5 record below is left as-is,
+since it's an accurate account of what Week 1 specifically proved, not a place to
+retrofit later work into.
+
+One related, deliberate product decision made the same day, overriding
+`DESIGN.md` §23.3's "free preview lesson" recommendation: **video and lessons are
+never free, with no exceptions** — a `Lesson.is_free_preview` bypass was built to
+spec, then the column was dropped hours later (migration `005`) on direct owner
+instruction. Only a question's written guidance is free (see the Research
+Specification's §4.1/8.2 annotations for how that model itself changed from the
+original "teaser paragraph" design to "full body, email-gated client-side").
+
 **[STATUS, updated 2026-08-11]** Every item in this chain is now either verified
 working against real production infrastructure, or explicitly named as the one thing
 left that only a human on a physical device can do. The three blockers named in the
@@ -143,10 +161,10 @@ click-through, below.
 
 ## Scope guardrails — what NOT to build this week
 
-- Multiple courses, modules, or lessons — one of each only.
+- Multiple courses, modules, or lessons — one of each only. **[SUPERSEDED, 2026-08-11]** Multiple lessons per course (all three lesson types) and a real multi-module course are now built — see the post-Week-1 update above and `docs/handover.md`. Still true: only one *course* exists (a second is data entry, not new engineering).
 - The full question-discovery / multi-tag filter UI. Week 1 needs exactly one question page to exist and be reachable. **[RECONCILED]** `DESIGN.md` §60 originally listed the functional discovery page as a Week 1 item too — the owner confirmed keeping this exclusion instead, deferring it to Week 2 so the five-day budget stays protected for the commerce chain. `theme.css`, the six core components, and header/footer/layout (also §60) remain Week 1 work regardless, since Day 1's design-tokens step (Phase 1, step 7) already covers them.
 - Admin CRUD interface (Week 3). Content goes in via Supabase Studio directly this week.
-- Progress tracking / resume (Week 2).
+- Progress tracking / resume (Week 2). **[SUPERSEDED, 2026-08-11]** Lesson-level completion and a live course-percentage rollup are now built — see the post-Week-1 update above.
 - Multiple products, bundles, or pricing tiers — one template product only.
 - Certificates of any kind — not cheap to add correctly; do not start.
 - Polished visual design — but **do** apply the Week 1 design tokens (below) from the first screen, since retrofitting consistency later never works.
@@ -242,7 +260,7 @@ click-through, below.
 
 ### Step-by-step
 
-1. **Build `GET /questions/{slug}`** in FastAPI — this endpoint was missing from earlier drafts of this plan and it is not optional: per the research spec's own primary user journey (8.2, step 3), *"Body text is blurred/locked"* even for the one demo question — this is not video/download-only gating. Implement the two response shapes from `BACKEND.md` §4.2/§1.2: **not entitled** → 200 with `QuestionPreviewOut` (title, domain, all seven tags, the short answer, related-content names and prices — never the full guidance body, structurally absent from the response model, not hidden in CSS); **entitled** → 200 with `QuestionFullOut` (adds the full guidance + "what to do next"). A paywall is a 200 with a `gated: true` flag, not a 403 — it's a conversion surface, not an error (`DESIGN.md` §21.3).
+1. **Build `GET /questions/{slug}`** in FastAPI — this endpoint was missing from earlier drafts of this plan and it is not optional: per the research spec's own primary user journey (8.2, step 3), *"Body text is blurred/locked"* even for the one demo question — this is not video/download-only gating. Implement the two response shapes from `BACKEND.md` §4.2/§1.2: **not entitled** → 200 with `QuestionPreviewOut` (title, domain, all seven tags, the short answer, related-content names and prices — never the full guidance body, structurally absent from the response model, not hidden in CSS); **entitled** → 200 with `QuestionFullOut` (adds the full guidance + "what to do next"). A paywall is a 200 with a `gated: true` flag, not a 403 — it's a conversion surface, not an error (`DESIGN.md` §21.3). **[RECONCILED]** This split-response model was later replaced by direct owner instruction: `QuestionPreviewOut`/`QuestionFullOut` were merged into a single `QuestionOut` with `body` always present, for everyone, entitled or not — the question's guidance became the free entry point itself (Research Specification §4.1's annotation), not a teaser gated behind purchase. `gated` now describes only the template/lesson upsell card shown alongside the free text; the actual soft-gate (email capture, CSS blur) moved entirely client-side into `EmailGatedBody.tsx`. See `docs/handover.md` §1.
 2. **Build the React question page** to `DESIGN.md` §21.1's structure — breadcrumb, domain, title, short answer (always visible), the seven tags as a definition grid (not seven loose badges — §21.2), then the guidance section. When ungated: first paragraph visible, second paragraph fades over ~120px, then the lock card (§21.3) naming the product, its contents, its price, and `[See what's included]` / `Already bought it? Sign in`. **Non-negotiable per §21.3: the gated text must never be present in the page's HTML for a non-entitled request** — a CSS blur over data already sent to the browser is defeated by View Source in four seconds, which on a paid product is the product leaking, not a styling bug.
 3. **Upload the one real video** to Mux; confirm it finishes processing and returns a playback ID.
 4. **Build `GET /lessons/{id}/playback-token`** in FastAPI — will verify the JWT and generate a signed Mux JWT (15–30 min expiry) once entitlement checking is wired Day 4. Build the shape now.
@@ -256,13 +274,13 @@ click-through, below.
 
 ### Definition of Done — Day 3
 
-- [x] `GET /questions/{slug}` returns `QuestionPreviewOut` (no guidance body, `gated: true`) for a non-entitled request and `QuestionFullOut` for an entitled one — confirmed by inspecting the raw JSON directly via `curl`.
-- [x] The question page matches §21.1's structure and the gated guidance fades into a lock card, never present in the HTML when ungated (the response models are structurally different shapes — `QuestionPreviewOut` has no `body` field at all, not a hidden one).
+- [x] `GET /questions/{slug}` returns `QuestionPreviewOut` (no guidance body, `gated: true`) for a non-entitled request and `QuestionFullOut` for an entitled one — confirmed by inspecting the raw JSON directly via `curl`. **[RECONCILED — see step 1's annotation above]** True as originally built; since superseded by owner instruction. `GET /questions/{slug}` now returns a single `QuestionOut` with `body` always present, verified again post-change via the same method.
+- [x] The question page matches §21.1's structure and the gated guidance fades into a lock card, never present in the HTML when ungated (the response models are structurally different shapes — `QuestionPreviewOut` has no `body` field at all, not a hidden one). **[RECONCILED]** The lock card now gates only the template/lesson upsell, not the guidance text — the guidance is intentionally present in the HTML for everyone (it's the free entry point), soft-gated by a client-side email capture instead.
 - [x] The video plays via `<MuxPlayer>` (dynamically imported) using a signed JWT from the FastAPI endpoint, with captions on by default. Verified the signed-token path about as thoroughly as possible without a browser: a real RS256 token, generated server-side, was accepted by Mux's real playback endpoint (200, English captions track present in the manifest); an absent or garbage token was correctly rejected (403/400).
 - [x] Storage (Supabase Storage, replacing the planned R2 — see decision below) presigned-URL endpoint returns a working, time-limited download link when called directly — verified by fetching the real file. The download button's Preparing → Downloaded ✓ state machine is built with no visible `href`.
 - [x] The question, course, and lesson pages exist and link to each other correctly, and the related-template card on the question page is a direct buy surface — verified live: `GET /questions/{slug}` now returns the real product's name/price in `related_content` once the product existed (Phase 4).
 
-**Do not proceed to Day 4 if:** the video plays from an unsigned or non-expiring URL, React ever calls Mux/R2 directly instead of going through FastAPI, or the question's guidance body is present in the page source for a logged-out request.
+**Do not proceed to Day 4 if:** the video plays from an unsigned or non-expiring URL, or React ever calls Mux/R2 directly instead of going through FastAPI. **[RECONCILED]** This item originally also listed "the question's guidance body is present in the page source for a logged-out request" as a blocker — inverted by the later owner-directed model change: the guidance body being present for a logged-out request is now the *correct*, required behaviour (it's the free entry point), not a leak.
 
 ---
 
