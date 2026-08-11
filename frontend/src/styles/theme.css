@@ -416,16 +416,22 @@
   --popover: #1E1911;
   --popover-foreground: #F2EBDE;
 
-  /* Brand — `[PALETTE CONSTRAINED, 2026-08-11]` was champagne gold carrying the
-     dark theme; now a lighter azure blue takes over the same role (buttons and
-     links in blue on espresso), consistent with the light theme's blue-only
-     constraint (see :root's note) rather than a gold theme paired with a blue one. */
+  /* Brand — blue leads here too (buttons and links in azure on espresso), with
+     champagne gold as the secondary, mirroring :root's two-colour shape rather
+     than inverting it. The dark gold shades run lighter than the light theme's:
+     on espresso it is `--gold-strong` that must be *bright* to carry text, the
+     opposite of the light theme where it must be dark — same token names, same
+     rule ("strong is the text-safe one"), inverted values. */
   --primary: #6FA8DC;
   --primary-foreground: #0B1A2E;
-  --secondary: #262016;
-  --secondary-foreground: #EAE2D1;
+  --secondary: #2A2318;
+  --secondary-foreground: #EDE2CB;
   --accent: #7FB8E8;
   --accent-foreground: #0B1A2E;
+
+  --gold: #C9AC6A;               /* champagne — decorative only, as in :root */
+  --gold-strong: #E3CB92;        /* text-safe on espresso, 12.0:1 (§7.5.1) */
+  --gold-soft: #2E2517;          /* champagne wash, dark-surface equivalent */
 
   /* Quiet */
   --muted: #201B12;
