@@ -15,11 +15,26 @@ export default function MarketingLayout() {
             Practicable
           </Link>
           <nav className="flex items-center gap-3">
-            <Link to={user ? '/dashboard' : '/sign-in'}>
-              <Button variant="outline" size="sm">
-                {user ? 'My account' : 'Sign in'}
-              </Button>
-            </Link>
+            {user ? (
+              <Link to="/dashboard">
+                <Button variant="outline" size="sm">
+                  My account
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link to="/sign-in">
+                  <Button variant="ghost" size="sm">
+                    Log in
+                  </Button>
+                </Link>
+                <Link to="/sign-up">
+                  <Button variant="primary" size="sm">
+                    Create account
+                  </Button>
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </header>

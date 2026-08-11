@@ -6,6 +6,7 @@ import AuthLayout from '@/routes/_layouts/AuthLayout'
 import MemberLayout from '@/routes/_layouts/MemberLayout'
 
 import { Home } from '@/pages/Home'
+import { Dashboard } from '@/pages/Dashboard'
 import { Question } from '@/pages/Question'
 import { SignIn } from '@/pages/SignIn'
 import { SignUp } from '@/pages/SignUp'
@@ -38,7 +39,7 @@ const router = createBrowserRouter([
       {
         element: <MemberLayout />,
         children: [
-          { path: '/dashboard', element: <Home /> }, // Week 1 placeholder — a real dashboard is Week 2
+          { path: '/dashboard', element: <Dashboard /> },
           { path: '/lessons/:lessonId', element: <Lesson /> },
           { path: '/templates/:templateId', element: <Template /> },
           // Account-required before purchase (week1_plan.md decision #8) — these live

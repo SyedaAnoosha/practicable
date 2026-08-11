@@ -51,7 +51,17 @@ class Settings(BaseSettings):
     # to the same address already verified-pending in Brevo, since that's the one
     # real address on file for whoever runs this account; override if that's wrong.
     owner_notification_email: str = "anooshaerm@gmail.com"
+    # Comma-separated when there's more than one real frontend origin (e.g. a stable
+    # Vercel production alias plus a preview-deployment URL, or www/non-www) — a bare
+    # single value still works since split(",") on a string with no comma just
+    # returns a one-element list. CORSMiddleware's preflight check is an exact string
+    # match against this list (scheme + host, no trailing slash), so a mismatch here
+    # is what produces the "400 Disallowed CORS origin" seen on OPTIONS requests.
     allowed_origin: str = "http://localhost:5173"
+
+    @property
+    def allowed_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.allowed_origin.split(",") if origin.strip()]
 
     class Config:
         env_file = ".env"

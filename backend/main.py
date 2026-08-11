@@ -11,7 +11,7 @@ app = FastAPI(title="Practicable API", version="1.0.0")
 # CORS middleware - restricted to allowed origins only (Day 1 non-negotiable)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.allowed_origin, "http://localhost:5173"],
+    allow_origins=list(dict.fromkeys(settings.allowed_origins_list + ["http://localhost:5173"])),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
