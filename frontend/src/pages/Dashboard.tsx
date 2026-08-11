@@ -39,6 +39,7 @@ interface ProductContent {
 }
 
 interface ProductData {
+  id: string
   name: string
   description: string
   price_amount: number
@@ -64,6 +65,15 @@ export function Dashboard() {
     queryKey: queryKeys.products.detail(WEEK1_PRODUCT_SLUG),
     queryFn: () => api.get<ProductData>(`/products/${WEEK1_PRODUCT_SLUG}`).then((res) => res.data),
   })
+
+  // Without this, the product card here still showed "See what's included" / price
+  // even for someone who already bought it — ProductBuy.tsx got this same fix, but
+  // this card is a separate render path and needed it too.
+  const { data: entitlements } = useQuery({
+    queryKey: queryKeys.me.entitlements(),
+    queryFn: () => api.get<{ product_ids: string[] }>('/me/entitlements').then((res) => res.data),
+  })
+  const alreadyOwnsProduct = !!product && !!entitlements?.product_ids.includes(product.id)
 
   // Only one real question exists in the catalogue today (the rest of the real
   // 100-question content, docs/questions/, hasn't been loaded into the database yet —
@@ -151,7 +161,9 @@ export function Dashboard() {
             <CardHeader>
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle>{product.name}</CardTitle>
-                <Badge variant="outline">Most popular</Badge>
+                <Badge variant={alreadyOwnsProduct ? 'success' : 'outline'}>
+                  {alreadyOwnsProduct ? '✓ Owned' : 'Most popular'}
+                </Badge>
               </div>
               <CardDescription>{product.description}</CardDescription>
             </CardHeader>
@@ -161,15 +173,21 @@ export function Dashboard() {
                   <li key={content.label}>· {content.label}</li>
                 ))}
               </ul>
-              <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
-                <p className="font-sans text-2xl font-semibold">
-                  {formatCurrency(product.price_amount, product.currency)}
+              {alreadyOwnsProduct ? (
+                <p className="shrink-0 text-sm text-foreground sm:text-right" role="status">
+                  You already own this — lifetime access.
                 </p>
-                <p className="text-xs text-muted-foreground">One-time purchase · lifetime access</p>
-                <Link to={`/buy/${WEEK1_PRODUCT_SLUG}`}>
-                  <Button>See what's included</Button>
-                </Link>
-              </div>
+              ) : (
+                <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
+                  <p className="font-sans text-2xl font-semibold">
+                    {formatCurrency(product.price_amount, product.currency)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">One-time purchase · lifetime access</p>
+                  <Link to={`/buy/${WEEK1_PRODUCT_SLUG}`}>
+                    <Button>See what's included</Button>
+                  </Link>
+                </div>
+              )}
             </CardContent>
           </Card>
         </section>
