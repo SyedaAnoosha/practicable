@@ -21,6 +21,16 @@ This complements `RUNNING.md` (how to run/deploy) and `DESIGN.md`/`BACKEND.md` (
 | Frontend hosting | Vercel | Netlify, Render static site | SPA-friendly out of the box (`frontend/vercel.json`'s catch-all rewrite for client-side routing). **Live gap, not a shrug**: the Hobby (free) tier's terms prohibit commercial/revenue-generating use, and this app is already taking real Stripe payments — see §4. |
 | Backend hosting | Render, Starter plan | Render Free, Railway, Fly.io | Free tier's cold start (service sleeps after 15 min idle, ~30–50s to wake) is not acceptable for a live checkout flow a paying customer's browser redirects into mid-transaction. |
 
+### The learning system, activated
+
+`Course`/`Module`/`Lesson`/`LessonProgress`/`CourseProgress` existed in the schema since Week 1, but until this session they were dead weight — one skeleton course with one lesson, no list endpoint, no frontend route to reach any of it. "I can't see a course" was a completely accurate complaint. This session wired the whole thing up:
+
+- `GET /courses` (catalogue) and `GET /courses/{slug}` (public syllabus — every lesson listed with a lock icon whether or not the visitor owns it, real price resolved from whichever product actually sells the course, never hardcoded).
+- `GET /courses/{courseSlug}/lessons/{lessonSlug}` — the member learning interface's one data call: the lesson's own content plus the whole course's outline (for the sidebar) plus prev/next, in one round trip.
+- `POST /lessons/{id}/complete` — marks progress and live-recomputes the course-level rollup, so the catalogue's "% complete" and the outline's checkmarks never drift apart.
+- The member area gained an actual shell: a persistent sidebar (`MemberLayout.tsx` — Dashboard/Courses/Templates/Questions) replacing what used to be a bare `<Outlet />` with no navigation at all.
+- `Lesson` gained real content columns: `body` (for `lesson_type = reading`) and `download_template_id` (for `lesson_type = download`, reusing the `templates` table's storage/file columns rather than duplicating them — a lesson's download is gated by *lesson* entitlement, not by also being sold as a standalone template).
+
 ### Decisions that shaped the data model
 
 - **Entitlements, not "has this user bought this product"** — `entitlements` rows reference a `(user_id, resource_type, resource_id)` tuple with a `granted_via` enum (`purchase` today; the enum exists so comps/admin grants/course bundles don't need a schema change later). `has_access_to()` (`app/core/entitlements.py`) is the single choke point every gated endpoint calls — lessons, templates, and (until this session) question bodies all went through it.

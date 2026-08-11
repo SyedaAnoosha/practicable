@@ -1,4 +1,5 @@
-import type { ComponentType, ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 export interface EmptyStateProps {
@@ -6,7 +7,7 @@ export interface EmptyStateProps {
   description?: string
   /** Icon rendered in a quiet tile above the title — the visual hook that makes the
    * empty state feel like an invitation, not an error (§36). Fixed §14.1 icons only. */
-  icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>
+  icon?: LucideIcon
   action?: ReactNode
   className?: string
 }

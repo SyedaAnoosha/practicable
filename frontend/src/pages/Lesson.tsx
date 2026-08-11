@@ -64,7 +64,7 @@ export function Lesson() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8">
-      <div className="aspect-video overflow-hidden rounded-xl bg-black">
+      <div className="aspect-video overflow-hidden rounded-xl bg-black shadow-sm">
         <MuxPlayer
           playbackId={playbackToken.playback_id}
           tokens={{ playback: playbackToken.token }}

@@ -81,7 +81,7 @@ export function CheckoutSuccess() {
 
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
-      <Card className="border-l-4 shadow-sm" style={{ borderLeftColor: 'var(--accent)' }}>
+      <Card>
         <CardHeader>
           {/* The success moment gets the same icon-tile treatment as the buy cards'
               gold tiles — a status tile, not a bare checkmark glyph (§14's fixed
