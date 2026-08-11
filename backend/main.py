@@ -4,7 +4,7 @@ from app.core.config import settings
 from app.core.deps import get_current_user_id
 from app.api.v1.content import questions, lessons, templates
 from app.api.v1.commerce import checkout, products, webhooks
-from app.api.v1 import me
+from app.api.v1 import leads, me
 
 app = FastAPI(title="Practicable API", version="1.0.0")
 
@@ -27,6 +27,7 @@ app.include_router(checkout.router, tags=["commerce"])
 app.include_router(products.router, tags=["commerce"])
 app.include_router(webhooks.router, tags=["commerce"])
 app.include_router(me.router, tags=["me"])
+app.include_router(leads.router, tags=["leads"])
 
 
 @app.get("/health")

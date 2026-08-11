@@ -21,7 +21,7 @@ class Entitlement(Base, IdMixin, TimestampMixin):
     # 'purchase' on webhook fulfilment; 'manual' is the audited admin override
     # (BACKEND.md §1.5 / scripts/grant_entitlement.py), 'free' is the lead-capture grant
     # (BACKEND.md §6.5 lead_service).
-    granted_via: Mapped[GrantedVia] = mapped_column(str_enum(GrantedVia), nullable=False, default=GrantedVia.PURCHASE)
+    granted_via: Mapped[GrantedVia] = mapped_column(str_enum(GrantedVia, name="granted_via"), nullable=False, default=GrantedVia.PURCHASE)
 
     # Optional expiry for temporary access. Mapped[] needs the Python type (datetime),
     # not the SQL column type (DateTime) — mapped_column's first positional arg is

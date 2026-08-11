@@ -46,6 +46,7 @@ async def get_current_user(
     user = User(
         id=user_id,
         email=token.email or f"{token.user_id}@unknown.local",
+        name=token.name,
         role=Role.MEMBER,
     )
     session.add(user)

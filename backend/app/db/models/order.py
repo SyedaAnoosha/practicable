@@ -19,7 +19,7 @@ class Order(Base, IdMixin, TimestampMixin):
     stripe_session_id: Mapped[str] = mapped_column(String(255), nullable=False)
     stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     
-    status: Mapped[OrderStatus] = mapped_column(str_enum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
+    status: Mapped[OrderStatus] = mapped_column(str_enum(OrderStatus, name="order_status"), default=OrderStatus.PENDING, nullable=False)
     total_amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     

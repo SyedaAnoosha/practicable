@@ -24,4 +24,4 @@ class User(Base, TimestampMixin):
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    role: Mapped[Role] = mapped_column(str_enum(Role), default=Role.MEMBER, nullable=False)
+    role: Mapped[Role] = mapped_column(str_enum(Role, name="role"), default=Role.MEMBER, nullable=False)

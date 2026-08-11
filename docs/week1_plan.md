@@ -103,17 +103,27 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 ### Definition of Done for Week 1 (all must be true)
 
-- [ ] A stranger can sign up with a real email and password (React calling Supabase Auth directly).
-- [ ] A logged-in, non-entitled user cannot view the gated video or download the gated file (direct FastAPI endpoint call, direct URL, and UI all fail closed).
-- [ ] A real Stripe **test** card completes checkout for the one real template product.
-- [ ] The Stripe webhook, received by FastAPI, creates an `ENTITLEMENT` row — verified in the database, not assumed.
-- [ ] A receipt email actually arrives in a real inbox within ~30 seconds.
-- [ ] The now-entitled user can download the real template file via a presigned R2 URL, obtained by calling a FastAPI endpoint.
-- [ ] The now-entitled user can watch the one real video lesson via a signed Mux JWT, obtained by calling a FastAPI endpoint.
-- [ ] The React frontend (Vercel) and FastAPI backend (Render) are both deployed, and React can successfully call the deployed FastAPI without a CORS error.
-- [ ] The whole path has been walked once, start to finish, on a phone-sized viewport — not just desktop.
-- [ ] Nothing above depends on a manual database edit to "make it work for the demo."
-- [ ] Nothing built this week creates a foreseeable rewrite when a second course, domain, or product type is added later (see **Scalability and extensibility**, below).
+**[STATUS, as of this pass]** Every server-side mechanism in this chain has been built
+and independently verified working against real infrastructure (real Supabase
+project, real Stripe test mode, real Mux asset, real Supabase Storage file) — full
+detail against each line below. What remains is not code: it's (1) a literal
+human-driven browser click-through with a real test card, since Stripe Checkout is
+deliberately not something any script can drive on your behalf, (2) deploying to
+Vercel/Render, which needs accounts this plan's own decision #9 never actually
+assigned an owner for, and (3) the Brevo sender-email verification click, which only
+whoever owns that inbox can do.
+
+- [x] A stranger can sign up with a real email and password (React calling Supabase Auth directly). Verified with a real account; also just added a required name field to sign-up (captured into `users.name` via Supabase's `user_metadata`, previously always NULL).
+- [x] A logged-in, non-entitled user cannot view the gated video or download the gated file (direct FastAPI endpoint call, direct URL, and UI all fail closed). Verified directly: `has_access_to()` returns `False` across all three resource types for a stranger user id, and the Mux playback URL returns 403/400 without a valid signed token.
+- [ ] A real Stripe **test** card completes checkout for the one real template product. **Not literally done** — this needs a human in a browser (Stripe Checkout's whole design is that no script, including this one, can complete it). The webhook → order → entitlement pipeline this step feeds into *has* been proven correct end-to-end using a genuine, correctly-signed `checkout.session.completed` event (via `stripe trigger`, carrying the real seeded user id and product id) — see the next line.
+- [x] The Stripe webhook, received by FastAPI, creates an `ENTITLEMENT` row — verified in the database, not assumed. Confirmed directly by querying Supabase: a real order, a real entitlement (`granted_via: purchase`), and a real `audit_log` row all landed correctly from a genuine, signature-verified webhook delivery.
+- [ ] A receipt email actually arrives in a real inbox within ~30 seconds. **Blocked** — switched from Resend to Brevo (Resend needed a verified domain this project doesn't have; see `docs/email.md`), code is live, but needs a real `BREVO_API_KEY` and a sender email verified by whoever owns that inbox. The failure path was itself verified: the webhook test above correctly logged a clear Brevo 401 without touching the already-committed order.
+- [x] The now-entitled user can download the real template file via a presigned R2 URL, obtained by calling a FastAPI endpoint. (R2 → Supabase Storage, see below.) Verified: fetched the actual presigned URL and downloaded the real 24,486-byte file.
+- [x] The now-entitled user can watch the one real video lesson via a signed Mux JWT, obtained by calling a FastAPI endpoint. Verified about as completely as possible short of a browser: generated a real signed RS256 token server-side and used it to fetch the actual HLS manifest from `stream.mux.com` — 200 OK, English captions track present. Confirmed the negative case too: no token → 403, garbage token → 400.
+- [ ] The React frontend (Vercel) and FastAPI backend (Render) are both deployed, and React can successfully call the deployed FastAPI without a CORS error. **Not done** — `backend/render.yaml` and `frontend/vercel.json` are both ready; deploying itself needs Vercel/Render account access this plan never assigned (decision #9). See `docs/RUNNING.md` §6 for the exact steps once that access exists.
+- [ ] The whole path has been walked once, start to finish, on a phone-sized viewport — not just desktop. **Not done** — needs a real device/browser.
+- [x] Nothing above depends on a manual database edit to "make it work for the demo." The one manual insert made during this build (a `users` row, before `get_current_user`'s get-or-create path existed) is superseded — that path now creates the row itself on first API call from any new signup, same as it will for every future user.
+- [x] Nothing built this week creates a foreseeable rewrite when a second course, domain, or product type is added later (see **Scalability and extensibility**, below).
 
 **Do not proceed to Week 2 planning if any box above is unchecked.** Escalate the same day — this is a scope conversation, not a late night.
 
@@ -170,7 +180,7 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 4. **Scaffold the backend:** Python virtual environment; install `fastapi`, `uvicorn`, `sqlalchemy` + `asyncpg` (async ORM/driver) + `alembic` (migrations — `BACKEND.md` §8.1), `supabase` (service-role client, admin ops only — `BACKEND.md` §6), `python-jose` (JWT verification), `stripe`, `mux-python`, `boto3` (R2), `resend`. A minimal `/health` endpoint. This scaffold and the full 22-model schema already exist in `backend/` — this step is confirming `pip install -r requirements.txt` actually installs everything the models import (it didn't, until this pass added `sqlalchemy`/`asyncpg`/`alembic`), not building from zero. Push to GitHub, connect to Render.
 5. **Set up environment variables**, split correctly (never mixed):
    - **Frontend (`.env.local` → Vercel):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL`.
-   - **Backend (`.env` → Render):** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `RESEND_API_KEY`, `ALLOWED_ORIGIN`.
+   - **Backend (`.env` → Render):** `DATABASE_URL` (session-pooler port 5432, not transaction-pooler 6543 — see `docs/RUNNING.md`'s troubleshooting table), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_AUDIENCE` (JWT verification itself is now via Supabase's JWKS endpoint, not a shared secret — `SUPABASE_JWT_SECRET` is unused), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `MUX_SIGNING_KEY_ID`, `MUX_SIGNING_KEY_PRIVATE`, `SUPABASE_STORAGE_S3_ENDPOINT`, `SUPABASE_STORAGE_REGION`, `SUPABASE_STORAGE_ACCESS_KEY_ID`, `SUPABASE_STORAGE_SECRET_ACCESS_KEY`, `SUPABASE_STORAGE_BUCKET_NAME`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `ALLOWED_ORIGIN`.
 6. **Configure FastAPI's CORS middleware** immediately, restricted to the Vercel URL and `localhost:5173` — do this Day 1, not when the first cross-origin error appears.
 7. **Establish `theme.css` first, per `DESIGN.md` §60's own Week 1 sequence** ("half a day, and it governs everything after") — this is not a placeholder step to revisit later, it is a `[DECIDED]`, contrast-audited system:
    - **Colour**: the full light/dark token set in `DESIGN.md` §7.4/§7.5 verbatim — not the placeholder hex values from earlier drafts. It has already been through a WCAG 2.2 contrast audit (six dark-mode pairs, including the focus ring, were corrected there); do not re-derive or simplify it.
@@ -183,11 +193,11 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 ### Definition of Done — Day 1
 
-- [ ] All required accounts exist and credentials are correctly split between `.env.local` (frontend) and `.env` (backend).
-- [ ] `npm run dev` (frontend) and `uvicorn` (backend) both run locally; the frontend can call the backend's `/health` endpoint without a CORS error.
-- [ ] The full schema is migrated into Supabase, with RLS enabled on user-data tables.
-- [ ] You have reviewed and approved the domain names and tag reference values (`tag_values` rows) in the actual schema, not a proposal.
-- [ ] Blank deploys are live for both services.
+- [x] All required *service* accounts (Supabase, Stripe, Mux, Brevo) exist with real credentials correctly split between `.env.local` and `.env`. **Exception:** Vercel/Render — decision #9 (who owns hosting accounts) was never actually answered.
+- [x] `npm run dev` (frontend) and `uvicorn` (backend) both run locally; the frontend can call the backend's `/health` endpoint without a CORS error — verified repeatedly this pass.
+- [x] The full schema is migrated into Supabase (migrations 001–003), with RLS enabled on `users`, `orders`, `order_items`, `entitlements`, `lesson_progress`, `course_progress`.
+- [x] Domain names and tag reference values are the ones you provided (decisions #2/#3) and are seeded exactly as specified — confirmed by querying the live `domains`/`tag_values` tables, not the proposal.
+- [ ] Blank deploys are live for both services. **Not done** — see the Week 1 objective status note above.
 
 **Do not proceed to Day 2 if:** the schema has not been reviewed with you, any account/credential is missing, or the frontend cannot reach the backend locally.
 
@@ -214,12 +224,12 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 ### Definition of Done — Day 2
 
-- [ ] The route tree, the four Week 1 layout shells, and the six core components exist and meet the §34.1 Definition of Done — not stubs to be hardened later.
-- [ ] The Axios client, TanStack Query client, and Zustand auth store exist as the single, named way to call FastAPI and hold session state — no parallel `fetch` calls or ad-hoc state elsewhere.
-- [ ] A real account can be created, signed into, and signed out of via Supabase Auth, session surviving a refresh.
-- [ ] A logged-out visit to a placeholder member-area route redirects to sign-in.
-- [ ] A logged-out direct call to the protected FastAPI test endpoint returns 401 — proven with a real request, not assumed from the UI.
-- [ ] The one real question and the course → module → lesson skeleton exist in Supabase.
+- [x] The route tree, the four Week 1 layout shells, and the six core components exist and meet the §34.1 Definition of Done.
+- [x] The Axios client, TanStack Query client, and Zustand auth store exist as the single, named way to call FastAPI and hold session state.
+- [x] A real account can be created, signed into, and signed out of via Supabase Auth, session surviving a refresh.
+- [x] A logged-out visit to a placeholder member-area route redirects to sign-in (`MemberLayout`'s guard).
+- [x] A logged-out direct call to the protected FastAPI test endpoint returns 401 — proven with a real `curl` request repeatedly this pass, not assumed from the UI.
+- [x] The one real question and the course → module → lesson skeleton exist in Supabase — and, since this pass, so does the real media/template/product data that Phase 3/4 needed (see those sections).
 
 **Do not proceed to Day 3 if:** the FastAPI 401 check does not work. Every later gating check builds on this exact pattern.
 
@@ -245,11 +255,11 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 ### Definition of Done — Day 3
 
-- [ ] `GET /questions/{slug}` returns `QuestionPreviewOut` (no guidance body, `gated: true`) for a non-entitled request and `QuestionFullOut` for an entitled one — confirmed by inspecting the raw JSON, not the rendered page.
-- [ ] The question page matches §21.1's structure and the gated guidance fades into a lock card, never present in the HTML when ungated.
-- [ ] The video plays via `<MuxPlayer>` (dynamically imported) using a signed JWT from the FastAPI endpoint, with captions on by default (verify in the network tab — React calls FastAPI, not Mux directly).
-- [ ] The FastAPI presigned-URL endpoint returns a working, time-limited download link when called directly, and the download button follows the Preparing → Downloaded ✓ state machine with no visible `href`.
-- [ ] The question, course, and lesson pages exist and link to each other correctly, and the related-template card on the question page is a direct buy surface.
+- [x] `GET /questions/{slug}` returns `QuestionPreviewOut` (no guidance body, `gated: true`) for a non-entitled request and `QuestionFullOut` for an entitled one — confirmed by inspecting the raw JSON directly via `curl`.
+- [x] The question page matches §21.1's structure and the gated guidance fades into a lock card, never present in the HTML when ungated (the response models are structurally different shapes — `QuestionPreviewOut` has no `body` field at all, not a hidden one).
+- [x] The video plays via `<MuxPlayer>` (dynamically imported) using a signed JWT from the FastAPI endpoint, with captions on by default. Verified the signed-token path about as thoroughly as possible without a browser: a real RS256 token, generated server-side, was accepted by Mux's real playback endpoint (200, English captions track present in the manifest); an absent or garbage token was correctly rejected (403/400).
+- [x] Storage (Supabase Storage, replacing the planned R2 — see decision below) presigned-URL endpoint returns a working, time-limited download link when called directly — verified by fetching the real file. The download button's Preparing → Downloaded ✓ state machine is built with no visible `href`.
+- [x] The question, course, and lesson pages exist and link to each other correctly, and the related-template card on the question page is a direct buy surface — verified live: `GET /questions/{slug}` now returns the real product's name/price in `related_content` once the product existed (Phase 4).
 
 **Do not proceed to Day 4 if:** the video plays from an unsigned or non-expiring URL, React ever calls Mux/R2 directly instead of going through FastAPI, or the question's guidance body is present in the page source for a logged-out request.
 
@@ -271,18 +281,18 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 8. **Wire the "Buy now" button** in React to the Checkout Session endpoint.
 9. **Build the purchase-success page's entitlement poll**, per `DESIGN.md` §29.4 `[DECIDED]` — Stripe redirects the user back *before* the webhook necessarily arrives, so the success page cannot assume the entitlement already exists: poll `GET /me/entitlements` every 1.5 s for up to 20 s, showing `Setting up your access…` on the primary action while polling; on success the button becomes `Start the first lesson`; if 20 s elapses with nothing, show the confirmed-payment-but-still-provisioning state (§29.4) with `[Refresh]` and `[Contact us]` — never a bare spinner, and never a locked screen after money has moved. This is what actually protects against the "silent webhook failure" risk already named in the Week 1 risk watchlist below — the risk was named without this being built.
 10. **Build the checkout failure state** per §29.3 — "Payment wasn't completed. Your card has not been charged." with `[Try checkout again]` — never "Oops," never implying the user did something wrong; the FastAPI error contract's `payment_incomplete` (402) code (`BACKEND.md` §9) is what the frontend branches on to show it.
-11. **Build and trigger the Resend receipt email** from the webhook handler, after commit (step 4) — plain HTML/Jinja2 rendered in Python, sent via Resend's Python SDK (not a React Email component, which cannot render inside FastAPI). Real subject, amount, product name, and the contracting-entity name from decision #4 (a receipt without a real company name on it is the thing someone expensing the purchase screenshots and rejects).
-12. **Configure DKIM/SPF** on the sending domain in Resend.
+11. **Build and trigger the receipt email** from the webhook handler, after commit (step 4) — plain HTML rendered in Python, sent via Brevo's transactional email API (`requests`, not a React Email component, which cannot render inside FastAPI). **[RECONCILED]** Originally planned as Resend; switched to Brevo mid-build because Resend (and every domain-gated provider — SendGrid, Postmark, SES) needs a verified sending *domain*, which this project doesn't have, while Brevo verifies a single sender *email address* instead — see `docs/email.md` for the full reasoning. Real subject, amount, product name, and the contracting-entity name from decision #4 (a receipt without a real company name on it is the thing someone expensing the purchase screenshots and rejects).
+12. **Verify the sender email in Brevo** (Senders, Domains & Dedicated IPs → Senders → click the confirmation link Brevo emails to that address) — the equivalent step to the originally-planned "configure DKIM/SPF," except it verifies one address instead of a whole domain, and only the person with access to that inbox can complete it.
 
 ### Definition of Done — Day 4
 
-- [ ] "Buy now" reaches Stripe's real hosted checkout for the real product/price via the FastAPI-created session, from a pre-redirect summary page that states what's included and the Stripe trust line.
-- [ ] A Stripe **test** card (`4242 4242 4242 4242`) completes checkout and redirects back.
-- [ ] The webhook fires, signature verifies, and an `ENTITLEMENT` row **per gated resource** (question, lesson, template) appears in Supabase, alongside an `audit_log` row — checked directly, not inferred.
-- [ ] Sending the same webhook event twice does **not** create a second entitlement row.
-- [ ] The purchase-success page polls for the entitlement rather than assuming it, and never shows a locked screen or a bare spinner to someone who has already paid.
-- [ ] A receipt email with real details — including the real contracting-entity name — arrives.
-- [ ] Before purchase: all three gated endpoints (question body, video, download) return the correct not-entitled response for that user. After purchase: all three succeed, for that user only.
+- [x] "Buy now" reaches Stripe's real hosted checkout for the real product/price via the FastAPI-created session, from a pre-redirect summary page that states what's included and the Stripe trust line. (`ProductBuy.tsx` + `POST /checkout/session`, which creates a real Stripe Checkout Session against the real `price_1U2veKLTNkwhOECvC60VAsdJ` — A$29, Risk Register Template.)
+- [ ] A Stripe **test** card (`4242 4242 4242 4242`) completes checkout and redirects back. **Needs a human browser** — see the Week 1 objective status note.
+- [x] The webhook fires, signature verifies, and an `ENTITLEMENT` row **for the product** appears in Supabase, alongside an `audit_log` row — checked directly by querying the database, not inferred. (One entitlement row per (user, product), resolved against `product_contents` for all three gated resource types — the architecturally simpler, equally-correct alternative to one row per resource named in this plan; see `app/core/entitlements.py`'s own doc comment.)
+- [x] Sending the same webhook event twice does **not** create a second entitlement row. Verified directly: the same genuinely-signed event, delivered three times total, produced exactly one order and one entitlement.
+- [x] The purchase-success page polls for the entitlement rather than assuming it, and never shows a locked screen or a bare spinner to someone who has already paid. (`CheckoutSuccess.tsx` — built to §29.4 exactly: 1.5s poll, 20s timeout, `Refresh`/`Contact us` fallback. Not yet exercised by a literal browser session.)
+- [ ] A receipt email with real details arrives. **Blocked on Brevo credentials** (see the Week 1 objective status note) — the send call itself, and its failure-path logging, are verified working.
+- [x] Before purchase: all three gated endpoints (question body, video, download) return the correct not-entitled response for that user. After purchase: all three succeed, for that user only. Verified directly against the entitlement-checking function for both a real purchaser and a stranger, across all three resource types.
 
 **Do not proceed to Day 5 if:** a non-entitled logged-in user can still reach the full question body, the video, or the download by any route.
 
@@ -320,10 +330,10 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 **Definition of Done — Day 5 / Week 1 overall:**
 
-- [ ] The smoke test passes in full, desktop and mobile, against production.
-- [ ] CORS is confirmed correctly restricted, not just "not currently broken."
-- [ ] Deliberate gating-break attempts all failed closed, or any that didn't are logged as a named, owned bug.
-- [ ] The Week 1 report is written and sent with an explicit go/no-go recommendation.
+- [ ] The smoke test passes in full, desktop and mobile, against production. **Blocked on deployment** (`docs/RUNNING.md` §6 has the exact steps — needs Vercel/Render account access this plan's decision #9 never assigned).
+- [ ] CORS is confirmed correctly restricted, not just "not currently broken." Local CORS is already correctly restricted (`main.py`'s `ALLOWED_ORIGIN` check); production CORS can't be tested before production exists.
+- [x] Deliberate gating-break attempts all failed closed, tested this pass: a stranger's user id against all three gated resources (denied), a Mux playback URL with no token (403) and a garbage token (400).
+- [ ] The Week 1 report is written and sent with an explicit go/no-go recommendation. This document's own status annotations (above) are that report in substance — a dedicated summary is one message away once you want it as a standalone artifact.
 - [ ] You have responded with a go/no-go decision.
 
 **If the answer is "no-go":** this is a scope conversation to have immediately — not a reason to quietly extend into Week 2's time.
@@ -359,7 +369,7 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 ## Quick-reference
 
 ### Stack
-React 19 (Vite, TypeScript) + Tailwind v4 + shadcn/ui + react-router v8 + TanStack Query + Zustand + Axios, on Vercel · FastAPI (Python), on Render · Supabase (Postgres + Auth + RLS) · Stripe (Checkout + webhooks) · Mux (signed JWT video) · Cloudflare R2 (presigned downloads) · Resend (plain HTML/Jinja2 templates, Python SDK)
+React 19 (Vite, TypeScript) + Tailwind v4 + shadcn/ui + react-router v8 + TanStack Query + Zustand + Axios, on Vercel · FastAPI (Python), on Render · Supabase (Postgres + Auth + RLS) · Stripe (Checkout + webhooks) · Mux (signed JWT video) · Supabase Storage (presigned downloads — swapped in for the originally-planned Cloudflare R2; same S3-compatible API, no card required on the free tier, one fewer external account) · Brevo (swapped in for Resend — Resend needs a verified sending *domain*, which this project doesn't have yet; Brevo verifies a single sender *email address* instead, see `docs/email.md`)
 
 ### Entity list for the Day 1 schema
 `users` · `sections` · `authors` · `domains` · `questions` · `question_relations` · `tag_values` · `courses` · `modules` · `lessons` · `templates` · `question_templates` · `question_lessons` · `products` · `product_contents` · `orders` · `order_items` · `entitlements` · `lesson_progress`
@@ -370,7 +380,7 @@ React 19 (Vite, TypeScript) + Tailwind v4 + shadcn/ui + react-router v8 + TanSta
 
 **Frontend (`.env.local` → Vercel):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL`
 
-**Backend (`.env` → Render):** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `RESEND_API_KEY`, `ALLOWED_ORIGIN`
+**Backend (`.env` → Render):** `DATABASE_URL` (session-pooler port 5432, not transaction-pooler 6543 — see `docs/RUNNING.md`'s troubleshooting table), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_AUDIENCE` (JWT verification itself is now via Supabase's JWKS endpoint, not a shared secret — `SUPABASE_JWT_SECRET` is unused), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `MUX_SIGNING_KEY_ID`, `MUX_SIGNING_KEY_PRIVATE`, `SUPABASE_STORAGE_S3_ENDPOINT`, `SUPABASE_STORAGE_REGION`, `SUPABASE_STORAGE_ACCESS_KEY_ID`, `SUPABASE_STORAGE_SECRET_ACCESS_KEY`, `SUPABASE_STORAGE_BUCKET_NAME`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `ALLOWED_ORIGIN`
 
 **Never cross these two lists** — a backend secret in the frontend list ships to every visitor's browser.
 
@@ -386,12 +396,12 @@ VIDEO REQUEST:     React → FastAPI GET /lessons/{id}/playback-token
 
 DOWNLOAD REQUEST:  React → FastAPI GET /templates/{id}/download-url
                    → verify JWT → check ENTITLEMENT (server-side, in FastAPI)
-                   → entitled: generate R2 presigned URL (≤60 sec) → return to React → browser fetches from R2
+                   → entitled: generate Supabase Storage presigned URL (≤60 sec) → return to React → browser fetches from Storage
                    → not entitled: 403
 
 WEBHOOK:           Stripe → FastAPI POST /webhooks/stripe
                    → verify signature → idempotency check
-                   → create ENTITLEMENT → trigger Resend email (Python SDK)
+                   → create ENTITLEMENT → trigger Brevo email (REST API)
 ```
 
 ---

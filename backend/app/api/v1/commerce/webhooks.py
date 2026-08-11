@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Product, User, WebhookEvent
 from app.db.session import get_session
 from app.integrations.stripe_client import construct_webhook_event
-from app.services.email_service import send_receipt_email
+from app.services.email_service import send_receipt_email, send_sale_notification_email
 from app.services.order_service import create_order_from_checkout
 
 router = APIRouter()
@@ -84,6 +84,16 @@ async def stripe_webhook(
                         amount_cents=order.total_amount_cents,
                         currency=order.currency,
                         product_name=product.name if product else "Your purchase",
+                    )
+                    # To the owner, not the buyer — same order, same commit, a second
+                    # person who needs to know a sale just happened. Independent of
+                    # the receipt email above: one failing must not skip the other.
+                    await send_sale_notification_email(
+                        order_id=str(order.id),
+                        buyer_email=user.email,
+                        amount_cents=order.total_amount_cents,
+                        currency=order.currency,
+                        product_name=product.name if product else "Unknown product",
                     )
             except Exception as e:
                 webhook_event.error_message = str(e)[:1000]

@@ -21,7 +21,15 @@ export function SignIn() {
     setLoading(false)
 
     if (signInError) {
-      setError(signInError.message)
+      // Supabase's real message here is the terse "Email not confirmed" — worth
+      // spelling out what to actually do about it, since it's reachable any time
+      // "Confirm email" is on (the project default) and someone hasn't clicked the
+      // link yet.
+      setError(
+        signInError.message === 'Email not confirmed'
+          ? "You haven't confirmed your email yet — check your inbox for the confirmation link."
+          : signInError.message,
+      )
       return
     }
     navigate('/dashboard')

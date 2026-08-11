@@ -18,7 +18,7 @@ class Media(Base, IdMixin, TimestampMixin):
     mux_asset_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     mux_playback_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     
-    status: Mapped[MediaStatus] = mapped_column(str_enum(MediaStatus), default=MediaStatus.UPLOADING, nullable=False)
+    status: Mapped[MediaStatus] = mapped_column(str_enum(MediaStatus, name="media_status"), default=MediaStatus.UPLOADING, nullable=False)
     duration_seconds: Mapped[int | None] = mapped_column(default=None)
     
     # Relationships

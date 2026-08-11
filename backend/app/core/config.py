@@ -34,10 +34,32 @@ class Settings(BaseSettings):
     supabase_storage_access_key_id: str
     supabase_storage_secret_access_key: str
     supabase_storage_bucket_name: str
-    resend_api_key: str
+    # Receipt emails — currently Resend, in sandbox mode (docs/email.md "Option 1"):
+    # `onboarding@resend.dev` needs no domain and no phone verification, but Resend's
+    # anti-abuse rules restrict a sandbox account to sending only to the email the
+    # Resend account itself is registered under — real buyers can't receive mail yet
+    # this way, only that one test address can. Brevo (verifies a sender email instead
+    # of a domain, no such recipient restriction) is the upgrade path once its
+    # one-time phone verification step is done — settings kept below, unused for now,
+    # so switching back is a one-line change in email_service.py, not a rebuild.
+    resend_api_key: str = ""
+    brevo_api_key: str = ""
+    brevo_sender_email: str = ""
+    brevo_sender_name: str = "Practicable"
+    # Where the "you made a sale" notification goes (app/services/email_service.py's
+    # send_sale_notification_email) — the owner's own inbox, not the buyer's. Defaults
+    # to the same address already verified-pending in Brevo, since that's the one
+    # real address on file for whoever runs this account; override if that's wrong.
+    owner_notification_email: str = "anooshaerm@gmail.com"
     allowed_origin: str = "http://localhost:5173"
 
     class Config:
         env_file = ".env"
+        # pydantic-settings defaults to rejecting any .env variable that isn't a
+        # declared field (unlike plain pydantic, which ignores extras by default) —
+        # every ad-hoc key added to .env for a dashboard/testing credential
+        # (RESEND_FULL_ACCESS_API_KEY, etc.) that isn't wired into a Settings field
+        # yet would otherwise crash the app at import time.
+        extra = "ignore"
 
 settings = Settings()

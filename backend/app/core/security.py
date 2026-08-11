@@ -11,6 +11,7 @@ from app.core.config import settings
 class VerifiedToken:
     user_id: str
     email: str | None
+    name: str | None
 
 # auto_error=False: HTTPBearer's default behaviour is to raise 403 when the
 # Authorization header is simply absent, which is wrong here — week1_plan.md's Phase 2
@@ -52,7 +53,11 @@ def _decode(token: str) -> VerifiedToken:
             detail="Invalid token: missing user ID"
         )
 
-    return VerifiedToken(user_id=user_id, email=payload.get("email"))
+    # Supabase puts anything passed as signUp's options.data (SignUp.tsx) under the
+    # user_metadata claim, not at the payload's top level.
+    name = payload.get("user_metadata", {}).get("name")
+
+    return VerifiedToken(user_id=user_id, email=payload.get("email"), name=name)
 
 
 async def verify_jwt_full(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> VerifiedToken:

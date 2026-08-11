@@ -306,3 +306,53 @@ explicitly, not just "it seemed fine."
 | `alembic upgrade head` hangs or times out | Usually still using port 6543, or a firewalled network | Same fix as the prepared-statement error above |
 | First purchase fails with a foreign-key violation on `entitlements.user_id` | The local `users` row was never created for that Supabase auth user | Only happens if a route uses `get_current_user_id` (string only) where it needed `get_current_user` (get-or-create) — `checkout.py` already does this correctly |
 | `npm run dev` frontend can't reach the backend | `VITE_API_BASE_URL` mismatch, or backend not running | Confirm both, and that `frontend/.env.local` isn't still pointing at a different port from a previous session |
+
+---
+
+## 6. Deploying to production (Phase 5)
+
+Both config files are already in the repo — deploying is a dashboard/CLI step, not a
+code-writing one, and needs accounts Claude doesn't have (week1_plan.md decision #9
+never actually got answered — who owns these accounts is still open).
+
+### 6.1 Backend → Render
+
+`backend/render.yaml` is a Render Blueprint — every setting (Starter tier, not Free;
+build command runs `alembic upgrade head` automatically; health check path) is already
+defined there.
+
+1. Render dashboard → **New → Blueprint** → connect this GitHub repo. Render reads
+   `render.yaml` automatically.
+2. It'll prompt for every `sync: false` env var — copy each value straight from
+   `backend/.env` (never commit that file; this is the one place its values are meant
+   to be pasted). Leave `ALLOWED_ORIGIN` for last — you don't have the real Vercel URL
+   until step 6.2 is done.
+3. Deploy. First build runs the Alembic migration against the real database — watch
+   the build log for it, don't assume it succeeded silently.
+
+### 6.2 Frontend → Vercel
+
+`frontend/vercel.json` already has the SPA rewrite rule Vercel needs (without it,
+directly loading a deep link like `/questions/some-slug` 404s — Vercel's static
+hosting doesn't know react-router owns that path).
+
+1. Vercel dashboard → **New Project** → import this repo → set **Root Directory** to
+   `frontend`. Framework preset (Vite) is auto-detected.
+2. Environment variables → add `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (from
+   `frontend/.env.local`), and `VITE_API_BASE_URL` set to the real Render URL from
+   6.1 (`https://practicable-api.onrender.com`, or whatever Render assigned).
+3. Deploy.
+
+### 6.3 Close the loop
+
+1. Back in Render, set `ALLOWED_ORIGIN` to the real Vercel URL from 6.2, and redeploy
+   — until this is set, every request from the deployed frontend fails CORS (week1_plan.md's own risk watchlist names this exact failure mode: "fails silently in a way
+   that looks like the API is down").
+2. Stripe Dashboard → Webhooks → the `we_...` endpoint already configured
+   (`https://practicable.onrender.com/webhooks/stripe` — confirm this matches your
+   real Render URL, update it if Render assigned a different subdomain) → this is
+   what makes production checkouts actually grant entitlements, since `stripe listen`
+   was a local-only workaround.
+3. Run the full smoke test (§4.3) again against the real URLs, desktop then mobile —
+   this is Phase 5 step 4, and it's a different test than the local one: CORS, cold
+   starts, and real DNS are all things `localhost` can't catch.

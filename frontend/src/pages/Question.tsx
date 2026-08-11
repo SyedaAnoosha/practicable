@@ -50,7 +50,7 @@ export function Question() {
   if (!question) return null
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8">
+    <div className="mx-auto w-full max-w-7xl px-5 py-12 sm:px-8">
       <PageTitle eyebrow={question.domain} title={question.title} description={question.subtitle} />
 
       <p className="mt-6 text-lg text-muted-foreground">{question.preview}</p>
