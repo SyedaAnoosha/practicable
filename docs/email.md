@@ -47,11 +47,14 @@ Sign up at brevo.com (needs your email to confirm — that part only you can do)
 
 ## Implementation status
 
-`app/services/email_service.py` now calls Brevo's transactional email API directly (`requests`, no new SDK dependency). `app/core/config.py` has `brevo_api_key` / `brevo_sender_email` / `brevo_sender_name`, all optional so the app still boots without them — a send attempt without them logs a clear error instead of crashing.
+**Update — switched to Brevo's SMTP relay, not the REST API.** The owner grabbed a credential from Settings → SMTP & API → the **SMTP** tab (`xsmtpsib-...`), not the **API Keys** tab (`xkeysib-...`) originally planned below — both are valid Brevo credentials, just for different transports. Rather than ask for the other key, `email_service.py` was rebuilt around SMTP relay (`smtp-relay.brevo.com:587`, stdlib `smtplib`, no new dependency), since the credential already on hand works for that.
+
+Confirmed directly: authenticating with `brevo_sender_email` as the SMTP login fails (`535 Authentication failed`) — Brevo's SMTP login is a separate value shown on that same SMTP tab (format `xxxxxx@smtp-brevo.com`), not derivable from the sender email or the key itself.
+
+`app/core/config.py` now has `brevo_api_key` (the SMTP key, kept under this name since it already matches `.env`/Render), `brevo_smtp_login` (new), `brevo_sender_email`, `brevo_sender_name` — all optional, so the app still boots without them and a send attempt without them logs a clear error instead of crashing or silently no-oping forever.
 
 **Still needed from the owner, genuinely can't be done by Claude:**
-1. Sign up at [brevo.com](https://www.brevo.com/) (free, 300 emails/day, no card).
-2. Settings → SMTP & API → API Keys → create one, paste it into `backend/.env` as `BREVO_API_KEY`.
-3. Senders, Domains & Dedicated IPs → Senders → add the real "from" email you want receipts to come from → click the confirmation link Brevo emails to that address (this step cannot be done by anyone but the person with access to that inbox) → put that same address in `backend/.env` as `BREVO_SENDER_EMAIL`.
+1. Settings → SMTP & API → **SMTP** tab → copy the **Login** field (format `xxxxxx@smtp-brevo.com`) → paste into `backend/.env` as `BREVO_SMTP_LOGIN`, and into Render's dashboard once deployed.
+2. Confirm `BREVO_SENDER_EMAIL` is a sender Brevo has actually verified (Senders, Domains & Dedicated IPs → Senders → the confirmation-link step) — sending from an unverified address will be rejected by the relay regardless of correct SMTP credentials.
 
-Once both are in `.env`, the webhook-triggered receipt email path is live — no further code changes needed.
+Once `BREVO_SMTP_LOGIN` is in `.env`, the webhook-triggered receipt + owner-notification email paths are live — no further code changes needed.

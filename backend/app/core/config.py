@@ -34,16 +34,24 @@ class Settings(BaseSettings):
     supabase_storage_access_key_id: str
     supabase_storage_secret_access_key: str
     supabase_storage_bucket_name: str
-    # Receipt emails — currently Resend, in sandbox mode (docs/email.md "Option 1"):
-    # `onboarding@resend.dev` needs no domain and no phone verification, but Resend's
-    # anti-abuse rules restrict a sandbox account to sending only to the email the
-    # Resend account itself is registered under — real buyers can't receive mail yet
-    # this way, only that one test address can. Brevo (verifies a sender email instead
-    # of a domain, no such recipient restriction) is the upgrade path once its
-    # one-time phone verification step is done — settings kept below, unused for now,
-    # so switching back is a one-line change in email_service.py, not a rebuild.
+    # Receipt/sale-notification emails — live path is now Brevo's SMTP relay
+    # (docs/email.md), not Resend: Resend's sandbox sender only ever reached the one
+    # address the Resend account itself was registered under, which a real buyer's
+    # receipt hit in production. resend_api_key is kept below, dormant, purely so
+    # switching back is a one-line change rather than a rebuild.
     resend_api_key: str = ""
+    # Despite the name (matches BREVO_API_KEY already in .env/Render — not renamed to
+    # avoid the churn of updating both), this holds Brevo's *SMTP key*
+    # (xsmtpsib-... — Settings -> SMTP & API -> SMTP tab), not the HTTP API key
+    # (xkeysib-...). email_service.py sends over SMTP relay (smtp-relay.brevo.com:587),
+    # not Brevo's REST API, because that's the credential type actually on file.
     brevo_api_key: str = ""
+    # The SMTP tab's "Login" value (format xxxxxx@smtp-brevo.com) — a distinct
+    # credential from both brevo_api_key above and brevo_sender_email below, and NOT
+    # derivable from either. Confirmed directly: authenticating with
+    # brevo_sender_email as the login failed with "535 Authentication failed" against
+    # the real relay. Same dashboard page as brevo_api_key.
+    brevo_smtp_login: str = ""
     brevo_sender_email: str = ""
     brevo_sender_name: str = "Practicable"
     # Where the "you made a sale" notification goes (app/services/email_service.py's
