@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { supabase } from '@/lib/auth/supabase'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/Card'
 import { FormField } from '@/components/ui/Input'
 
 export function SignUp() {
@@ -59,7 +59,7 @@ export function SignUp() {
     return (
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-h2">Check your email</CardTitle>
+          <h1 className="text-h2 font-semibold text-foreground">Check your email</h1>
           <CardDescription>
             We've sent a confirmation link to {email}. Click it, then{' '}
             <Link to="/sign-in" className="text-primary underline-offset-4 hover:underline">
@@ -75,7 +75,7 @@ export function SignUp() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle className="text-h2">Create an account</CardTitle>
+        <h1 className="text-h2 font-semibold text-foreground">Create an account</h1>
         <CardDescription>Enter your email and password to create your account</CardDescription>
       </CardHeader>
       <CardContent>

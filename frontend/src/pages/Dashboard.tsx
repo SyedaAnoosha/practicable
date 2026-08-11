@@ -233,7 +233,7 @@ export function Dashboard() {
                 </p>
               ) : (
                 <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
-                  {/* Gold like the question-page buy card — large marketing price,
+                  {/* Accent-blue like the question-page buy card — large marketing price,
                       the one figure allowed to be the accent (24px, large-text-safe). */}
                   <p className="text-2xl font-semibold tabular-nums text-accent">
                     {formatCurrency(product.price_amount, product.currency)}

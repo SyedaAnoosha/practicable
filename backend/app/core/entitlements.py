@@ -7,10 +7,16 @@ in the route" — the response models in app/api/v1/content/questions.py already
 that structurally (QuestionPreviewOut has no `body` field at all).
 
 A product grants access to whatever its `product_contents` rows point at — a
-template file, a lesson's video, or (research spec 8.2 step 3) a question's full
-guidance body. One entitlement row per (user, product); resolving that into "can
-this user see resource X" is this file's job, not a second entitlements table per
-resource type.
+template file or a lesson's video/reading. One entitlement row per (user, product);
+resolving that into "can this user see resource X" is this file's job, not a second
+entitlements table per resource type.
+
+`ResourceType.QUESTION` is the one exception worth flagging: a question's guidance
+body is never gated (DESIGN.md §21.3, owner decision 2026-08-11 — it's the free
+entry point, not the paid product). `has_access_to(..., ResourceType.QUESTION, ...)`
+still exists and is still called from `questions.py`, but only to decide whether to
+show the "buy the related template/course" upsell card versus the owned state —
+never to decide whether `body` is present in the response. `body` is unconditional.
 """
 import enum
 from datetime import datetime, timezone

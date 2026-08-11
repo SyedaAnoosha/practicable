@@ -147,7 +147,7 @@ export function CourseDetail() {
       {/* §23.3's "Price · [Buy the course]" surface, resolved to whichever real
           product actually grants this course — never a hardcoded price. Hidden
           entirely once owned, per §23.2's "never show a price on something the user
-          already owns." Same gold left-rule family as the question page's buy card
+          already owns." Same accent-blue left-rule family as the question page's buy card
           and the dashboard product card: the price is the conversion moment, so it
           earns the accent. */}
       {!course.owned && primaryProduct && (
@@ -161,7 +161,7 @@ export function CourseDetail() {
                 <GraduationCap className="size-4" aria-hidden="true" />
               </span>
               <div>
-                {/* Gold like every other buy card — large marketing price, 24px,
+                {/* Accent-blue like every other buy card — large marketing price, 24px,
                     large-text-safe (theme.css). Do not shrink it. */}
                 <p className="text-2xl font-semibold tabular-nums text-accent">
                   {formatCurrency(primaryProduct.price_amount, primaryProduct.currency)}

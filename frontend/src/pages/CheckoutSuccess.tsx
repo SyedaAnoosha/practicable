@@ -84,7 +84,7 @@ export function CheckoutSuccess() {
       <Card>
         <CardHeader>
           {/* The success moment gets the same icon-tile treatment as the buy cards'
-              gold tiles — a status tile, not a bare checkmark glyph (§14's fixed
+              accent-blue tiles — a status tile, not a bare checkmark glyph (§14's fixed
               icon map: CircleCheck is the one icon for completion). */}
           <span className="flex size-10 items-center justify-center rounded-full bg-success/10 text-success ring-1 ring-inset ring-success/25">
             <CircleCheck className="size-5" aria-hidden="true" />

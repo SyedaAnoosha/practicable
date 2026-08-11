@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { supabase } from '@/lib/auth/supabase'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/Card'
 import { FormField } from '@/components/ui/Input'
 
 export function SignIn() {
@@ -38,9 +38,10 @@ export function SignIn() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        {/* text-h2 carries the §10 size/line-height from theme.css — the inline
-            fontSize this used bypassed the type system entirely. */}
-        <CardTitle className="text-h2">Sign in</CardTitle>
+        {/* The one h1 on the page (§42.1) — an explicit h1 with the §10 h2 token,
+            rather than CardTitle (h3, and its base text-h3 would fight a text-h2
+            override through tailwind-merge, which doesn't know custom type tokens). */}
+        <h1 className="text-h2 font-semibold text-foreground">Sign in</h1>
         <CardDescription>Enter your email and password to access your account</CardDescription>
       </CardHeader>
       <CardContent>

@@ -1,11 +1,13 @@
 import type { HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils/cn'
 
-// The one section-heading treatment in the product: a 24px champagne hairline
+// The one section-heading treatment in the product: a 24px accent hairline
 // before an h4-sized h2. Previously hand-rolled inline in Question.tsx (Guidance)
 // and missing entirely from CourseDetail.tsx — one component so the gilt rule and
 // the heading level (h2, so CardTitle h3s below it land in sequence, §42.1) can't
 // drift between pages.
+// Text-only children, please — the text sits inside a span so the rule stays
+// vertically centred; block-level content would nest invalidly inside it.
 export const SectionHeading = ({ className, children, ...props }: HTMLAttributes<HTMLHeadingElement>) => (
   <h2 className={cn('flex items-center gap-3 text-h4 font-semibold text-foreground', className)} {...props}>
     <span aria-hidden="true" className="h-px w-6 shrink-0 bg-accent" />

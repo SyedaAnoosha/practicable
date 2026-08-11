@@ -16,7 +16,7 @@ const buttonVariants = cva(
         // The primary action is the brand moment: midnight navy with a faint
         // cream inner edge (the engraving), a warm resting shadow, and a 1px
         // lift + deepened shadow on hover — tactile, never bouncy (§39.2).
-        primary: 'bg-primary text-primary-foreground shadow-sm ring-1 ring-inset ring-primary-edge hover:-translate-y-px hover:shadow-md',
+        primary: 'bg-gradient-brand text-primary-foreground shadow-sm ring-1 ring-inset ring-primary-edge hover:-translate-y-px hover:shadow-md',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary-strong',
         outline: 'border border-border bg-background hover:border-border-strong hover:bg-muted',
         ghost: 'bg-transparent text-foreground hover:bg-muted',

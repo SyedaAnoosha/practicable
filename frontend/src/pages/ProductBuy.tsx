@@ -100,7 +100,7 @@ export function ProductBuy() {
 
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
-      {/* Same gold left-rule family as the question page's buy card and the course
+      {/* Same accent-blue left-rule family as the question page's buy card and the course
           buy surface — the conversion moment earns the accent. */}
       <Card
         className="border-l-4 shadow-sm transition-[box-shadow] duration-150 hover:shadow-md"
@@ -141,7 +141,7 @@ export function ProductBuy() {
 
           <div className="flex items-baseline justify-between border-t border-border pt-4">
             <span className="text-sm text-muted-foreground">Subtotal</span>
-            {/* Gold, but only because this is 24px — the gold token is
+            {/* Accent-blue, but only because this is 24px — the accent-blue token is
                 large-text-only on light surfaces (theme.css). Do not shrink it. */}
             <span className="text-2xl font-semibold tabular-nums text-accent">
               {formatCurrency(product.price_amount, product.currency)}

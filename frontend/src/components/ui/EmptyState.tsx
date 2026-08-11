@@ -13,9 +13,11 @@ export interface EmptyStateProps {
 }
 
 // DESIGN.md §36: an invitation, not a dead end — states what would be here and gives
-// the one action that puts something here. The icon tile follows the same quiet
-// tile language as the tag grid and buy cards (muted, hairline-adjacent) so an
-// empty state never outshouts the action that fills it.
+// the one action that puts something here. The icon tile follows the quiet tile
+// language of the tag grid and buy cards, deliberately circular rather than the
+// rounded-md data tiles: round = status/moment surfaces (empty states, checkout
+// outcomes), square = data surfaces (tags, buy-card icons). One shape family per
+// job, so the two never blur.
 export const EmptyState = ({ title, description, icon: Icon, action, className }: EmptyStateProps) => (
   <div
     className={cn(

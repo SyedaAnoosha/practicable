@@ -1,6 +1,6 @@
 # Deciding in the Dark — Design System & UI Specification
 
-**Version 2.0** · Supersedes v1.0 · Status: working specification, Week 1 build-ready
+**Version 2.2** · Supersedes v2.1 (2026-08-11: the liveliness pass and its same-day blue/ivory/black/white palette constraint — §5.3) · Supersedes v2.0 (reconciled against `design_again.md` and against what had already shipped — §0.5 row 21, §0.7) · Supersedes v1.0 · Status: working specification, Week 1 build-ready
 **Stack:** React 19 · TypeScript · Tailwind CSS v4 (frontend) → FastAPI · Supabase · Stripe · Mux · R2 (backend, per Research Spec)
 
 ---
@@ -69,6 +69,7 @@ The v1.0 document was structurally sound: the principles, the surface inventory 
 | 18 | **Component contracts and Definition of Done added** (§33–§34) | "It extends without you" (brief) requires the next developer to know a component's props and states without reading its source. |
 | 19 | **Copy and voice rules added** (§6) | The brief assesses whether the product "looks worth paying for". Interface copy is half of that judgement and v1 covered only button verbs. |
 | 20 | **Design tokens exported as code** (§50) | The brief's design-system deliverable is a *documented component set*, not a document describing one. Tokens now live in one CSS file and one TS file, generated from the same source. |
+| 21 | **Reconciled against `design_again.md` and updated to match decisions already shipped** (§3.7, §5.1–5.2, §9.4, §19.9, §21.3, §27) | A second brief (`design_again.md`) argued the product should read as a decision library, not an LMS — see `docs/win.md` for the full comparison. Cross-checking it also surfaced places this document had gone stale against code already shipped: the question title is set in serif in the actual `PageTitle` component (§9.4), the mobile filter sheet applies live (§19.9), and the question paywall was rebuilt as a free body with a soft email gate weeks after §21.3 was written (§21.3, §27). Fixed here so the document describes what is actually true, not what v2.0 assumed. |
 
 ### 0.6 Reconciliations with the Research Specification
 
@@ -78,6 +79,18 @@ The v1.0 document was structurally sound: the principles, the surface inventory 
 | Research 3.2 specifies a Postgres `WHERE` query; v1 §57 requires instant client-side counts | §57.1 `[DECIDED]`: FastAPI owns the query contract and the authoritative result. The client caches the published question **index** (title, slug, domain, seven tags, 160-char preview) for instant recount. Bodies are never in the index. |
 | Research 9.2 offers semantic search as "should have"; v1 does not mention it | §22.4 `[V2]`: the discovery UI reserves the layout slot and the empty-state copy for it, so adding pgvector later is a query change, not a redesign. |
 | Research 12.6 says do not build certificates; brief says propose if cheap | §59 `[DECIDED]`: not built. §24.4 specifies the completion moment that delivers the same psychological payoff for roughly an hour of work. |
+
+### 0.7 Reconciliation with `design_again.md` `[DECIDED]`
+
+`design_again.md` is a creative brief, not a build spec — it names no stack, gives no contrast numbers, and doesn't resolve its own conflicts with this document (full comparison: `docs/win.md`). It is not a second source of truth. Where it disagreed with an already-audited, already-shipped decision here, this document wins and stays as-is. Three places it was simply right, and this document has been corrected to match:
+
+| Tension | Resolution |
+|---|---|
+| §21.3 said the gated question body must never reach the client; `design_again.md` §20 says the question body is public and email capture is a soft conversion device, not a security boundary | §21.3 rewritten. This is also what actually shipped (`EmailGatedBody.tsx`): the API sends the full body to every visitor, and the blur is a lead-capture device over content that was never the paid product. §21.3's old "never in the HTML" rule still stands, but for the products it actually protects — lesson video, lesson reading bodies, and template files, all server-gated with no free preview (§23.2, §26). |
+| §9.4 confined serif to reading body only; `design_again.md` §5 recommends serif for major question titles | §9.4 updated. The shipped `PageTitle` component already sets the question title in serif via an `editorial` variant, reserved for flagship reading surfaces — not applied to product/commerce titles, which stay sans. |
+| §19.9 required mobile filter changes to apply on sheet close; `design_again.md` §13/§17 expects a quick filter to update results immediately | §19.9 updated. The shipped filter sheet reuses the same live, per-tap `toggle()` as desktop — one state model for both, which turned out simpler to build and to reason about than a second batched-apply mode would have been. |
+
+Everything else `design_again.md` raises — the brand-concept motif (§5.1), the anti-pattern list (§5.2), visual-priority ranking (§3.7), and the single core journey to prototype first (§4) — was genuinely missing here and has been added, in this document's own format (numbered, `[DECIDED]`-tagged, cross-referenced), not pasted in as prose.
 
 ---
 
@@ -177,6 +190,20 @@ Concretely, in the UI:
 
 Where the product makes a judgement on the user's behalf — a close match, a recommendation, a suggested next lesson — the interface says **why** in plain words. `Because you were reading about risk reporting` beats `Recommended for you`. This audience distrusts opaque relevance, and a transparent rule is also dramatically cheaper to build and debug (Research 3.5).
 
+### 3.7 Visual priority `[DECIDED]`
+
+When two surfaces compete for design or engineering attention, this is the order, ranked by how much of the "answer first" loop (§3.1) each one carries:
+
+1. **Question discovery** — the homepage finder and §19. If this is weak, nothing downstream matters.
+2. **Question reading** — §20–21. The moment credibility is actually judged (§1.2).
+3. **Product connection** — the related-template/course surface on a question page (§21.4). The bridge from free to paid.
+4. **Course learning** — §23–25. Real, but it's what a purchase leads *to*, not what creates one.
+5. **Commerce** — checkout, pricing, purchase history (§28–29, §39). Necessary and should be calm and boring, not a design priority in itself.
+6. **Member library** — §30. A returning user's home base, not a new visitor's.
+7. **Admin** — §31. Functional and usable, never a design priority over the six above it.
+
+This is why §19 is built and reviewed before any other surface in the four-week sequence (§60), and why admin (§31) is explicitly scoped as "functional, not decorative." A screen fighting for attention above its rank here is a sign the priority order has drifted, not a reason to raise its rank.
+
 ## 4. The speed-to-answer budget
 
 The brief asks: *how few steps from landing to owning it?* This is the answer, and it is a design constraint with numbers attached.
@@ -195,13 +222,61 @@ The brief asks: *how few steps from landing to owning it?* This is the answer, a
 - Account creation happens *at* checkout or after it, never as a gate before someone can see whether the product is any good. `[OWNER]` guest-checkout vs account-required is an open decision (Research Appendix J); this design assumes **account-required but created inside the checkout flow**, which keeps the budget at three steps.
 - Any new step added to these journeys must remove one.
 
+**The one path to prototype before any secondary screen:** home → search a question → apply a filter → open the question → read the answer → see the related template or course → open it → buy it → purchase confirmation → member area → open the course → play a lesson → mark it complete. If this path works end to end on a real device with real content, the product works. Every other screen in the inventory (§47) exists to support, sell into, or administer this one path.
+
 ## 5. Brand personality
 
-**The interface should communicate:** practical, experienced, direct, useful, calm, authoritative, human, considered.
+**The interface should communicate:** practical, experienced, direct, useful, calm, authoritative, human, considered — and, as of the `[REVERSED, 2026-08-11]` owner direction below, **lively and modern**, not muted for its own sake.
 
-**Avoid:** loud startup aesthetics, gradient washes, neon, glassmorphism, animated backgrounds, generic corporate stock photography, dashboard overload, everything-is-a-rounded-card, decorative motion.
+**Avoid:** loud startup aesthetics, neon, glassmorphism, generic corporate stock photography, dashboard overload, everything-is-a-rounded-card. **No longer avoided — see §5.3:** gradient text and backgrounds, a richer colour range beyond the single navy+gold pair, animated backgrounds and entrance motion, used deliberately rather than everywhere at once.
 
-The register to aim for is a good professional publisher — confident enough not to shout.
+The register to aim for is a good professional publisher that isn't afraid of colour — confident, not shouting, but not colourless either.
+
+### 5.3 Liveliness pass `[DECIDED, 2026-08-11 — owner direction, reversing part of §5/§5.2]`
+
+Direct owner instruction: *"the whole platform uses more white than my actual colours... introduce colours in each page, components, font, symbols. Use animations."* This explicitly reverses three things v2.0–v2.1 had settled: no gradients, one restrained accent colour, and motion limited to functional micro-interactions. What actually changed, concretely (`theme.css`):
+
+- **A domain colour system.** Five signature colours, one per domain (`--domain-risk` amber, `--domain-cyber` teal, `--domain-compliance` violet, `--domain-resilience` emerald, `--domain-ai` fuchsia — `frontend/src/lib/domainVisuals.ts`), each paired with a Lucide icon. Used for domain icon tiles, a question's breadcrumb/eyebrow/tag-grid, and result-row accents. **This is still not the seven question-tag dimensions** — §7.6/§37's "no per-dimension rainbow" holds; five domains named prominently in the nav/discovery UI is the one deliberate exception, not a reopening of badge-soup risk everywhere.
+- **Gradient utilities**, built from existing tokens via `color-mix()`/`linear-gradient()`, not raw hex (`.text-gradient-brand`, `.bg-gradient-brand`, `.bg-gradient-animated`) — applied to the homepage hero headline, the primary button fill, and available anywhere else a page wants one.
+- **A brightened hero wash** — three colour stops (gold/violet/teal) instead of the previous 7–10%-opacity two-stop version.
+- **Deliberate entrance motion** (`.animate-enter`, a 0.5s fade+rise, staggered per element) on the homepage hero and domain grid — still collapses to instant under `prefers-reduced-motion` via the existing global rule (§39.4), still never used to compensate for weak hierarchy (§3.3 still holds).
+
+**What did not change:** tokens are still the only place a colour value lives (§7.2) — no component holds a hex. The seven-dimension badge discipline (§20.2, §37) is untouched. Cards still follow §36. Radius is still capped at 12px (§12.1). This is a materials change, applied through the same system, not a return to hand-picked inline styles everywhere.
+
+**`[CONSTRAINED, same day]`** After seeing the first pass (five distinct hues — amber, teal, violet, emerald, fuchsia — plus a champagne gold accent), the owner narrowed it: *"use shades of blue and ivory, black, white only, no other colours."* Applied immediately, same session:
+
+- **The gold accent is gone.** `--accent` (and `--ring`, which shared its hue) moved from champagne gold to a vivid blue (`#1D5FA8` light / `#7FB8E8` dark). Same role — the one interactive-emphasis colour, regulator pressure's tag treatment, the eyebrow's hairline rule — just a different hue.
+- **The five domain colours are now five shades of blue**, not five hues — varying in depth and lean (navy, azure, steel-blue-leaning-cyan, indigo-blue, slate-blue-grey) so they stay visually distinguishable without leaving the blue family. Same tokens, same usage (`--domain-risk` etc.), different values.
+- **Dark mode's primary also moved off gold** (`#C7AC6D` → `#6FA8DC`) — the palette constraint applies to both themes, not just light, so the two didn't end up telling different colour stories.
+- **Exempted, deliberately:** semantic status colour (`--destructive` red, `--success` green, `--warning` amber) — these are functional conventions this audience reads instantly, not decorative brand colour, and losing them costs more usability than the constraint is meant to buy back. Chart tokens (`--chart-*`) are also left as-is — no chart component is built or rendered anywhere, so they're dormant, and §7.1 already exempts them from the semantic-token rule.
+- **Surfaces (ivory background, espresso ink, warm stone borders) were never touched** — they were already inside "ivory/black/white," just warm-toned rather than cool-neutral, which is a different axis than the hue constraint this addresses.
+
+The result reads as one accent hue used with real range — deep navy through soft slate — rather than either a single flat blue or the earlier five-colour spread. `frontend/src/lib/domainVisuals.ts` is the one place that maps a domain name to its colour token and icon; nothing else should hold that mapping.
+
+### 5.1 What the name should evoke `[DECIDED]`
+
+"Deciding in the Dark" names a real condition: practitioners often have to act on incomplete information. The product's whole value is reducing that darkness — context, a practical answer, a framework, a tool, learning. That is the only thing the name should evoke visually.
+
+**Do not illustrate the name literally.** No moons, no stars, no night skies, no dark rooms, no lightbulb-in-the-dark clichés. None of that is on the page anywhere, and it would read as decoration over a name that is actually a claim about the product's usefulness.
+
+Instead, the motif is carried structurally, by things the product already does: clarity (short answers before long ones, §3.1), signal (the seven-tag taxonomy actually filtering, §19.2, not decorating), evidence (a real author's name and real guidance, §6.3), and decision points (`What to do next`, §21.1, is a literal list of decisions to make). The dark/light theme toggle (§66 of `design_again.md`'s vocabulary; built as `.dark` on `<html>`, §8) is a coincidence worth not overplaying — it is a standard accessibility feature, not the brand metaphor.
+
+### 5.2 What "premium" is not — the anti-pattern list `[DECIDED]`
+
+A consolidated list, because "premium" is invoked constantly in this project and is cheap to get wrong in a specific, recognisable way — the generic-SaaS/course-marketplace look this document has been steering away from since v1. If a screen does any of these, it has drifted, regardless of how the tokens were used to get there:
+
+- A hero built from a giant illustration or decorative graphic rather than typography and whitespace (§18.2)
+- Glassmorphism or neon anywhere. **Gradients and animated colour are no longer on this list** — §5.3 `[REVERSED, 2026-08-11]` — but a gradient still needs to come from the token layer (`.text-gradient-brand`, `.bg-gradient-brand`, the `--domain-*` set), never a one-off hex picked in a component
+- Every section wrapped in a card, including single paragraphs and single stats (§36)
+- Seven taxonomy badges on one result row (§20.2 caps this at three)
+- Circular progress rings used decoratively, off the one place progress is real (§24.4, §31)
+- Giant course-thumbnail artwork standing in for a real outcome statement (§23.1)
+- Gamification, streaks, badges-as-achievements, or confetti anywhere, including purchase success (§29.2)
+- Fake testimonials, fake user counts, fake review stars, or any invented metric (§49.1's "real content, always")
+- Placeholder copy of any kind shipped to production — lorem ipsum, "Test test", a placeholder price (§49.2)
+- A chatbot or AI feature presented as the homepage's centrepiece (§61 — deliberately out of v1 scope)
+- "Welcome to your dashboard" framed as the return experience, instead of "continue where you left off" (§30.1)
+- Corporate blue used as the default for every button and link, rather than the restrained single accent (§7.1)
 
 ## 6. Voice and interface copy
 
@@ -439,6 +514,43 @@ Every foreground/background pair in the supplied token set was measured against 
 }
 ```
 
+### 7.5.1 Contrast audit of the blue palette `[DECIDED, 2026-08-11]`
+
+§5.3's palette constraint replaced the audited gold accent with blue and introduced five new `--domain-*` tokens. Those values shipped before being measured, which is exactly the gap §7.3 exists to close — so they were audited the same way, computed from the WCAG 2.2 relative-luminance formula rather than eyeballed. **Every pair passes AA for normal text (≥4.5:1); no value needed changing.**
+
+**Light theme** (on `--background` `#FBF9F4` unless stated):
+
+| Pair | Ratio | Verdict |
+|---|---:|---|
+| `--accent` `#1D5FA8` text on background | 6.13:1 | Pass |
+| `--accent` text on `--card` `#FFFFFF` | 6.45:1 | Pass |
+| `--accent-foreground` `#FFFFFF` on solid `--accent` | 6.45:1 | Pass |
+| `--ring` `#1B4E8C` (non-text, needs 3:1) | 7.94:1 | Pass, with margin |
+| `--domain-risk` `#142E5C` | 12.67:1 | Pass |
+| `--domain-cyber` `#1B5FA8` | 6.14:1 | Pass |
+| `--domain-compliance` `#1D6FA5` | 5.16:1 | Pass |
+| `--domain-resilience` `#3D5A99` | 6.40:1 | Pass |
+| `--domain-ai` `#46618C` | 5.96:1 | Pass |
+
+**Dark theme** (on `--background` `#141008`):
+
+| Pair | Ratio | Verdict |
+|---|---:|---|
+| `--accent` `#7FB8E8` text | 8.96:1 | Pass |
+| `--accent-foreground` `#0B1A2E` on solid `--accent` | 8.26:1 | Pass |
+| `--primary` `#6FA8DC` text | 7.50:1 | Pass |
+| `--primary-foreground` `#0B1A2E` on `--primary` (button label) | 6.92:1 | Pass |
+| `--ring` `#8FC1EA` (non-text, needs 3:1) | 9.92:1 | Pass, with margin |
+| `--domain-risk` `#5B7FBD` | 4.71:1 | Pass (narrowest margin in the set) |
+| `--domain-cyber` `#6FB0E8` | 8.17:1 | Pass |
+| `--domain-compliance` `#5FB8D9` | 8.44:1 | Pass |
+| `--domain-resilience` `#8090D8` | 6.23:1 | Pass |
+| `--domain-ai` `#93A7C9` | 7.78:1 | Pass |
+
+**The one to watch:** dark `--domain-risk` at 4.71:1 clears AA but has the least headroom in the set. Any future darkening of that token, or any use of it on `--card` (`#1B1710`, slightly lighter than `--background`) rather than the page background, should be re-measured rather than assumed.
+
+**Not covered by this audit,** and deliberately so: the `--domain-*` tokens are also used at low opacity as icon-tile *backgrounds* (`color-mix(… 12%, transparent)`) and in the decorative header/hero washes. Those are non-text, non-meaning-bearing surfaces — the icon sitting on them carries the full-strength token colour, which is what the table above measures. A decorative wash has no contrast requirement (§7.6's "colour is never the only carrier of meaning" is what keeps that true).
+
 ### 7.6 Colour rules
 
 - **Colour is never the only carrier of meaning.** Every status has an icon or a word alongside it. Every tag has a label. Every chart series has a direct label, not just a legend swatch.
@@ -569,13 +681,15 @@ Mono is a signal that a string is *data*, not prose. Used at `text-xs` and `text
 
 | Context | Face |
 |---|---|
-| Hero, page titles, section headings, card titles | Sans (Bricolage) |
-| The question itself, on a question page | Sans, large, tight — it is a headline, not body |
+| Product/commerce page titles, section headings, card titles | Sans (Bricolage) |
+| The question itself, on a question page | Serif, large, tight — an editorial headline, not a card title (see below) |
 | Guidance body, reading lesson body, author essay | Serif (Source Serif 4) |
 | Lead paragraph / summary answer | Serif, `text-lg`, `--muted-foreground` |
 | Every control, label, nav item, table, admin screen | Sans |
 | IDs, prices in a reconciliation table, timestamps | Mono |
 | Prices on marketing surfaces | Sans, tabular figures (`font-variant-numeric: tabular-nums`) |
+
+**`[UPDATED, 2026-08-11]`** v2.0 kept the question title in sans, reasoning that a headline needs weight more than character. Reviewing `design_again.md` §5 alongside the shipped page prompted a second look, and the serif reads *more* authoritative here, not less — it's what makes `We Have a Risk Register, But No One Uses It` look like a headline from a publication with an editor, rather than a SaaS feature title. Built as a `variant="product" | "editorial"` prop on `PageTitle`: `editorial` sets serif title + serif lead description, and is applied only to flagship reading surfaces (currently `Question.tsx`). Product and commerce titles — course cards, checkout, admin, dashboard — stay on the default `product` variant and stay in sans; this is a targeted exception for the single page type the whole product exists to make credible (§3.7 priority 2), not a reopening of "serif for headings" generally. §9.2's "never for navigation, buttons, labels, tables, admin, or anything under 16px" still holds everywhere else.
 
 ### 9.5 Loading the fonts `[DECIDED]`
 
@@ -679,17 +793,20 @@ Arbitrary spacing values (`mt-[13px]`) need a comment explaining the optical rea
 
 ### 12.1 Radius
 
-Base `--radius: 1.25rem` (20px), stepped down for smaller elements.
+**[TIGHTENED, 2026-08-11 — owner design critique]** Base `--radius: 0.75rem` (12px), stepped down for smaller elements. This is the second tightening, not the first: v1's 20px went to 16px in an earlier premium pass, then to this 12px ceiling here, because 16px on the largest surfaces was still reading as "modern SaaS template" rather than the tailored/editorial register this product wants. Nothing in the product should now round past 12px — `rounded-2xl`/`rounded-3xl` are pinned to the same 12px ceiling at the token level (`theme.css`) specifically so a component reaching for a bigger utility by habit can't quietly exceed it.
 
 | Utility | Value | Use |
 |---|---|---|
-| `rounded-sm` | 8px | Chips, badges, small buttons, table cells |
-| `rounded-md` | 12px | Inputs, selects, buttons, small cards |
-| `rounded-lg` | 16px | Cards — the default |
-| `rounded-xl` | 20px | Feature blocks, video frame, hero panels |
+| `rounded-sm` | 4px | Chips, badges, small buttons, table cells |
+| `rounded-md` | 6px | Inputs, selects, buttons |
+| `rounded-lg` | 8px | Cards — the default |
+| `rounded-xl` | 12px | Feature blocks, video frame, hero panels |
+| `rounded-2xl`, `rounded-3xl` | 12px | Pinned to the same ceiling as `rounded-xl` — do not reach for these expecting something rounder. |
 | `rounded-full` | — | Avatars, pills, circular icon buttons only |
 
-Do not round everything heavily. A dense admin table with 20px corners on every cell reads as a toy.
+Do not round everything heavily. A dense admin table with 12px corners on every cell reads as a toy.
+
+**`[CONSIDERED AND REJECTED, 2026-08-11]`** `design_again.md` §8 suggests allowing radius above 12px on "major product surfaces" like the hero. Not adopted: a larger radius on the single largest surface on the page is the most visible way to reintroduce the generic-SaaS-template read this whole tightening pass (twice, now) exists to remove — a soft giant rounded panel is exactly what a marketing-template hero looks like. The 12px ceiling stays flat across every surface size, hero included.
 
 ### 12.2 Borders
 
@@ -1099,7 +1216,7 @@ This gives, free: browser back works, refresh works, the state is shareable and 
 
 Returning from a question page must restore the exact result list and scroll position.
 
-### 19.9 Mobile
+### 19.9 Mobile `[UPDATED, 2026-08-11]`
 
 ```
 [Search…]
@@ -1108,7 +1225,7 @@ Returning from a question page must restore the exact result list and scroll pos
 [Results]
 ```
 
-The sheet is a bottom drawer at 90% height with the seven groups. **Changes apply on close, not per tap** — a full-screen recount on every tap is disorienting and burns requests. The sheet's footer holds `Clear all` and `Show 12 results`, with the count live inside the sheet so the user knows before committing.
+The sheet is a slide-over panel with the same groups as the desktop rail. **Changes apply live, per tap** — this was v2.0's opposite call ("apply on close, to avoid a disorienting recount"), reversed after building it: the shipped sheet reuses the exact same `toggle()` used by the desktop rail rather than a second batched-apply state, which is both less code and lets a user watch the result count move as they narrow in, same as desktop. `design_again.md` §13/§17 independently argued for the same behaviour ("clicking a quick filter should immediately update the results") — a useful confirmation, not the reason for the change. Debounce still applies to the *search* input only (§19.6); chip and checkbox taps recount immediately. The sheet's footer holds `Clear all` and a close action; there is no separate "Show N results" commit step because there is nothing left to commit.
 
 ## 20. Question card and row
 
@@ -1190,41 +1307,39 @@ The author
 
 On the detail page all seven appear as a compact definition grid — icon, dimension name in `text-xs` muted, value in `text-sm` foreground — in two columns on desktop and one on mobile. Not a row of badges: seven badges in a line is unreadable and hides the structure that *is* the product.
 
-### 21.3 The paywall preview `[DECIDED]`
+### 21.3 The question paywall — superseded by the free-question decision `[DECIDED, rewritten 2026-08-11]`
 
-This is the conversion moment (Research 8.2 step 3) and it has to be handled precisely.
+**This section originally specified server-side gating of the guidance body, priced behind the related course.** That was reversed by an explicit, later owner decision: *questions are the free layer, in full; only the delivery of that knowledge as video, structured lessons and templates is ever paid.* The reasoning, and what actually shipped, replaces everything this section said before.
 
-**Public, always:** the question title, the domain, all seven tags, the short answer, and the names of related templates and courses with their prices.
+**Public, always, in the API response — not a preview, the whole thing:** the question title, domain, all seven tags, the short answer, and the complete guidance body and "what to do next" steps. There is no `gated: true` flag on a question and nothing withheld server-side. This is also what `design_again.md` §20 independently argues for ("question body is public… email capture is a soft conversion mechanism, not the security boundary") — confirmation of a decision already made and shipped, not the source of it.
 
-**Gated:** the full guidance body and the "what to do next" steps.
-
-**Presentation of the gate:**
+**The email capture is a lead-magnet device, not access control.** Presentation:
 
 ```
 [Short answer — fully readable]
 
 Guidance
 ────────────────────────────────────────
-[First paragraph — fully readable]
+[First ~350 characters — fully readable, cut at a sentence boundary]
 
-[Second paragraph fading to transparent over ~120px]
+[The rest of the body — genuinely present in the DOM, blurred and
+ aria-hidden — fading under a gradient into the form below]
 
         ┌────────────────────────────────────┐
-        │ 🔒 The rest of this guidance is    │
-        │    part of Third-Party Risk        │
-        │    Foundations.                    │
+        │ ✉ Keep reading — free              │
+        │   Enter your email to unlock the   │
+        │   rest of this guidance.           │
         │                                    │
-        │    6 modules · 3 templates · 2h 40m│
-        │    US$149 · lifetime access        │
-        │                                    │
-        │    [See what's included]           │
-        │    Already bought it? Sign in      │
+        │   [ you@example.com ]              │
+        │   [Unlock the rest]                │
         └────────────────────────────────────┘
 ```
 
-**Non-negotiable implementation rule:** the gated text is **not in the HTML**. The API returns the first paragraph and a `gated: true` flag; it does not return the body with a CSS blur applied. A blur is a decoration over data the user already has — View Source defeats it in four seconds, and on a paid product that is not a design flaw, it is the product leaking. See §45.
+One shared unlock (`localStorage`, one flag), not per-question — the goal is capturing the email once, not re-prompting on every article. Short questions with nothing left after the ~350-character preview render with no gate at all.
 
-The fade is applied to the *last returned paragraph*, so the fade is honest: there genuinely is more text, and the user can see that there is.
+**Why a CSS blur is correct here, reversing v2.0's ban on it:** the old rule — "the gated text is not in the HTML; a blur is a decoration over data the user already has, and View Source defeats it" — is still the right rule, and still applies without exception to anything actually sold: lesson video, lesson reading bodies, template files (§23.2, §26, §45). It was wrong applied to the question body specifically, because the question body was never the paid product. A blur that a determined user can defeat with View Source is not a leak when the content behind it was never entitled or metered — it's the same trade every gated-content email-capture on the web makes, deliberately, in exchange for a much better conversion experience than a hard wall.
+
+**What is still genuinely paid**, connected from the same question page (§21.4): the related course's video and structured lessons, and any related downloadable template. Those follow §23.2's and §26's entitlement rules exactly as before — checked server-side, no client flag is authority, no free preview of any kind. "Never free" there is as absolute as "always free" is here; the two policies were decided together, not independently.
 
 ### 21.4 Related templates as a buy surface
 
@@ -1301,7 +1416,7 @@ Every course card shows one of four states, and the state changes the primary ac
 
 Never show a price on something the user already owns. This is the single most common trust-damaging bug in learning platforms.
 
-### 23.3 Course detail page
+### 23.3 Course detail page `[UPDATED, 2026-08-11]`
 
 ```
 Course title (h1)
@@ -1312,19 +1427,45 @@ What's included:  6 modules · 14 lessons · 2h 40m video · 3 templates
 Access: lifetime          Refund: 14 days, no questions
 
 Full syllabus — modules expanded, lessons listed with type icon and duration
-  · One lesson marked "Free preview" and genuinely playable
+  · Every lesson shown, all locked until purchased (§23.4)
 
 Included templates — with preview thumbnails
 Related questions — the questions this course answers
+  · A module can attach a question directly as a syllabus item (§23.5) —
+    it stays free, like every question (§21.3), with no lock state of its own
 
 Price · [Buy the course]
 
 Refund position, plainly stated
 ```
 
-**The free preview lesson is not optional.** Research 8.3 has the buyer watching 30 ungated seconds before committing. A course product page with no playable content asks for US$149 on trust alone.
+**`One lesson marked "Free preview"` — removed, not just relabelled.** v2.0 specified one genuinely playable free lesson per course, on the theory that a sample lowers the barrier to buying. The owner overruled this explicitly: video and lesson content are never free, full stop, no exceptions per-course or per-lesson. Built structurally, not just as an unset flag — the `is_free_preview` column was added and then dropped in the same session (migration 005) specifically so a future "let's just flip it back on for this one course" request can't be satisfied by a one-line change; it would need this section reopened first. The syllabus itself stays fully visible either way (§23.4) — what disappeared is a playable exception, not the lesson list.
+
+**What replaces the ungated 30-second sample (Research 8.3):** the related question that led here is itself the ungated sample — its full guidance body, free, no gate at all (§21.3). A visitor reaches a course page from a question they already read in full; the trust-building has already happened by the time they see a price. The Research Specification's own copy of this journey step is annotated with this override, so the two documents agree.
 
 The page must answer, without the buyer hunting: what do I get, how long does it take, is access permanent, what can I download, is there video, and what happens if I want a refund.
+
+### 23.4 Course content preview — locked lessons stay visible
+
+Every lesson in the syllabus is listed for a visitor who hasn't bought the course, whether or not they're signed in. None are playable, and none are hidden — a course whose syllabus you can't see is harder to evaluate, not more exclusive.
+
+```
+MODULE 01 · Making risk useful
+
+🔒 Why risk registers fail                    12 min video
+🔒 Making ownership real                       8 min reading
+🔒 Reporting that gets used                    6 min · download
+```
+
+Use `🔒 Included with the course` as the row's status, not disabled/greyed-out styling — a locked row is a normal, expected state (§40.4), not a broken one. Clicking a locked row opens the course purchase surface, never a dead link or a silent no-op.
+
+### 23.5 Attaching a question to a module
+
+A module's syllabus can include a question alongside its lessons — useful when a course's structure tracks the same problems the question library already organises around. A module question:
+
+- Has its own `sort_order` within the module, independent of the lesson ordering (`[KNOWN GAP]` these are two separate sequences today, not one unified list — acceptable for a handful of items per module, worth unifying if a module ever needs the two interleaved precisely)
+- Carries **no lock state and no progress state of its own** — it is the same free, always-public question as everywhere else (§21.3), simply surfaced in this course's context because it's relevant here
+- Renders in the syllabus list visually distinct from a lesson row (no duration, no play/read/download icon, no lock) so it reads as "related reading," not as a fourth lesson type
 
 ## 24. Learning interface
 
@@ -1505,40 +1646,41 @@ The URL is valid for 60 seconds and is single-use (Research 6.6). If the user's 
 
 Re-downloading is always allowed for an entitled user, with no limit and no counter. A download cap on a professional template is a support ticket generator.
 
-## 27. Free entry point `[DECIDED]`
+## 27. Free entry point `[DECIDED, rewritten 2026-08-11]`
 
-A named deliverable — "at least one free entry point that earns an email address" — with no design in v1.
+A named brief deliverable — "at least one free entry point that earns an email address." v2.0 designed this as one hand-picked free domain plus one free template, gated behind a homepage/footer capture form. **That is not what shipped, and the shipped version is simpler and better**, because it arrived as a side effect of the §21.3 policy change rather than as a separate feature: every question is now the free entry point, all 100 of them, all the time — not one curated domain chosen up front.
 
 ### 27.1 What it is
 
-One complete domain of questions, freely readable in full, in exchange for an email address. Not a sample chapter, not a blurred teaser: a genuinely useful, complete thing. `[OWNER]` which domain.
+Every question's guidance body, in full. Not a sample chapter for one domain — the entire library, always. The email address is earned per-reader, at the natural point they hit while reading (§21.3's blur gate on the tail of a long answer), not up front on the homepage before they've seen anything worth trading an email for.
 
-Plus one free template — the lowest-effort, highest-payback artefact in the library — as the proof that the paid templates are worth what they cost.
+The separate "one free template" idea is not built and is not needed to satisfy the brief: the question body itself is the free, complete, useful thing (§27's original requirement), and it now works for a reader dropping into any one of 100 questions from search, not only the one domain someone picked as "the free one."
 
 ### 27.2 The capture
 
-Not a modal. Not an exit-intent popup. An inline block, on the homepage and at the foot of every public question page:
+Built as `EmailGatedBody.tsx` — no modal, no exit-intent popup, no homepage form. The prompt appears inline, in place, exactly where a reader who kept reading this far actually is:
 
 ```
-────────────────────────────────────────────────
+[First ~350 characters of the guidance — always readable]
 
-Read the Third-Party Risk domain free
+[The rest, visibly present but blurred, fading under the form]
 
-20 questions, in full, plus the Supplier
-Register template. No card, no trial.
-
-[ your@work-email.com ]  [Send me the link]
-
-We'll email you the link and occasional notes
-from the author. Unsubscribe any time.
-────────────────────────────────────────────────
+        ┌────────────────────────────────────┐
+        │ ✉ Keep reading — free              │
+        │   Enter your email to unlock the   │
+        │   rest of this guidance.           │
+        │                                    │
+        │   [ you@example.com ]              │
+        │   [Unlock the rest]                │
+        │   No spam, unsubscribe any time.   │
+        └────────────────────────────────────┘
 ```
 
-**Rules:** one field only. The privacy statement is *above* the button and in plain words, not a checkbox burying a link. No pre-ticked marketing consent. `[OWNER]` confirm the consent model against the jurisdiction the contracting entity sits in.
+**Rules, unchanged from v2.0's intent:** one field only. The privacy statement sits in plain words next to the button, not a checkbox burying a link. No pre-ticked marketing consent. `[OWNER]` confirm the consent model against the jurisdiction the contracting entity sits in.
 
 ### 27.3 After capture
 
-Immediate access — do not make them go to their inbox to read what you just promised. The email arrives too, as the durable link, but the content unlocks on the page instantly. Every gate between "I gave you my email" and "I got the thing" loses people.
+Instant, client-side — no round trip to an inbox. The unlock is stored once (`localStorage`) and applies to every question site-wide from then on, so a returning reader is never asked twice. Every gate between "I gave you my email" and "I got the thing" loses people; this shipped with zero gates between the two.
 
 ## 28. Pricing
 
@@ -1768,16 +1910,19 @@ Course ▸ Module ▸ Lesson
 Lesson title *          [                     ]
 Type *                  ( ) Video  ( ) Reading  ( ) Download  ( ) Mixed
 Estimated duration      [  ] minutes
-Free preview            [ ] Make this lesson playable without purchase
 
 Video                   [Upload or select existing]
                         Status: Ready · 14:22 · Captions: generated ✓
 Reading                 [rich text editor]
-Attached templates      [select]
+Download                [select an existing template's file]
 Related questions       [select]
 
 [Save draft]  [Publish]
 ```
+
+There is deliberately no "free preview" field (§23.3) — lesson access has exactly one control, entitlement, with no per-lesson override to misconfigure.
+
+A module's own editor (not the lesson editor) additionally has an **`Attach a question`** control (searchable, from the published question list) alongside `Add a lesson` — this is how §23.5's module-question syllabus items get added. It has its own `sort_order` within the module, separate from the lesson list's ordering.
 
 ### 31.6 Admin lists
 
@@ -1852,7 +1997,7 @@ Add only what is used. Do not run the CLI's "add everything" at init.
 | `QuestionTags` | The three-tag badge row, filter-aware |
 | `MatchBadge` | The close-match explanation badge (§19.3) |
 | `QuestionReader` | Guidance body with `.prose-guidance` typography |
-| `PaywallFade` | The gated-content boundary (§21.3) |
+| `EmailGateFade` | The free-question email-capture boundary (§21.3, §27) — not a security boundary, a lead-capture one |
 | `FilterRail` | Desktop filter sidebar |
 | `FilterSheet` | Mobile filter drawer |
 | `QuickGoalChips` | Preset filter chips |
@@ -1866,7 +2011,7 @@ Add only what is used. Do not run the CLI's "add everything" at init.
 | `TemplateCard` | Template, owned or for sale |
 | `PricingTable` | The three-column pricing block |
 | `ProductSummary` | Pre-checkout summary (§29.1) |
-| `EntitlementGate` | Renders children, a paywall, or a loading state |
+| `EntitlementGate` | Renders children, a locked state, or a loading state — for lessons and templates, never for a question (§21.3) |
 | `DownloadButton` | The full mint-fetch-discard flow (§26.4) |
 | `SearchCommand` | ⌘K palette |
 | `EmptyState` / `ErrorState` / `LoadingState` | The three non-happy paths |
@@ -1945,12 +2090,13 @@ Say what happens. `Start the module`, not `Submit`. `Buy the template`, not `Pro
 
 ## 36. Cards
 
-Cards group things that are decided about together. They are not a wrapper for every paragraph.
+**[SHARPENED, 2026-08-11 — owner design critique: "use a card only when there is a real boundary."]** A card is a container for a real, decided-about *thing* — a distinct item a user could point at and say "that one." It is not a general-purpose section wrapper, and the component inventory (§35) existing doesn't mean every screen region should reach for it.
 
-Use for: questions, courses, templates, purchases, dashboard modules, pricing tiers.
-Do not use for: body copy, a single statistic, form sections, or anything already inside a card.
+**Card it:** a course, a template, a purchase, a search result, a product in a bundle — anything with its own identity, its own state (owned/not-owned, complete/incomplete), and its own primary action.
 
-Every card answers three questions in this order: **what is this, why should I care, what can I do.** If it cannot answer all three, it is a list item, not a card.
+**Don't card:** a page section, a single paragraph, a single statistic, a piece of metadata, a dashboard heading, a filter control, or anything already living inside another card. These sit directly on the page — a heading, spacing, and maybe a hairline rule (`border-t`) is the whole treatment. A page where everything is a card reads as a stack of boxes, not a designed hierarchy; it's also the fastest way back to "generic SaaS," which is exactly the register this product is trying not to be in (see the Executive Summary / Part Eight annotations in the Research Specification on leading with the question interface, not a course-catalogue aesthetic).
+
+Every card answers three questions in this order: **what is this, why should I care, what can I do.** If it cannot answer all three, it is a list item or plain content, not a card.
 
 **Interactive cards:** the whole card is one link or one button — not a card with a separate link inside it, which produces two tab stops for one destination and confuses screen readers. Hover raises by 2px with a `shadow-sm`; that is the entire hover treatment.
 
@@ -2312,11 +2458,11 @@ JSON-LD            Question → QAPage; Course → Course; Template → Product
 
 ### 44.4 What must not be indexed
 
-- Any gated body text — which is automatic, because it is never sent to the client (§21.3)
+- Lesson reading bodies and any other content gated by actual purchase — automatic, because it is never sent to the client for a non-entitled user (§23.2, §26). **This no longer includes the question guidance body** — §21.3 was rewritten: question content is public in full, so it is not just indexable but *should* be indexed, since it is the acquisition mechanism (Research 8.2).
 - Every member, admin and auth route: `noindex, nofollow` plus a `robots.txt` disallow
 - Draft content, on any URL
 
-`[OWNER]` Whether question *previews* are publicly indexable is the owner's call. The design assumes yes, because it is the acquisition mechanism, and gating the preview would make the platform invisible to search.
+Question pages being fully public and fully readable is a genuine SEO gain from the §21.3 policy change — prerendered HTML now contains the entire guidance body, not a 350-character preview, which is strictly better for both search and for anyone sharing a direct link.
 
 ### 44.5 Open Graph images
 
@@ -2352,7 +2498,7 @@ It is fine *as a convenience*, provided the endpoint behind the button performs 
 
 ### 45.2 What must never reach the client
 
-- Gated guidance bodies, gated lesson content, gated transcripts
+- Gated lesson content and transcripts, for a user not entitled to that lesson (§21.3's "never" now applies here, not to question guidance — question bodies are deliberately public, see §21.3)
 - Permanent storage URLs for any paid artefact
 - Playback IDs or tokens for lessons the user is not entitled to
 - Any secret. **No key in a `VITE_` variable** — those are compiled into the bundle and readable by anyone (§56.3).
@@ -2459,8 +2605,9 @@ Event names without properties cannot answer the one question the funnel exists 
 | `quick_goal_used` | `chip_id`, `resulting_count` |
 | `zero_results` | `active_filters` (object), `suggested_relaxation` |
 | `question_opened` | `question_slug`, `domain`, `from` (`search`/`filter`/`related`/`direct`), `rank`, `was_close_match` |
-| `paywall_viewed` | `question_slug`, `product_id`, `price` |
-| `lead_captured` | `source_path`, `domain_offered` |
+| `email_gate_viewed` | `question_slug` — the blur/email prompt on a long question, not a purchase paywall (§21.3, §27) |
+| `lead_captured` | `source_path` (a question slug, per §27's rewrite — not a fixed `domain_offered`) |
+| `related_product_viewed` | `question_slug`, `product_id`, `product_type`, `price` — the question-to-product bridge (§21.4) |
 | `product_viewed` | `product_id`, `product_type`, `price`, `from` |
 | `checkout_started` | `product_id`, `price`, `currency`, `from` |
 | `purchase_completed` | `order_id`, `product_id`, `amount`, `currency`, `is_first_purchase` |
@@ -2475,8 +2622,8 @@ Event names without properties cannot answer the one question the funnel exists 
 ### 48.1 The funnels that matter
 
 ```
-Landing → question search → question opened → paywall viewed → checkout → purchase → download
-Landing → free entry point → lead captured → return visit → purchase
+Landing → question search → question opened → related product viewed → checkout → purchase → download
+Landing → any question → email gate viewed → lead captured → return visit → purchase
 Purchase → first lesson → 50% → completion
 ```
 
@@ -2706,7 +2853,7 @@ src/
     questions/                ← question-row, question-card, filter-rail,
                                 filter-sheet, quick-goal-chips, result-count,
                                 match-badge, question-meta, question-reader,
-                                paywall-fade
+                                email-gate-fade
     courses/                  ← course-card, course-outline, lesson-layout,
                                 lesson-nav, progress-bar
     lessons/                  ← video-lesson, reading-lesson, download-lesson
@@ -3274,7 +3421,7 @@ Not everything. In four weeks, test the things whose failure is expensive and si
 | Layer | Coverage |
 |---|---|
 | Unit (Vitest) | `scoring.ts`, `format.ts`, filter/URL serialisation, Zod schemas |
-| Component (Testing Library) | `EntitlementGate`, `DownloadButton`, `PaywallFade`, `FilterRail`, forms |
+| Component (Testing Library) | `EntitlementGate`, `DownloadButton`, `EmailGateFade`, `FilterRail`, forms |
 | E2E (Playwright) | The gating suite (below), the purchase path, the learning path |
 | Accessibility (axe) | Every public route and the lesson page, in CI |
 
@@ -3282,16 +3429,16 @@ Not everything. In four weeks, test the things whose failure is expensive and si
 
 The brief's hardest requirement is that paid content is genuinely inaccessible. That is a test suite, not a hope. Each of these must fail closed:
 
-1. Logged-out user requests a gated lesson URL → paywall, no body text in the HTML response
-2. Signed-in but unentitled user requests the same → paywall, no body text
+1. Logged-out user requests a gated lesson URL → locked state, no lesson body text in the HTML response
+2. Signed-in but unentitled user requests the same → locked state, no lesson body text
 3. Direct request to a template's storage URL without a presigned credential → denied
 4. A presigned download URL reused after 60 seconds → denied
 5. A Mux playback token for a lesson the user is not entitled to → never issued
 6. A playback token issued for lesson A used for lesson B → denied
 7. Entitlement revoked mid-session → next gated request denied
 8. Draft content requested by direct URL, signed out → 404, not a preview
-9. `View source` on a gated question page contains no gated text
-10. The API's question index response contains no `body` field, ever
+9. `View source` on a **lesson** page a user is not entitled to contains no lesson body text — a question page is exempt by design (§21.3): its full body is meant to be in the HTML for every visitor, gated only by a client-side email prompt, and that must stay true
+10. The API's question **filter index** response (§0.6, §57.1 — the lightweight list used for instant recount) contains no `body` field, ever — the question **detail** response, by contrast, must always contain the full `body`, unconditionally, per §21.3
 
 Run these in Week 2, not Week 4. "Access control discovered to be wrong in week four invalidates everything built on top of it" (brief).
 
@@ -3313,7 +3460,7 @@ The brief assesses reasoning as seriously as the build. Each decision states wha
 | 6 | **Transparent scoring, not AI ranking** | This audience distrusts opaque relevance. A visible rule is more trustworthy, and vastly cheaper to build and debug (Research 3.5) | Embedding-based relevance in v1 (accuracy risk, prompt-engineering time, and unexplainable) |
 | 7 | **URL as filter source of truth** | Shareable, bookmarkable, back-button-correct, and free of a whole class of state-sync bugs | Zustand-only (v1's position — loses shareability and breaks the back button) |
 | 8 | **Serif for reading only** | Reconciles Research 12.5's editorial-credibility recommendation with a sans interface. The serif works where a practitioner reads 400 words; sans works everywhere they act | All-sans (v1 — forfeits the editorial signal); all-serif (unreadable in admin and controls) |
-| 9 | **Gated text never sent to the client** | A CSS blur over delivered text is decoration, not gating. View Source defeats it instantly, and this is a paid product | Blur/overlay on delivered content (common, and wrong) |
+| 9 | **Lesson and template content never sent to the client until entitled** | A CSS blur over delivered text is decoration, not gating. View Source defeats it instantly, and lesson video/reading and template files are the paid product. **Question guidance is the deliberate exception** (§21.3, decided later than this row): it was never the paid product, so a blur there is a legitimate lead-capture device, not a leak | Blur/overlay on delivered *paid* content (common, and wrong); treating every gated-looking UI the same regardless of whether real money sits behind it |
 | 10 | **Semantic tokens, lint-enforced** | One source of truth means a brand change is one file. Enforcement matters because consistency that relies on remembering is not consistency | Convention alone (v1 — the seventh shade of blue arrives in week three) |
 | 11 | **Corrected palette rather than the palette as supplied** | Six dark-mode pairs failed WCAG including the focus ring at 1.65:1, and the light sidebar tokens were dark-theme values. Both are brief non-negotiables, not preferences | Shipping as supplied (fails accessibility); a full repalette (the supplied palette is good; it needed six fixes, not a redesign) |
 | 12 | **TanStack Query + Zustand + Axios** | Server state and client state are different problems and should not share a mechanism. Axios interceptors put JWT attachment and 401 handling in one file | Redux (weight); raw `fetch` + `useEffect` (reinvents caching, badly); SWR (fine, but Query's mutation and invalidation story is stronger for admin) |
@@ -3335,7 +3482,7 @@ Then, in this order:
 2. Fonts loaded and the type scale applied (§9, §10)
 3. Six components built properly, not copy-pasted: Button, Card, Input+Label+error, Badge, EmptyState, PageTitle
 4. Header, footer, marketing layout
-5. One question detail page with a real paywall
+5. One question detail page, full guidance body free and readable, with a real related-product buy surface (§21.3, §21.4)
 6. Sign-in / sign-up
 7. One product page → hosted checkout → success → entitlement
 8. One lesson with a real video that plays
@@ -3350,7 +3497,7 @@ Then, in this order:
 
 Course outline, modules, mixed lesson types, progress and resume. Real content loaded from the 100 questions. Sign-in and access control finished properly. **The gating test suite written and passing (§58.2).**
 
-Design work: the learning interface at both widths, locked states, the paywall, empty states for the library and dashboard.
+Design work: the learning interface at both widths, locked lesson states (§23.4), the question email gate (§21.3, §27), empty states for the library and dashboard.
 
 ### Week 3 — commerce, content and admin
 
@@ -3421,7 +3568,7 @@ Run before every release, on a real device.
 
 **Commerce** — price visible and correctly formatted · tax behaviour stated before redirect · checkout works on a real phone with a real card · failed payment state · success state · receipt arrives · entitlement delay handled · purchase record reconcilable
 
-**Paid content** — logged-out blocked · unentitled blocked · direct file URL blocked · playback token scoped and expiring · expired session handled without data loss · refresh preserves correct access state · gated text absent from the HTML
+**Paid content (lessons, video, templates — never questions, §21.3)** — logged-out blocked · unentitled blocked · direct file URL blocked · playback token scoped and expiring · expired session handled without data loss · refresh preserves correct access state · lesson body text absent from the HTML for a non-entitled request
 
 **Content** — real questions · real prices · real names · a very long title present · a very long person name present · no `test`, no `asdf`, no `$0.00`
 

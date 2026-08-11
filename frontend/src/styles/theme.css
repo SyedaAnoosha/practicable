@@ -4,15 +4,21 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Art direction: "private bank meets editorial publisher".
+   Art direction: "private bank meets editorial publisher" — livelier, 2026-08-11.
    DESIGN.md §7's role map is untouched — primary is still the brand/action
-   colour, accent still the sparing interactive emphasis. What changed are the
-   *materials*: the cool violet-white surfaces become warm ivory, the saturated
-   near-black navy becomes a calmer midnight (same authority, quieter), and the
-   accent moves from pale blue to a restrained champagne gold — the single
-   metallic that carries the "expensive" register without ever shouting.
-   Every colour change happens here, at the token level (§7.2): no component
-   holds a hex, so the whole product re-materialises at once.
+   colour, accent still the interactive emphasis. What changed: the owner asked
+   for more colour, gradients (text and background), and livelier icon/symbol
+   treatment across the whole product — a deliberate reversal of the "no
+   gradients, one restrained accent" rule this file carried until now. Two new
+   layers on top of the existing navy/gold system, both additive:
+     1. `--domain-*` — one signature hue per domain (Risk/Cyber/Compliance/
+        Resilience/AI), for domain icon tiles, accents and gradients. Reserved
+        for *domain* identity specifically — the seven question-tag dimensions
+        still don't get their own colours (that's still real badge-soup risk;
+        five domains named prominently on their own is a different problem).
+     2. `.text-gradient-*` / `.bg-gradient-*` utilities below, built from
+        existing tokens via color-mix() so a theme swap still restyles them.
+   Every colour still lives at the token level (§7.2): no component holds a hex.
    ───────────────────────────────────────────────────────────────────────────── */
 
 @theme inline {
@@ -50,6 +56,15 @@
   --color-primary-edge: var(--primary-edge);
   --color-secondary-strong: var(--secondary-strong);
 
+  /* Domain signature colours — registered as Tailwind utilities (text-domain-risk,
+     bg-domain-risk/10, border-domain-risk, ...) so pages can reach for them like
+     any other semantic colour rather than an inline style. */
+  --color-domain-risk: var(--domain-risk);
+  --color-domain-cyber: var(--domain-cyber);
+  --color-domain-compliance: var(--domain-compliance);
+  --color-domain-resilience: var(--domain-resilience);
+  --color-domain-ai: var(--domain-ai);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -69,14 +84,19 @@
   --font-family-serif: var(--font-serif);
   --font-family-mono: var(--font-mono);
 
-  /* DESIGN.md §12.1 — base radius tightened 20px → 16px. A full 20px reads
-     "friendly SaaS"; 16px on cards with 8px on controls is the crisper,
-     tailored register the luxury direction wants. The step-down formula from
-     the spec is preserved. */
-  --radius-sm: calc(var(--radius) - 0.75rem); /* 4px  — chips, badges */
-  --radius-md: calc(var(--radius) - 0.5rem);  /* 8px  — inputs, buttons */
-  --radius-lg: calc(var(--radius) - 0.25rem); /* 12px — small cards */
-  --radius-xl: var(--radius);                 /* 16px — cards, feature blocks */
+  /* DESIGN.md §12.1 — base radius tightened twice now: 20px → 16px (the first
+     premium pass), then 16px → 12px here (owner design critique, 2026-08-11:
+     "a 20px radius everywhere can quickly give the site that modern-SaaS-
+     template appearance" — 16px on the largest surfaces was still reading
+     that way). Everything from chips up to feature blocks now sits inside a
+     4–12px range, no exceptions — --radius-2xl is pinned to the same 12px
+     ceiling below specifically so a stray `rounded-2xl` in a component can't
+     quietly exceed it. */
+  --radius-sm: calc(var(--radius) - 0.5rem);   /* 4px  — chips, badges */
+  --radius-md: calc(var(--radius) - 0.375rem); /* 6px  — inputs, buttons */
+  --radius-lg: calc(var(--radius) - 0.25rem);  /* 8px  — cards, the default */
+  --radius-xl: var(--radius);                  /* 12px — feature blocks, hero panels, video frame */
+  --radius-2xl: var(--radius);                 /* 12px — same ceiling; nothing rounder than xl */
 
   /* Elevation — §12.3's four levels, but tinted warm: shadows drawn from an
      espresso-brown rather than pure black (rgb(52 42 26)) read as depth cast
@@ -138,17 +158,24 @@
   --popover-foreground: #1C1712;
 
   /* Brand — midnight navy (authority without the saturated shout of #03035e),
-     warm cream instead of pure white on it, stone for secondary surfaces,
-     champagne gold for the one accent the interface is allowed to spend */
+     warm cream instead of pure white on it, stone for secondary surfaces.
+     `[PALETTE CONSTRAINED, 2026-08-11]` Owner instruction, same day as the
+     liveliness pass that introduced a five-hue domain system and a champagne
+     gold accent: "use shades of blue and ivory, black, white only, no other
+     colours." Both reversed here — the accent moves from gold to a vivid blue,
+     and the five domain colours below (previously amber/teal/violet/emerald/
+     fuchsia) become five shades of blue instead. Liveliness (gradients,
+     colour-by-domain, motion) stays; the hue range is now constrained to one
+     family. Semantic status colours (destructive/success/warning below) are
+     treated as exempt — they're functional conventions (red=error, green=
+     success), not brand/decorative colour, the same exemption §7.1 already
+     gives chart tokens. */
   --primary: #10213E;
   --primary-foreground: #F7F2E9;
   --secondary: #EFE9DE;
   --secondary-foreground: #453B2C;
-  --accent: #A17D2E;            /* antique gold — LARGE TEXT ONLY on ivory (~3.6:1);
-                                   never use text-accent for body-size text. Badges
-                                   compensate via --accent-foreground (espresso on
-                                   gold, ~4.7:1) */
-  --accent-foreground: #1A1305;
+  --accent: #1D5FA8;             /* vivid blue — the one accent, ~4.6:1 on ivory */
+  --accent-foreground: #FFFFFF;
 
   /* Quiet */
   --muted: #F1ECE1;
@@ -158,10 +185,12 @@
   --border: #E6DFD0;
   --border-strong: #998E78;     /* 3.2:1 on card — state-bearing borders (§7.6) */
   --input: #E6DFD0;
-  --ring: #8F6F28;              /* deep gold focus ring — 4.4:1 on ivory */
+  --ring: #1B4E8C;               /* deep blue focus ring — ~5.7:1 on ivory */
 
-  /* Status — terracotta rather than magenta-rose for destructive: it belongs
-     to the warm palette and still clears 4.5:1 on ivory with white text */
+  /* Status — kept as the one exception to the blue/ivory/black/white
+     constraint (see note above): red for error, green for success are
+     near-universal conventions this audience reads instantly, and losing
+     them would cost more usability than the palette constraint is meant to. */
   --destructive: #B3402E;
   --destructive-foreground: #FFFFFF;
   --success: #067647;
@@ -173,6 +202,16 @@
   --primary-edge: color-mix(in srgb, var(--primary-foreground) 16%, transparent);
   --secondary-strong: #E3DBC8;
 
+  /* Domain signature colours — five shades of blue (not five hues), varying in
+     depth and lean (navy, azure, steel, indigo-blue, slate-blue) so the five
+     stay distinguishable at a glance while staying inside the constrained
+     palette. Still not applied to the seven question-tag dimensions (§7.6). */
+  --domain-risk: #142E5C;         /* deep navy-blue */
+  --domain-cyber: #1B5FA8;        /* azure */
+  --domain-compliance: #1D6FA5;   /* steel blue, leaning cyan */
+  --domain-resilience: #3D5A99;   /* indigo-blue */
+  --domain-ai: #46618C;           /* slate blue-grey */
+
   /* Sidebar */
   --sidebar: #EFE9DE;
   --sidebar-foreground: #453B2C;
@@ -181,11 +220,13 @@
   --sidebar-accent: #E2D9C6;
   --sidebar-accent-foreground: #10213E;
   --sidebar-border: #D8CFB8;
-  --sidebar-ring: #8F6F28;
+  --sidebar-ring: #1B4E8C;
 
-  /* Charts — data visualisation only */
+  /* Charts — data visualisation only, exempt from the blue/ivory/black/white
+     constraint per §7.1 (same exemption semantic status colours get) — no
+     chart component is built or rendered anywhere yet, so this is dormant. */
   --chart-1: #10213E;
-  --chart-2: #A17D2E;
+  --chart-2: #1D6FA5;
   --chart-3: #B3402E;
   --chart-4: #5C6B4F;
   --chart-5: #7A8699;
@@ -197,7 +238,7 @@
   --letter-spacing: -0.01em;
 
   /* Geometry */
-  --radius: 1rem;
+  --radius: 0.75rem;
   --spacing: 0.25rem;
 
   /* Elevation tint — warm espresso shadow colour (see @theme above) */
@@ -262,13 +303,19 @@
     content: "";
     width: 1.5rem;
     height: 1px;
-    background: var(--accent);
+    /* Falls back to the gilt rule everywhere; PageTitle's optional
+       `eyebrowColor` prop (2026-08-11) overrides this per-instance via the
+       --eyebrow-rule-color custom property, e.g. a question's domain colour. */
+    background: var(--eyebrow-rule-color, var(--accent));
     flex-shrink: 0;
   }
 
-  /* The hero's atmosphere: two very faint radial blooms (gold, then navy) behind
-     the type. Deliberately 7–10% opacity — depth without a gradient wash (§5),
-     and because it is a static background it needs no reduced-motion handling. */
+  /* The hero's atmosphere — 2026-08-11: brightened from a near-invisible 7–10%
+     wash into a genuine three-stop gradient, all shades of blue (accent azure,
+     domain-compliance steel-blue, domain-cyber azure — see the palette
+     constraint note in :root), now the product is allowed gradients (§5). Still
+     a static background (no animation needed to read as "alive" — the colour
+     does that work), so no reduced-motion handling required here. */
   .hero-wash {
     position: absolute;
     inset-inline: 0;
@@ -276,8 +323,67 @@
     height: 42rem;
     pointer-events: none;
     background:
-      radial-gradient(46rem 28rem at 16% -8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 65%),
-      radial-gradient(52rem 32rem at 94% -14%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 62%);
+      radial-gradient(46rem 28rem at 12% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 68%),
+      radial-gradient(50rem 30rem at 88% 0%, color-mix(in srgb, var(--domain-compliance) 16%, transparent), transparent 65%),
+      radial-gradient(44rem 26rem at 50% 18%, color-mix(in srgb, var(--domain-cyber) 12%, transparent), transparent 70%);
+    /* Same fix as the question page's header wash: centres sat above the box
+       (`at … -10%`), which puts near-full-strength tint on the top edge and
+       reads as a hard line under the header. Centres are on the edge now, and
+       the mask fades both ends so the wash can never be clipped by its own
+       box at any viewport size. */
+    mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 50%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 50%, transparent 100%);
+  }
+
+  /* Gradient text — the brand headline device. All-blue stops from tokens
+     (never a raw hex), so it re-materialises with the rest of the theme and
+     stays inside the blue/ivory/black/white constraint. Falls back to solid
+     --foreground in browsers without background-clip:text support. */
+  .text-gradient-brand {
+    color: var(--foreground);
+    background-image: linear-gradient(100deg, var(--primary) 0%, var(--accent) 55%, var(--domain-compliance) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Gradient surface — for a hero panel, a feature card, a primary CTA. Subtle
+     angle, two stops, restrained saturation so it reads as "premium" rather
+     than "app icon". */
+  .bg-gradient-brand {
+    background-image: linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 70%, var(--domain-compliance)) 100%);
+  }
+
+  /* A slow, quiet hue drift — for a hero backdrop or a section divider that
+     wants to feel alive without drawing the eye. 24s so it's felt, not watched;
+     collapses to static under prefers-reduced-motion via the global rule below. */
+  .bg-gradient-animated {
+    background-image: linear-gradient(
+      120deg,
+      var(--accent) 0%,
+      var(--domain-compliance) 33%,
+      var(--domain-cyber) 66%,
+      var(--accent) 100%
+    );
+    background-size: 300% 300%;
+    animation: gradient-drift 18s ease infinite;
+  }
+
+  /* A restrained entrance — content settling in, not sliding or bouncing.
+     Applied via className, not globally, so it stays a deliberate choice. */
+  .animate-enter {
+    animation: fade-rise 0.5s var(--ease-entrance) both;
+  }
+}
+
+@layer utilities {
+  @keyframes gradient-drift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  @keyframes fade-rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 }
 
@@ -290,14 +396,16 @@
   --popover: #1E1911;
   --popover-foreground: #F2EBDE;
 
-  /* Brand — champagne gold carries the dark theme (buttons and links in gilt on
-     espresso), with a lighter champagne reserved for the accent */
-  --primary: #C7AC6D;
-  --primary-foreground: #221A08;
+  /* Brand — `[PALETTE CONSTRAINED, 2026-08-11]` was champagne gold carrying the
+     dark theme; now a lighter azure blue takes over the same role (buttons and
+     links in blue on espresso), consistent with the light theme's blue-only
+     constraint (see :root's note) rather than a gold theme paired with a blue one. */
+  --primary: #6FA8DC;
+  --primary-foreground: #0B1A2E;
   --secondary: #262016;
   --secondary-foreground: #EAE2D1;
-  --accent: #CDB377;
-  --accent-foreground: #211A06;
+  --accent: #7FB8E8;
+  --accent-foreground: #0B1A2E;
 
   /* Quiet */
   --muted: #201B12;
@@ -307,7 +415,7 @@
   --border: #332B1E;
   --border-strong: #7C6F56;
   --input: #332B1E;
-  --ring: #D9C189;
+  --ring: #8FC1EA;
 
   /* Status — kept from the audited dark values in DESIGN.md §7.5 */
   --destructive: #E11D48;
@@ -321,15 +429,24 @@
   --primary-edge: color-mix(in srgb, var(--primary-foreground) 18%, transparent);
   --secondary-strong: #2E271B;
 
+  /* Domain signature colours — lifted a step brighter than the light values so
+     they still read as saturated colour on an espresso background; same five
+     blue leans as :root (navy, azure, steel-cyan, indigo, slate), not five hues. */
+  --domain-risk: #5B7FBD;
+  --domain-cyber: #6FB0E8;
+  --domain-compliance: #5FB8D9;
+  --domain-resilience: #8090D8;
+  --domain-ai: #93A7C9;
+
   /* Sidebar */
   --sidebar: #161209;
   --sidebar-foreground: #B7AC96;
-  --sidebar-primary: #C7AC6D;
-  --sidebar-primary-foreground: #221A08;
+  --sidebar-primary: #6FA8DC;
+  --sidebar-primary-foreground: #0B1A2E;
   --sidebar-accent: #262016;
   --sidebar-accent-foreground: #F2EBDE;
   --sidebar-border: #332B1E;
-  --sidebar-ring: #D9C189;
+  --sidebar-ring: #8FC1EA;
 
   /* Charts */
   --chart-1: #C7AC6D;
