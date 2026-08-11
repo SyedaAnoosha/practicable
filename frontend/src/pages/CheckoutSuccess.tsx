@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
+import { CircleCheck } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -80,9 +81,15 @@ export function CheckoutSuccess() {
 
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
-      <Card>
+      <Card className="border-l-4 shadow-sm" style={{ borderLeftColor: 'var(--accent)' }}>
         <CardHeader>
-          <CardTitle>{entitled ? "✓ You're in." : '✓ Payment confirmed.'}</CardTitle>
+          {/* The success moment gets the same icon-tile treatment as the buy cards'
+              gold tiles — a status tile, not a bare checkmark glyph (§14's fixed
+              icon map: CircleCheck is the one icon for completion). */}
+          <span className="flex size-10 items-center justify-center rounded-full bg-success/10 text-success ring-1 ring-inset ring-success/25">
+            <CircleCheck className="size-5" aria-hidden="true" />
+          </span>
+          <CardTitle className="mt-3">{entitled ? "You're in." : 'Payment confirmed.'}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {product && (

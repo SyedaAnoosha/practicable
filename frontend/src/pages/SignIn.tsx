@@ -38,7 +38,9 @@ export function SignIn() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle style={{ fontSize: 'var(--text-h2)' }}>Sign in</CardTitle>
+        {/* text-h2 carries the §10 size/line-height from theme.css — the inline
+            fontSize this used bypassed the type system entirely. */}
+        <CardTitle className="text-h2">Sign in</CardTitle>
         <CardDescription>Enter your email and password to access your account</CardDescription>
       </CardHeader>
       <CardContent>

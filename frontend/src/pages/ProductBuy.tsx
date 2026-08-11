@@ -1,15 +1,26 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
+import { Download, FileQuestion, PlayCircle } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
 
 interface ProductContent {
   content_type: string
   label: string
+  href: string | null
+}
+
+// See Dashboard.tsx for the backend side of this — products.py now computes the
+// right route per content_type; this just picks the icon that matches.
+const CONTENT_ICON: Record<string, typeof PlayCircle> = {
+  lesson: PlayCircle,
+  template: Download,
+  question_set: FileQuestion,
 }
 
 interface ProductData {
@@ -62,28 +73,77 @@ export function ProductBuy() {
     }
   }
 
-  if (isLoading) return <div className="p-8 text-muted-foreground">Loading…</div>
-  if (!product) return <div className="p-8 text-destructive">We couldn't find that product.</div>
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Loading product">
+        <div className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
+        <span className="sr-only">Loading product…</span>
+      </div>
+    )
+  }
+
+  if (!product) {
+    return (
+      <div className="mx-auto w-full max-w-2xl px-5 py-16 sm:px-8">
+        <EmptyState
+          title="We couldn't find that product."
+          description="It may have been moved or unpublished."
+          action={
+            <Link to="/dashboard">
+              <Button variant="outline">Back to your library</Button>
+            </Link>
+          }
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
-      <Card>
+      {/* Same gold left-rule family as the question page's buy card and the course
+          buy surface — the conversion moment earns the accent. */}
+      <Card
+        className="border-l-4 shadow-sm transition-[box-shadow] duration-150 hover:shadow-md"
+        style={{ borderLeftColor: 'var(--accent)' }}
+      >
         <CardHeader>
           <CardTitle>{product.name}</CardTitle>
           <CardDescription>{product.description}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <ul className="flex flex-col gap-1 text-sm text-foreground">
-            {product.contents.map((c) => (
-              <li key={`${c.content_type}-${c.label}`} className="flex items-center gap-2">
-                <span aria-hidden="true">·</span> {c.label}
-              </li>
-            ))}
+          <ul className="flex flex-col gap-2 text-sm text-foreground">
+            {product.contents.map((c) => {
+              const Icon = CONTENT_ICON[c.content_type] ?? FileQuestion
+              // Lesson/template links 403 gracefully with a clear "not entitled yet"
+              // message (Lesson.tsx/Template.tsx already handle that state) — safe to
+              // always link, not just once alreadyOwned is confirmed.
+              if (c.href) {
+                return (
+                  <li key={`${c.content_type}-${c.label}`}>
+                    <Link
+                      to={c.href}
+                      className="flex items-center gap-2 transition-colors hover:text-primary"
+                    >
+                      <Icon className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                      {c.label}
+                    </Link>
+                  </li>
+                )
+              }
+              return (
+                <li key={`${c.content_type}-${c.label}`} className="flex items-center gap-2">
+                  <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  {c.label}
+                </li>
+              )
+            })}
           </ul>
 
           <div className="flex items-baseline justify-between border-t border-border pt-4">
             <span className="text-sm text-muted-foreground">Subtotal</span>
-            <span className="font-sans text-lg font-semibold">
+            {/* Gold, but only because this is 24px — the gold token is
+                large-text-only on light surfaces (theme.css). Do not shrink it. */}
+            <span className="text-2xl font-semibold tabular-nums text-accent">
               {formatCurrency(product.price_amount, product.currency)}
             </span>
           </div>

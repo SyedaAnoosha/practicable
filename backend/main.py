@@ -2,7 +2,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.deps import get_current_user_id
-from app.api.v1.content import questions, lessons, templates
+from app.api.v1.content import questions, lessons, templates, courses
 from app.api.v1.commerce import checkout, products, webhooks
 from app.api.v1 import leads, me
 
@@ -23,6 +23,7 @@ app.add_middleware(
 app.include_router(questions.router, tags=["questions"])
 app.include_router(lessons.router, tags=["lessons"])
 app.include_router(templates.router, tags=["templates"])
+app.include_router(courses.router, tags=["courses"])
 app.include_router(checkout.router, tags=["commerce"])
 app.include_router(products.router, tags=["commerce"])
 app.include_router(webhooks.router, tags=["commerce"])

@@ -5,16 +5,20 @@ import { cn } from '@/lib/utils/cn'
 
 const buttonVariants = cva(
   [
-    'inline-flex items-center justify-center gap-2 font-sans font-medium transition-colors duration-150',
+    'inline-flex items-center justify-center gap-2 font-sans font-medium',
+    'transition-[color,background-color,border-color,box-shadow,transform] duration-150',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
     'disabled:pointer-events-none disabled:opacity-50',
   ].join(' '),
   {
     variants: {
       variant: {
-        primary: 'bg-primary text-primary-foreground hover:opacity-90',
-        secondary: 'bg-secondary text-secondary-foreground hover:opacity-90',
-        outline: 'border border-border bg-background hover:bg-muted',
+        // The primary action is the brand moment: midnight navy with a faint
+        // cream inner edge (the engraving), a warm resting shadow, and a 1px
+        // lift + deepened shadow on hover — tactile, never bouncy (§39.2).
+        primary: 'bg-primary text-primary-foreground shadow-sm ring-1 ring-inset ring-primary-edge hover:-translate-y-px hover:shadow-md',
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary-strong',
+        outline: 'border border-border bg-background hover:border-border-strong hover:bg-muted',
         ghost: 'bg-transparent text-foreground hover:bg-muted',
         destructive: 'bg-destructive text-destructive-foreground hover:opacity-90',
       },
@@ -52,5 +56,3 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ),
 )
 Button.displayName = 'Button'
-
-export { buttonVariants }

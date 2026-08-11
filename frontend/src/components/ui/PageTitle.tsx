@@ -16,10 +16,10 @@ export interface PageTitleProps {
 export const PageTitle = ({ eyebrow, title, description, action, className }: PageTitleProps) => (
   <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between', className)}>
     <div>
-      {eyebrow && (
-        <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{eyebrow}</p>
-      )}
-      <h1 tabIndex={-1} className="font-sans font-semibold tracking-tight text-foreground outline-none" style={{ fontSize: 'var(--text-h1)' }}>
+      {eyebrow && <p className="eyebrow mb-2">{eyebrow}</p>}
+      {/* text-h1 carries the §10 size, line-height and tracking from theme.css — the
+          inline fontSize style this used before is gone now that the token exists. */}
+      <h1 tabIndex={-1} className="text-balance text-h1 font-semibold text-foreground outline-none">
         {title}
       </h1>
       {description && <p className="mt-2 max-w-2xl text-muted-foreground">{description}</p>}

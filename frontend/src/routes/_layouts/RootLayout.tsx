@@ -1,17 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { supabase } from '@/lib/auth/supabase'
 import { useAuthStore } from '@/stores/useAuthStore'
 
 /** Announces the new page on every route change for screen-reader users, who
- * otherwise get told nothing when a SPA navigates (DESIGN.md §42.2). */
+ * otherwise get told nothing when a SPA navigates (DESIGN.md §42.2).
+ *
+ * The message is derived during render rather than synced through an effect: an
+ * aria-live region only announces when its text actually changes, so a navigation
+ * (which changes the text via the new pathname) still produces exactly one
+ * announcement — without the setState-in-effect pattern lint forbids. */
 function RouteAnnouncer() {
-  const location = useLocation()
-  const [message, setMessage] = useState('')
-
-  useEffect(() => {
-    setMessage(`${document.title} — page loaded`)
-  }, [location.pathname])
+  // Subscribes this component to navigation: a pathname change re-renders it,
+  // which recomputes the announcement text below. The location object itself is
+  // not read — the re-render (and the aria-live text change) is the point.
+  useLocation()
+  const message = `${document.title} — page loaded`
 
   return (
     <div role="status" aria-live="polite" className="sr-only">

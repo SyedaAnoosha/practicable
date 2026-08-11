@@ -3,6 +3,18 @@
 /* Class-based dark mode (we toggle .dark on <html>, we do not follow the OS blindly) */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Art direction: "private bank meets editorial publisher".
+   DESIGN.md §7's role map is untouched — primary is still the brand/action
+   colour, accent still the sparing interactive emphasis. What changed are the
+   *materials*: the cool violet-white surfaces become warm ivory, the saturated
+   near-black navy becomes a calmer midnight (same authority, quieter), and the
+   accent moves from pale blue to a restrained champagne gold — the single
+   metallic that carries the "expensive" register without ever shouting.
+   Every colour change happens here, at the token level (§7.2): no component
+   holds a hex, so the whole product re-materialises at once.
+   ───────────────────────────────────────────────────────────────────────────── */
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -33,6 +45,11 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
 
+  /* Component-level tokens added for the premium pass — both resolve to
+     colour-mix() of existing semantic tokens, so a theme swap restyles them too. */
+  --color-primary-edge: var(--primary-edge);
+  --color-secondary-strong: var(--secondary-strong);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -52,80 +69,126 @@
   --font-family-serif: var(--font-serif);
   --font-family-mono: var(--font-mono);
 
-  --radius-sm: calc(var(--radius) - 0.75rem);
-  --radius-md: calc(var(--radius) - 0.5rem);
-  --radius-lg: calc(var(--radius) - 0.25rem);
-  --radius-xl: var(--radius);
+  /* DESIGN.md §12.1 — base radius tightened 20px → 16px. A full 20px reads
+     "friendly SaaS"; 16px on cards with 8px on controls is the crisper,
+     tailored register the luxury direction wants. The step-down formula from
+     the spec is preserved. */
+  --radius-sm: calc(var(--radius) - 0.75rem); /* 4px  — chips, badges */
+  --radius-md: calc(var(--radius) - 0.5rem);  /* 8px  — inputs, buttons */
+  --radius-lg: calc(var(--radius) - 0.25rem); /* 12px — small cards */
+  --radius-xl: var(--radius);                 /* 16px — cards, feature blocks */
 
-  /* Type scale - fluid clamp() tokens per DESIGN.md §10 */
+  /* Elevation — §12.3's four levels, but tinted warm: shadows drawn from an
+     espresso-brown rather than pure black (rgb(52 42 26)) read as depth cast
+     by warm materials, and the old token block below was never wired into
+     Tailwind at all — shadow-sm/md/lg were silently the default black
+     utilities. The tint switches to near-black in dark mode, where shadows
+     barely register and the border does the work (§12.3). */
+  --shadow-2xs: 0 1px 2px 0 rgb(var(--shadow-tint) / 0.04);
+  --shadow-xs: 0 1px 2px 0 rgb(var(--shadow-tint) / 0.05);
+  --shadow-sm: 0 1px 2px 0 rgb(var(--shadow-tint) / 0.05), 0 2px 6px -1px rgb(var(--shadow-tint) / 0.06);
+  --shadow-md: 0 4px 10px -2px rgb(var(--shadow-tint) / 0.08), 0 2px 5px -2px rgb(var(--shadow-tint) / 0.05);
+  --shadow-lg: 0 10px 24px -6px rgb(var(--shadow-tint) / 0.13), 0 4px 10px -4px rgb(var(--shadow-tint) / 0.07);
+  --shadow-xl: 0 20px 40px -10px rgb(var(--shadow-tint) / 0.18), 0 8px 20px -6px rgb(var(--shadow-tint) / 0.09);
+  --shadow-2xl: 0 30px 60px -14px rgb(var(--shadow-tint) / 0.24), 0 10px 28px -8px rgb(var(--shadow-tint) / 0.12);
+
+  /* Type scale - fluid clamp() tokens per DESIGN.md §10. Each entry also carries the
+     line-height and (where the spec calls for it) letter-spacing from §10's table, so
+     text-display / text-h1 / … utilities render the exact rhythm the spec defines
+     instead of a per-component inline style. */
   --text-display: clamp(2.75rem, 1.6rem + 4.6vw, 4.5rem);
+  --text-display--line-height: 1.0;
+  --text-display--letter-spacing: -0.03em;
   --text-h1: clamp(2.25rem, 1.6rem + 2.6vw, 3.25rem);
+  --text-h1--line-height: 1.08;
+  --text-h1--letter-spacing: -0.02em;
   --text-h2: clamp(1.75rem, 1.4rem + 1.4vw, 2.375rem);
+  --text-h2--line-height: 1.15;
+  --text-h2--letter-spacing: -0.015em;
   --text-h3: clamp(1.375rem, 1.2rem + 0.7vw, 1.75rem);
+  --text-h3--line-height: 1.25;
+  --text-h3--letter-spacing: -0.01em;
   --text-h4: 1.25rem;
+  --text-h4--line-height: 1.35;
+  --text-h4--letter-spacing: -0.01em;
   --text-lead: 1.1875rem;
+  --text-lead--line-height: 1.55;
   --text-body: 1rem;
+  --text-body--line-height: 1.55;
   --text-read: 1.0625rem;
+  --text-read--line-height: 1.7;
   --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
   --text-xs: 0.75rem;
+  --text-xs--line-height: 1.4;
 
-  /* Motion tokens */
+  /* Motion tokens — see §39 */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-entrance: cubic-bezier(0, 0, 0, 1);
   --ease-exit: cubic-bezier(0.3, 0, 1, 1);
 }
 
 :root {
-  /* Surfaces */
-  --background: #FDFCFE;
-  --foreground: #0A050D;
+  /* Surfaces — warm ivory, not violet-white: the paper this brand is printed on */
+  --background: #FBF9F4;
+  --foreground: #1C1712;        /* espresso ink, not near-black */
   --card: #FFFFFF;
-  --card-foreground: #0A050D;
+  --card-foreground: #1C1712;
   --popover: #FFFFFF;
-  --popover-foreground: #0A050D;
+  --popover-foreground: #1C1712;
 
-  /* Brand */
-  --primary: #03035e;
-  --primary-foreground: #FFFFFF;
-  --secondary: #e2ebfd;
-  --secondary-foreground: #0248d4;
-  --accent: #e5e8ff;
-  --accent-foreground: #0248d4;
+  /* Brand — midnight navy (authority without the saturated shout of #03035e),
+     warm cream instead of pure white on it, stone for secondary surfaces,
+     champagne gold for the one accent the interface is allowed to spend */
+  --primary: #10213E;
+  --primary-foreground: #F7F2E9;
+  --secondary: #EFE9DE;
+  --secondary-foreground: #453B2C;
+  --accent: #A17D2E;            /* antique gold — LARGE TEXT ONLY on ivory (~3.6:1);
+                                   never use text-accent for body-size text. Badges
+                                   compensate via --accent-foreground (espresso on
+                                   gold, ~4.7:1) */
+  --accent-foreground: #1A1305;
 
   /* Quiet */
-  --muted: #F0EEF2;
-  --muted-foreground: #635D69;
+  --muted: #F1ECE1;
+  --muted-foreground: #6E675A;
 
-  /* Lines and fields */
-  --border: #E6E1E9;
-  --border-strong: #8F8896;
-  --input: #E6E1E9;
-  --ring: #2F6BF0;
+  /* Lines and fields — warm hairlines instead of grey-violet */
+  --border: #E6DFD0;
+  --border-strong: #998E78;     /* 3.2:1 on card — state-bearing borders (§7.6) */
+  --input: #E6DFD0;
+  --ring: #8F6F28;              /* deep gold focus ring — 4.4:1 on ivory */
 
-  /* Status */
-  --destructive: #E11D48;
+  /* Status — terracotta rather than magenta-rose for destructive: it belongs
+     to the warm palette and still clears 4.5:1 on ivory with white text */
+  --destructive: #B3402E;
   --destructive-foreground: #FFFFFF;
   --success: #067647;
   --success-foreground: #FFFFFF;
   --warning: #8A5300;
   --warning-foreground: #FFFFFF;
 
+  /* Component-level tokens */
+  --primary-edge: color-mix(in srgb, var(--primary-foreground) 16%, transparent);
+  --secondary-strong: #E3DBC8;
+
   /* Sidebar */
-  --sidebar: #e2ebfd;
-  --sidebar-foreground: #02173b;
-  --sidebar-primary: #03035e;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #D3E0FB;
-  --sidebar-accent-foreground: #02173b;
-  --sidebar-border: #C3D6F7;
-  --sidebar-ring: #2F6BF0;
+  --sidebar: #EFE9DE;
+  --sidebar-foreground: #453B2C;
+  --sidebar-primary: #10213E;
+  --sidebar-primary-foreground: #F7F2E9;
+  --sidebar-accent: #E2D9C6;
+  --sidebar-accent-foreground: #10213E;
+  --sidebar-border: #D8CFB8;
+  --sidebar-ring: #8F6F28;
 
   /* Charts — data visualisation only */
-  --chart-1: #0248d4;
-  --chart-2: #6D3BD6;
-  --chart-3: #B02BC4;
-  --chart-4: #F43F5E;
-  --chart-5: #B4530C;
+  --chart-1: #10213E;
+  --chart-2: #A17D2E;
+  --chart-3: #B3402E;
+  --chart-4: #5C6B4F;
+  --chart-5: #7A8699;
 
   /* Type */
   --font-sans: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
@@ -134,46 +197,119 @@
   --letter-spacing: -0.01em;
 
   /* Geometry */
-  --radius: 1.25rem;
+  --radius: 1rem;
   --spacing: 0.25rem;
 
-  /* Elevation */
-  --shadow-color: 0 0 0;
-  --shadow-opacity: 0.10;
-  --shadow-blur: 10px;
-  --shadow-offset-x: 0px;
-  --shadow-offset-y: 4px;
-  --shadow-spread: 0px;
+  /* Elevation tint — warm espresso shadow colour (see @theme above) */
+  --shadow-tint: 52 42 26;
+}
+
+/* DESIGN.md §39.2: reduced-motion backstop for anything outside Motion's tree (plain
+   CSS animations such as the loading spinner). Under reduced motion, transitions and
+   animations collapse to instant state changes — never removed entirely, because the
+   state change itself still needs to be visible. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    letter-spacing: var(--letter-spacing);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* One focus style, everywhere, no exceptions — the gold ring is the product's
+     gilt signature, and it doubles as a keyboard affordance (§42) */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  /* Text selection in a soft gold wash — the same restraint as everything else */
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 24%, transparent);
+    color: var(--color-foreground);
+  }
+}
+
+@layer components {
+  /* The spec's eyebrow device (§18.2: mono, xs, tracked) given its gilt rule —
+     a 24px champagne hairline before the text. One class, every section. */
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--muted-foreground);
+  }
+  .eyebrow::before {
+    content: "";
+    width: 1.5rem;
+    height: 1px;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  /* The hero's atmosphere: two very faint radial blooms (gold, then navy) behind
+     the type. Deliberately 7–10% opacity — depth without a gradient wash (§5),
+     and because it is a static background it needs no reduced-motion handling. */
+  .hero-wash {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 42rem;
+    pointer-events: none;
+    background:
+      radial-gradient(46rem 28rem at 16% -8%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 65%),
+      radial-gradient(52rem 32rem at 94% -14%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 62%);
+  }
 }
 
 .dark {
-  /* Surfaces */
-  --background: #020409;
-  --foreground: #FDFCFE;
-  --card: #060a13;
-  --card-foreground: #FDFCFE;
-  --popover: #060913;
-  --popover-foreground: #FDFCFE;
+  /* Surfaces — espresso rather than blue-black: a warm night */
+  --background: #141008;
+  --foreground: #F2EBDE;
+  --card: #1B1710;
+  --card-foreground: #F2EBDE;
+  --popover: #1E1911;
+  --popover-foreground: #F2EBDE;
 
-  /* Brand */
-  --primary: #2F5BD8;
-  --primary-foreground: #FFFFFF;
-  --secondary: #11172c;
-  --secondary-foreground: #FDFCFE;
-  --accent: #1a1f42;
-  --accent-foreground: #FDFCFE;
+  /* Brand — champagne gold carries the dark theme (buttons and links in gilt on
+     espresso), with a lighter champagne reserved for the accent */
+  --primary: #C7AC6D;
+  --primary-foreground: #221A08;
+  --secondary: #262016;
+  --secondary-foreground: #EAE2D1;
+  --accent: #CDB377;
+  --accent-foreground: #211A06;
 
   /* Quiet */
-  --muted: #0c1022;
-  --muted-foreground: #9999a8;
+  --muted: #201B12;
+  --muted-foreground: #A79D89;
 
   /* Lines and fields */
-  --border: #232A52;
-  --border-strong: #6D74A8;
-  --input: #232A52;
-  --ring: #5F78F7;
+  --border: #332B1E;
+  --border-strong: #7C6F56;
+  --input: #332B1E;
+  --ring: #D9C189;
 
-  /* Status */
+  /* Status — kept from the audited dark values in DESIGN.md §7.5 */
   --destructive: #E11D48;
   --destructive-foreground: #FFFFFF;
   --success: #2CC08A;
@@ -181,25 +317,28 @@
   --warning: #E9A13B;
   --warning-foreground: #150C02;
 
+  /* Component-level tokens */
+  --primary-edge: color-mix(in srgb, var(--primary-foreground) 18%, transparent);
+  --secondary-strong: #2E271B;
+
   /* Sidebar */
-  --sidebar: #0a0e1e;
-  --sidebar-foreground: #A9ACC4;
-  --sidebar-primary: #2F5BD8;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #171D3C;
-  --sidebar-accent-foreground: #FFFFFF;
-  --sidebar-border: #232A52;
-  --sidebar-ring: #5F78F7;
+  --sidebar: #161209;
+  --sidebar-foreground: #B7AC96;
+  --sidebar-primary: #C7AC6D;
+  --sidebar-primary-foreground: #221A08;
+  --sidebar-accent: #262016;
+  --sidebar-accent-foreground: #F2EBDE;
+  --sidebar-border: #332B1E;
+  --sidebar-ring: #D9C189;
 
   /* Charts */
-  --chart-1: #5f78f7;
-  --chart-2: #ef9b4d;
-  --chart-3: #F43F5E;
-  --chart-4: #F97316;
-  --chart-5: #A78BFA;
+  --chart-1: #C7AC6D;
+  --chart-2: #A17D2E;
+  --chart-3: #E55252;
+  --chart-4: #5C6B4F;
+  --chart-5: #B7AC96;
 
-  /* Elevation — dark surfaces read depth from a lighter surface, not a darker shadow */
-  --shadow-opacity: 0.5;
-  --shadow-blur: 20px;
-  --shadow-offset-y: 10px;
+  /* Elevation — dark surfaces read depth from a lighter surface, not a darker
+     shadow; the tint goes near-black so what little shadow remains stays neutral */
+  --shadow-tint: 0 0 0;
 }

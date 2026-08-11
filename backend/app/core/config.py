@@ -34,11 +34,19 @@ class Settings(BaseSettings):
     supabase_storage_access_key_id: str
     supabase_storage_secret_access_key: str
     supabase_storage_bucket_name: str
-    # Receipt/sale-notification emails — live path is now Brevo's SMTP relay
-    # (docs/email.md), not Resend: Resend's sandbox sender only ever reached the one
-    # address the Resend account itself was registered under, which a real buyer's
-    # receipt hit in production. resend_api_key is kept below, dormant, purely so
-    # switching back is a one-line change rather than a rebuild.
+    # Receipt/sale-notification emails — live path is now Mailjet (docs/email.md):
+    # confirmed live, it sends to an arbitrary real recipient immediately, no domain
+    # and no pending account review — unlike every other free provider tried before it
+    # (Resend: sandbox-only recipient; Postmark: blocks signup without a work-domain
+    # email; Brevo: account-wide "not yet activated" until manual approval; SendGrid:
+    # documented compliance-review holds on new accounts; MailerSend: hard 2-recipient
+    # trial cap). Basic-auth REST API (api key : secret key), not SMTP.
+    mailjet_api_key: str = ""
+    mailjet_secret_key: str = ""
+    # Brevo kept as the second fallback (its activation ticket may still clear), and
+    # Resend as the last resort (docs/email.md) — resend_api_key kept below, dormant
+    # for its own tier, purely so removing any one provider is a one-line change
+    # rather than a rebuild.
     resend_api_key: str = ""
     # Despite the name (matches BREVO_API_KEY already in .env/Render — not renamed to
     # avoid the churn of updating both), this holds Brevo's *SMTP key*

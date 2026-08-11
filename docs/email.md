@@ -58,3 +58,16 @@ Confirmed directly: authenticating with `brevo_sender_email` as the SMTP login f
 2. Confirm `BREVO_SENDER_EMAIL` is a sender Brevo has actually verified (Senders, Domains & Dedicated IPs → Senders → the confirmation-link step) — sending from an unverified address will be rejected by the relay regardless of correct SMTP credentials.
 
 Once `BREVO_SMTP_LOGIN` is in `.env`, the webhook-triggered receipt + owner-notification email paths are live — no further code changes needed.
+
+**Update — Mailjet is now the primary tier, Brevo demoted to second fallback.** Confirmed live: Mailjet sends to an arbitrary real recipient immediately on a fresh free account — no domain, no pending review, no 2-recipient trial cap. Checked against every other free provider considered this round:
+
+| Provider | Result |
+|---|---|
+| Resend | sandbox sender reaches only the one whitelisted account address |
+| Postmark | blocks signup without a work-domain email; test mode restricted to verified-domain addresses only |
+| Brevo | account-wide "SMTP account is not yet activated" pending manual approval, regardless of correct credentials |
+| SendGrid | documented compliance-review holds, sometimes suspending new accounts on creation |
+| MailerSend | trial hard-capped at 2 total recipients |
+| **Mailjet** | **sent successfully to a real, non-whitelisted address on the first try** |
+
+`email_service.py` now tries Mailjet first (REST API, basic auth via `MAILJET_API_KEY`/`MAILJET_SECRET_KEY`), falls back to Brevo if that fails, then Resend as the last resort. Both receipt and sale-notification emails now include a `TextPart`/plain-text alternative alongside the HTML body, matching Mailjet's own documented send structure — better deliverability than an HTML-only send, and applied to all three tiers for consistency. Brevo and Resend are kept configured, not deleted, purely as redundancy in case Mailjet has an outage; removing either later is a one-line change, not a rebuild.

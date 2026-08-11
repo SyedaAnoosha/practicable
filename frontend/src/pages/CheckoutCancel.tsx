@@ -1,3 +1,4 @@
+import { XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 
@@ -9,7 +10,12 @@ export function CheckoutCancel() {
     <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
       <Card>
         <CardHeader>
-          <CardTitle>Payment wasn't completed.</CardTitle>
+          {/* Same status-tile language as CheckoutSuccess — muted here, since nothing
+              went wrong, checkout was simply abandoned (§29.3: no blame). */}
+          <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground ring-1 ring-inset ring-border">
+            <XCircle className="size-5" aria-hidden="true" />
+          </span>
+          <CardTitle className="mt-3">Payment wasn't completed.</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="text-foreground">Your card has not been charged.</p>

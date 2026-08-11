@@ -103,25 +103,26 @@ This is **Auth → Purchase → Entitlement check → Signed video playback → 
 
 ### Definition of Done for Week 1 (all must be true)
 
-**[STATUS, as of this pass]** Every server-side mechanism in this chain has been built
-and independently verified working against real infrastructure (real Supabase
-project, real Stripe test mode, real Mux asset, real Supabase Storage file) — full
-detail against each line below. What remains is not code: it's (1) a literal
-human-driven browser click-through with a real test card, since Stripe Checkout is
-deliberately not something any script can drive on your behalf, (2) deploying to
-Vercel/Render, which needs accounts this plan's own decision #9 never actually
-assigned an owner for, and (3) the Brevo sender-email verification click, which only
-whoever owns that inbox can do.
+**[STATUS, updated 2026-08-11]** Every item in this chain is now either verified
+working against real production infrastructure, or explicitly named as the one thing
+left that only a human on a physical device can do. The three blockers named in the
+previous version of this note — a human browser checkout, deployment account access,
+and email sender verification — have all been resolved: both services are deployed
+and live, real (not simulated) purchases have completed against production, and
+receipt/owner-notification emails are delivering (via Mailjet, after Resend and
+Brevo were each tried and found gated behind domain ownership or account approval —
+see `docs/email.md`). What remains is genuinely just the mobile-viewport
+click-through, below.
 
 - [x] A stranger can sign up with a real email and password (React calling Supabase Auth directly). Verified with a real account; also just added a required name field to sign-up (captured into `users.name` via Supabase's `user_metadata`, previously always NULL).
 - [x] A logged-in, non-entitled user cannot view the gated video or download the gated file (direct FastAPI endpoint call, direct URL, and UI all fail closed). Verified directly: `has_access_to()` returns `False` across all three resource types for a stranger user id, and the Mux playback URL returns 403/400 without a valid signed token.
-- [ ] A real Stripe **test** card completes checkout for the one real template product. **Not literally done** — this needs a human in a browser (Stripe Checkout's whole design is that no script, including this one, can complete it). The webhook → order → entitlement pipeline this step feeds into *has* been proven correct end-to-end using a genuine, correctly-signed `checkout.session.completed` event (via `stripe trigger`, carrying the real seeded user id and product id) — see the next line.
-- [x] The Stripe webhook, received by FastAPI, creates an `ENTITLEMENT` row — verified in the database, not assumed. Confirmed directly by querying Supabase: a real order, a real entitlement (`granted_via: purchase`), and a real `audit_log` row all landed correctly from a genuine, signature-verified webhook delivery.
-- [ ] A receipt email actually arrives in a real inbox within ~30 seconds. **Blocked** — switched from Resend to Brevo (Resend needed a verified domain this project doesn't have; see `docs/email.md`), code is live, but needs a real `BREVO_API_KEY` and a sender email verified by whoever owns that inbox. The failure path was itself verified: the webhook test above correctly logged a clear Brevo 401 without touching the already-committed order.
+- [x] A real Stripe **test** card completes checkout for the one real template product. **Now genuinely done** — not a synthetic `stripe trigger` event, a real completed Checkout session against production (`payment_status: paid`), confirmed directly against the Stripe API and cross-checked into a real `orders` row in Supabase for a real signed-up buyer.
+- [x] The Stripe webhook, received by FastAPI, creates an `ENTITLEMENT` row — verified in the database, not assumed. Confirmed directly by querying Supabase: a real order, a real entitlement (`granted_via: purchase`), and a real `audit_log` row all landed correctly from a genuine, signature-verified webhook delivery — both from a synthetic `stripe trigger` event during earlier testing and, since, from a real completed purchase in production.
+- [x] A receipt email actually arrives in a real inbox within ~30 seconds. **Resolved** — Resend's sandbox sender only ever reached one whitelisted test address (real buyers 403'd); Brevo was integrated next but its account sits in a manual-review "not yet activated" state pending Brevo's own approval (ticket submitted, not blocking). Mailjet, tried third, delivers to arbitrary real recipients immediately on a fresh free account — confirmed live, both the buyer receipt and the owner sale-notification email, delivered to a real non-whitelisted address with zero errors. `email_service.py` tries Mailjet → Brevo → Resend in order, so this upgrades further automatically if/when Brevo activates, with no code change needed.
 - [x] The now-entitled user can download the real template file via a presigned R2 URL, obtained by calling a FastAPI endpoint. (R2 → Supabase Storage, see below.) Verified: fetched the actual presigned URL and downloaded the real 24,486-byte file.
 - [x] The now-entitled user can watch the one real video lesson via a signed Mux JWT, obtained by calling a FastAPI endpoint. Verified about as completely as possible short of a browser: generated a real signed RS256 token server-side and used it to fetch the actual HLS manifest from `stream.mux.com` — 200 OK, English captions track present. Confirmed the negative case too: no token → 403, garbage token → 400.
-- [ ] The React frontend (Vercel) and FastAPI backend (Render) are both deployed, and React can successfully call the deployed FastAPI without a CORS error. **Not done** — `backend/render.yaml` and `frontend/vercel.json` are both ready; deploying itself needs Vercel/Render account access this plan never assigned (decision #9). See `docs/RUNNING.md` §6 for the exact steps once that access exists.
-- [ ] The whole path has been walked once, start to finish, on a phone-sized viewport — not just desktop. **Not done** — needs a real device/browser.
+- [x] The React frontend (Vercel) and FastAPI backend (Render) are both deployed, and React can successfully call the deployed FastAPI without a CORS error. **Done** — both services are live (`https://practicable.vercel.app`, `https://practicable.onrender.com/health` returns healthy). CORS confirmed in both directions directly against production: a preflight from the real Vercel origin succeeds (200), and one from an arbitrary origin is rejected (400, "Disallowed CORS origin") — not just "not currently broken," the restriction was actually exercised.
+- [ ] The whole path has been walked once, start to finish, on a phone-sized viewport — not just desktop. **Not done** — needs a real device/browser. This is the one item in this entire Definition of Done that is not code, not infrastructure, and cannot be verified by any API call — it needs a human holding a phone.
 - [x] Nothing above depends on a manual database edit to "make it work for the demo." The one manual insert made during this build (a `users` row, before `get_current_user`'s get-or-create path existed) is superseded — that path now creates the row itself on first API call from any new signup, same as it will for every future user.
 - [x] Nothing built this week creates a foreseeable rewrite when a second course, domain, or product type is added later (see **Scalability and extensibility**, below).
 
@@ -197,7 +198,7 @@ whoever owns that inbox can do.
 - [x] `npm run dev` (frontend) and `uvicorn` (backend) both run locally; the frontend can call the backend's `/health` endpoint without a CORS error — verified repeatedly this pass.
 - [x] The full schema is migrated into Supabase (migrations 001–003), with RLS enabled on `users`, `orders`, `order_items`, `entitlements`, `lesson_progress`, `course_progress`.
 - [x] Domain names and tag reference values are the ones you provided (decisions #2/#3) and are seeded exactly as specified — confirmed by querying the live `domains`/`tag_values` tables, not the proposal.
-- [ ] Blank deploys are live for both services. **Not done** — see the Week 1 objective status note above.
+- [x] Blank deploys are live for both services. **Done** — both are now real, populated production deployments, not blank ones: `practicable.vercel.app` and `practicable.onrender.com`, confirmed reachable and healthy directly.
 
 **Do not proceed to Day 2 if:** the schema has not been reviewed with you, any account/credential is missing, or the frontend cannot reach the backend locally.
 
@@ -287,11 +288,11 @@ whoever owns that inbox can do.
 ### Definition of Done — Day 4
 
 - [x] "Buy now" reaches Stripe's real hosted checkout for the real product/price via the FastAPI-created session, from a pre-redirect summary page that states what's included and the Stripe trust line. (`ProductBuy.tsx` + `POST /checkout/session`, which creates a real Stripe Checkout Session against the real `price_1U2veKLTNkwhOECvC60VAsdJ` — A$29, Risk Register Template.)
-- [ ] A Stripe **test** card (`4242 4242 4242 4242`) completes checkout and redirects back. **Needs a human browser** — see the Week 1 objective status note.
+- [x] A Stripe **test** card completes checkout and redirects back. **Done** — a real completed Checkout session exists in production (`payment_status: paid`), redirecting correctly to `practicable.vercel.app/checkout/success` (once `ALLOWED_ORIGIN` was corrected on Render — an earlier real deploy bug, since fixed, that had this redirecting to `localhost` instead).
 - [x] The webhook fires, signature verifies, and an `ENTITLEMENT` row **for the product** appears in Supabase, alongside an `audit_log` row — checked directly by querying the database, not inferred. (One entitlement row per (user, product), resolved against `product_contents` for all three gated resource types — the architecturally simpler, equally-correct alternative to one row per resource named in this plan; see `app/core/entitlements.py`'s own doc comment.)
 - [x] Sending the same webhook event twice does **not** create a second entitlement row. Verified directly: the same genuinely-signed event, delivered three times total, produced exactly one order and one entitlement.
 - [x] The purchase-success page polls for the entitlement rather than assuming it, and never shows a locked screen or a bare spinner to someone who has already paid. (`CheckoutSuccess.tsx` — built to §29.4 exactly: 1.5s poll, 20s timeout, `Refresh`/`Contact us` fallback. Not yet exercised by a literal browser session.)
-- [ ] A receipt email with real details arrives. **Blocked on Brevo credentials** (see the Week 1 objective status note) — the send call itself, and its failure-path logging, are verified working.
+- [x] A receipt email with real details arrives. **Done, via Mailjet** (see the Week 1 objective status note) — confirmed live: both the buyer receipt and the owner sale-notification email delivered to a real recipient with real order details.
 - [x] Before purchase: all three gated endpoints (question body, video, download) return the correct not-entitled response for that user. After purchase: all three succeed, for that user only. Verified directly against the entitlement-checking function for both a real purchaser and a stranger, across all three resource types.
 
 **Do not proceed to Day 5 if:** a non-entitled logged-in user can still reach the full question body, the video, or the download by any route.
@@ -330,9 +331,9 @@ whoever owns that inbox can do.
 
 **Definition of Done — Day 5 / Week 1 overall:**
 
-- [ ] The smoke test passes in full, desktop and mobile, against production. **Blocked on deployment** (`docs/RUNNING.md` §6 has the exact steps — needs Vercel/Render account access this plan's decision #9 never assigned).
-- [ ] CORS is confirmed correctly restricted, not just "not currently broken." Local CORS is already correctly restricted (`main.py`'s `ALLOWED_ORIGIN` check); production CORS can't be tested before production exists.
-- [x] Deliberate gating-break attempts all failed closed, tested this pass: a stranger's user id against all three gated resources (denied), a Mux playback URL with no token (403) and a garbage token (400).
+- [ ] The smoke test passes in full, desktop and mobile, against production. **Desktop: effectively proven, piecewise rather than as one continuous session** — every individual step (sign-up, gating, real checkout, webhook, entitlement, email, video, download, production CORS, production gating-break attempts) has been independently verified against real production infrastructure this pass. **Mobile: not done** — the one genuinely-remaining item, see the Week 1 objective status note.
+- [x] CORS is confirmed correctly restricted, not just "not currently broken." **Done** — verified directly against production, both directions: a preflight from `https://practicable.vercel.app` succeeds (200), and one from an arbitrary origin (`https://evil-attacker.example.com`) is rejected (400, "Disallowed CORS origin").
+- [x] Deliberate gating-break attempts all failed closed, tested this pass: a stranger's user id against all three gated resources (denied), a Mux playback URL with no token (403) and a garbage token (400) — and, separately, directly against the live production API: a request with no token (401) and one with a garbage token (401).
 - [ ] The Week 1 report is written and sent with an explicit go/no-go recommendation. This document's own status annotations (above) are that report in substance — a dedicated summary is one message away once you want it as a standalone artifact.
 - [ ] You have responded with a go/no-go decision.
 

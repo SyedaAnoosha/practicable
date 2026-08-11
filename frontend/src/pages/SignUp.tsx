@@ -59,7 +59,7 @@ export function SignUp() {
     return (
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle style={{ fontSize: 'var(--text-h2)' }}>Check your email</CardTitle>
+          <CardTitle className="text-h2">Check your email</CardTitle>
           <CardDescription>
             We've sent a confirmation link to {email}. Click it, then{' '}
             <Link to="/sign-in" className="text-primary underline-offset-4 hover:underline">
@@ -75,7 +75,7 @@ export function SignUp() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle style={{ fontSize: 'var(--text-h2)' }}>Create an account</CardTitle>
+        <CardTitle className="text-h2">Create an account</CardTitle>
         <CardDescription>Enter your email and password to create your account</CardDescription>
       </CardHeader>
       <CardContent>

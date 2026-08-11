@@ -1,8 +1,10 @@
 import { useEffect, useState, type ComponentType } from 'react'
-import { useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { Button } from '@/components/ui/Button'
 
 interface PlaybackToken {
   playback_id: string
@@ -38,8 +40,16 @@ export function Lesson() {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-5 py-12 text-center sm:px-8">
-        <p className="text-foreground">This lesson is part of a course you don't have yet.</p>
+      <div className="mx-auto w-full max-w-2xl px-5 py-16 sm:px-8">
+        <EmptyState
+          title="This lesson is part of a course you don't have yet."
+          description="The standalone lesson player only serves lessons tied to a product you own."
+          action={
+            <Link to="/courses">
+              <Button>Browse courses</Button>
+            </Link>
+          }
+        />
       </div>
     )
   }

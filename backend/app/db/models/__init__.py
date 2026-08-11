@@ -9,6 +9,7 @@ from app.db.models.question import (
 )
 from app.db.models.course import Course, Module
 from app.db.models.lesson import Lesson, LessonType
+from app.db.models.module_question import ModuleQuestion
 from app.db.models.template import Template
 from app.db.models.media import Media, MediaStatus
 from app.db.models.product import Product, ProductContent
@@ -29,6 +30,7 @@ __all__ = [
     "Question", "QuestionLeadershipTrait", "QuestionRelation", "QuestionTemplate", "QuestionLesson",
     "Course", "Module",
     "Lesson", "LessonType",
+    "ModuleQuestion",
     "Template",
     "Media", "MediaStatus",
     "Product", "ProductContent",
