@@ -43,6 +43,10 @@ class PlaybackTokenOut(BaseModel):
 class LessonDownloadOut(BaseModel):
     file_name: str
     file_size_bytes: int
+    # True when the underlying template is the free lead magnet. The frontend shows the
+    # email capture instead of the course paywall for these, so a visitor who has not
+    # bought the course can still take the file — see the note on the download endpoint.
+    is_free: bool = False
 
 
 class LessonNavOut(BaseModel):
@@ -217,13 +221,22 @@ async def get_lesson_in_course(
 
     media = (await session.execute(select(Media).where(Media.lesson_id == lesson.id))).scalar_one_or_none()
 
+    # A free template stays free wherever it appears. The Risk Register Template is both
+    # the standalone lead magnet AND one of this course's lessons, and gating it here
+    # would have meant the same file was free on /templates and paywalled inside the
+    # course — the kind of inconsistency a buyer notices immediately. The lesson's own
+    # writing is still gated by `entitled` below; only the artefact is exempt.
     download_out = None
-    if entitled and lesson.download_template_id:
+    if lesson.download_template_id:
         template = (
             await session.execute(select(Template).where(Template.id == lesson.download_template_id))
         ).scalar_one_or_none()
-        if template:
-            download_out = LessonDownloadOut(file_name=template.file_name, file_size_bytes=template.file_size_bytes)
+        if template and (entitled or template.is_free):
+            download_out = LessonDownloadOut(
+                file_name=template.file_name,
+                file_size_bytes=template.file_size_bytes,
+                is_free=template.is_free,
+            )
 
     return LessonDetailOut(
         id=str(lesson.id),
@@ -294,28 +307,47 @@ class LessonDownloadUrlOut(BaseModel):
 async def get_lesson_download_url(
     lesson_id: str,
     session: AsyncSession = Depends(get_session),
-    user_id: str = Depends(get_current_user_id),
+    # Optional so a free template inside a course is downloadable with no account, exactly
+    # as it is on /templates. Paid artefacts still 401 below when this is None.
+    user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
-    """The download-type lesson's artefact, gated by LESSON entitlement (course access).
-    The same file sold standalone goes through templates.py's TEMPLATE-gated path."""
+    """The download-type lesson's artefact, gated by LESSON entitlement (course access) —
+    unless the underlying template is the free lead magnet, in which case it is free here
+    too. The same file sold standalone goes through templates.py's TEMPLATE-gated path,
+    and these two endpoints must agree about whether a given file costs money.
+    """
     lesson = (
         await session.execute(select(Lesson).where(Lesson.id == uuid.UUID(lesson_id)))
     ).scalar_one_or_none()
     if not lesson or not lesson.download_template_id:
         raise HTTPException(status_code=404, detail="No downloadable file on this lesson")
 
-    entitled = await _lesson_entitled(lesson=lesson, user_id=user_id, session=session)
-    if not entitled:
-        raise HTTPException(
-            status_code=403,
-            detail={"error": {"code": "not_entitled", "message": "This lesson is part of a course you don't have yet."}},
-        )
-
     template = (
         await session.execute(select(Template).where(Template.id == lesson.download_template_id))
     ).scalar_one_or_none()
     if not template:
         raise HTTPException(status_code=404, detail="File not found")
+
+    # Free means free: no entitlement, no account, no check — the same rule as
+    # templates.py. The email capture fronting this in the UI is a conversion device,
+    # not a boundary, so it is not enforced here either.
+    if not template.is_free:
+        if user_id is None:
+            raise HTTPException(
+                status_code=401,
+                detail={"error": {"code": "not_authenticated", "message": "Sign in to download this file."}},
+            )
+        entitled = await _lesson_entitled(lesson=lesson, user_id=user_id, session=session)
+        if not entitled:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": {
+                        "code": "not_entitled",
+                        "message": "This lesson is part of a course you don't have yet.",
+                    }
+                },
+            )
 
     download_url = generate_presigned_url(template.storage_key)
     return LessonDownloadUrlOut(

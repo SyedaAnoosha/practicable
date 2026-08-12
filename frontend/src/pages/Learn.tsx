@@ -18,6 +18,9 @@ import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Badge } from '@/components/ui/Badge'
+import { EmailGateForm } from '@/components/content/EmailGateForm'
+import { useEmailGate } from '@/lib/emailGate'
 
 type LessonType = 'video' | 'reading' | 'download' | 'mixed'
 
@@ -59,7 +62,7 @@ interface LessonDetail {
   description: string | null
   lesson_type: LessonType
   body: string | null
-  download: { file_name: string; file_size_bytes: number } | null
+  download: { file_name: string; file_size_bytes: number; is_free: boolean } | null
   has_video: boolean
   entitled: boolean
   completed: boolean
@@ -169,6 +172,40 @@ function DownloadBlock({ lessonId, fileName }: { lessonId: string; fileName: str
         {status === 'downloaded' ? 'Downloaded ✓' : status === 'error' ? 'Try again' : 'Download'}
       </Button>
     </div>
+  )
+}
+
+/** The free lead-magnet artefact shown inside a course the visitor has not bought.
+ *
+ * Same soft gate as /templates and the free question: one email, once, shared across
+ * every entry point — and satisfied outright by being signed in. Once cleared it hands
+ * off to the ordinary DownloadBlock, so there is exactly one download implementation.
+ */
+function FreeDownloadBlock({ lessonId, fileName }: { lessonId: string; fileName: string }) {
+  const gate = useEmailGate('course_lesson_free_template')
+
+  if (gate.unlocked) {
+    return (
+      <div className="flex flex-col gap-2">
+        <Badge variant="success" className="self-start">
+          Free
+        </Badge>
+        <DownloadBlock lessonId={lessonId} fileName={fileName} />
+      </div>
+    )
+  }
+
+  return (
+    <EmailGateForm
+      heading="This template is free"
+      description="Enter your email and it downloads straight away — you don't need to buy the course for this one."
+      submitLabel="Get the template"
+      email={gate.email}
+      onEmailChange={gate.setEmail}
+      onSubmit={gate.submit}
+      isPending={gate.isPending}
+      isError={gate.isError}
+    />
   )
 }
 
@@ -368,7 +405,18 @@ export function Learn() {
         {lesson.description && <p className="mt-2 font-serif text-read text-pretty text-muted-foreground">{lesson.description}</p>}
 
         {!lesson.entitled ? (
-          <div className="mt-8">
+          <div className="mt-8 flex flex-col gap-8">
+            {/* The free template is free here too. This lesson's artefact IS the
+                standalone lead magnet, so paywalling it inside the course would mean
+                the same file was free on /templates and locked here — an inconsistency
+                a buyer spots immediately. The lesson's writing stays locked; only the
+                download is exempt, and it still asks for an email first. */}
+            {lesson.download?.is_free && (
+              <FreeDownloadBlock
+                lessonId={lesson.id}
+                fileName={lesson.download.file_name}
+              />
+            )}
             <EmptyState
               title="This lesson is part of a course you don't have yet."
               description="Buy the course to unlock every module — video and lessons are only available to buyers."

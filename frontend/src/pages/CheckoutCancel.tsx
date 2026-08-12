@@ -1,10 +1,14 @@
 import { XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { SUPPORT_MAILTO } from '@/lib/support'
 
 // DESIGN.md §29.3: never "Oops", never blame the user. State affirmatively that no
 // money moved — that's the thing they're anxious about when checkout is abandoned
 // or declined.
+
+// get mail from env
+
 export function CheckoutCancel() {
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
@@ -26,7 +30,7 @@ export function CheckoutCancel() {
           </div>
           <p className="text-center text-sm text-muted-foreground">
             Still stuck?{' '}
-            <a href="mailto:hello@practicable.com.au" className="underline">
+            <a href={SUPPORT_MAILTO} className="underline">
               Contact us
             </a>
           </p>

@@ -7,12 +7,38 @@ import { queryKeys } from '@/lib/query/keys'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { SUPPORT_MAILTO } from '@/lib/support'
+
+interface ProductContent {
+  content_type: string
+  label: string
+  href: string | null
+}
 
 interface ProductData {
   id: string
   slug: string
   name: string
-  contents: { content_type: string; label: string }[]
+  contents: ProductContent[]
+}
+
+// What the buyer should do next depends on what they actually bought. A template-only
+// purchase has no lesson to start, and telling someone who just bought a spreadsheet to
+// "start the first lesson" sends them to a course they don't own.
+//
+// Order matters: a course that bundles a template is still a course, so `lesson` wins.
+// `href` is computed server-side per content type (ProductContentOut), so this doesn't
+// re-derive routes the API already knows.
+function nextStep(contents: ProductContent[]): { label: string; href: string } {
+  const lesson = contents.find((c) => c.content_type === 'lesson')
+  if (lesson) return { label: 'Start the first lesson', href: lesson.href ?? '/dashboard' }
+
+  const template = contents.find((c) => c.content_type === 'template')
+  if (template) return { label: 'Download your template', href: template.href ?? '/library' }
+
+  // question_set, or a product whose contents didn't load — the library lists
+  // everything they own, so it is always a safe destination.
+  return { label: 'Go to your library', href: '/library' }
 }
 
 const POLL_INTERVAL_MS = 1500
@@ -74,10 +100,7 @@ export function CheckoutSuccess() {
     }
   }, [product, entitled])
 
-  // Week 1 has exactly one lesson and no lesson id on ProductOut yet (Week 2's real
-  // dashboard resolves this properly) — /dashboard is the one place a fresh purchase
-  // can always land safely.
-  const firstLessonHref = '/dashboard'
+  const step = nextStep(product?.contents ?? [])
 
   return (
     <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
@@ -104,9 +127,9 @@ export function CheckoutSuccess() {
           )}
 
           {!timedOut && (
-            <Link to={firstLessonHref}>
+            <Link to={step.href}>
               <Button loading={!entitled} className="w-full">
-                {entitled ? 'Start the first lesson' : 'Setting up your access…'}
+                {entitled ? step.label : 'Setting up your access…'}
               </Button>
             </Link>
           )}
@@ -121,7 +144,7 @@ export function CheckoutSuccess() {
                 <Button variant="outline" className="sm:flex-1" onClick={() => window.location.reload()}>
                   Refresh
                 </Button>
-                <a href="mailto:hello@practicable.com.au" className="sm:flex-1">
+                <a href={SUPPORT_MAILTO} className="sm:flex-1">
                   <Button variant="ghost" className="w-full">
                     Contact us
                   </Button>
@@ -130,7 +153,7 @@ export function CheckoutSuccess() {
             </>
           )}
 
-          <Link to="/dashboard" className="text-center text-sm text-muted-foreground underline">
+          <Link to="/library" className="text-center text-sm text-muted-foreground underline">
             Or browse everything in your library
           </Link>
         </CardContent>

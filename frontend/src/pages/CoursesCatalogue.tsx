@@ -31,7 +31,13 @@ export function CoursesCatalogue() {
   })
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-5 py-12 sm:px-8">
+    <div className="relative isolate mx-auto w-full max-w-6xl px-5 py-12 sm:px-8">
+      {/* Catalogue header atmosphere (theme.css .page-wash). Full-bleed to the viewport
+          edge via `left-1/2 … w-screen`, since this sits inside a max-w container where
+          `inset-x-0` would stop at the container edge. `-z-10` inside the parent's
+          `isolate` keeps it behind the content without wrapping every child in a
+          positioned div. Decorative, so out of the a11y tree. */}
+      <div aria-hidden="true" className="page-wash absolute left-1/2 top-0 -z-10 h-[30rem] w-screen -translate-x-1/2" />
       <PageTitle
         eyebrow="Learn"
         title="Courses"

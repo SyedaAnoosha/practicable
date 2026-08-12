@@ -314,6 +314,33 @@
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 45%, transparent 94%);
   }
 
+  /* The catalogue header wash — Courses, Questions and Templates.
+
+     Same construction as .hero-wash and the question page's header tint, deliberately
+     one notch quieter (0.14 vs 0.18): a catalogue is a working index the reader scans,
+     not a landing page, so the atmosphere should be felt rather than noticed. Before
+     this, every catalogue was flat `bg-background` while the question detail page it
+     linked into had a wash, which made the index pages read as unfinished by comparison.
+
+     Two layers, both linear. A radial ellipse inside a fixed-height box always exposes
+     its own curved edge somewhere, and the blue alone desaturates to grey over ivory —
+     the champagne pass from the right is what keeps it reading as a deliberate warm
+     tint rather than a dirty smudge.
+
+     Positioned by the consumer (absolute, full-bleed); this rule only carries the paint,
+     so a page that needs a different height or bleed doesn't have to fight it. */
+  .page-wash {
+    pointer-events: none;
+    opacity: 0.14;
+    background-image:
+      linear-gradient(180deg, var(--accent) 0%, transparent 60%),
+      linear-gradient(115deg, transparent 30%, color-mix(in srgb, var(--gold) 55%, transparent) 100%);
+    /* Fades to nothing well before the box ends, so the wash is never clipped by its
+       own container at any viewport width. */
+    mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 42%, transparent 92%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 42%, transparent 92%);
+  }
+
   /* Gradient text — the brand headline device: navy through blue into antique gold.
      The gold stop must be `--gold-strong`, not `--gold`: the tail of the gradient is
      still legible text, so the decorative shade would fail contrast on the last few

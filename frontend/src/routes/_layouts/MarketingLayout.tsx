@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { cn } from '@/lib/utils/cn'
+import { SUPPORT_MAILTO } from '@/lib/support'
 
 const DOMAINS = ['Risk', 'Cyber', 'Compliance', 'Resilience', 'AI']
 
@@ -222,7 +223,7 @@ export default function MarketingLayout() {
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Company</p>
               <ul className="mt-3 flex flex-col gap-2 text-sm">
                 <li>
-                  <a href="mailto:hello@practicable.com.au" className="text-muted-foreground transition-colors duration-150 hover:text-foreground">
+                  <a href={SUPPORT_MAILTO} className="text-muted-foreground transition-colors duration-150 hover:text-foreground">
                     Contact
                   </a>
                 </li>
