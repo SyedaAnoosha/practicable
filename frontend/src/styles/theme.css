@@ -202,14 +202,32 @@
   --domain-resilience: #3D5A99;   /* indigo-blue */
   --domain-ai: #46618C;           /* slate blue-grey */
 
-  /* Sidebar */
-  --sidebar: #9bc6f7;
-  --sidebar-foreground: #88baf4;
+  /* Sidebar — blue, not champagne `[CHANGED 2026-08-12]`.
+     Still a quieter plane than the ivory ground, but now in the primary family rather
+     than the secondary one. The member chrome is the app's structural frame, and
+     structure reads as blue everywhere else here (nav, focus, the five domains); gold
+     is for warmth and emphasis, which a persistent rail does not need.
+
+     `--sidebar` was chosen to sit the same distance from the page ground as the
+     champagne it replaces — 1.107:1 against --background vs the old 1.104:1 — so the
+     layout's visual weight is unchanged and only the hue moves.
+
+     Measured, not eyeballed (relative luminance, alpha composited against the plane
+     the text actually sits on — the nav labels render at 60–80% opacity):
+       sidebar-foreground on sidebar          11.09:1
+         same @70% (nav labels)                4.75:1   was 3.96:1 in champagne
+         same @60% (quietest label)            3.64:1   was 3.13:1
+       accent-foreground on accent (active)   11.21:1
+       primary-foreground on primary          14.39:1
+     The 70% case is the one that matters and the one the old palette failed; this is
+     the reason not to pick these by eye. */
+  --sidebar: #E0E8F3;
+  --sidebar-foreground: #1A2E4A;
   --sidebar-primary: #10213E;
   --sidebar-primary-foreground: #F7F2E9;
-  --sidebar-accent: #E5D7B6;
+  --sidebar-accent: #CBD9EC;
   --sidebar-accent-foreground: #10213E;
-  --sidebar-border: #DCCDA9;
+  --sidebar-border: #BDCEE5;
   --sidebar-ring: #1B4E8C;
 
   /* Charts — exempt from the palette constraint. Dormant: nothing renders a chart yet. */
@@ -443,14 +461,23 @@
   --domain-resilience: #8090D8;
   --domain-ai: #93A7C9;
 
-  /* Sidebar */
-  --sidebar: #161209;
-  --sidebar-foreground: #B7AC96;
+  /* Sidebar — blue, matching the light theme's move off champagne `[CHANGED 2026-08-12]`.
+     The warm near-black plane (#161209) and its warm-grey text went with it; keeping
+     them would have left the dark theme's rail reading gold while the light theme's
+     read blue, which is the same token meaning two different things.
+
+     Measured the same way as the light theme, alpha composited:
+       sidebar-foreground on sidebar           8.53:1
+         same @70% (nav labels)                4.79:1
+       accent-foreground on accent (active)   13.68:1
+       sidebar-primary on sidebar              7.24:1 */
+  --sidebar: #0C1524;
+  --sidebar-foreground: #9FB3CC;
   --sidebar-primary: #6FA8DC;
   --sidebar-primary-foreground: #0B1A2E;
-  --sidebar-accent: #262016;
-  --sidebar-accent-foreground: #F2EBDE;
-  --sidebar-border: #332B1E;
+  --sidebar-accent: #17243A;
+  --sidebar-accent-foreground: #EAF1FA;
+  --sidebar-border: #22314A;
   --sidebar-ring: #8FC1EA;
 
   /* Charts */
