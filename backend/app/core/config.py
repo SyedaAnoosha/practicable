@@ -34,67 +34,30 @@ class Settings(BaseSettings):
     supabase_storage_access_key_id: str
     supabase_storage_secret_access_key: str
     supabase_storage_bucket_name: str
-    # ── Gmail SMTP, the first transport tried (docs/gmail.md) ───────────────────
-    # Added 2026-08-11 after a real order delivered both of its emails from
-    # `onboarding@resend.dev` — i.e. the send fell all the way through Mailjet and
-    # Brevo to the Resend last resort, whose sandbox sender can only reach the
-    # account owner, so the *buyer* received nothing and the owner got two emails.
-    # Gmail SMTP with an app password is the one transport here that needs no
-    # provider account review and can reach an arbitrary real recipient today.
+    # ── Email ────────────────────────────────────────────────────────────────────
+    # [OWNER-DECIDED 2026-08-12] One transport: Resend. The Gmail, Mailjet and Brevo
+    # settings that used to sit here were removed with their tiers — see the module
+    # note at the top of app/services/email_service.py for what each one was and why
+    # it went, including the fact that Mailjet was working when it was removed.
     #
-    # gmail_app_password is the 16-character App Password from
-    # myaccount.google.com/apppasswords (NOT the account password — Google rejects
-    # that over SMTP), with the spaces Google displays it with removed. Requires
-    # 2-Step Verification on the account first. Both blank = tier skipped entirely,
-    # so this is inert until real credentials are supplied.
-    gmail_user: str = ""
-    gmail_app_password: str = ""
-    # Gmail rewrites the From header to the authenticated account on personal
-    # accounts, so this is a display name only — the address will be gmail_user
-    # whatever is set here (docs/gmail.md).
-    gmail_sender_name: str = "Practicable"
-
-    # Receipt/sale-notification emails — live path is now Mailjet (docs/email.md):
-    # confirmed live, it sends to an arbitrary real recipient immediately, no domain
-    # and no pending account review — unlike every other free provider tried before it
-    # (Resend: sandbox-only recipient; Postmark: blocks signup without a work-domain
-    # email; Brevo: account-wide "not yet activated" until manual approval; SendGrid:
-    # documented compliance-review holds on new accounts; MailerSend: hard 2-recipient
-    # trial cap). Basic-auth REST API (api key : secret key), not SMTP.
-    mailjet_api_key: str = ""
-    mailjet_secret_key: str = ""
-    # Brevo kept as the second fallback (its activation ticket may still clear), and
-    # Resend as the last resort (docs/email.md) — resend_api_key kept below, dormant
-    # for its own tier, purely so removing any one provider is a one-line change
-    # rather than a rebuild.
+    # Any GMAIL_*/MAILJET_*/BREVO_* variables still present in a .env or a hosting
+    # dashboard are now inert rather than an error: `extra = "ignore"` below means an
+    # undeclared key is skipped instead of crashing the app at import. Worth deleting
+    # them from the deployed environment anyway, so the next person reading that list
+    # doesn't conclude those transports are live.
     resend_api_key: str = ""
-    # Despite the name (matches BREVO_API_KEY already in .env/Render — not renamed to
-    # avoid the churn of updating both), this holds Brevo's *SMTP key*
-    # (xsmtpsib-... — Settings -> SMTP & API -> SMTP tab), not the HTTP API key
-    # (xkeysib-...). email_service.py sends over SMTP relay (smtp-relay.brevo.com:587),
-    # not Brevo's REST API, because that's the credential type actually on file.
-    brevo_api_key: str = ""
-    # The SMTP tab's "Login" value (format xxxxxx@smtp-brevo.com) — a distinct
-    # credential from both brevo_api_key above and brevo_sender_email below, and NOT
-    # derivable from either. Confirmed directly: authenticating with
-    # brevo_sender_email as the login failed with "535 Authentication failed" against
-    # the real relay. Same dashboard page as brevo_api_key.
-    brevo_smtp_login: str = ""
-    brevo_sender_email: str = ""
-    brevo_sender_name: str = "Practicable"
-    # Where the "you made a sale" notification goes (app/services/email_service.py's
-    # send_sale_notification_email) — the owner's own inbox, NOT a buyer's.
+    # The owner/admin inbox. Now load-bearing for ALL email, not just sale alerts:
+    # while the store is Resend-only, buyer receipts are redirected here too, because
+    # Resend's sandbox sender can only deliver to the address its own account is
+    # registered under. This value must therefore equal that Resend account address, or
+    # every send returns a 403.
     #
-    # Deliberately empty, like every other credential-shaped field in this file. No real
-    # address is hardcoded here: this file is committed, and a default address is a
-    # default that silently applies in environments nobody configured.
-    #
-    # [2026-08-12] It previously defaulted to a real address that turned out to be a
-    # *customer's*, contradicting the line above it. That is a privacy defect, not a
-    # cosmetic one — every sale notification quotes the buyer's email address and what
-    # they paid, so one customer would receive other customers' purchase details. Empty
-    # is the safe default: email_service.py skips the notification and logs loudly
-    # rather than sending owner-only data to a guessed recipient.
+    # Deliberately empty, like every other credential-shaped field here. No real address
+    # is hardcoded: this file is committed, and a default address is one that silently
+    # applies in environments nobody configured. It previously defaulted to a real
+    # address that turned out to be a customer's — a privacy defect, since sale
+    # notifications quote the buyer's address and what they paid. Empty means
+    # email_service.py logs loudly and sends nothing, rather than guessing a recipient.
     owner_notification_email: str = ""
     # Comma-separated when there's more than one real frontend origin (e.g. a stable
     # Vercel production alias plus a preview-deployment URL, or www/non-www) — a bare

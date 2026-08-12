@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -6,6 +8,23 @@ from app.api.v1.content import questions, lessons, templates, courses
 from app.api.v1.commerce import checkout, products, webhooks
 from app.api.v1 import leads, me
 from app.api.v1.admin.router import router as admin_router
+
+# Logging. Uvicorn configures only its own `uvicorn.*` loggers and leaves the root
+# logger at Python's default WARNING, so until 2026-08-12 every `logger.info(...)` under
+# `app.` was silently discarded in production while `logger.error(...)` got through.
+#
+# That is a worse gap than it sounds. email_service.py logs *which transport delivered*
+# at INFO, so in the deployed logs the only evidence a receipt had been sent was the
+# absence of the next tier's failure line — i.e. proof by silence, on the one code path
+# where "did the customer actually get their receipt?" has to be answerable directly.
+# Debugging the Render email outage came down to reading what wasn't printed.
+#
+# Root stays at WARNING so third-party libraries (httpx, botocore, asyncio) don't flood
+# the log; only this application's own package is raised to INFO. A record logged on
+# `app.*` is gated by its own logger's level, then passes to the root handler installed
+# here regardless of root's level, so this does what it looks like it does.
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
+logging.getLogger("app").setLevel(logging.INFO)
 
 app = FastAPI(title="Practicable API", version="1.0.0")
 

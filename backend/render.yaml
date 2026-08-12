@@ -49,47 +49,25 @@ services:
         sync: false
       - key: SUPABASE_STORAGE_BUCKET_NAME
         sync: false
-      # Live email path (app/services/email_service.py) — Mailjet REST API, primary
-      # tier: confirmed live, reaches any real recipient today with no domain and no
-      # pending account review, unlike every other free provider tried before it.
+      # ── Email — Resend only [OWNER-DECIDED 2026-08-12] ───────────────────────
+      # GMAIL_*, MAILJET_* and BREVO_* were removed from this blueprint along with
+      # their transports. DELETE them by hand in Render -> Environment too: removing a
+      # key here does not remove it from an already-provisioned service, and a stale
+      # GMAIL_USER makes every send open a doomed TCP connection to smtp.gmail.com
+      # first — Render blocks outbound port 587 ([Errno 101], docs/gmail.md §8) — which
+      # costs a 15s timeout inside a Stripe webhook that has to answer fast.
+      #
       # Adding a key here only creates the slot on a fresh Blueprint deploy; an
-      # already-existing service needs each added by hand once in Render's dashboard
-      # -> Environment tab (see RUNNING.md §6.3).
-      # First tier — Gmail SMTP with an App Password (docs/gmail.md). Needs 2-Step
-      # Verification on the Google account, then a 16-char App Password from
-      # myaccount.google.com/apppasswords, pasted with its spaces REMOVED. Leave both
-      # blank to skip this tier entirely and fall through to Mailjet.
-      # Two Render-specific notes: outbound port 587 must be reachable from the
-      # service, and Gmail can block a first send from a new server IP even with
-      # correct credentials — that unblock is a one-time manual visit to
-      # accounts.google.com/DisplayUnlockCaptcha, not a config change here.
-      - key: GMAIL_USER
-        sync: false
-      - key: GMAIL_APP_PASSWORD
-        sync: false
-      # Second tier.
-      - key: MAILJET_API_KEY
-        sync: false
-      - key: MAILJET_SECRET_KEY
-        sync: false
-      # Second tier — dormant until Brevo's account activation clears, tried only if
-      # Mailjet fails. BREVO_API_KEY here is Brevo's *SMTP key* (Settings -> SMTP &
-      # API -> SMTP tab), and BREVO_SMTP_LOGIN is that same page's separate "Login"
-      # field (format xxxxxx@smtp-brevo.com) — neither value is derivable from the
-      # other, both are required for SMTP auth to succeed. brevo_sender_email/name
-      # also double as the "From" identity for Mailjet above (same real address).
-      - key: BREVO_API_KEY
-        sync: false
-      - key: BREVO_SMTP_LOGIN
-        sync: false
-      - key: BREVO_SENDER_EMAIL
-        sync: false
-      - key: BREVO_SENDER_NAME
-        value: Practicable
-      # Third/last-resort tier — can only ever reach the one Resend-account-whitelisted
-      # address, kept so removing this tier entirely later is a one-line change.
+      # already-existing service needs each added by hand (see RUNNING.md §6.3).
+      #
+      # WARNING: Resend's sandbox sender only delivers to the Resend account's own
+      # address, so no real buyer is emailed while this is the only transport. Receipts
+      # are redirected to OWNER_NOTIFICATION_EMAIL, labelled undelivered. Verify a
+      # domain at resend.com/domains before taking real money.
       - key: RESEND_API_KEY
         sync: false
+      # Must equal the Resend account's own address, or every send returns 403. Also
+      # the destination for redirected buyer receipts — never a customer address.
       - key: OWNER_NOTIFICATION_EMAIL
         sync: false
       - key: ALLOWED_ORIGIN
