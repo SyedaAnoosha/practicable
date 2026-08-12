@@ -1,9 +1,5 @@
 """Admin CRUD for courses, their modules, and their lessons — including attaching a
 Mux video and a downloadable file to a lesson.
-
-Product spec §8: "…add a new question, course, or template — tag it, attach a video or
-file, and publish", and "group existing questions into a new domain pack or course, so
-growing the catalog doesn't require rebuilding anything."
 """
 import uuid
 from typing import Optional
@@ -52,8 +48,8 @@ class LessonOut(BaseModel):
     published: bool
     download_template_id: Optional[str]
     mux_playback_id: Optional[str]
-    # A video lesson with no Mux asset attached is a lesson that will render an empty
-    # player after purchase. Surfaced so the editor can block publishing it.
+    # A video lesson with no Mux asset renders an empty player after purchase — surfaced
+    # so the editor can block publishing it.
     is_ready: bool
 
 
@@ -110,8 +106,7 @@ async def list_courses(session: AsyncSession = Depends(get_session)):
     courses = (await session.execute(select(Course).order_by(Course.title))).scalars().all()
     if not courses:
         return []
-    # Two grouped counts rather than a query per course — the same N+1 shape that made
-    # GET /questions take 90 seconds once the catalogue was real.
+    # Two grouped counts rather than a query per course, avoiding an N+1.
     module_counts = dict(
         (
             await session.execute(
@@ -284,8 +279,7 @@ async def create_module(
     admin: User = Depends(require_admin),
 ):
     course = await get_or_404(session, Course, course_id, "Course")
-    # Default to the end of the list. Asking an editor to type a sort order for a
-    # module they're appending is exposing an implementation detail as a form field.
+    # Default to the end of the list, so appending doesn't need a sort-order field.
     sort_order = payload.sort_order
     if sort_order is None:
         highest = (
@@ -334,8 +328,8 @@ class LessonWriteIn(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     lesson_type: LessonType
     description: Optional[str] = None
-    # Required in practice for reading/mixed lessons; validated on publish, not on
-    # save, so a draft can be written across several sittings.
+    # Required for reading/mixed lessons, but validated on publish rather than save so a
+    # draft can be written across several sittings.
     body: Optional[str] = None
     download_template_id: Optional[uuid.UUID] = None
     sort_order: Optional[int] = None
@@ -411,12 +405,10 @@ async def update_lesson(
 class LessonVideoIn(BaseModel):
     """Mux ids, pasted from the Mux dashboard after an upload there.
 
-    Deliberately NOT a video upload endpoint. Mux's own direct-upload flow hands the
-    browser a one-time signed URL and handles multi-GB resumable transfer, retries and
-    encoding; proxying video bytes through this API would be strictly worse at all
-    three and would tie up a worker for the length of the upload. Pasting the asset/
-    playback id is the honest interim: it's two fields, it works today, and it leaves
-    the direct-upload integration as an isolated later change to this one endpoint.
+    Deliberately not a video upload endpoint: proxying video bytes through this API
+    would tie up a worker for the length of the upload, where Mux's own direct-upload
+    flow handles resumable transfer, retries and encoding. Swapping to that flow later
+    is an isolated change to this one endpoint.
     """
     mux_asset_id: str = Field(min_length=1, max_length=255)
     mux_playback_id: str = Field(min_length=1, max_length=255)
@@ -456,12 +448,8 @@ async def set_lesson_published(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """Publishing is refused unless the lesson actually has its content.
-
-    This is the check that stops the most expensive failure mode in the product: a
-    published video lesson with no Mux asset renders an empty player to someone who
-    just paid for the course, and nothing else in the system would catch it.
-    """
+    """Publishing is refused unless the lesson actually has its content — otherwise a
+    video lesson with no Mux asset renders an empty player to someone who just paid."""
     lesson = await get_or_404(session, Lesson, lesson_id, "Lesson")
     if payload.published:
         media = (

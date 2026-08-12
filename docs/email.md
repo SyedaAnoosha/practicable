@@ -1,7 +1,7 @@
 Good news — checked DNS, and it looks like you may already have options:
 
 practicable.com.au — has active MX records pointing to Microsoft 365 (protection.outlook.com), meaning it's a registered domain with real email hosting already set up. If this is yours, it's the obvious pick — matches the brand name exactly, and .com.au fits the Australian/AUD positioning already locked in.
-effectiverm.com — has MX records pointing to Google Workspace, consistent with your effectiverm.australia@gmail.com address.
+effectiverm.com — has MX records pointing to Google Workspace, consistent with the owner's existing Google-hosted address.
 I can't confirm ownership from DNS alone (MX records just mean someone configured email there), so: which of these do you actually control — i.e., can you get into a DNS management panel (GoDaddy, Cloudflare, Netlify, whoever the registrar/DNS host is) to add TXT/CNAME records? That's what verifying in Resend actually requires.
 
 Once you confirm which one and that you have DNS access, I'll:

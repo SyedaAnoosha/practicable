@@ -1,8 +1,4 @@
-"""Admin CRUD for the reference library — the 100-question catalogue.
-
-Product spec §8: "As an admin, I want to add a new question, course, or template — tag
-it, attach a video or file, and publish — without writing code."
-"""
+"""Admin CRUD for the reference library — the 100-question catalogue."""
 import uuid
 from typing import Optional
 
@@ -19,9 +15,7 @@ from .common import ensure_unique_slug, get_or_404, record_audit, slugify
 
 router = APIRouter()
 
-# The six single-select tag dimensions, mapped to their column on `questions`. Kept as
-# one table rather than six near-identical blocks: adding a seventh single-select
-# dimension later means one line here plus the column, not another copy-paste branch.
+# The six single-select tag dimensions, mapped to their column on `questions`.
 SINGLE_SELECT_DIMENSIONS: dict[str, str] = {
     "effort": "effort_tag_id",
     "duration": "duration_tag_id",
@@ -35,9 +29,8 @@ MULTI_SELECT_DIMENSION = "leadership_traits"
 
 
 class QuestionWriteIn(BaseModel):
-    """One shape for create and update. Every field except title/body/domain is
-    optional so a half-finished draft can still be saved — an editor who has to fill
-    all seven tags before the first save will lose work."""
+    """One shape for create and update. Everything except title/body/domain is optional
+    so a half-finished draft can still be saved."""
     title: str = Field(min_length=1, max_length=500)
     body: str = Field(min_length=1)
     domain_id: uuid.UUID
@@ -56,8 +49,7 @@ class QuestionRowOut(BaseModel):
     subtitle: Optional[str]
     domain: str
     published: bool
-    # Surfaced in the list so an editor can see at a glance which rows still carry a
-    # machine-derived preview (docs/handover.md's known gap) without opening each one.
+    # In the list so an editor can spot rows still carrying a machine-derived preview.
     preview: str
 
 
@@ -86,9 +78,8 @@ class DomainOptionOut(BaseModel):
 
 
 class FormOptionsOut(BaseModel):
-    """Everything the question form needs to render its dropdowns, in one request.
-    The editor is a form, not a catalogue — it needs all tag values regardless of use,
-    which the public /questions endpoint deliberately never returns."""
+    """Everything the question form needs to render its dropdowns, in one request —
+    all tag values regardless of use, which the public endpoint never returns."""
     domains: list[DomainOptionOut]
     tag_dimensions: dict[str, list[TagOptionOut]]
 
@@ -124,12 +115,7 @@ async def list_questions(
     offset: int = 0,
 ):
     """Paginated and searchable, unlike the public catalogue which returns everything.
-
-    With 100 questions today and no ceiling by design, an admin list that returns the
-    whole table would repeat the N+1-scale mistake this codebase already hit once on
-    GET /questions. `total` is a separate COUNT so the UI can show "showing 50 of 100"
-    truthfully rather than inferring it from a short page.
-    """
+    `total` is a separate COUNT so the UI can show "showing 50 of 100" truthfully."""
     conditions = []
     if search:
         pattern = f"%{search}%"
@@ -196,13 +182,8 @@ async def get_question(question_id: uuid.UUID, session: AsyncSession = Depends(g
 
 
 async def _validate_tags(session: AsyncSession, payload: QuestionWriteIn) -> None:
-    """Reject a tag id that isn't real, or that belongs to the wrong dimension.
-
-    The FK alone only proves the id exists in `tag_values` — it would happily accept
-    a *duration* value stored in `effort_tag_id`, which then renders as nonsense on
-    the public page and silently corrupts the filter counts. Dimension is the part
-    the database cannot check, so it's checked here.
-    """
+    """Reject a tag id that isn't real, or that belongs to the wrong dimension. The FK
+    only proves the id exists — it would accept a duration value in `effort_tag_id`."""
     requested = list(payload.tags.items()) + [
         (MULTI_SELECT_DIMENSION, tid) for tid in payload.leadership_trait_ids
     ]
@@ -253,8 +234,7 @@ async def _validate_tags(session: AsyncSession, payload: QuestionWriteIn) -> Non
 async def _apply_tags(session: AsyncSession, question: Question, payload: QuestionWriteIn) -> None:
     for dimension, column in SINGLE_SELECT_DIMENSIONS.items():
         setattr(question, column, payload.tags.get(dimension))
-    # Replace rather than diff: the trait set is small and a full replace can't leave
-    # a stale row behind the way an incremental add/remove can if it misses a case.
+    # Replace rather than diff — small set, and it can't leave a stale row behind.
     await session.execute(
         delete(QuestionLeadershipTrait).where(QuestionLeadershipTrait.question_id == question.id)
     )
@@ -264,11 +244,7 @@ async def _apply_tags(session: AsyncSession, question: Question, payload: Questi
 
 def _derive_preview(payload: QuestionWriteIn) -> str:
     """Use the editor's preview if given; otherwise cut the body at a sentence boundary.
-
-    160 is a hard ceiling in every branch — the column is varchar(160), and an earlier
-    version of this logic searched for a sentence boundary *past* the limit and blew up
-    the seed with StringDataRightTruncationError.
-    """
+    160 is a hard ceiling in every branch — the column is varchar(160)."""
     if payload.preview:
         return payload.preview[:160]
     body = payload.body.strip()
@@ -320,10 +296,8 @@ async def update_question(
     await _validate_tags(session, payload)
     await get_or_404(session, Domain, payload.domain_id, "Domain")
 
-    # The slug deliberately does NOT follow a retitle. Question URLs are the product's
-    # shareable surface (DESIGN.md §21) and may already be linked from an email or a
-    # colleague's message; silently changing one to match an edited title breaks those
-    # links with no redirect. Slugs are set once, at creation.
+    # Slugs are set once, at creation: a retitle must not break already-shared URLs,
+    # since there are no redirects.
     question.title = payload.title
     question.subtitle = payload.subtitle
     question.body = payload.body
@@ -349,9 +323,8 @@ async def set_published(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """Publish/unpublish. Separate from update so the audit trail distinguishes "an
-    admin edited the wording" from "an admin took this off the site" — the second is
-    the one worth being able to answer questions about later."""
+    """Publish/unpublish. Separate from update so the audit trail distinguishes a wording
+    edit from taking a question off the site."""
     question = await get_or_404(session, Question, question_id, "Question")
     was = question.published
     question.published = payload.published

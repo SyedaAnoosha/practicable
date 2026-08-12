@@ -17,9 +17,8 @@ const DOMAINS = [
   { name: 'AI (Governance)', label: 'AI', description: 'Model risk, oversight and responsible use.' },
 ] as const
 
-// Real taxonomy values, not guesses — the exact enum vocabulary from
-// week1_plan.md decision #3 (Duration: XS/S/M/L/XL, Cost: $/$$/$$$, Regulator
-// pressure: N/L/M/H). A chip only ever matches a real tag row, never fuzzy text.
+// The real tag vocabulary (Duration: XS/S/M/L/XL, Cost: $/$$/$$$, Regulator pressure:
+// N/L/M/H). A chip only ever matches a real tag row, never fuzzy text.
 const FINDER_CHIPS = [
   { label: '2 weeks or less', test: (t: QuestionTag) => t.dimension === 'duration' && (t.value === 'XS' || t.value === 'S') },
   { label: 'Low cost', test: (t: QuestionTag) => t.dimension === 'cost' && t.value === '$' },
@@ -43,14 +42,9 @@ interface QuestionSummary {
   tags: QuestionTag[]
 }
 
-// The public marketing landing page. Rebuilt 2026-08-11 per direct owner design
-// critique: the previous version led with a hero claim, two auth buttons, a "how it
-// works" explainer and a product card — a perfectly reasonable SaaS homepage, and
-// exactly the wrong shape for this product. The Research Specification's own thesis
-// is that the question-discovery system is the differentiator, not the course
-// catalogue — so this version leads with a working question finder instead of a
-// claim about one, and routes courses/templates to their own catalogue pages
-// (reachable from the header) rather than pitching them here.
+// The public marketing landing page. Leads with a working question finder rather than
+// a claim about one, since question discovery is the differentiator; courses and
+// templates get their own catalogue pages instead of being pitched here.
 export function Home() {
   const { data: questions } = useQuery({
     queryKey: queryKeys.questions.list(),
@@ -68,12 +62,8 @@ export function Home() {
   )
 }
 
-// The finder is the hero now, not a claim above two auth buttons — DESIGN.md §18.2's
-// "no hero image" rule still holds, but the working input replaces the CTA pair as
-// the thing above the fold that actually does something. Chips filter the real,
-// already-fetched question list by real tag rows — never fuzzy text matching a
-// keyword against a title, which would silently stop meaning anything the moment a
-// second question with different wording gets seeded.
+// The finder is the hero: a working input above the fold rather than a CTA pair. Chips
+// filter the already-fetched question list by real tag rows, never by fuzzy text.
 function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -100,12 +90,8 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
 
   return (
     <section className="relative overflow-hidden px-5 pb-16 pt-16 sm:px-8 sm:pb-20 sm:pt-24">
-      {/* Atmospheric depth behind the type — a three-stop gradient wash, all
-          shades of blue (accent azure, domain-compliance steel-blue, domain-
-          cyber azure — theme.css's blue/ivory/black/white constraint),
-          2026-08-11's liveliness pass. Still a static background: the colour
-          itself reads as "alive" without needing motion. Decorative; kept out
-          of the a11y tree. */}
+      {/* Atmospheric depth behind the type — a static three-stop gradient wash in
+          shades of blue. Decorative, so it stays out of the a11y tree. */}
       <div aria-hidden="true" className="hero-wash" />
       <div className="relative mx-auto w-full max-w-3xl text-center">
         <p className="eyebrow animate-enter justify-center">Deciding in the Dark</p>
@@ -160,10 +146,7 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
           </div>
         </form>
 
-        {/* Live results — only appears once the visitor has actually asked for
-            something, per §36's card discipline: a plain list, no card wrapper, no
-            decoration for its own sake. A left accent rule on hover gives the row
-            the same tactile primary-colour feedback as the catalogue's rows. */}
+        {/* Live results, appearing only once the visitor has asked for something. */}
         {searching && (
           <div className="mx-auto mt-6 max-w-xl text-left">
             {matches.length === 0 ? (
@@ -193,16 +176,10 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
   )
 }
 
-// DESIGN.md §3.5's extensibility signal, made prominent rather than a filter value
-// buried in a dropdown — a numbered list with real per-domain counts computed from
-// the same fetched list the finder above uses, not a second request.
-//
-// [LIVELINESS PASS, 2026-08-11] Each domain now carries its own signature colour
-// and icon (theme.css's --domain-* tokens) instead of a uniform secondary tile —
-// applied via inline CSS variables, not a Tailwind class string, because the
-// colour is chosen from data at render time and Tailwind's JIT only generates
-// classes it can see literally in source (`bg-${x}` would silently produce
-// nothing in the production build).
+// A numbered list with real per-domain counts, computed from the same fetched list the
+// finder uses rather than a second request. Each domain's signature colour is applied
+// via inline CSS variables, not a Tailwind class string: the colour is chosen from data
+// at render time, and Tailwind's JIT only generates classes it can see literally.
 function DomainSection({ questions }: { questions: QuestionSummary[] | undefined }) {
   return (
     <section className="border-t border-border py-16 sm:py-20">
@@ -245,9 +222,8 @@ function DomainSection({ questions }: { questions: QuestionSummary[] | undefined
   )
 }
 
-// A compact teaser, deliberately not a card grid — plain title lines, per the owner
-// critique's own mockup ("QUESTIONS PEOPLE ACTUALLY ASK" as bare text, not boxes).
-// The full, filterable list lives at /questions; this is a proof point, not a catalogue.
+// A compact teaser — plain title lines, not a card grid. The full filterable list lives
+// at /questions; this is a proof point, not a catalogue.
 function QuestionsTeaser({ questions }: { questions: QuestionSummary[] | undefined }) {
   if (!questions || questions.length === 0) return null
 
@@ -279,11 +255,9 @@ function QuestionsTeaser({ questions }: { questions: QuestionSummary[] | undefin
   )
 }
 
-// DESIGN.md §27: the free entry point — a required deliverable (intern brief: "at
-// least one free entry point that earns an email address"), kept but deliberately
-// quieter than before, per "reduce marketing sections." An inline block, one field,
-// the privacy statement in plain words above the button. The id is what the header's
-// "Get started" and the footer both link to.
+// The free entry point that earns an email address. One field, with the privacy
+// statement above the button. The id is what the header's "Get started" and the footer
+// both link to.
 function LeadCaptureSection() {
   const [email, setEmail] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -340,8 +314,7 @@ function LeadCaptureSection() {
   )
 }
 
-// Brand-level, not a fabricated founder bio/photo; those go in once the owner
-// supplies real ones. The id is the header's "About" link target.
+// Brand-level rather than a fabricated founder bio. The header's "About" link target.
 function AboutSection() {
   return (
     <section id="about" className="scroll-mt-24 border-t border-border py-16 sm:py-20">

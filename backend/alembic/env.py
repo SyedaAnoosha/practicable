@@ -21,11 +21,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set the database URL from settings — DATABASE_URL, not supabase_url (that's the REST/
-# Auth API URL, not a Postgres DSN). Alembic's own connection here is synchronous
-# (engine_from_config + connection.connect() below), so force the psycopg2 driver
-# regardless of what scheme was supplied — the app's async engine (app/db/session.py)
-# uses asyncpg separately; the two must not share a driver.
+# DATABASE_URL, not supabase_url (which is the REST/Auth API URL, not a DSN). Alembic's
+# connection is synchronous, so force psycopg2 here — the app's engine uses asyncpg.
 _db_url = settings.database_url
 if _db_url.startswith("postgresql+asyncpg://"):
     _db_url = _db_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)

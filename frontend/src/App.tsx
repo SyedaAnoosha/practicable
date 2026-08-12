@@ -27,38 +27,31 @@ import { AdminQuestions } from '@/pages/admin/AdminQuestions'
 import { AdminTemplates } from '@/pages/admin/AdminTemplates'
 import { AdminCourses } from '@/pages/admin/AdminCourses'
 
-// react-router v8, data mode (DESIGN.md §51.6). Week 1 needs four layouts, not the
-// Admin one (Week 3 — week1_plan.md Scope guardrails).
+// react-router v8, data mode.
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
     children: [
       {
         element: <MarketingLayout />,
-        // The landing page stays purely public chrome even for signed-in visitors:
-        // it's the marketing front door, and a member already has /dashboard as
-        // their home. Everything else moved to CatalogueLayout below.
+        // The landing page keeps public chrome even for signed-in visitors — members
+        // already have /dashboard as their home.
         children: [{ path: '/', element: <Home /> }],
       },
       {
-        // Public routes that a signed-in member also lives in, so they keep the
-        // member sidebar instead of dropping the visitor back into marketing chrome
-        // mid-session (CatalogueLayout.tsx documents the bug this fixes). Still
-        // public — no auth guard, no account needed to browse or read.
+        // Public routes a signed-in member also lives in, so they keep the member
+        // sidebar rather than dropping back into marketing chrome mid-session.
         element: <CatalogueLayout />,
         children: [
           { path: '/questions', element: <QuestionsCatalogue /> },
           { path: '/questions/:slug', element: <Question /> },
-          // Public product/syllabus pages (DESIGN.md §41: /courses, /courses/:slug),
-          // distinct from /learn/:courseSlug/:lessonSlug below — browsing what a
-          // course contains before buying needs no account, same as /questions/:slug.
+          // Public product/syllabus pages, distinct from /learn/… below: browsing what
+          // a course contains before buying needs no account.
           { path: '/courses', element: <CoursesCatalogue /> },
           { path: '/courses/:slug', element: <CourseDetail /> },
           { path: '/templates', element: <TemplatesCatalogue /> },
-          // Public, not member-only: the free lead-magnet template has to be
-          // reachable with no account at all (product spec §9). Paid templates at
-          // this route show a buy/sign-in prompt instead of a download — the page
-          // branches on the template, and the API is the real boundary either way.
+          // Public: the free lead-magnet template must be reachable with no account.
+          // Paid templates here show a buy/sign-in prompt instead of a download.
           { path: '/templates/:templateId', element: <Template /> },
         ],
       },
@@ -73,26 +66,21 @@ const router = createBrowserRouter([
         element: <MemberLayout />,
         children: [
           { path: '/dashboard', element: <Dashboard /> },
-          // Product spec §9: "'My Library' panel: purchased items across all types,
-          // clearly labeled, with progress and resume where relevant."
+          // Purchased items across all types, with progress and resume.
           { path: '/library', element: <Library /> },
-          // The full learning interface (DESIGN.md §24.1) — sidebar outline,
-          // video/reading/download content, prev/next, mark complete. The bare
-          // /lessons/:lessonId player stays for any lesson with no module/course
-          // (products.py falls back to it when a lesson isn't part of one).
+          // The full learning interface. The bare /lessons/:lessonId player stays for
+          // any lesson that isn't part of a module/course.
           { path: '/learn/:courseSlug/:lessonSlug', element: <Learn /> },
           { path: '/lessons/:lessonId', element: <Lesson /> },
-          // Account-required before purchase (week1_plan.md decision #8) — these live
-          // under the same auth-guarded layout as the gated content itself.
+          // Account required before purchase, so these share the gated content's guard.
           { path: '/buy/:slug', element: <ProductBuy /> },
           { path: '/checkout/success', element: <CheckoutSuccess /> },
           { path: '/checkout/cancel', element: <CheckoutCancel /> },
         ],
       },
       {
-        // The content editor (product spec §9). AdminLayout checks the role for a
-        // clean message, but the real boundary is server-side: every /admin/* API
-        // route is guarded by require_admin at the router level.
+        // The content editor. AdminLayout checks the role for a clean message, but the
+        // real boundary is server-side require_admin on every /admin/* route.
         element: <AdminLayout />,
         children: [
           { path: '/admin', element: <AdminQuestions /> },

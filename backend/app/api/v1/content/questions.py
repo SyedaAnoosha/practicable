@@ -1,3 +1,5 @@
+"""Public question catalogue and detail routes."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -29,23 +31,16 @@ class RelatedProductOut(BaseModel):
     currency: str
 
 class RelatedLessonOut(BaseModel):
-    """A lesson this question leads into (§21.1 "related lessons"), shown with its
-    entitlement state — never playable from here, this is a signpost to the course
-    (§21.4's buy surface is the actual purchase path), not a second player."""
+    """A lesson this question leads into, with its entitlement state. A signpost to
+    the course, never a player."""
     course_slug: str
     course_title: str
     lesson_slug: str
     lesson_title: str
     lesson_type: str
     owned: bool
-    # The cheapest published product that actually grants THIS lesson, or None if
-    # nothing sells it yet. Added with the template/course split (db/seed/012): the
-    # page used to send every locked lesson to `related_content[0]`, which was safe
-    # only while a single product bundled the template and the course together. Once
-    # they became separate purchases, that link pointed a locked *course* lesson at
-    # the A$29 *template* — a checkout that takes the money and still leaves the
-    # lesson locked. The unlocking product has to be resolved per lesson, not guessed
-    # from the question's own upsell list.
+    # Cheapest published product that grants THIS lesson, or None if nothing sells it.
+    # Resolved per lesson — the question's own upsell list may sell a different item.
     unlock_product_slug: Optional[str] = None
     unlock_product_name: Optional[str] = None
 
@@ -55,11 +50,8 @@ class TagOut(BaseModel):
     dimension: str
     value: str
     display_label: str
-    # tag_values.sort_order — the real ordinal scale (effort: quick < mod < project
-    # < trans, duration: xs < s < m < l < xl, ...). Without this the frontend's only
-    # option was rendering values in whatever order they were first encountered
-    # across the question list, which reads as random ("Mod., Project, Quick,
-    # Trans."), not a scale a practitioner can actually read at a glance.
+    # tag_values.sort_order — the ordinal scale (effort: quick < mod < project < trans,
+    # duration: xs < s < m < l < xl, ...) the frontend orders values by.
     sort_order: int
 
 class QuestionSummaryOut(BaseModel):
@@ -77,28 +69,19 @@ class QuestionOut(BaseModel):
     title: str
     subtitle: Optional[str]
     preview: str
-    # Always present now — the written question is the free entry point (intern
-    # brief: "at least one free entry point that earns an email address"), not the
-    # paid product. It used to be withheld entirely for non-entitled visitors
-    # (QuestionPreviewOut had no body field at all), which meant nothing was
-    # actually free to read — only a 160-char teaser. The frontend soft-gates this
-    # behind an email capture (CSS blur + /leads, not a server-side restriction);
-    # the body itself is not the thing being sold.
+    # Always present — the written question is the free entry point, not the paid
+    # product. The frontend soft-gates it behind an email capture (blur + /leads),
+    # which is a conversion surface, not a server-side restriction.
     body: str
     domain: str
     tags: List[TagOut]
-    # Now purely about the *product* upsell card (template/lesson bundle), unrelated
-    # to whether body above is present — kept under this name so the frontend's
-    # existing "buy the template" card logic didn't need to change.
+    # Drives the product upsell card only; unrelated to whether `body` is present.
     gated: bool
     related_content: List[RelatedProductOut]
-    # §21.1: up to 3 related questions (explicit QuestionRelation rows first, same-
-    # domain published questions as a fallback so this is never empty just because
-    # nobody has curated relations yet — never fabricated, always a real query).
+    # Up to 3 related questions (§21.1).
     related_questions: List[QuestionSummaryOut]
-    # §21.1: the course lesson(s) this question leads into, with entitlement state
-    # so the frontend can show "included" vs the lock icon (§23.4) without a second
-    # round trip.
+    # Course lesson(s) this question leads into, with entitlement state so the
+    # frontend can show "included" vs locked without a second round trip.
     related_lessons: List[RelatedLessonOut]
 
 
@@ -109,20 +92,14 @@ _TAG_FK_DIMENSIONS = (
 
 
 async def _load_domains(session: AsyncSession) -> dict:
-    """All domains, once. Five rows — cheap to hold for the life of a request and
-    avoids a per-question round trip (see `_load_tag_value_map` for why this
-    matters now that the catalogue is 100 rows, not 1)."""
+    """All domains, once — five rows, avoiding a per-question round trip."""
     result = await session.execute(select(Domain))
     return {d.id: d for d in result.scalars().all()}
 
 
 async def _load_tag_value_map(session: AsyncSession) -> dict:
-    """All tag_values, once, keyed by id. `tag_values.tag_dimension` already carries
-    the dimension name, so a single flat map resolves every FK column on a question
-    (effort_tag_id, duration_tag_id, ...) *and* every leadership-trait join row,
-    with no per-tag query. `list_questions` used to do 1 domain query + 6 tag
-    queries + 1 traits query *per question* — invisible at 1 seeded question,
-    ~90s at the real 100 (§43's performance budget exists for exactly this)."""
+    """All tag_values, once, keyed by id. One flat map resolves every tag FK on a
+    question and every leadership-trait row, avoiding an N+1 across the catalogue."""
     result = await session.execute(select(TagValue))
     return {
         t.id: TagOut(dimension=t.tag_dimension, value=t.value, display_label=t.display_label, sort_order=t.sort_order)
@@ -131,8 +108,7 @@ async def _load_tag_value_map(session: AsyncSession) -> dict:
 
 
 async def _load_leadership_traits(session: AsyncSession, question_ids: list, tag_map: dict) -> dict:
-    """One query for every question's leadership traits at once, grouped by
-    question_id — the multi-select join table's answer to the same N+1 problem."""
+    """Every question's leadership traits in one query, grouped by question_id."""
     if not question_ids:
         return {}
     result = await session.execute(
@@ -145,18 +121,15 @@ async def _load_leadership_traits(session: AsyncSession, question_ids: list, tag
         tag = tag_map.get(trait_tag_id)
         if tag:
             by_question.setdefault(question_id, []).append(tag)
-    # Multi-select, so display order matters and the query above has none — sort
-    # each question's traits by the real ordinal scale, same as every other
-    # dimension (tag_values.sort_order), not by insertion/DB row order.
+    # Multi-select, so sort by the ordinal scale rather than DB row order.
     for traits in by_question.values():
         traits.sort(key=lambda t: t.sort_order)
     return by_question
 
 
 def _tags_for_question(question: Question, tag_map: dict, traits_by_question: dict) -> List[TagOut]:
-    """Shared by the list and detail routes so the two never drift on how a
-    question's tag FKs resolve into (dimension, value, display_label) triples —
-    reading from the batched maps above, never issuing a query itself."""
+    """Resolve a question's tag FKs from the batched maps above. Shared by the list
+    and detail routes so the two can't drift; issues no queries itself."""
     tags: List[TagOut] = [
         tag_map[tag_id]
         for field in _TAG_FK_DIMENSIONS
@@ -168,16 +141,14 @@ def _tags_for_question(question: Question, tag_map: dict, traits_by_question: di
 
 @router.get("/questions", response_model=List[QuestionSummaryOut])
 async def list_questions(session: AsyncSession = Depends(get_session)):
-    """The question index — public, like /courses and /templates. Every question's
-    written guidance is free to read (the email-gate lives client-side), so this list
-    never needs an entitlement check the way the template/course catalogues do."""
+    """The question index — public. Every question's written guidance is free to read
+    (the email gate lives client-side), so no entitlement check is needed here."""
     result = await session.execute(
         select(Question).where(Question.published.is_(True)).order_by(Question.created_at)
     )
     questions = result.scalars().all()
 
-    # Four queries total, however many questions there are — not four-plus-eight-
-    # per-question (see `_load_tag_value_map`'s docstring).
+    # Four queries total, however many questions there are.
     domains = await _load_domains(session)
     tag_map = await _load_tag_value_map(session)
     traits_by_question = await _load_leadership_traits(session, [q.id for q in questions], tag_map)
@@ -198,8 +169,7 @@ async def get_question(
     session: AsyncSession = Depends(get_session),
     user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
-    """Get question by slug. Returns preview for non-entitled (including logged-out —
-    this is the public discovery surface, research spec 8.2), full for entitled."""
+    """Get a question by slug. Public — `gated` carries the entitlement state."""
     
     # Fetch question
     result = await session.execute(
@@ -210,20 +180,14 @@ async def get_question(
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     
-    # Same batched helpers as list_questions (§ above) — a single-question request
-    # only needs domains/tag_values loaded once each regardless, and sharing the
-    # helpers means this route and the list route can no longer drift on how a
-    # tag FK resolves into a TagOut, which the old duplicated inline loop here
-    # already had (its docstring claimed sharing that wasn't actually happening).
+    # Same batched helpers as list_questions, so the two routes can't drift.
     domains = await _load_domains(session)
     domain = domains[question.domain_id]
     tag_map = await _load_tag_value_map(session)
     traits_by_question = await _load_leadership_traits(session, [question.id], tag_map)
     tags = _tags_for_question(question, tag_map, traits_by_question)
 
-    # Check entitlement — 200 either way, never 403: the paywall is a conversion
-    # surface, not an error (DESIGN.md §21.3). Logged-out users are never entitled,
-    # skipping the query entirely rather than passing a null user_id through.
+    # 200 either way, never 403 — the paywall is a conversion surface, not an error.
     is_entitled = (
         await has_access_to(
             user_id=uuid.UUID(user_id),
@@ -235,9 +199,7 @@ async def get_question(
         else False
     )
     
-    # DESIGN.md §21.4: the related-template card on the question page is a direct buy
-    # surface (name, price) — resolved via product_contents (content_type='question_set',
-    # content_id=this question), never a hardcoded/empty stand-in the frontend can't act on.
+    # The related-template card is a direct buy surface, resolved via product_contents.
     related_result = await session.execute(
         select(Product)
         .join(ProductContent, ProductContent.product_id == Product.id)
@@ -246,10 +208,8 @@ async def get_question(
             ProductContent.content_id == question.id,
             Product.published.is_(True),
         )
-        # Cheapest first. Since the template/course split (db/seed/012) more than one
-        # product can grant the same question, and the frontend's buy card reads
-        # related_content[0] — so without this the page could quote the A$49 course
-        # when the A$29 template is the cheaper way in.
+        # Cheapest first — more than one product can grant the same question, and the
+        # frontend's buy card reads related_content[0].
         .order_by(Product.price_amount)
     )
     related_content = [
@@ -257,10 +217,8 @@ async def get_question(
         for p in related_result.scalars().all()
     ]
 
-    # §21.1 "Related questions": explicit curated relations first, in their sort
-    # order; if none have been curated yet, fall back to other published questions
-    # in the same domain so the section is never empty purely for lack of admin
-    # data-entry — capped at 3 either way (§21.1).
+    # Curated relations first; falling back to same-domain questions so the section is
+    # never empty purely for lack of admin data entry. Capped at 3 either way.
     related_q_result = await session.execute(
         select(Question)
         .join(QuestionRelation, QuestionRelation.related_question_id == Question.id)
@@ -294,9 +252,7 @@ async def get_question(
         for rq in related_questions_rows
     ]
 
-    # §21.1 "Related lessons": the course lesson(s) this question leads into, each
-    # with its own entitlement check (§23.4 — never a second player here, just the
-    # signpost + lock state; the course page is where playback actually happens).
+    # Lesson(s) this question leads into, each with its own entitlement check.
     related_lesson_result = await session.execute(
         select(Lesson, Module, Course)
         .join(QuestionLesson, QuestionLesson.lesson_id == Lesson.id)
@@ -311,10 +267,7 @@ async def get_question(
     )
     related_lesson_rows = related_lesson_result.all()
 
-    # Which product unlocks each of these lessons — one batched query, keyed by lesson,
-    # cheapest product per lesson wins. Batched rather than per-lesson for the same
-    # reason the tag loaders above are (the N+1 that made GET /questions take 90s once
-    # there were 100 rows); this list is short today but the shape shouldn't regress.
+    # Which product unlocks each lesson — one batched query, cheapest product wins.
     unlock_by_lesson: dict[uuid.UUID, Product] = {}
     if related_lesson_rows:
         unlock_result = await session.execute(

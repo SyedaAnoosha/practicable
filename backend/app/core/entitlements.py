@@ -1,22 +1,14 @@
-"""THE GATE. Read this file before touching any of app/api/v1/content/*.
+"""THE GATE — read before touching any of app/api/v1/content/*.
 
-BACKEND.md §1.1/§4: the entitlements table is the single source of truth for access,
-and every gated resource passes through one dependency, in this one file. No route
-reads `entitlements` directly, and no response model carries a gated field "filtered
-in the route" — the response models in app/api/v1/content/questions.py already do
-that structurally (QuestionPreviewOut has no `body` field at all).
+The entitlements table is the single source of truth for access, and every gated
+resource passes through one dependency here. No route reads `entitlements` directly.
+A product grants whatever its `product_contents` rows point at; there is one entitlement
+row per (user, product), and resolving that into "can this user see resource X" is this
+file's job.
 
-A product grants access to whatever its `product_contents` rows point at — a
-template file or a lesson's video/reading. One entitlement row per (user, product);
-resolving that into "can this user see resource X" is this file's job, not a second
-entitlements table per resource type.
-
-`ResourceType.QUESTION` is the one exception worth flagging: a question's guidance
-body is never gated (DESIGN.md §21.3, owner decision 2026-08-11 — it's the free
-entry point, not the paid product). `has_access_to(..., ResourceType.QUESTION, ...)`
-still exists and is still called from `questions.py`, but only to decide whether to
-show the "buy the related template/course" upsell card versus the owned state —
-never to decide whether `body` is present in the response. `body` is unconditional.
+`ResourceType.QUESTION` is the exception: a question body is never gated. The check is
+still called from questions.py, but only to choose between the upsell card and the owned
+state — never to decide whether `body` is present.
 """
 import enum
 from datetime import datetime, timezone
@@ -88,9 +80,8 @@ def require_entitlement(resource_type: ResourceType):
         session: AsyncSession = Depends(get_session),
     ) -> UUID:
         if user.role == Role.ADMIN:
-            return resource_id  # BACKEND.md §4: no admin bypass without an audit row —
-            # not written yet, since no Week 1 route needs it; add one before relying
-            # on this bypass for anything real.
+            # TODO: no admin bypass without an audit row — write one before relying on this.
+            return resource_id
         if not await has_access_to(
             user_id=user.id, resource_type=resource_type, resource_id=resource_id, session=session
         ):

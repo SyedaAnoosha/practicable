@@ -20,10 +20,8 @@ class LeadOut(BaseModel):
 
 @router.post("/leads", response_model=LeadOut)
 async def capture_lead(body: LeadIn, session: AsyncSession = Depends(get_session)):
-    """The homepage's free entry point (DESIGN.md §18.1) — public, no auth. Deduped on
-    (email, source) rather than erroring or silently duplicating on a repeat signup;
-    either way this always returns ok so the frontend never has to distinguish
-    "new lead" from "already on the list" — neither is the visitor's problem."""
+    """The homepage's free entry point — public, no auth. Deduped on (email, source),
+    and always returns ok so the frontend needn't distinguish a repeat signup."""
     existing = await session.execute(
         select(Lead.id).where(Lead.email == body.email, Lead.source == body.source)
     )

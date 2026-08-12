@@ -41,11 +41,8 @@ class ProfileOut(BaseModel):
 async def get_my_profile(user: User = Depends(get_current_user)):
     """The signed-in user's own profile, including role.
 
-    `is_admin` exists so the frontend can decide whether to render the Admin link at
-    all. It is a *convenience*, never a control: every /admin/* route is independently
-    guarded by require_admin server-side, so hiding the link is cosmetic and forging
-    this response gains nothing (BACKEND.md §5 / week1_plan.md Non-negotiable #3 —
-    client-side checks are UX, the server is the boundary).
+    `is_admin` only tells the frontend whether to render the Admin link. It is never a
+    control: every /admin/* route is independently guarded by require_admin server-side.
     """
     return ProfileOut(
         id=str(user.id), email=user.email, name=user.name,
@@ -59,25 +56,16 @@ async def get_my_entitlements(
     session: AsyncSession = Depends(get_session),
     user_id: str = Depends(get_current_user_id),
 ):
-    """DESIGN.md §29.4: the success page polls this every 1.5s for up to 20s after a
-    Stripe redirect, since the webhook that actually creates the entitlement can
-    arrive after the user is already back on our site. Returns every product the
-    user currently holds — the frontend just checks whether the one it's waiting on
-    is in the list."""
+    """Every product the user currently holds. The checkout success page polls this after
+    a Stripe redirect, since the webhook can land after the user is already back."""
     product_ids = await resolve_product_ids(user_id=uuid.UUID(user_id), session=session)
     return EntitlementsOut(product_ids=[str(pid) for pid in product_ids])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# My Library — product spec §2 steps 6/9 and §9's "'My Library' panel: purchased
-# items across all types, clearly labeled, with progress and resume where relevant".
-#
-# One endpoint, not three, deliberately: the spec's point is that a buyer sees ONE
-# place holding differently-shaped things, so the grouping by type belongs in the
-# response rather than in three separate client fetches the page then has to
-# reassemble (and race). Everything here is derived from entitlements → products →
-# product_contents, so a new content type added to that polymorphic table appears
-# here by extending this one function, not by adding an endpoint.
+# My Library — purchased items across all content types, with progress and resume.
+# One endpoint rather than three, so the page doesn't have to reassemble (and race)
+# separate fetches. Everything derives from entitlements → products → product_contents.
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -89,11 +77,9 @@ class LibraryCourseOut(BaseModel):
     total_lessons: int
     completed_lessons: int
     percentage_complete: int
-    # The next lesson to open. None means every owned lesson is complete — the page
-    # shows "Completed" rather than a Continue button. Note this counts only lessons
-    # the user is actually entitled to, so a partially-owned course reports progress
-    # against what they bought, never against lessons they can't open (which would
-    # strand them at 60% forever with no way to finish).
+    # The next lesson to open; None means everything owned is complete. Counts only
+    # entitled lessons, so a partially-owned course reports progress against what was
+    # bought rather than stranding the user below 100% with no way to finish.
     resume_lesson_slug: Optional[str]
     resume_lesson_title: Optional[str]
 
@@ -118,9 +104,7 @@ class LibraryOut(BaseModel):
     courses: list[LibraryCourseOut]
     templates: list[LibraryTemplateOut]
     reference: list[LibraryReferenceOut]
-    # True when the user holds no entitlements at all — lets the page distinguish
-    # "you haven't bought anything yet" (an empty state with a route into the
-    # storefront) from "your library failed to load", which are different messages.
+    # Lets the page distinguish "you haven't bought anything yet" from a load failure.
     is_empty: bool
 
 
@@ -148,9 +132,8 @@ async def get_my_library(
         owned.setdefault(content_type, set()).add(content_id)
 
     # ── Courses, reached through the lessons the user owns ───────────────────────
-    # A course is "in your library" when you own at least one of its lessons. There is
-    # no direct course entitlement in the common case: products grant lessons, and the
-    # course is what those lessons belong to.
+    # A course is "in your library" when you own at least one of its lessons — products
+    # grant lessons, not courses.
     courses: list[LibraryCourseOut] = []
     owned_lesson_ids = owned.get("lesson", set())
     if owned_lesson_ids:
@@ -206,8 +189,7 @@ async def get_my_library(
                     subtitle=course.subtitle,
                     total_lessons=total,
                     completed_lessons=done,
-                    # Integer percent, floored — a course is only ever shown as 100%
-                    # when every owned lesson is genuinely complete, never by rounding.
+                    # Floored, so 100% is never reached by rounding.
                     percentage_complete=(done * 100 // total) if total else 0,
                     resume_lesson_slug=resume.slug if resume else None,
                     resume_lesson_title=resume.title if resume else None,
@@ -238,10 +220,8 @@ async def get_my_library(
         ]
 
     # ── Reference (question_set grants) ──────────────────────────────────────────
-    # Question bodies are free to read for everyone (DESIGN.md §21.3), so this section
-    # is not an access list — it's the record of what a purchase included, which is
-    # what makes a receipt verifiable later. It is also the seam that domain reference
-    # packs would arrive through if they are ever sold: same content_type, more rows.
+    # Question bodies are free to read for everyone, so this is not an access list —
+    # it's the record of what a purchase included.
     reference: list[LibraryReferenceOut] = []
     if owned.get("question_set"):
         rows = (

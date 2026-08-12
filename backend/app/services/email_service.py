@@ -1,3 +1,14 @@
+"""Transactional email (buyer receipts, owner sale alerts) over Resend.
+
+WARNING: while this file is Resend-only, NO REAL CUSTOMER RECEIVES ANY EMAIL — every
+send is redirected to the owner's inbox and labelled undelivered, because Resend's
+sandbox sender can only deliver to its own account address. This is a deliberate
+holding position for a test-mode store and must be reversed before taking real money.
+Gmail and Brevo SMTP were removed because Render blocks outbound port 587; Mailjet was
+working over REST when it was removed by choice, and is the fastest route back to real
+delivery. See docs/gmail.md §8 and docs/email.md.
+"""
+
 import asyncio
 import logging
 
@@ -9,41 +20,8 @@ logger = logging.getLogger(__name__)
 
 RESEND_SEND_URL = "https://api.resend.com/emails"
 
-# Resend's sandbox sender. It can only ever deliver to the single address the Resend
-# account itself is registered under — attempting any other recipient returns a 403
-# validation_error naming that address. Sending from a real address instead requires
-# verifying a domain at resend.com/domains.
+# Sending from a real address requires verifying a domain at resend.com/domains.
 SANDBOX_SENDER = "Practicable <onboarding@resend.dev>"
-
-
-# ── Why this file is one transport instead of four ───────────────────────────────────
-#
-# [OWNER-DECIDED 2026-08-12] Gmail SMTP, Mailjet and Brevo were removed, leaving Resend
-# alone, with every email routed to the owner's inbox.
-#
-# What was actually true at the time of that decision, recorded here because it is not
-# recoverable from the code that remains:
-#
-#   - Gmail SMTP and Brevo SMTP could NEVER work on Render. Both connect on port 587,
-#     and Render blocks outbound SMTP — every attempt failed with [Errno 101] Network
-#     is unreachable. Deleting them removed two tiers that were structurally incapable
-#     of sending from the deployed host. This is the one unambiguously correct part of
-#     the change, and it also removes a doomed 15-second TCP timeout from the front of
-#     every send, inside a Stripe webhook that must return fast.
-#
-#   - Mailjet, by contrast, WAS working. It is a REST call over 443, immune to the SMTP
-#     block, and it delivered order 46ff0ba1's receipt to a real buyer at an address
-#     that was not the sender. It was removed by choice, not because it failed.
-#
-# The consequence, stated plainly so it is not rediscovered later as a bug: while this
-# file is Resend-only, NO REAL CUSTOMER RECEIVES ANY EMAIL. Their receipt is redirected
-# to the owner, labelled as undelivered. That is a deliberate holding position for a
-# test-mode store, not a working receipt path, and it must be reversed before taking
-# real money. `git log` on this file has the four-tier version to restore from; the
-# fastest route back to real delivery is Mailjet plus BREVO_SENDER_EMAIL.
-#
-# See docs/gmail.md §8 for the Render/SMTP finding and docs/email.md for provider
-# history.
 
 
 def _send_via_resend(*, to_email: str, subject: str, html: str, text: str) -> None:
@@ -57,21 +35,17 @@ def _send_via_resend(*, to_email: str, subject: str, html: str, text: str) -> No
 
 
 async def _send(*, to_email: str, subject: str, html: str, text: str, context: str) -> None:
-    """Shared send path for both email types below. Deliberately never raises
-    (BACKEND.md §6.1) — a slow or failed send must not undo an already-committed order.
+    """Shared send path for both email types below. Never raises (BACKEND.md §6.1) — a
+    failed send must not undo an already-committed order.
 
-    `to_email` is the INTENDED recipient, which is not necessarily where this ends up:
-    everything is redirected to settings.owner_notification_email while the store runs
-    in this holding configuration. The distinction is kept in the signature rather than
-    collapsed at the call site so the redirect stays visible and reversible in one place.
+    `to_email` is the INTENDED recipient; everything is currently redirected to
+    settings.owner_notification_email (see the module note).
     """
     if not settings.resend_api_key:
         logger.error("Cannot send %s: RESEND_API_KEY is not set.", context)
         return
 
-    # Resend's sandbox refuses any recipient other than the account's own address, so an
-    # unset owner address doesn't degrade to "send to the buyer" — that would be a
-    # guaranteed 403. Fail loudly instead of pretending there is a fallback.
+    # No fallback to the buyer's address: the sandbox would 403. Fail loudly instead.
     if not settings.owner_notification_email:
         logger.error(
             "Cannot send %s: OWNER_NOTIFICATION_EMAIL is not set, and the Resend sandbox "
@@ -82,15 +56,9 @@ async def _send(*, to_email: str, subject: str, html: str, text: str, context: s
 
     recipient = settings.owner_notification_email
 
-    # If this is someone else's mail being redirected, SAY SO in the message itself.
-    # [FIXED 2026-08-11 — owner-reported] A real order once fell through to this tier and
-    # the owner received two emails a minute apart: "Thank you for your purchase — your
-    # order has been completed" and "You made a sale". The first is addressed to the
-    # *buyer*, and arriving unlabelled in the owner's inbox it reads as though the owner
-    # bought their own product, while giving no hint that the actual buyer was never
-    # emailed. The redirect is the right behaviour; it just has to be honest about what
-    # it is. That matters more now than it did then, because this is no longer a rare
-    # last-resort path — it is every single receipt.
+    # If this is someone else's mail being redirected, say so in the message itself —
+    # an unlabelled buyer receipt in the owner's inbox reads as their own purchase and
+    # gives no hint that the buyer was never emailed.
     if recipient != to_email:
         subject = f"[Not delivered to buyer] {subject}"
         notice_text = (
@@ -135,9 +103,7 @@ async def send_receipt_email(
     product_name: str,
 ):
     """To the buyer: confirms their purchase went through. Currently redirected to the
-    owner and labelled undelivered — see the module note above. The "Order for" line is
-    what makes the redirected copy legible, since the owner otherwise cannot tell whose
-    receipt they are looking at."""
+    owner and labelled undelivered — the "Order for" line identifies whose receipt it is."""
     amount_display = f"{currency} {amount_cents / 100:.2f}"
     await _send(
         to_email=to_email,
@@ -169,10 +135,8 @@ async def send_sale_notification_email(
     currency: str,
     product_name: str,
 ):
-    """To the owner (settings.owner_notification_email): a sale just happened. Sent
-    alongside the buyer's receipt, from the same webhook handler, after the same
-    commit — one confirmed sale, two people who need to know. This one is genuinely
-    addressed to the owner, so it arrives without the redirect banner."""
+    """To the owner: a sale just happened. Sent alongside the buyer's receipt from the
+    same webhook handler, and arrives without the redirect banner."""
     if not settings.owner_notification_email:
         logger.error(
             "OWNER_NOTIFICATION_EMAIL is not set — skipping the sale notification for "

@@ -3,16 +3,12 @@
     cd backend
     .venv\\Scripts\\python.exe scripts/grant_admin.py you@example.com
 
-There is deliberately no in-app way to do this. Role escalation is the one action an
-admin UI must never offer, because the first admin has to come from somewhere trusted
-and "any signed-in user can make themselves an admin" is not a bootstrap, it's a hole.
-This script requires DATABASE_URL — i.e. whoever runs it already has full database
-access and could set the column by hand anyway.
+There is deliberately no in-app way to do this — role escalation is the one action an
+admin UI must never offer. Running this requires DATABASE_URL, so whoever can run it
+could set the column by hand anyway.
 
-Works whether or not the account has used the API yet. `public.users` rows are created
-lazily on first authenticated request (app/core/deps.py get_current_user), so a
-brand-new signup often has an `auth.users` row and no profile row; this creates the
-profile row directly rather than making you go and click something first.
+Works whether or not the account has used the API yet: `public.users` rows are created
+lazily on first authenticated request, so this creates the profile row directly.
 """
 import asyncio
 import sys
@@ -54,8 +50,7 @@ async def grant(email: str) -> int:
         ).first()
 
         if profile is None:
-            # Mirrors what get_current_user would create on first authenticated call,
-            # but with role already set — so the very first request lands as an admin.
+            # What get_current_user would create, but with role already set.
             await session.execute(
                 text(
                     "insert into users (id, email, role, created_at, updated_at) "

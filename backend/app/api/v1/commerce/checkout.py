@@ -39,13 +39,9 @@ async def create_checkout(
     if not product or not product.published:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # DESIGN.md §29.2/§29.3: the success/failure pages are frontend routes, so these
-    # must point at the deployed frontend, not be hardcoded to localhost. ALLOWED_ORIGIN
-    # is already set to exactly that origin (Day 1 CORS setting), so it doubles as the
-    # base for these redirect URLs without a third setting to keep in sync.
-    # product_slug travels with the redirect so the success page can re-fetch the
-    # product (name, contents) and know which entitlement it's polling for, without
-    # a second endpoint that resolves a Stripe session id back to a product.
+    # The success/cancel pages are frontend routes, so ALLOWED_ORIGIN doubles as their
+    # base rather than adding a third setting to keep in sync. product_slug travels with
+    # the redirect so the success page knows which entitlement it's polling for.
     success_url = (
         f"{settings.allowed_origin}/checkout/success"
         f"?session_id={{CHECKOUT_SESSION_ID}}&product_slug={product.slug}"

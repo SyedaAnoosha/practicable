@@ -45,9 +45,8 @@ async def create_order_from_checkout(
     )
     session.add(entitlement)
 
-    # BACKEND.md §1.5: every entitlement grant is audited — this is the difference
-    # between "we think the webhook fired" and knowing. actor_user_id is the buyer
-    # themselves here (a self-service purchase, not an admin override).
+    # Every entitlement grant is audited. actor_user_id is the buyer themselves here,
+    # since this is a self-service purchase rather than an admin override.
     await session.flush()  # entitlement.id populated for the audit context below
     audit_entry = AuditLog(
         actor_user_id=uuid.UUID(user_id),

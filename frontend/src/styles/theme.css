@@ -4,21 +4,15 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Art direction: "private bank meets editorial publisher" — livelier, 2026-08-11.
-   DESIGN.md §7's role map is untouched — primary is still the brand/action
-   colour, accent still the interactive emphasis. What changed: the owner asked
-   for more colour, gradients (text and background), and livelier icon/symbol
-   treatment across the whole product — a deliberate reversal of the "no
-   gradients, one restrained accent" rule this file carried until now. Two new
-   layers on top of the existing navy/gold system, both additive:
+   Art direction: "private bank meets editorial publisher". Primary is the brand
+   and action colour, accent the interactive emphasis. Two layers sit on top of
+   the base navy/gold system:
      1. `--domain-*` — one signature hue per domain (Risk/Cyber/Compliance/
-        Resilience/AI), for domain icon tiles, accents and gradients. Reserved
-        for *domain* identity specifically — the seven question-tag dimensions
-        still don't get their own colours (that's still real badge-soup risk;
-        five domains named prominently on their own is a different problem).
-     2. `.text-gradient-*` / `.bg-gradient-*` utilities below, built from
-        existing tokens via color-mix() so a theme swap still restyles them.
-   Every colour still lives at the token level (§7.2): no component holds a hex.
+        Resilience/AI). Reserved for domain identity; the seven question-tag
+        dimensions deliberately get no colours of their own.
+     2. `.text-gradient-*` / `.bg-gradient-*` utilities, built from existing
+        tokens via color-mix() so a theme swap restyles them too.
+   Every colour lives at the token level — no component holds a hex.
    ───────────────────────────────────────────────────────────────────────────── */
 
 @theme inline {
@@ -51,8 +45,8 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
 
-  /* Component-level tokens added for the premium pass — both resolve to
-     colour-mix() of existing semantic tokens, so a theme swap restyles them too. */
+  /* Both resolve to colour-mix() of existing semantic tokens, so a theme swap
+     restyles them too. */
   --color-primary-edge: var(--primary-edge);
   --color-secondary-strong: var(--secondary-strong);
 
@@ -93,26 +87,17 @@
   --font-family-serif: var(--font-serif);
   --font-family-mono: var(--font-mono);
 
-  /* DESIGN.md §12.1 — base radius tightened twice now: 20px → 16px (the first
-     premium pass), then 16px → 12px here (owner design critique, 2026-08-11:
-     "a 20px radius everywhere can quickly give the site that modern-SaaS-
-     template appearance" — 16px on the largest surfaces was still reading
-     that way). Everything from chips up to feature blocks now sits inside a
-     4–12px range, no exceptions — --radius-2xl is pinned to the same 12px
-     ceiling below specifically so a stray `rounded-2xl` in a component can't
-     quietly exceed it. */
+  /* Everything from chips to feature blocks sits in a 4–12px range. --radius-2xl is
+     pinned to the same 12px ceiling so a stray `rounded-2xl` can't exceed it. */
   --radius-sm: calc(var(--radius) - 0.5rem);   /* 4px  — chips, badges */
   --radius-md: calc(var(--radius) - 0.375rem); /* 6px  — inputs, buttons */
   --radius-lg: calc(var(--radius) - 0.25rem);  /* 8px  — cards, the default */
   --radius-xl: var(--radius);                  /* 12px — feature blocks, hero panels, video frame */
   --radius-2xl: var(--radius);                 /* 12px — same ceiling; nothing rounder than xl */
 
-  /* Elevation — §12.3's four levels, but tinted warm: shadows drawn from an
-     espresso-brown rather than pure black (rgb(52 42 26)) read as depth cast
-     by warm materials, and the old token block below was never wired into
-     Tailwind at all — shadow-sm/md/lg were silently the default black
-     utilities. The tint switches to near-black in dark mode, where shadows
-     barely register and the border does the work (§12.3). */
+  /* Elevation, tinted warm: shadows drawn from espresso-brown rather than pure black
+     read as depth cast by warm materials. The tint goes near-black in dark mode, where
+     the border does most of the work instead. */
   --shadow-2xs: 0 1px 2px 0 rgb(var(--shadow-tint) / 0.04);
   --shadow-xs: 0 1px 2px 0 rgb(var(--shadow-tint) / 0.05);
   --shadow-sm: 0 1px 2px 0 rgb(var(--shadow-tint) / 0.05), 0 2px 6px -1px rgb(var(--shadow-tint) / 0.06);
@@ -121,10 +106,8 @@
   --shadow-xl: 0 20px 40px -10px rgb(var(--shadow-tint) / 0.18), 0 8px 20px -6px rgb(var(--shadow-tint) / 0.09);
   --shadow-2xl: 0 30px 60px -14px rgb(var(--shadow-tint) / 0.24), 0 10px 28px -8px rgb(var(--shadow-tint) / 0.12);
 
-  /* Type scale - fluid clamp() tokens per DESIGN.md §10. Each entry also carries the
-     line-height and (where the spec calls for it) letter-spacing from §10's table, so
-     text-display / text-h1 / … utilities render the exact rhythm the spec defines
-     instead of a per-component inline style. */
+  /* Fluid clamp() type scale. Each entry carries its own line-height and letter-spacing
+     so text-display / text-h1 / … need no per-component inline styles. */
   --text-display: clamp(2.75rem, 1.6rem + 4.6vw, 4.5rem);
   --text-display--line-height: 1.0;
   --text-display--letter-spacing: -0.03em;
@@ -166,21 +149,13 @@
   --popover: #FFFFFF;
   --popover-foreground: #1C1712;
 
-  /* Brand — midnight navy (authority without the saturated shout of #03035e),
-     warm cream instead of pure white on it, champagne for secondary surfaces.
-     `[PALETTE: TWO-COLOUR, 2026-08-11]` Third and final revision of the day.
-     The morning's liveliness pass introduced five unrelated hues (amber/teal/
-     violet/emerald/fuchsia) plus a gold accent; the owner cut that to "blue and
-     ivory, black, white only"; and that single-hue result read flat and grey in
-     the shipped screenshots — a wash built from one dark navy desaturates to
-     grey over ivory no matter how it's mixed. Settled shape, owner-specified:
+  /* Brand — midnight navy, warm cream instead of pure white on it, champagne for
+     secondary surfaces. A deliberately two-colour palette:
        ivory          the ground (--background)
        blue           PRIMARY   — brand, action, links, focus, the five domains
        champagne gold SECONDARY — warmth, rules, washes, quiet emphasis
-     Shades and hues within those two families are open; a *third* hue family is
-     not. Semantic status colours (destructive/success/warning below) stay
-     exempt — red=error / green=success are functional conventions this audience
-     reads instantly, the same exemption §7.1 already gives chart tokens. */
+     Shades within those families are open; a third hue family is not. Status colours
+     below are exempt — red=error / green=success are conventions worth keeping. */
   --primary: #10213E;
   --primary-foreground: #F7F2E9;
   --secondary: #F0E7D2;          /* champagne surface — secondary buttons, sidebar, chips */
@@ -188,18 +163,12 @@
   --accent: #1D5FA8;             /* vivid blue — the one interactive accent, 6.13:1 on ivory */
   --accent-foreground: #FFFFFF;
 
-  /* Champagne gold — the secondary brand colour, in the three shades §7.5.1
-     audits. `--gold` is genuine champagne and is therefore decorative-only
-     (2.5:1 on ivory — it fails text contrast by design, being a light metal);
-     `--gold-strong` is the antique shade that carries gold *as text* at 4.63:1.
-     Reaching for `--gold` on a text node is the one way to misuse this family. */
+  /* Champagne gold in three shades. `--gold` is decorative-only — it fails text
+     contrast by design, being a light metal; putting it on a text node is the one way
+     to misuse this family. Use `--gold-strong` for gold as text. */
   --gold: #C6A961;               /* champagne — rules, gradient stops, decorative fills (2.16:1, never text) */
-  /* Antique gold — the text-safe shade. Darkened from #8A6A1E after the §7.5.1
-     audit: that value passed on ivory (4.80:1) and on card (5.05:1) but only
-     reached 4.10:1 on --secondary and 4.18:1 on --gold-soft, i.e. it failed AA
-     for normal text on exactly the champagne surfaces it is most likely to be
-     used on. This value clears 4.5:1 on all four (worst case 5.02:1 on
-     --secondary), so "gold text" is safe anywhere without a per-surface check. */
+  /* The text-safe antique shade: clears 4.5:1 on ivory, card, --secondary and
+     --gold-soft, so gold text is safe anywhere without a per-surface check. */
   --gold-strong: #7C5C14;
   --gold-soft: #F3E9D2;          /* champagne wash — tinted card/tile surfaces */
 
@@ -213,10 +182,7 @@
   --input: #E6DFD0;
   --ring: #1B4E8C;               /* deep blue focus ring — ~5.7:1 on ivory */
 
-  /* Status — kept as the one exception to the blue/ivory/black/white
-     constraint (see note above): red for error, green for success are
-     near-universal conventions this audience reads instantly, and losing
-     them would cost more usability than the palette constraint is meant to. */
+  /* Status — the one exception to the two-colour constraint (see note above). */
   --destructive: #B3402E;
   --destructive-foreground: #FFFFFF;
   --success: #067647;
@@ -228,10 +194,8 @@
   --primary-edge: color-mix(in srgb, var(--primary-foreground) 16%, transparent);
   --secondary-strong: #E5D7B6;
 
-  /* Domain signature colours — five shades of blue (not five hues), varying in
-     depth and lean (navy, azure, steel, indigo-blue, slate-blue) so the five
-     stay distinguishable at a glance while staying inside the constrained
-     palette. Still not applied to the seven question-tag dimensions (§7.6). */
+  /* Five shades of blue, not five hues — varying in depth and lean so they stay
+     distinguishable at a glance inside the constrained palette. */
   --domain-risk: #142E5C;         /* deep navy-blue */
   --domain-cyber: #1B5FA8;        /* azure */
   --domain-compliance: #1D6FA5;   /* steel blue, leaning cyan */
@@ -248,9 +212,7 @@
   --sidebar-border: #DCCDA9;
   --sidebar-ring: #1B4E8C;
 
-  /* Charts — data visualisation only, exempt from the blue/ivory/black/white
-     constraint per §7.1 (same exemption semantic status colours get) — no
-     chart component is built or rendered anywhere yet, so this is dormant. */
+  /* Charts — exempt from the palette constraint. Dormant: nothing renders a chart yet. */
   --chart-1: #10213E;
   --chart-2: #1D6FA5;
   --chart-3: #B3402E;
@@ -271,10 +233,9 @@
   --shadow-tint: 52 42 26;
 }
 
-/* DESIGN.md §39.2: reduced-motion backstop for anything outside Motion's tree (plain
-   CSS animations such as the loading spinner). Under reduced motion, transitions and
-   animations collapse to instant state changes — never removed entirely, because the
-   state change itself still needs to be visible. */
+/* Reduced-motion backstop for plain CSS animations outside Motion's tree. Animations
+   collapse to instant state changes rather than being removed — the state change still
+   needs to be visible. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -311,8 +272,7 @@
 }
 
 @layer components {
-  /* The spec's eyebrow device (§18.2: mono, xs, tracked) given its gilt rule —
-     a 24px champagne hairline before the text. One class, every section. */
+  /* The eyebrow device: mono, xs, tracked, with a 24px hairline rule before the text. */
   .eyebrow {
     display: inline-flex;
     align-items: center;
@@ -329,23 +289,16 @@
     content: "";
     width: 1.5rem;
     height: 1px;
-    /* Falls back to the gilt rule everywhere; PageTitle's optional
-       `eyebrowColor` prop (2026-08-11) overrides this per-instance via the
-       --eyebrow-rule-color custom property, e.g. a question's domain colour. */
+    /* PageTitle's optional `eyebrowColor` prop overrides this per-instance via the
+       --eyebrow-rule-color custom property, e.g. with a question's domain colour. */
     background: var(--eyebrow-rule-color, var(--accent));
     flex-shrink: 0;
   }
 
-  /* The hero's atmosphere — 2026-08-11: brightened from a near-invisible 7–10%
-     wash into a genuine three-stop gradient, all shades of blue (accent azure,
-     domain-compliance steel-blue, domain-cyber azure — see the palette
-     constraint note in :root), now the product is allowed gradients (§5). Still
-     a static background (no animation needed to read as "alive" — the colour
-     does that work), so no reduced-motion handling required here. */
-  /* Blue on one side, champagne on the other, both linear. Rebuilt to match the
-     question page's header wash after three failed radial versions — see the long
-     note in Question.tsx: a radial ellipse inside a fixed-height box always shows
-     its own curved edge somewhere, and an all-blue wash reads grey over ivory. */
+  /* The hero's atmosphere: a three-stop gradient, blue on one side and champagne on
+     the other, matching the question page's header wash. All linear, since a radial
+     ellipse in a fixed-height box always exposes its own curved edge somewhere.
+     Static, so no reduced-motion handling is needed. */
   .hero-wash {
     position: absolute;
     inset-inline: 0;
@@ -361,14 +314,10 @@
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 45%, transparent 94%);
   }
 
-  /* Gradient text — the brand headline device: navy through blue into antique
-     gold, i.e. the two brand colours in one sweep. Stops are tokens, never raw
-     hex, so it re-materialises with the theme.
-     The gold stop is deliberately `--gold-strong` (4.63:1 on ivory) and NOT
-     `--gold` (2.5:1): champagne is a light metal and the tail of a gradient is
-     still body-legible text, so ending on the decorative shade would make the
-     last few letters of every headline fail contrast. Falls back to solid
-     --foreground where background-clip:text is unsupported. */
+  /* Gradient text — the brand headline device: navy through blue into antique gold.
+     The gold stop must be `--gold-strong`, not `--gold`: the tail of the gradient is
+     still legible text, so the decorative shade would fail contrast on the last few
+     letters. Falls back to solid --foreground where background-clip:text is missing. */
   .text-gradient-brand {
     color: var(--foreground);
     background-image: linear-gradient(100deg, var(--primary) 0%, var(--accent) 50%, var(--gold-strong) 100%);
@@ -377,16 +326,13 @@
     -webkit-text-fill-color: transparent;
   }
 
-  /* Gradient surface — for a hero panel, a feature card, a primary CTA. Subtle
-     angle, two stops, restrained saturation so it reads as "premium" rather
-     than "app icon". */
+  /* Gradient surface — for a hero panel, feature card, or primary CTA. */
   .bg-gradient-brand {
     background-image: linear-gradient(135deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 70%, var(--domain-compliance)) 100%);
   }
 
-  /* A slow, quiet hue drift — for a hero backdrop or a section divider that
-     wants to feel alive without drawing the eye. 24s so it's felt, not watched;
-     collapses to static under prefers-reduced-motion via the global rule below. */
+  /* A slow hue drift for a backdrop — felt rather than watched. Collapses to static
+     under prefers-reduced-motion via the global rule above. */
   .bg-gradient-animated {
     background-image: linear-gradient(
       120deg,
@@ -399,8 +345,7 @@
     animation: gradient-drift 18s ease infinite;
   }
 
-  /* A restrained entrance — content settling in, not sliding or bouncing.
-     Applied via className, not globally, so it stays a deliberate choice. */
+  /* A restrained entrance, applied per-element so it stays a deliberate choice. */
   .animate-enter {
     animation: fade-rise 0.5s var(--ease-entrance) both;
   }
@@ -426,12 +371,9 @@
   --popover: #1E1911;
   --popover-foreground: #F2EBDE;
 
-  /* Brand — blue leads here too (buttons and links in azure on espresso), with
-     champagne gold as the secondary, mirroring :root's two-colour shape rather
-     than inverting it. The dark gold shades run lighter than the light theme's:
-     on espresso it is `--gold-strong` that must be *bright* to carry text, the
-     opposite of the light theme where it must be dark — same token names, same
-     rule ("strong is the text-safe one"), inverted values. */
+  /* Mirrors :root's two-colour shape rather than inverting it. The gold shades run
+     lighter here: on espresso, `--gold-strong` must be bright to carry text. Same
+     token names, same rule ("strong is the text-safe one"), inverted values. */
   --primary: #6FA8DC;
   --primary-foreground: #0B1A2E;
   --secondary: #2A2318;

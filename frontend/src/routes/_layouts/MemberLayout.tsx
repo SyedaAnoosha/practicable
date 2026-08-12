@@ -17,18 +17,12 @@ export function FullPageSpinner() {
   )
 }
 
-// DESIGN.md §17.2's member navigation, as a persistent sidebar rather than a
-// horizontal bar — four destinations plus account is already past the point the spec
-// says to collapse ("until the item count exceeds seven, then a collapsible
-// sidebar"), and a standing sidebar is what makes "I can't find the courses" stop
-// being true: every section is one click away from anywhere in the member area, not
-// just from cards buried on the dashboard.
+// Member navigation as a persistent sidebar rather than a horizontal bar, so every
+// section is one click away from anywhere in the member area.
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  // "My Library" sits directly under Dashboard, above the catalogue links: the three
-  // below are places to *find* things, this is the one place that holds what you
-  // already own (product spec §2 step 6). A buyer looking for something they paid for
-  // should not have to work out which catalogue it came from.
+  // Above the catalogue links: those are places to find things, this holds what you
+  // already own, so a buyer needn't work out which catalogue it came from.
   { to: '/library', label: 'My Library', icon: Library, end: false },
   { to: '/courses', label: 'Courses', icon: GraduationCap, end: false },
   { to: '/templates', label: 'Templates', icon: Sparkles, end: false },
@@ -36,10 +30,8 @@ const NAV_ITEMS = [
 ] as const
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
-  // Shown only to admins — and only as a shortcut. /admin is guarded independently on
-  // both the client (AdminLayout) and, the part that actually matters, the server
-  // (require_admin on every /admin/* route). A member who never sees this link and
-  // types the URL still gets nothing.
+  // A shortcut only: /admin is guarded independently on the client and, the part that
+  // matters, on the server by require_admin.
   const user = useAuthStore((s) => s.user)
   const { data: profile } = useQuery({
     queryKey: queryKeys.me.profile(),
@@ -125,18 +117,10 @@ function SidebarAccount() {
 
 /** The signed-in chrome — sidebar, mobile sheet, `<Outlet/>` — with NO auth guard.
  *
- * Split out from MemberLayout below (2026-08-11, owner-reported: "clicking on
- * Courses, Templates and Questions is making the sidebar disappear"). The cause was
- * that those three destinations are *public* routes registered under
- * MarketingLayout, while the sidebar linking to them lives in MemberLayout — so
- * every click from the sidebar navigated out of the layout that drew the sidebar.
- *
- * The fix is not to move those routes behind the auth guard (they must stay
- * publicly reachable — a visitor has to be able to browse the catalogue before
- * buying). It's that the *chrome* should follow who is signed in, not which route
- * is being viewed. CatalogueLayout.tsx picks between this and MarketingLayout on
- * exactly that basis; this component is the half that needs to render without
- * asserting anything about auth. */
+ * Split out from MemberLayout below so public catalogue routes can render member chrome
+ * without requiring an account. CatalogueLayout picks between this and MarketingLayout
+ * based on who is signed in; this half must render without asserting anything about
+ * auth. */
 export function MemberChrome() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -201,10 +185,8 @@ export function MemberChrome() {
   )
 }
 
-// The auth guard, checked once here rather than re-implemented per page
-// (DESIGN.md §78's auth guard pattern). A client-side redirect is a UX nicety, not a
-// security control — every route this wraps still calls a FastAPI endpoint that
-// checks entitlement server-side (week1_plan.md Non-negotiable #3).
+// The auth guard, checked once here rather than per page. A client-side redirect is a
+// UX nicety, not a security control — the API checks entitlement server-side.
 export default function MemberLayout() {
   const user = useAuthStore((s) => s.user)
   const loading = useAuthStore((s) => s.loading)

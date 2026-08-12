@@ -34,11 +34,8 @@ async def stripe_webhook(
     except stripe.error.SignatureVerificationError as e:
         raise HTTPException(status_code=400, detail=f"Invalid signature: {e}")
 
-    # Idempotency, BACKEND.md §6.1: insert the event id first, on conflict return
-    # early — already handled. Stripe retries on anything but a fast 2xx, and this
-    # is what week1_plan.md's Phase 4 DoD means by "sending the same webhook event
-    # twice does not create a second entitlement row." This must be the first
-    # database write in this handler, before any order/entitlement logic runs.
+    # Idempotency: insert the event id first and return early on conflict, so a Stripe
+    # retry can't create a second entitlement row. Must be the first write in this handler.
     webhook_event = WebhookEvent(stripe_event_id=event['id'], event_type=event['type'])
     session.add(webhook_event)
     try:
@@ -55,8 +52,7 @@ async def stripe_webhook(
 
         if user_id and product_id:
             try:
-                # Order + entitlement in one transaction (order_service commits it),
-                # per BACKEND.md §6.1 — this is what prevents "paid but no access."
+                # Order + entitlement in one transaction, preventing "paid but no access".
                 order = await create_order_from_checkout(
                     session=session,
                     user_id=user_id,
@@ -70,8 +66,8 @@ async def stripe_webhook(
                 webhook_event.processed = True
                 await session.commit()
 
-                # Receipt email AFTER commit, never inside the transaction (BACKEND.md
-                # §6.1) — a slow/failed send must not roll back a successful purchase.
+                # After commit, never inside the transaction — a failed send must not roll
+                # back a successful purchase.
                 user_result = await session.execute(select(User).where(User.id == uuid.UUID(user_id)))
                 user = user_result.scalar_one_or_none()
                 product_result = await session.execute(select(Product).where(Product.id == uuid.UUID(product_id)))
@@ -85,9 +81,8 @@ async def stripe_webhook(
                         currency=order.currency,
                         product_name=product.name if product else "Your purchase",
                     )
-                    # To the owner, not the buyer — same order, same commit, a second
-                    # person who needs to know a sale just happened. Independent of
-                    # the receipt email above: one failing must not skip the other.
+                    # To the owner, not the buyer, and independent of the receipt above:
+                    # one failing must not skip the other.
                     await send_sale_notification_email(
                         order_id=str(order.id),
                         buyer_email=user.email,

@@ -37,8 +37,7 @@ def upgrade() -> None:
     
     # Create tables
     op.create_table('users',
-        # id has no server_default: it must be set explicitly to the Supabase auth
-        # user id on insert (app/core/deps.py get_current_user) — see app/db/models/user.py.
+        # No server_default: set explicitly to the Supabase auth user id on insert.
         sa.Column('id', sa.UUID(), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),

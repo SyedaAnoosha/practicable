@@ -28,9 +28,8 @@ interface QuestionTag {
   dimension: string
   value: string
   display_label: string
-  // The real ordinal scale (tag_values.sort_order) — Quick < Mod. < Project < Trans.,
-  // XS < S < M < L < XL, and so on. Filter options are sorted by this, never by the
-  // order values happened to be first encountered scanning the question list.
+  // The real ordinal scale (tag_values.sort_order): Quick < Mod. < Project < Trans.,
+  // XS < S < M < L < XL. Filter options sort by this, not by encounter order.
   sort_order: number
 }
 
@@ -44,8 +43,7 @@ interface QuestionSummary {
   tags: QuestionTag[]
 }
 
-// Same fixed icon/label map as Question.tsx's definition grid (DESIGN.md §14.1) —
-// one dimension, one icon, everywhere it appears.
+// Same icon/label map as Question.tsx's definition grid — one dimension, one icon.
 const DIMENSION_ICONS: Record<string, LucideIcon> = {
   effort: Gauge,
   duration: Clock,
@@ -66,8 +64,7 @@ const DIMENSION_LABELS: Record<string, string> = {
 }
 const DIMENSION_ORDER = ['effort', 'duration', 'cost', 'roi_horizon', 'tier', 'regulator_pressure', 'leadership_traits']
 
-// Real taxonomy values (week1_plan.md decision #3), not fuzzy text — a chip only
-// ever matches a real tag row, and stays correct as more questions get seeded.
+// Real taxonomy values, not fuzzy text — a chip only ever matches a real tag row.
 const QUICK_FILTERS = [
   { label: '2 weeks or less', dimension: 'duration', values: ['XS', 'S'] },
   { label: 'Low cost', dimension: 'cost', values: ['$'] },
@@ -75,8 +72,8 @@ const QUICK_FILTERS = [
   { label: 'Leadership support', dimension: 'leadership_traits', values: ['1', '2', '3', '4', '5'] },
 ] as const
 
-// One URL param per dimension (+domain) — bookmarkable/shareable, and it's how
-// Home.tsx's domain blocks and quick filters both link in from outside this page.
+// One URL param per dimension (+domain), so filters are shareable and Home's domain
+// blocks and quick filters can link straight in.
 const FILTER_PARAMS = ['domain', ...DIMENSION_ORDER]
 
 function FilterPanel({
@@ -88,9 +85,7 @@ function FilterPanel({
   searchParams: URLSearchParams
   setSearchParams: (params: URLSearchParams) => void
 }) {
-  // Only ever offer a value that's actually present in the real data — never a
-  // taxonomy option that would silently return zero results because nothing
-  // published carries it yet.
+  // Only offer values actually present in the data, so no option returns zero results.
   const domainOptions = useMemo(() => [...new Set(questions.map((q) => q.domain))].sort(), [questions])
   const dimensionOptions = useMemo(() => {
     const byDimension = new Map<string, Map<string, { label: string; sortOrder: number }>>()
@@ -158,9 +153,8 @@ function FilterPanel({
       {DIMENSION_ORDER.filter((dim) => dimensionOptions.has(dim)).map((dim) => {
         const Icon = DIMENSION_ICONS[dim] ?? Filter
         const values = dimensionOptions.get(dim)!
-        // Regulator pressure keeps its one allowed emphasis colour (§7.1/§20.2);
-        // every other dimension's tile reads as secondary — deliberate restraint,
-        // not an oversight.
+        // Regulator pressure keeps the one emphasis colour; every other tile is
+        // secondary by design.
         const isUrgent = dim === 'regulator_pressure'
         return (
           <div key={dim}>
@@ -209,18 +203,9 @@ function FilterPanel({
   )
 }
 
-// DESIGN.md §41's /questions, rebuilt 2026-08-11 (owner design critique + docs/
-// design_again.md §§13-17): a real, honest filter system — every option offered is
-// derived from what's actually published, never a decorative taxonomy list — plus
-// editorial result rows (§36's card discipline: a search result earns a light border,
-// not a heavy rounded Card) and a match explanation naming which active filters each
-// visible result satisfies, rather than a bare list dropped on the visitor.
-//
-// [COLOUR PASS, 2026-08-11] Restrained doesn't mean colourless — the first version
-// leaned so hard on neutrals that active state was barely visible. This pass gives
-// primary/secondary/accent more visible work to do (icon tiles, left-rule accents,
-// tinted active pills, a coloured result count) without adding a new hue or
-// colour-coding the seven dimensions against each other (§7.6/§37 still hold).
+// The /questions catalogue: an honest filter system where every option offered is
+// derived from what's actually published, plus editorial result rows and a match
+// explanation naming which active filters each visible result satisfies.
 export function QuestionsCatalogue() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')

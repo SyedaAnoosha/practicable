@@ -1,3 +1,5 @@
+"""Public template catalogue, detail, and presigned download routes."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -26,9 +28,8 @@ class TemplateSummaryOut(BaseModel):
     file_name: str
     owned: bool
     product: Optional[ProductRefOut]
-    # The free lead-magnet template (product spec §9). When true, `product` is None and
-    # `owned` is meaningless — there is nothing to own. The card shows an email capture
-    # instead of a price.
+    # When true, `product` is None and `owned` is meaningless — the card shows an email
+    # capture instead of a price.
     is_free: bool
 
 class DownloadUrlOut(BaseModel):
@@ -41,9 +42,8 @@ async def list_templates(
     session: AsyncSession = Depends(get_session),
     user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
-    """The template catalogue — public, like /questions and /courses. Each template
-    carries the product that sells it (if any) so the card can show a real price
-    without a second round trip, same pattern as questions.py's related_content."""
+    """The template catalogue — public. Each template carries the product that sells it,
+    so the card can show a real price without a second round trip."""
     result = await session.execute(select(Template).where(Template.published.is_(True)).order_by(Template.created_at))
     templates = result.scalars().all()
 
@@ -63,12 +63,9 @@ async def list_templates(
                 ProductContent.content_id == t.id,
                 Product.published.is_(True),
             )
-            # Cheapest first, and the ordering is load-bearing rather than cosmetic:
-            # since the template/course split (db/seed/012) a template is granted by
-            # BOTH the standalone template product and the course that contains it, so
-            # an unordered .first() would sometimes price the template card at the
-            # course's A$49. The card must always quote the cheapest way to get this
-            # file — DESIGN.md §23.2's "never overstate what something costs".
+            # Cheapest first, and load-bearing: a template is granted by both the
+            # standalone product and the course containing it, so an unordered .first()
+            # would sometimes quote the course price for the template card.
             .order_by(Product.price_amount)
         )
         product = product_result.scalars().first()
@@ -82,9 +79,7 @@ async def list_templates(
             TemplateSummaryOut(
                 id=str(t.id), slug=t.slug, title=t.title, description=t.description,
                 file_name=t.file_name, owned=owned,
-                # A free template never advertises a product, even if one somehow
-                # points at it — "free" and "A$29" on the same card is the kind of
-                # contradiction a visitor reads as a pricing bug.
+                # A free template never advertises a price, even if a product points at it.
                 product=None if t.is_free else product_out,
                 is_free=t.is_free,
             )
@@ -97,9 +92,8 @@ async def get_template(
     session: AsyncSession = Depends(get_session),
     user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
-    """One template, public. Added so the download page can tell a visitor what they
-    are about to get (and whether it's free) without pulling the whole catalogue and
-    filtering client-side."""
+    """One template, public — lets the download page show what a visitor is about to get
+    without pulling the whole catalogue."""
     template = (
         await session.execute(select(Template).where(Template.id == uuid.UUID(template_id)))
     ).scalar_one_or_none()
@@ -144,9 +138,8 @@ async def get_template(
 async def get_template_download_url(
     template_id: str,
     session: AsyncSession = Depends(get_session),
-    # Optional, not required — a free template must be downloadable by a visitor with
-    # no account at all (product spec §9: "at least one free template that captures an
-    # email"). Paid templates still 401 below when this is None.
+    # Optional so a free template is downloadable with no account. Paid templates still
+    # 401 below when this is None.
     user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
     """Get presigned Supabase Storage download URL for a template."""
@@ -160,12 +153,8 @@ async def get_template_download_url(
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    # The free lead magnet: no entitlement, no account, no check. `is_free` is an
-    # explicit product decision (migration 007), so this branch cannot be reached by a
-    # template that merely hasn't been priced yet. The email capture that fronts this
-    # in the UI is a conversion device, not a boundary — it is deliberately NOT
-    # enforced here, because a server-side check on an unverified email would be
-    # security theatre: anyone can type any address. Free means free.
+    # Free means free: no entitlement, no account, no check. The email capture fronting
+    # this in the UI is a conversion device, not a boundary, so it isn't enforced here.
     if template.is_free:
         return DownloadUrlOut(
             download_url=generate_presigned_url(template.storage_key),

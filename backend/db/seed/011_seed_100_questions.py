@@ -1,27 +1,15 @@
 """Seed 011 — load the real 100-question catalogue.
 
-Deviates from this folder's .sql convention on purpose: the source is
-docs/questions/questions.json (100 real questions, extracted from
-docs/Deciding_in_the_Dark_100_Questions.md by docs/questions/parse_questions.py),
-and hand-writing 100 rows' worth of answer text into a SQL literal file both
-duplicates the JSON and invites an escaping bug the first time an answer contains
-a quote. This script reads the JSON directly and inserts with bound parameters
-instead — same idempotent, safe-to-rerun contract as the numbered .sql seeds
-(skips any slug that already exists), just executed from Python.
+Python rather than .sql like its neighbours, because the source is
+docs/questions/questions.json: reading it directly and inserting with bound parameters
+avoids duplicating 100 answers into SQL literals and the escaping bugs that invites.
+Same idempotent, safe-to-rerun contract as the .sql seeds (skips existing slugs).
 
-Run with: ./.venv/Scripts/python.exe db/seed/011_seed_100_questions.py
-(from backend/, same as every other seed script this session).
+Run with: ./.venv/Scripts/python.exe db/seed/011_seed_100_questions.py (from backend/).
 
-What this intentionally does NOT do: author a `preview` field. DESIGN.md §20.3
-requires `preview` to be a purpose-written 160-character summary, never a
-machine-truncated first paragraph — Q1's preview (already in the DB) was hand-
-written to that standard. questions.json has no such field for the other 99
-questions, and truncating their `answer` text algorithmically would be exactly
-the thing §20.3 forbids. So this script derives a *stopgap* preview (first
-sentence(s) of the real answer, cut at a sentence boundary, capped at 155 chars)
-and marks every row it touches so they're trivially findable and replaceable:
-see the `-- STOPGAP PREVIEW` marker in the inserted row via the `preview_authored`
-convention below. Recorded as a known gap in docs/handover.md, not hidden.
+Known gap: `preview` should be a purpose-written 160-character summary, but
+questions.json has none, so this derives a stopgap from the answer text. Recorded in
+docs/handover.md.
 """
 import asyncio
 import json
@@ -62,10 +50,8 @@ def slugify(title: str) -> str:
 
 
 def stopgap_preview(answer: str) -> str:
-    """First sentence(s) up to ~155 chars, cut at a sentence boundary — never
-    mid-word. See module docstring: this is a stopgap, not an authored preview.
-    The `questions.preview` column is `varchar(160)`, so 160 is a hard ceiling,
-    not a target — every branch below must respect it."""
+    """First sentence(s) up to ~155 chars, cut at a sentence boundary. The column is
+    varchar(160), so 160 is a hard ceiling every branch below must respect."""
     limit = 160
     target = 155
     if len(answer) <= limit:
@@ -73,8 +59,7 @@ def stopgap_preview(answer: str) -> str:
     period_index = answer.rfind(". ", 0, target)
     if period_index != -1:
         return answer[: period_index + 1].strip()
-    # No sentence boundary before the target — hard-truncate, but only ever
-    # within `limit`, not "the next period found anywhere in the text".
+    # No sentence boundary before the target — hard-truncate within `limit`.
     return answer[: limit - 1].rstrip() + "…"
 
 

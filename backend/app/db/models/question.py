@@ -46,11 +46,8 @@ class QuestionLeadershipTrait(Base, IdMixin, TimestampMixin):
     trait_tag: Mapped["TagValue"] = relationship("TagValue")
 
 class QuestionRelation(Base, IdMixin, TimestampMixin):
-    """Self-referential many-to-many: 'related questions' shown on a question detail
-    page (DESIGN.md question-detail structure; Research Spec Appendix C entity hierarchy).
-    Directional by row — a question's related list is queried by question_id; add the
-    reverse row too if the relation should show on both sides, since this is not
-    auto-symmetric."""
+    """Self-referential many-to-many: the 'related questions' on a question detail page.
+    Directional by row — add the reverse row too if it should show on both sides."""
     __tablename__ = "question_relations"
 
     question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("questions.id"), nullable=False)
@@ -62,8 +59,7 @@ class QuestionRelation(Base, IdMixin, TimestampMixin):
     related_question: Mapped["Question"] = relationship("Question", foreign_keys=[related_question_id])
 
 class QuestionTemplate(Base, IdMixin, TimestampMixin):
-    """Many-to-many: which templates a question links to on its detail page
-    ('Related templates' — DESIGN.md question-detail structure)."""
+    """Which templates a question links to on its detail page."""
     __tablename__ = "question_templates"
 
     question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("questions.id"), nullable=False)
@@ -75,8 +71,7 @@ class QuestionTemplate(Base, IdMixin, TimestampMixin):
     template: Mapped["Template"] = relationship("Template")
 
 class QuestionLesson(Base, IdMixin, TimestampMixin):
-    """Many-to-many: which lessons a question links to on its detail page
-    ('Related lessons' / the course a question leads into)."""
+    """Which lessons a question links to — the course it leads into."""
     __tablename__ = "question_lessons"
 
     question_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("questions.id"), nullable=False)

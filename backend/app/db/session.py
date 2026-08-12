@@ -1,3 +1,5 @@
+"""Async SQLAlchemy engine, session factory, and the FastAPI session dependency."""
+
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.core.config import settings
 
@@ -13,26 +15,17 @@ def _asyncpg_url(database_url: str) -> str:
     raise ValueError(f"DATABASE_URL does not look like a Postgres connection string: {database_url!r}")
 
 
-# Create async engine — from DATABASE_URL, the actual Postgres DSN, never supabase_url.
-# DATABASE_URL points at Supabase's connection pooler on port 6543 (pgbouncer,
-# transaction-mode pooling — recommended for a stateless web service like Render's),
-# which does not support named prepared statements: pgbouncer freely hands the same
-# backend connection to different client sessions between transactions, and a
-# statement name one session prepared can still be sitting on that connection when
-# another session's asyncpg client tries to prepare the same deterministic name —
-# DuplicatePreparedStatementError. Two separate caches have to be disabled, not one:
-# asyncpg's own client-side cache (statement_cache_size, a real asyncpg.connect() kwarg)
-# AND SQLAlchemy's asyncpg dialect's independent cache on top of it
-# (prepared_statement_cache_size, a SQLAlchemy-level kwarg it intercepts before
-# forwarding the rest to asyncpg.connect() — see sqlalchemy/dialects/postgresql/asyncpg.py).
-# Missing either one still reproduces the error.
+# Built from DATABASE_URL (the Postgres DSN), never supabase_url. That points at
+# Supabase's pgbouncer pooler on 6543, which doesn't support named prepared statements —
+# hence DuplicatePreparedStatementError. Both caches must be disabled: asyncpg's own
+# (statement_cache_size) and SQLAlchemy's dialect-level one
+# (prepared_statement_cache_size). Missing either still reproduces the error.
 engine = create_async_engine(
     _asyncpg_url(settings.database_url),
     echo=False,
     connect_args={"statement_cache_size": 0, "prepared_statement_cache_size": 0},
 )
 
-# Create async session factory
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,

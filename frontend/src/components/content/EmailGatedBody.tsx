@@ -6,9 +6,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
-// One shared flag, not per-question: giving an email once should unlock every free
-// question, not re-prompt on the next one — the point is capturing the email, not
-// gatekeeping any specific article.
+// One shared flag, not per-question: giving an email once unlocks every free question.
 const UNLOCK_STORAGE_KEY = 'practicable:email_unlocked'
 const PREVIEW_CHAR_TARGET = 350
 
@@ -21,13 +19,9 @@ function readUnlocked(): boolean {
   }
 }
 
-// Length-based, not paragraph-based — the real seeded question body is one 1,000+
-// character block with zero newlines (confirmed directly against the live DB), so an
-// earlier version of this that split on blank-line paragraph breaks found none, fell
-// through to its "nothing to gate" branch, and showed the entire body unblurred with
-// no gate at all. This instead finds a sentence boundary at or after the target
-// length, so the cut lands after a period, never mid-word — works the same whether
-// the source text has paragraph breaks or not.
+// Length-based, not paragraph-based: real question bodies are often one long block with
+// no newlines, where splitting on paragraph breaks finds none and gates nothing. Cuts at
+// a sentence boundary at or after the target length, so it never lands mid-word.
 function splitPreview(body: string): [preview: string, rest: string] {
   if (body.length <= PREVIEW_CHAR_TARGET) return [body, '']
   const periodIndex = body.indexOf('. ', PREVIEW_CHAR_TARGET)
@@ -35,26 +29,16 @@ function splitPreview(body: string): [preview: string, rest: string] {
   return [body.slice(0, splitAt).trim(), body.slice(splitAt).trim()]
 }
 
-// The free entry point (intern brief: "at least one free entry point that earns an
-// email address"). This is deliberately a soft gate, not a security boundary: the
-// backend already sends the full body to every visitor (app/api/v1/content/
-// questions.py) — the paid product is the template/lesson bundle, not the written
-// question. Blur + email capture is a conversion device, matched to how virtually
-// every content-marketing email-gate works; it would be the wrong tool if this body
-// were the thing actually being sold.
+// The free entry point that earns an email address. Deliberately a soft gate, not a
+// security boundary — the backend already sends the full body to every visitor, and the
+// paid product is the template/lesson bundle, not the written question.
 export function EmailGatedBody({ body }: { body: string }) {
   const [emailGiven, setEmailGiven] = useState(readUnlocked)
   const [email, setEmail] = useState('')
 
-  // [FIXED, 2026-08-11 — owner-reported: "even after signing up I can't read the
-  // complete question guidance"] The gate used to key off localStorage alone, so a
-  // visitor who had gone all the way through sign-up — handing over an email address,
-  // confirming it, and creating an account — was still asked for their email to read
-  // a free question. Worse, it was unskippable for them: submitting the form posts to
-  // /leads, and the one thing a signed-in user cannot do is prove they're new.
-  // Being signed in is strictly stronger evidence than the lead form collects, so it
-  // satisfies the gate outright. (Clearing localStorage or using another browser
-  // still re-gated a signed-in user before this.)
+  // Being signed in satisfies the gate outright — it's stronger evidence than the lead
+  // form collects. Keying off localStorage alone re-prompted signed-up users, who then
+  // couldn't clear the gate at all, since the form posts a new lead.
   const signedIn = useAuthStore((s) => s.user) !== null
   const unlocked = signedIn || emailGiven
 
@@ -78,8 +62,6 @@ export function EmailGatedBody({ body }: { body: string }) {
   }
 
   // Short questions with nothing left after the preview don't need a gate at all.
-  // The serif reading rhythm is the §10 `read` token (1.7 line-height, carried by
-  // text-read itself) — no leading override, text-pretty for even paragraph shaping.
   if (unlocked || !restText) {
     return <p className="mt-4 whitespace-pre-line font-serif text-read text-pretty text-foreground">{body}</p>
   }
@@ -88,25 +70,16 @@ export function EmailGatedBody({ body }: { body: string }) {
     <div>
       <p className="mt-4 whitespace-pre-line font-serif text-read text-pretty text-foreground">{previewText}</p>
 
-      {/* [FIXED, 2026-08-11 — owner-reported: the "Unlock the rest" button and the
-          "No spam" line rendered on mobile but were missing on desktop.]
-          The form used to be absolutely positioned *inside* this blurred block, which
-          had `overflow-hidden`. Its height was therefore the height of the blurred
-          teaser — and that depends on viewport width: on a narrow phone the leftover
-          text wraps to ~10 lines and the card fits inside it, while on a wide desktop
-          the same text is ~2 lines, so the card was clipped halfway down and the
-          submit button was simply not on the page. A gate you cannot submit is worse
-          than no gate.
-          The teaser and the card are now siblings in normal flow: the teaser gets a
-          fixed max height (so it reads as "there's more" at every width), and the
-          card is pulled up over its faded tail with a negative margin. Nothing
-          clips the card, because nothing contains it. */}
+      {/* The teaser and the form card are siblings in normal flow: the teaser gets a
+          fixed max height (so it reads as "there's more" at every width), and the card
+          is pulled up over its faded tail with a negative margin. The card must not
+          live inside this `overflow-hidden` block — its height varies with viewport
+          width, which clipped the submit button off the page on desktop. */}
       <div
         aria-hidden="true"
         className="relative mt-4 max-h-44 overflow-hidden rounded-lg sm:max-h-56"
       >
-        {/* Decorative only — not meant to be read, just to show there's more; the
-            actual content lives behind the form below, not in this hidden text. */}
+        {/* Decorative only — just to show there's more. */}
         <p className="pointer-events-none select-none whitespace-pre-line font-serif text-read text-pretty text-foreground/30 blur-[3px]">
           {restText}
         </p>
@@ -120,9 +93,7 @@ export function EmailGatedBody({ body }: { body: string }) {
         onSubmit={handleSubmit}
         className="relative z-10 mx-auto -mt-20 w-full max-w-sm rounded-xl border border-border bg-card p-6 text-center shadow-lg sm:-mt-24"
       >
-        {/* Champagne tile — the secondary brand colour doing the work it exists for
-            (theme.css's two-colour palette): this is a warm invitation, not a system
-            action, so it reads gold where a primary CTA reads blue. */}
+        {/* Gold, not blue: this is a warm invitation rather than a system action. */}
         <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-gold-soft text-gold-strong ring-1 ring-inset ring-gold/40">
           <Mail className="size-5" aria-hidden="true" />
         </span>

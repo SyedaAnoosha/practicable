@@ -1,8 +1,7 @@
-"""The member learning interface's data (DESIGN.md §24.1): one endpoint returns the
-lesson's own content plus the whole course's outline, so /learn/:courseSlug/
-:lessonSlug renders its sidebar without a second round trip. Video/download URLs stay
-separate, short-lived endpoints (signed Mux token, presigned S3 URL) — minted only
-after the entitlement check, never embedded in the detail payload itself.
+"""The member learning interface's data: one endpoint returns the lesson's content plus
+the whole course outline, so /learn/:courseSlug/:lessonSlug renders its sidebar without a
+second round trip. Video and download URLs stay on separate short-lived endpoints, minted
+only after the entitlement check rather than embedded in this payload.
 """
 import uuid
 from datetime import datetime, timezone
@@ -28,8 +27,7 @@ def _lesson_type_value(lesson_type) -> str:
 
 
 async def _lesson_entitled(*, lesson: Lesson, user_id: Optional[str], session: AsyncSession) -> bool:
-    """No free-preview bypass (explicit product decision, 2026-08-11): lessons and
-    video are never free — purely a real, per-product entitlement check."""
+    """No free-preview bypass — lessons and video are never free."""
     if not user_id:
         return False
     return await has_access_to(
@@ -64,8 +62,7 @@ class SidebarLessonOut(BaseModel):
 
 
 class SidebarQuestionOut(BaseModel):
-    """A question attached to the module (ModuleQuestion) — always free/public, so it
-    carries no locked/completed state the way a lesson row does."""
+    """A question attached to the module — always public, so it carries no lock state."""
     id: str
     slug: str
     title: str
@@ -106,10 +103,8 @@ async def get_lesson_in_course(
     session: AsyncSession = Depends(get_session),
     user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
-    """Powers /learn/:courseSlug/:lessonSlug. Public at the API layer (so a
-    free-preview lesson is reachable logged-out too), same as /questions/:slug —
-    the frontend still keeps the actual /learn route behind the member auth guard for
-    now, since nothing else in the app supports anonymous content consumption yet."""
+    """Powers /learn/:courseSlug/:lessonSlug. Public at the API layer; the frontend still
+    keeps the /learn route behind the member auth guard."""
     course = (
         await session.execute(select(Course).where(Course.slug == course_slug, Course.published.is_(True)))
     ).scalar_one_or_none()
@@ -180,8 +175,7 @@ async def get_lesson_in_course(
                 )
             )
 
-        # Questions attached to this module (ModuleQuestion) — always free, so they
-        # ride alongside the lesson list with no lock state of their own.
+        # Always free, so they ride alongside the lesson list with no lock state.
         module_question_rows = (
             (
                 await session.execute(
@@ -274,9 +268,7 @@ async def get_playback_token(
     if media.status != "ready":
         raise HTTPException(status_code=400, detail="Video still processing")
 
-    # The check runs BEFORE Mux is ever called (BACKEND.md §4.1) — a signed URL minted
-    # and then discarded on a failed check is a signed URL that existed, and existing
-    # is enough. No free-preview bypass — video is never free (2026-08-11).
+    # Checked before Mux is called — a signed URL minted then discarded still existed.
     entitled = await _lesson_entitled(lesson=lesson, user_id=user_id, session=session)
     if not entitled:
         raise HTTPException(
@@ -304,10 +296,8 @@ async def get_lesson_download_url(
     session: AsyncSession = Depends(get_session),
     user_id: str = Depends(get_current_user_id),
 ):
-    """The download-type (or mixed-type) lesson's artefact. Gated by LESSON
-    entitlement — i.e. by course access — not by whether the same file is also sold
-    standalone as a template product (app/api/v1/content/templates.py's
-    /templates/{id}/download-url is that separate, TEMPLATE-gated path)."""
+    """The download-type lesson's artefact, gated by LESSON entitlement (course access).
+    The same file sold standalone goes through templates.py's TEMPLATE-gated path."""
     lesson = (
         await session.execute(select(Lesson).where(Lesson.id == uuid.UUID(lesson_id)))
     ).scalar_one_or_none()
@@ -344,9 +334,8 @@ async def mark_lesson_complete(
     session: AsyncSession = Depends(get_session),
     user_id: str = Depends(get_current_user_id),
 ):
-    """DESIGN.md §24.1's "Mark complete" button. Also recomputes the course-level
-    CourseProgress rollup live — cheap at this data scale, and it means the catalogue's
-    "45% complete" badge (§23.2) and the outline's checkmarks never drift apart."""
+    """The "Mark complete" button. Recomputes the CourseProgress rollup live, so the
+    catalogue's percentage badge and the outline's checkmarks can't drift apart."""
     lesson_uuid = uuid.UUID(lesson_id)
     lesson = (await session.execute(select(Lesson).where(Lesson.id == lesson_uuid))).scalar_one_or_none()
     if not lesson:

@@ -1,7 +1,5 @@
-"""Course catalogue + syllabus. DESIGN.md §41 route table: /courses (catalogue) and
-/courses/:slug (public product/syllabus page) are separate from /learn/:courseSlug/
-:lessonSlug (the member-only learning interface, served by lessons.py) — this file
-only ever answers "what is in this course and do I own it," never lesson content.
+"""Course catalogue and public syllabus pages. This file only ever answers "what is in
+this course and do I own it" — lesson content is served by lessons.py.
 """
 import uuid
 from typing import Optional
@@ -66,8 +64,7 @@ class LessonOutlineOut(BaseModel):
 
 
 class ModuleQuestionOut(BaseModel):
-    """A question attached to the module — always free/public (never gated), so it
-    carries no lock state the way a lesson row does."""
+    """A question attached to the module — always public, so it carries no lock state."""
     id: str
     slug: str
     title: str
@@ -103,9 +100,8 @@ async def list_courses(
     session: AsyncSession = Depends(get_session),
     user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
-    """The course catalogue — public, like /questions and /templates. `owned` is a
-    real entitlement check (never the free-preview bypass), so the catalogue card
-    never shows a price on something the signed-in visitor already holds (§23.2)."""
+    """The course catalogue — public. `owned` is a real entitlement check, so a card
+    never shows a price on something the visitor already holds."""
     result = await session.execute(
         select(Course).where(Course.published.is_(True)).order_by(Course.created_at)
     )
@@ -165,9 +161,8 @@ async def get_course(
     session: AsyncSession = Depends(get_session),
     user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
-    """The course product page. Every lesson is listed with a type icon and a lock
-    state (§23.3) whether or not the visitor owns the course — a syllabus a buyer
-    cannot see is not a syllabus, it's a promise."""
+    """The course product page. Every lesson is listed with a type icon and lock state
+    whether or not the visitor owns the course."""
     result = await session.execute(select(Course).where(Course.slug == slug, Course.published.is_(True)))
     course = result.scalar_one_or_none()
     if not course:
@@ -276,10 +271,8 @@ async def get_course(
             )
         )
 
-    # DESIGN.md §23.3's price/[Buy the course] surface — resolved via product_contents
-    # (any published product whose lesson rows overlap this course's), same pattern as
-    # questions.py's related_content, rather than a course-to-product FK that would
-    # assume a course is only ever sold on its own.
+    # The price/[Buy the course] surface, resolved via product_contents rather than a
+    # course-to-product FK that would assume a course is only ever sold on its own.
     related_products: list[RelatedProductOut] = []
     if all_lesson_ids:
         related_result = await session.execute(

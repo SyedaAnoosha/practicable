@@ -1,8 +1,4 @@
-"""Admin CRUD for templates, including the actual file upload.
-
-Product spec §8: "As an admin, I want to add a template as a standalone product,
-without needing to attach it to a course first."
-"""
+"""Admin CRUD for templates, including the downloadable file upload."""
 import asyncio
 import uuid
 from typing import Optional
@@ -21,14 +17,11 @@ from .common import ensure_unique_slug, get_or_404, record_audit, slugify
 
 router = APIRouter()
 
-# 25 MB. Templates here are spreadsheets and documents, not video — anything larger is
-# almost certainly a mistake (a video dragged into the wrong field), and accepting it
-# would mean holding it all in memory to hash and forward to storage.
+# Templates are documents, not video. Uploads are buffered in memory, so this bound is
+# what keeps that safe.
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
-# Deliberately an allow-list, not a deny-list of dangerous types. This bucket serves
-# files to paying customers; a deny-list silently accepts every extension nobody
-# thought to ban, which is the wrong default for user-supplied uploads.
+# An allow-list rather than a deny-list: this bucket serves files to paying customers.
 ALLOWED_MIME_TYPES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",  # .xlsx
     "application/vnd.ms-excel",  # .xls
@@ -44,8 +37,7 @@ ALLOWED_MIME_TYPES = {
 class TemplateWriteIn(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     description: str = Field(min_length=1)
-    # The free lead magnet (product spec §9). Defaults to False so a template is never
-    # accidentally given away by omitting a field.
+    # Defaults to False so a template is never given away by omitting a field.
     is_free: bool = False
 
 
@@ -59,9 +51,8 @@ class TemplateOut(BaseModel):
     mime_type: str
     published: bool
     is_free: bool
-    # False until a real file has been uploaded. The editor uses this to block the
-    # publish action — publishing a template row with no file behind it would put a
-    # buyable product on the site whose download is a 404 after payment.
+    # False until a file has been uploaded; the editor uses it to block publishing, which
+    # would otherwise put a buyable product on the site whose download 404s after payment.
     has_file: bool
 
 
@@ -91,12 +82,10 @@ async def create_template(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """Creates the row only. The file arrives via the upload endpoint below, as a
-    second step — a multipart create that carried both would make "save my wording
-    edit" and "replace the artefact customers download" the same action."""
-    # section_id/author_id are NOT NULL on templates but are not an editorial concern —
-    # there is one section and one author, and asking a content editor to pick them
-    # would be exposing a schema detail as a form field. First row of each is used.
+    """Creates the row only. The file arrives via the upload endpoint below, so that
+    editing wording and replacing the customer-facing artefact stay separate actions."""
+    # section_id/author_id are NOT NULL but aren't an editorial concern — there is one of
+    # each, and asking an editor to pick would expose a schema detail as a form field.
     section_id = (await session.execute(select(Section.id).limit(1))).scalar_one_or_none()
     author_id = (await session.execute(select(Author.id).limit(1))).scalar_one_or_none()
     if section_id is None or author_id is None:
@@ -144,8 +133,7 @@ async def update_template(
     template.title = payload.title
     template.description = payload.description
     template.is_free = payload.is_free
-    # Slug is not regenerated on retitle — same reasoning as questions: /templates/:id
-    # links and any shared URL must keep working.
+    # Slug is not regenerated on retitle, so shared URLs keep working.
     await record_audit(
         session, actor=admin, action="update_template", target_type="template",
         target_id=template.id, context={"title": template.title, "is_free": template.is_free},
@@ -161,13 +149,8 @@ async def upload_template_file(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """Upload or replace the downloadable artefact.
-
-    The bytes are read fully into memory before being forwarded — bounded by
-    MAX_UPLOAD_BYTES above, which is what makes that safe. The storage write itself
-    runs in a thread because boto3 is blocking, and a 25 MB PUT on the event loop
-    would stall every concurrent request on this worker.
-    """
+    """Upload or replace the downloadable artefact. Bytes are buffered in memory (bounded
+    by MAX_UPLOAD_BYTES) and written in a thread, since boto3 would block the event loop."""
     template = await get_or_404(session, Template, template_id, "Template")
 
     content = await file.read()
@@ -198,11 +181,9 @@ async def upload_template_file(
             },
         )
 
-    # Key includes the template id so two templates can share a filename, and a uuid4
-    # so replacing a file writes a NEW object rather than overwriting the old one in
-    # place. That matters because download URLs are presigned with a 60s expiry: an
-    # in-place overwrite could swap the bytes under a link a customer is mid-download
-    # on. The old object is deleted after the row points at the new one.
+    # The template id lets two templates share a filename; the uuid4 means a replacement
+    # writes a new object rather than swapping bytes under an already-presigned download
+    # link. The old object is deleted after the row points at the new one.
     previous_key = template.storage_key
     safe_name = slugify(file.filename or "template") or "template"
     new_key = f"templates/{template.id}/{uuid.uuid4().hex}-{safe_name}"
@@ -221,9 +202,8 @@ async def upload_template_file(
     await session.commit()
 
     if previous_key and previous_key != new_key:
-        # Best-effort: the row is already committed and correct. A failed cleanup
-        # leaves an orphaned object costing storage, which is strictly better than
-        # failing the request after the upload succeeded.
+        # Best-effort: the row is already committed. An orphaned object beats failing a
+        # request whose upload succeeded.
         try:
             await asyncio.to_thread(delete_file, previous_key)
         except Exception:  # noqa: BLE001 — deliberately swallowed, see above
