@@ -161,7 +161,19 @@ export function MemberChrome() {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* `overflow-x-clip` confines full-bleed page decoration to this column.
+          Pages paint their header wash with `left-1/2 w-screen -translate-x-1/2` to
+          reach the viewport edge, which is correct in the marketing layout but wrong
+          here: this column is inset by the 256px sidebar, so a 100vw box centred on it
+          hangs past its left edge and tints the sidebar. Clipping is the fix rather
+          than narrowing the wash, because the column's width is not knowable from
+          inside the page.
+
+          Deliberately `clip`, not `hidden`: `overflow: hidden` would make this element
+          a scroll container and break `position: sticky` on the mobile header below and
+          on the learning outline. `overflow: clip` cuts the paint without that side
+          effect, and clipping one axis does not force the other to `auto`. */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur-sm md:hidden">
           <button
             type="button"
