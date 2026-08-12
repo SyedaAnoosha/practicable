@@ -83,10 +83,19 @@ class Settings(BaseSettings):
     brevo_sender_email: str = ""
     brevo_sender_name: str = "Practicable"
     # Where the "you made a sale" notification goes (app/services/email_service.py's
-    # send_sale_notification_email) — the owner's own inbox, not the buyer's. Defaults
-    # to the same address already verified-pending in Brevo, since that's the one
-    # real address on file for whoever runs this account; override if that's wrong.
-    owner_notification_email: str = "anooshaerm@gmail.com"
+    # send_sale_notification_email) — the owner's own inbox, NOT a buyer's.
+    #
+    # Deliberately empty, like every other credential-shaped field in this file. No real
+    # address is hardcoded here: this file is committed, and a default address is a
+    # default that silently applies in environments nobody configured.
+    #
+    # [2026-08-12] It previously defaulted to a real address that turned out to be a
+    # *customer's*, contradicting the line above it. That is a privacy defect, not a
+    # cosmetic one — every sale notification quotes the buyer's email address and what
+    # they paid, so one customer would receive other customers' purchase details. Empty
+    # is the safe default: email_service.py skips the notification and logs loudly
+    # rather than sending owner-only data to a guessed recipient.
+    owner_notification_email: str = ""
     # Comma-separated when there's more than one real frontend origin (e.g. a stable
     # Vercel production alias plus a preview-deployment URL, or www/non-www) — a bare
     # single value still works since split(",") on a string with no comma just

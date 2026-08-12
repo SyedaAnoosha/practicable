@@ -139,6 +139,7 @@ async def _send(
     if gmail_configured:
         try:
             await asyncio.to_thread(_send_via_gmail_smtp, to_email=to_email, subject=subject, html=html, text=text)
+            logger.info("Sent %s to %s via Gmail SMTP (tier 1).", context, to_email)
             return
         except (smtplib.SMTPException, OSError) as e:
             # OSError as well as SMTPException: a blocked/timed-out TCP connection to
@@ -147,26 +148,70 @@ async def _send(
             # SMTPException-only except here would let those escape and crash the
             # webhook, which is precisely what this function promises never to do.
             logger.error("Gmail send failed for %s to %s, trying Mailjet: %s", context, to_email, e)
+    else:
+        # [ADDED 2026-08-12] This branch did not exist, and its absence is why a
+        # production misconfiguration stayed invisible. Mailjet and Brevo both logged
+        # "not configured"; Gmail alone skipped in silence, so a deploy missing
+        # GMAIL_USER/GMAIL_APP_PASSWORD looked identical in the logs to one where
+        # Gmail was tried and failed. Naming the missing variable matters more than
+        # it looks: the local .env and the deployed environment are different places,
+        # and the whole failure mode here was assuming the deployed one matched.
+        missing = [
+            name
+            for name, value in (("GMAIL_USER", settings.gmail_user), ("GMAIL_APP_PASSWORD", settings.gmail_app_password))
+            if not value
+        ]
+        logger.error("Gmail not configured for %s (missing %s), trying Mailjet.", context, ", ".join(missing))
 
+    # NOTE the brevo_sender_email term: Mailjet borrows Brevo's sender identity as its
+    # verified "From" address, so an otherwise-complete pair of Mailjet keys is still
+    # skipped without it. That coupling is easy to miss when setting variables one at a
+    # time in a hosting dashboard, hence the itemised log below rather than a bare
+    # "not configured".
     mailjet_configured = bool(settings.mailjet_api_key and settings.mailjet_secret_key and settings.brevo_sender_email)
     if mailjet_configured:
         try:
             await asyncio.to_thread(_send_via_mailjet, to_email=to_email, subject=subject, html=html, text=text)
+            logger.info("Sent %s to %s via Mailjet (tier 2).", context, to_email)
             return
         except requests.RequestException as e:
             logger.error("Mailjet send failed for %s to %s, trying Brevo: %s", context, to_email, e)
     else:
-        logger.error("Mailjet not configured for %s, trying Brevo.", context)
+        missing = [
+            name
+            for name, value in (
+                ("MAILJET_API_KEY", settings.mailjet_api_key),
+                ("MAILJET_SECRET_KEY", settings.mailjet_secret_key),
+                ("BREVO_SENDER_EMAIL", settings.brevo_sender_email),
+            )
+            if not value
+        ]
+        logger.error("Mailjet not configured for %s (missing %s), trying Brevo.", context, ", ".join(missing))
 
     brevo_configured = bool(settings.brevo_api_key and settings.brevo_smtp_login and settings.brevo_sender_email)
     if brevo_configured:
         try:
             await asyncio.to_thread(_send_via_brevo_smtp, to_email=to_email, subject=subject, html=html, text=text)
+            logger.info("Sent %s to %s via Brevo SMTP (tier 3).", context, to_email)
             return
         except smtplib.SMTPException as e:
             logger.error("Brevo send failed for %s to %s, trying Resend: %s", context, to_email, e)
     else:
         logger.error("Brevo not configured for %s, trying Resend.", context)
+
+    # Reaching this line is a production incident, not a fallback working as intended.
+    # The Resend sandbox sender can only ever deliver to the single address the Resend
+    # account is registered under, so for any real buyer at any other address this send
+    # is already lost — the tier exists to salvage a copy for the owner, not to deliver.
+    # Logged at ERROR with an explicit instruction because the symptom (owner receives
+    # mail, everything "looks fine") actively disguises the failure.
+    logger.error(
+        "EMAIL DEGRADED: %s fell through every real transport to the Resend sandbox. "
+        "Buyers at any address other than the Resend account's own will NOT receive mail. "
+        "Set GMAIL_USER/GMAIL_APP_PASSWORD (or the Mailjet pair + BREVO_SENDER_EMAIL) in "
+        "the DEPLOYED environment, not just the local .env.",
+        context,
+    )
 
     if not settings.resend_api_key:
         logger.error("Cannot send %s: Mailjet, Brevo, and RESEND_API_KEY are all unusable.", context)
@@ -252,6 +297,20 @@ async def send_sale_notification_email(
     """To the owner (settings.owner_notification_email): a sale just happened. Sent
     alongside the buyer's receipt, from the same webhook handler, after the same
     commit — one confirmed sale, two people who need to know."""
+    # No configured owner address means there is no correct recipient for this — and
+    # this email quotes the buyer's address and what they paid, so guessing one would
+    # disclose a customer's purchase to whoever happened to be the fallback. Skip and
+    # say so. The buyer's own receipt is a separate call and is unaffected: a missing
+    # owner alert costs the owner a notification, not the customer their confirmation.
+    if not settings.owner_notification_email:
+        logger.error(
+            "OWNER_NOTIFICATION_EMAIL is not set — skipping the sale notification for "
+            "order %s. The buyer's receipt is unaffected. Set it in this environment to "
+            "start receiving sale alerts.",
+            order_id,
+        )
+        return
+
     amount_display = f"{currency} {amount_cents / 100:.2f}"
     await _send(
         to_email=settings.owner_notification_email,
