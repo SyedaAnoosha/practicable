@@ -15,11 +15,42 @@ MAILJET_SEND_URL = "https://api.mailjet.com/v3.1/send"
 BREVO_SMTP_HOST = "smtp-relay.brevo.com"
 BREVO_SMTP_PORT = 587
 RESEND_SEND_URL = "https://api.resend.com/emails"
+GMAIL_SMTP_HOST = "smtp.gmail.com"
+GMAIL_SMTP_PORT = 587  # STARTTLS (docs/gmail.md); 465 would be implicit SSL instead
 
 # Resend's sandbox sender — deliverable only to the one address the Resend account
 # itself is registered under (docs/email.md), never a real arbitrary buyer. Now the
 # last-resort tier, kept for when both Mailjet and Brevo are unreachable.
 SANDBOX_SENDER = "Practicable <onboarding@resend.dev>"
+
+
+def _send_via_gmail_smtp(*, to_email: str, subject: str, html: str, text: str) -> None:
+    """Gmail SMTP with an App Password (docs/gmail.md). Blocking, like the Brevo path
+    below — only ever called through asyncio.to_thread in _send().
+
+    Two Gmail-specific facts worth knowing before changing anything here:
+      - The From address is NOT ours to choose. Gmail rewrites it to the
+        authenticated account on personal accounts, so setting a nice
+        noreply@practicable.com.au here would be silently replaced. Only the display
+        name survives, which is why settings.gmail_sender_name exists and there is no
+        gmail_sender_email.
+      - A first send from a new server IP can be blocked by Gmail's abuse checks even
+        with correct credentials. The unblock is a one-time manual visit to
+        accounts.google.com/DisplayUnlockCaptcha while signed in as that account —
+        not a code change, and not something a retry here will resolve.
+    """
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{settings.gmail_sender_name} <{settings.gmail_user}>"
+    msg["To"] = to_email
+    # Plain first, HTML second — clients render the last part they understand.
+    msg.attach(MIMEText(text, "plain"))
+    msg.attach(MIMEText(html, "html"))
+
+    with smtplib.SMTP(GMAIL_SMTP_HOST, GMAIL_SMTP_PORT, timeout=15) as server:
+        server.starttls(context=ssl.create_default_context())
+        server.login(settings.gmail_user, settings.gmail_app_password)
+        server.sendmail(settings.gmail_user, [to_email], msg.as_string())
 
 
 def _send_via_mailjet(*, to_email: str, subject: str, html: str, text: str) -> None:
@@ -93,18 +124,30 @@ async def _send(
     logger.error, not print(), is what makes a failure here visible instead of the
     silent-for-every-order bug this integration had the first time it was built.
 
-    Three tiers, tried in order: Mailjet (confirmed live, reaches any real recipient
-    today) -> Brevo (dormant until its account activation clears) -> Resend (dormant,
-    can only ever reach the one whitelisted sandbox address). Each tier only runs if
-    the one before it is unconfigured or fails, so this only ever exercises Mailjet
-    in the common case — the other two are redundancy, not the active path.
+    Four tiers, tried in order: Gmail SMTP (app password, reaches any real recipient,
+    no provider review) -> Mailjet -> Brevo (dormant until its account activation
+    clears) -> Resend (last resort; can only ever reach the one whitelisted sandbox
+    address). Each tier only runs if the one before it is unconfigured or fails.
 
     resend_fallback_to: only consulted if execution reaches the Resend tier. Resend's
-    sandbox sender can't reach a real buyer at all, so send_receipt_email passes the
-    owner's address here — a delivered email to check against, instead of a
-    guaranteed logged failure. Doesn't apply to Mailjet/Brevo, which can both reach
-    the real to_email directly.
+    sandbox sender cannot reach a real buyer at all, so send_receipt_email passes the
+    owner's address here — a delivered email to check against, instead of a guaranteed
+    logged failure. Doesn't apply to the first three tiers, which all reach the real
+    to_email directly.
     """
+    gmail_configured = bool(settings.gmail_user and settings.gmail_app_password)
+    if gmail_configured:
+        try:
+            await asyncio.to_thread(_send_via_gmail_smtp, to_email=to_email, subject=subject, html=html, text=text)
+            return
+        except (smtplib.SMTPException, OSError) as e:
+            # OSError as well as SMTPException: a blocked/timed-out TCP connection to
+            # smtp.gmail.com (common on hosts that firewall outbound 587) raises
+            # socket.timeout/ConnectionRefusedError, which are NOT SMTPException — an
+            # SMTPException-only except here would let those escape and crash the
+            # webhook, which is precisely what this function promises never to do.
+            logger.error("Gmail send failed for %s to %s, trying Mailjet: %s", context, to_email, e)
+
     mailjet_configured = bool(settings.mailjet_api_key and settings.mailjet_secret_key and settings.brevo_sender_email)
     if mailjet_configured:
         try:
@@ -130,6 +173,32 @@ async def _send(
         return
 
     resend_to = resend_fallback_to or to_email
+
+    # If we are redirecting someone else's mail to the owner, SAY SO in the message.
+    # [FIXED, 2026-08-11 — owner-reported] A real order fell through to this tier and
+    # the owner received two emails a minute apart: "Thank you for your purchase —
+    # your order has been completed" and "You made a sale". The first one is addressed
+    # to the *buyer*, and arriving unlabelled in the owner's inbox it reads as though
+    # the owner bought their own product, while giving no hint that the actual buyer
+    # was never emailed. The redirect is still the right behaviour (a delivered email
+    # beats a log line nobody reads), but it has to be honest about what it is.
+    if resend_to != to_email:
+        subject = f"[Not delivered to buyer] {subject}"
+        notice_text = (
+            f"This is a copy of an email that could NOT be delivered to {to_email}.\n"
+            f"Every configured transport failed, so it was redirected to you instead.\n"
+            f"The recipient has not received it — follow up manually.\n\n"
+            f"{'-' * 60}\n\n"
+        )
+        text = notice_text + text
+        html = (
+            '<div style="border:2px solid #B3402E;padding:12px;margin-bottom:16px;font-family:sans-serif">'
+            f"<strong>This email could not be delivered to {to_email}.</strong><br>"
+            "Every configured transport failed, so it was redirected to you. "
+            "The recipient has <strong>not</strong> received it — follow up manually."
+            "</div>"
+        ) + html
+
     try:
         await asyncio.to_thread(_send_via_resend, to_email=resend_to, subject=subject, html=html, text=text)
     except requests.RequestException as e:

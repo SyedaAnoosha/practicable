@@ -20,6 +20,14 @@ class Template(Base, IdMixin, TimestampMixin):
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     
     published: Mapped[bool] = mapped_column(default=False)
+
+    # The free lead-magnet template (product spec §9; owner instruction 2026-08-12).
+    # True = not sold at all: no product, no price, no entitlement check on download.
+    # The email capture that fronts it is client-side into `leads`, the same soft gate
+    # the free question guidance uses (DESIGN.md §21.3) — a conversion device, not a
+    # security boundary. Deliberately an explicit flag rather than "has no product
+    # row", because an unpriced template is a draft, not a giveaway.
+    is_free: Mapped[bool] = mapped_column(default=False, nullable=False)
     
     # Relationships
     section: Mapped["Section"] = relationship("Section")

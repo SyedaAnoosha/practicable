@@ -193,8 +193,14 @@
      (2.5:1 on ivory — it fails text contrast by design, being a light metal);
      `--gold-strong` is the antique shade that carries gold *as text* at 4.63:1.
      Reaching for `--gold` on a text node is the one way to misuse this family. */
-  --gold: #C6A961;               /* champagne — rules, gradient stops, decorative fills */
-  --gold-strong: #8A6A1E;        /* antique gold — the text-safe shade, 4.63:1 on ivory */
+  --gold: #C6A961;               /* champagne — rules, gradient stops, decorative fills (2.16:1, never text) */
+  /* Antique gold — the text-safe shade. Darkened from #8A6A1E after the §7.5.1
+     audit: that value passed on ivory (4.80:1) and on card (5.05:1) but only
+     reached 4.10:1 on --secondary and 4.18:1 on --gold-soft, i.e. it failed AA
+     for normal text on exactly the champagne surfaces it is most likely to be
+     used on. This value clears 4.5:1 on all four (worst case 5.02:1 on
+     --secondary), so "gold text" is safe anywhere without a per-surface check. */
+  --gold-strong: #7C5C14;
   --gold-soft: #F3E9D2;          /* champagne wash — tinted card/tile surfaces */
 
   /* Quiet */
@@ -336,32 +342,36 @@
      constraint note in :root), now the product is allowed gradients (§5). Still
      a static background (no animation needed to read as "alive" — the colour
      does that work), so no reduced-motion handling required here. */
+  /* Blue on one side, champagne on the other, both linear. Rebuilt to match the
+     question page's header wash after three failed radial versions — see the long
+     note in Question.tsx: a radial ellipse inside a fixed-height box always shows
+     its own curved edge somewhere, and an all-blue wash reads grey over ivory. */
   .hero-wash {
     position: absolute;
     inset-inline: 0;
     top: 0;
-    height: 42rem;
+    height: 44rem;
     pointer-events: none;
-    background:
-      radial-gradient(46rem 28rem at 12% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 68%),
-      radial-gradient(50rem 30rem at 88% 0%, color-mix(in srgb, var(--domain-compliance) 16%, transparent), transparent 65%),
-      radial-gradient(44rem 26rem at 50% 18%, color-mix(in srgb, var(--domain-cyber) 12%, transparent), transparent 70%);
-    /* Same fix as the question page's header wash: centres sat above the box
-       (`at … -10%`), which puts near-full-strength tint on the top edge and
-       reads as a hard line under the header. Centres are on the edge now, and
-       the mask fades both ends so the wash can never be clipped by its own
-       box at any viewport size. */
-    mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 50%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 50%, transparent 100%);
+    opacity: 0.18;
+    background-image:
+      linear-gradient(180deg, var(--accent) 0%, transparent 60%),
+      linear-gradient(115deg, color-mix(in srgb, var(--primary) 70%, transparent) 0%, transparent 45%),
+      linear-gradient(250deg, color-mix(in srgb, var(--gold) 75%, transparent) 0%, transparent 55%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 45%, transparent 94%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 45%, transparent 94%);
   }
 
-  /* Gradient text — the brand headline device. All-blue stops from tokens
-     (never a raw hex), so it re-materialises with the rest of the theme and
-     stays inside the blue/ivory/black/white constraint. Falls back to solid
-     --foreground in browsers without background-clip:text support. */
+  /* Gradient text — the brand headline device: navy through blue into antique
+     gold, i.e. the two brand colours in one sweep. Stops are tokens, never raw
+     hex, so it re-materialises with the theme.
+     The gold stop is deliberately `--gold-strong` (4.63:1 on ivory) and NOT
+     `--gold` (2.5:1): champagne is a light metal and the tail of a gradient is
+     still body-legible text, so ending on the decorative shade would make the
+     last few letters of every headline fail contrast. Falls back to solid
+     --foreground where background-clip:text is unsupported. */
   .text-gradient-brand {
     color: var(--foreground);
-    background-image: linear-gradient(100deg, var(--primary) 0%, var(--accent) 55%, var(--domain-compliance) 100%);
+    background-image: linear-gradient(100deg, var(--primary) 0%, var(--accent) 50%, var(--gold-strong) 100%);
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;

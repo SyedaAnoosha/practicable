@@ -1,0 +1,96 @@
+# Render Blueprint (render.com/docs/blueprint-spec). Connect this repo in the Render
+# dashboard -> New -> Blueprint, and it reads this file automatically. Every env var
+# below has `sync: false` — Render prompts for the real value in its dashboard rather
+# than this file ever holding a secret; committing this file is safe.
+#
+# week1_plan.md Phase 5 step 2: Starter tier, not Free — Free's cold start (the
+# service spins down after 15 min idle, ~30-50s to wake) is not acceptable for a live
+# checkout flow a Stripe redirect lands a paying customer on.
+services:
+  - type: web
+    name: practicable
+    runtime: python
+    plan: starter
+    region: singapore # closest Render region to the Supabase project's ap-south-1 pooler
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt && alembic upgrade head"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: SUPABASE_JWT_AUDIENCE
+        value: authenticated
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: MUX_TOKEN_ID
+        sync: false
+      - key: MUX_TOKEN_SECRET
+        sync: false
+      - key: MUX_SIGNING_KEY_ID
+        sync: false
+      - key: MUX_SIGNING_KEY_PRIVATE
+        sync: false
+      - key: SUPABASE_STORAGE_S3_ENDPOINT
+        sync: false
+      - key: SUPABASE_STORAGE_REGION
+        sync: false
+      - key: SUPABASE_STORAGE_ACCESS_KEY_ID
+        sync: false
+      - key: SUPABASE_STORAGE_SECRET_ACCESS_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET_NAME
+        sync: false
+      # Live email path (app/services/email_service.py) — Mailjet REST API, primary
+      # tier: confirmed live, reaches any real recipient today with no domain and no
+      # pending account review, unlike every other free provider tried before it.
+      # Adding a key here only creates the slot on a fresh Blueprint deploy; an
+      # already-existing service needs each added by hand once in Render's dashboard
+      # -> Environment tab (see RUNNING.md §6.3).
+      # First tier — Gmail SMTP with an App Password (docs/gmail.md). Needs 2-Step
+      # Verification on the Google account, then a 16-char App Password from
+      # myaccount.google.com/apppasswords, pasted with its spaces REMOVED. Leave both
+      # blank to skip this tier entirely and fall through to Mailjet.
+      # Two Render-specific notes: outbound port 587 must be reachable from the
+      # service, and Gmail can block a first send from a new server IP even with
+      # correct credentials — that unblock is a one-time manual visit to
+      # accounts.google.com/DisplayUnlockCaptcha, not a config change here.
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      # Second tier.
+      - key: MAILJET_API_KEY
+        sync: false
+      - key: MAILJET_SECRET_KEY
+        sync: false
+      # Second tier — dormant until Brevo's account activation clears, tried only if
+      # Mailjet fails. BREVO_API_KEY here is Brevo's *SMTP key* (Settings -> SMTP &
+      # API -> SMTP tab), and BREVO_SMTP_LOGIN is that same page's separate "Login"
+      # field (format xxxxxx@smtp-brevo.com) — neither value is derivable from the
+      # other, both are required for SMTP auth to succeed. brevo_sender_email/name
+      # also double as the "From" identity for Mailjet above (same real address).
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SMTP_LOGIN
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
+      - key: BREVO_SENDER_NAME
+        value: Practicable
+      # Third/last-resort tier — can only ever reach the one Resend-account-whitelisted
+      # address, kept so removing this tier entirely later is a one-line change.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: OWNER_NOTIFICATION_EMAIL
+        sync: false
+      - key: ALLOWED_ORIGIN
+        sync: false # set to the real Vercel URL once the frontend is deployed

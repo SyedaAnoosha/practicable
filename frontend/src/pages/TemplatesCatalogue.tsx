@@ -25,6 +25,7 @@ interface TemplateSummary {
   file_name: string
   owned: boolean
   product: TemplateProduct | null
+  is_free: boolean
 }
 
 // The template catalogue (DESIGN.md §41's /templates) — the sidebar's third
@@ -72,7 +73,18 @@ export function TemplatesCatalogue() {
               <CardDescription>{template.description}</CardDescription>
             </CardHeader>
             <CardContent className="mt-auto flex items-center justify-between gap-3">
-              {template.owned ? (
+              {/* Free is checked BEFORE owned: the free template has no product and
+                  no entitlement, so an `owned` branch would never fire for it and a
+                  `product` branch would fall through to "not yet available for
+                  purchase" — which is the opposite of true. */}
+              {template.is_free ? (
+                <>
+                  <Badge variant="success">Free</Badge>
+                  <Link to={`/templates/${template.id}`}>
+                    <Button size="sm">Get it free</Button>
+                  </Link>
+                </>
+              ) : template.owned ? (
                 <>
                   <Badge variant="success" className="gap-1">
                     <CircleCheck className="size-3" aria-hidden="true" />

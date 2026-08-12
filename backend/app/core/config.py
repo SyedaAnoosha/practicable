@@ -34,6 +34,26 @@ class Settings(BaseSettings):
     supabase_storage_access_key_id: str
     supabase_storage_secret_access_key: str
     supabase_storage_bucket_name: str
+    # ── Gmail SMTP, the first transport tried (docs/gmail.md) ───────────────────
+    # Added 2026-08-11 after a real order delivered both of its emails from
+    # `onboarding@resend.dev` — i.e. the send fell all the way through Mailjet and
+    # Brevo to the Resend last resort, whose sandbox sender can only reach the
+    # account owner, so the *buyer* received nothing and the owner got two emails.
+    # Gmail SMTP with an app password is the one transport here that needs no
+    # provider account review and can reach an arbitrary real recipient today.
+    #
+    # gmail_app_password is the 16-character App Password from
+    # myaccount.google.com/apppasswords (NOT the account password — Google rejects
+    # that over SMTP), with the spaces Google displays it with removed. Requires
+    # 2-Step Verification on the account first. Both blank = tier skipped entirely,
+    # so this is inert until real credentials are supplied.
+    gmail_user: str = ""
+    gmail_app_password: str = ""
+    # Gmail rewrites the From header to the authenticated account on personal
+    # accounts, so this is a display name only — the address will be gmail_user
+    # whatever is set here (docs/gmail.md).
+    gmail_sender_name: str = "Practicable"
+
     # Receipt/sale-notification emails — live path is now Mailjet (docs/email.md):
     # confirmed live, it sends to an arbitrary real recipient immediately, no domain
     # and no pending account review — unlike every other free provider tried before it

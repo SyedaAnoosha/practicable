@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Mail } from 'lucide-react'
 import { api } from '@/lib/api/client'
+import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
@@ -42,8 +43,20 @@ function splitPreview(body: string): [preview: string, rest: string] {
 // every content-marketing email-gate works; it would be the wrong tool if this body
 // were the thing actually being sold.
 export function EmailGatedBody({ body }: { body: string }) {
-  const [unlocked, setUnlocked] = useState(readUnlocked)
+  const [emailGiven, setEmailGiven] = useState(readUnlocked)
   const [email, setEmail] = useState('')
+
+  // [FIXED, 2026-08-11 — owner-reported: "even after signing up I can't read the
+  // complete question guidance"] The gate used to key off localStorage alone, so a
+  // visitor who had gone all the way through sign-up — handing over an email address,
+  // confirming it, and creating an account — was still asked for their email to read
+  // a free question. Worse, it was unskippable for them: submitting the form posts to
+  // /leads, and the one thing a signed-in user cannot do is prove they're new.
+  // Being signed in is strictly stronger evidence than the lead form collects, so it
+  // satisfies the gate outright. (Clearing localStorage or using another browser
+  // still re-gated a signed-in user before this.)
+  const signedIn = useAuthStore((s) => s.user) !== null
+  const unlocked = signedIn || emailGiven
 
   const [previewText, restText] = splitPreview(body)
 
@@ -55,7 +68,7 @@ export function EmailGatedBody({ body }: { body: string }) {
       } catch {
         // Storage unavailable — still unlock this render via state below.
       }
-      setUnlocked(true)
+      setEmailGiven(true)
     },
   })
 
@@ -74,52 +87,71 @@ export function EmailGatedBody({ body }: { body: string }) {
   return (
     <div>
       <p className="mt-4 whitespace-pre-line font-serif text-read text-pretty text-foreground">{previewText}</p>
-      <div className="relative mt-4 overflow-hidden rounded-lg">
+
+      {/* [FIXED, 2026-08-11 — owner-reported: the "Unlock the rest" button and the
+          "No spam" line rendered on mobile but were missing on desktop.]
+          The form used to be absolutely positioned *inside* this blurred block, which
+          had `overflow-hidden`. Its height was therefore the height of the blurred
+          teaser — and that depends on viewport width: on a narrow phone the leftover
+          text wraps to ~10 lines and the card fits inside it, while on a wide desktop
+          the same text is ~2 lines, so the card was clipped halfway down and the
+          submit button was simply not on the page. A gate you cannot submit is worse
+          than no gate.
+          The teaser and the card are now siblings in normal flow: the teaser gets a
+          fixed max height (so it reads as "there's more" at every width), and the
+          card is pulled up over its faded tail with a negative margin. Nothing
+          clips the card, because nothing contains it. */}
+      <div
+        aria-hidden="true"
+        className="relative mt-4 max-h-44 overflow-hidden rounded-lg sm:max-h-56"
+      >
         {/* Decorative only — not meant to be read, just to show there's more; the
             actual content lives behind the form below, not in this hidden text. */}
-        <p
-          aria-hidden="true"
-          className="pointer-events-none select-none whitespace-pre-line font-serif text-read text-pretty text-foreground/30 blur-[3px]"
-        >
+        <p className="pointer-events-none select-none whitespace-pre-line font-serif text-read text-pretty text-foreground/30 blur-[3px]">
           {restText}
         </p>
         <div
-          className="absolute inset-0 flex items-start justify-center pt-6"
-          style={{ background: 'linear-gradient(180deg, transparent, var(--background) 40%)' }}
-        >
-          <form
-            onSubmit={handleSubmit}
-            className="w-full max-w-sm rounded-xl border border-border bg-card p-6 text-center shadow-lg"
-          >
-            <Mail className="mx-auto size-6 text-primary" aria-hidden="true" />
-            <p className="mt-3 font-sans font-semibold">Keep reading — free</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Enter your email to unlock the rest of this guidance.
-            </p>
-            <label htmlFor="gate-email" className="sr-only">
-              Your email address
-            </label>
-            <Input
-              id="gate-email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="mt-4"
-            />
-            <Button type="submit" loading={isPending} className="mt-3 w-full">
-              Unlock the rest
-            </Button>
-            {isError && (
-              <p role="alert" className="mt-2 text-xs text-destructive">
-                Something went wrong — please try again.
-              </p>
-            )}
-            <p className="mt-2 text-xs text-muted-foreground">No spam, unsubscribe any time.</p>
-          </form>
-        </div>
+          className="absolute inset-0"
+          style={{ background: 'linear-gradient(180deg, transparent 20%, var(--background) 92%)' }}
+        />
       </div>
+
+      <form
+        onSubmit={handleSubmit}
+        className="relative z-10 mx-auto -mt-20 w-full max-w-sm rounded-xl border border-border bg-card p-6 text-center shadow-lg sm:-mt-24"
+      >
+        {/* Champagne tile — the secondary brand colour doing the work it exists for
+            (theme.css's two-colour palette): this is a warm invitation, not a system
+            action, so it reads gold where a primary CTA reads blue. */}
+        <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-gold-soft text-gold-strong ring-1 ring-inset ring-gold/40">
+          <Mail className="size-5" aria-hidden="true" />
+        </span>
+        <p className="mt-3 font-sans font-semibold">Keep reading — free</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Enter your email to unlock the rest of this guidance.
+        </p>
+        <label htmlFor="gate-email" className="sr-only">
+          Your email address
+        </label>
+        <Input
+          id="gate-email"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          className="mt-4"
+        />
+        <Button type="submit" loading={isPending} className="mt-3 w-full">
+          Unlock the rest
+        </Button>
+        {isError && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            Something went wrong — please try again.
+          </p>
+        )}
+        <p className="mt-2 text-xs text-muted-foreground">No spam, unsubscribe any time.</p>
+      </form>
     </div>
   )
 }

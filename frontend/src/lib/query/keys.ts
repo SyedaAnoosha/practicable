@@ -15,6 +15,7 @@ export const queryKeys = {
   },
   templates: {
     list: () => ['templates', 'list'] as const,
+    detail: (id: string) => ['templates', 'detail', id] as const,
     downloadUrl: (templateId: string) => ['templates', 'download-url', templateId] as const,
   },
   products: {
@@ -22,5 +23,15 @@ export const queryKeys = {
   },
   me: {
     entitlements: () => ['me', 'entitlements'] as const,
+    library: () => ['me', 'library'] as const,
+    profile: () => ['me', 'profile'] as const,
+  },
+  admin: {
+    questions: (search: string, published: string) => ['admin', 'questions', search, published] as const,
+    question: (id: string) => ['admin', 'question', id] as const,
+    questionFormOptions: () => ['admin', 'questions', 'form-options'] as const,
+    templates: () => ['admin', 'templates'] as const,
+    courses: () => ['admin', 'courses'] as const,
+    course: (id: string) => ['admin', 'course', id] as const,
   },
 } as const

@@ -35,3 +35,30 @@ def generate_presigned_url(key: str, expiry_seconds: int = 60) -> str:
         Params={'Bucket': settings.supabase_storage_bucket_name, 'Key': key},
         ExpiresIn=expiry_seconds,
     )
+
+
+def upload_file(*, key: str, body: bytes, content_type: str) -> None:
+    """Upload bytes to Supabase Storage under `key`, overwriting any existing object.
+
+    Used by the admin template editor (app/api/v1/admin/templates.py). Blocking
+    (boto3 has no async client), so callers must run it via asyncio.to_thread rather
+    than inline — a multi-MB upload on the event loop stalls every other request on
+    the worker for its duration.
+
+    Deliberately NOT presigned-upload-from-the-browser: that would need the bucket to
+    accept direct writes, and this bucket is the one holding paid artefacts. Routing
+    the bytes through an admin-guarded endpoint keeps writes to it impossible without
+    a verified admin JWT (BACKEND.md §4.1's "the check runs before the storage call").
+    """
+    _get_s3_client().put_object(
+        Bucket=settings.supabase_storage_bucket_name,
+        Key=key,
+        Body=body,
+        ContentType=content_type,
+    )
+
+
+def delete_file(key: str) -> None:
+    """Remove an object. Used when an admin replaces a template's file with a new one
+    under a different key, so the orphan doesn't sit in the bucket forever."""
+    _get_s3_client().delete_object(Bucket=settings.supabase_storage_bucket_name, Key=key)

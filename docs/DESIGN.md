@@ -1,6 +1,6 @@
 # Deciding in the Dark — Design System & UI Specification
 
-**Version 2.2** · Supersedes v2.1 (2026-08-11: the liveliness pass and its same-day blue/ivory/black/white palette constraint — §5.3) · Supersedes v2.0 (reconciled against `design_again.md` and against what had already shipped — §0.5 row 21, §0.7) · Supersedes v1.0 · Status: working specification, Week 1 build-ready
+**Version 2.4** · Supersedes v2.3 (2026-08-12: reconciled against `Deciding_in_the_Dark_Product_Spec.md` — the product reframed as a three-type content store, §0.8; the commercial model settled as free questions + one free template + paid templates/courses, §27.4 and §28.0; My Library specified as built, §30.4; the admin interface specified as built with an honest gap list, §31.8) · Supersedes v2.2 (2026-08-11: the palette settles on two brand colours — ivory ground, blue primary, champagne gold secondary — after the blue-only pass read grey on real screens; §5.3, §7.5.2) · Supersedes v2.1 (2026-08-11: the liveliness pass and its same-day blue/ivory/black/white palette constraint — §5.3) · Supersedes v2.0 (reconciled against `design_again.md` and against what had already shipped — §0.5 row 21, §0.7) · Supersedes v1.0 · Status: working specification, Week 1 build-ready
 **Stack:** React 19 · TypeScript · Tailwind CSS v4 (frontend) → FastAPI · Supabase · Stripe · Mux · R2 (backend, per Research Spec)
 
 ---
@@ -69,6 +69,7 @@ The v1.0 document was structurally sound: the principles, the surface inventory 
 | 18 | **Component contracts and Definition of Done added** (§33–§34) | "It extends without you" (brief) requires the next developer to know a component's props and states without reading its source. |
 | 19 | **Copy and voice rules added** (§6) | The brief assesses whether the product "looks worth paying for". Interface copy is half of that judgement and v1 covered only button verbs. |
 | 20 | **Design tokens exported as code** (§50) | The brief's design-system deliverable is a *documented component set*, not a document describing one. Tokens now live in one CSS file and one TS file, generated from the same source. |
+| 22 | **Reconciled against the product spec; commercial model settled; Library and admin recorded as built** (§0.8, §27.4, §28.0, §30.4, §31.8) | A product spec arrived after v2.3 and reframed the product as a three-type content store rather than a question library with attachments — right, and adopted. The same pass settled the commercial model in one place (free questions, one free template, paid everything else), specified My Library, and recorded what the admin build actually does versus what §31.1–§31.7 specify — the latter mattering most, because a spec section that reads as shipped when it isn't is how a handover goes wrong. |
 | 21 | **Reconciled against `design_again.md` and updated to match decisions already shipped** (§3.7, §5.1–5.2, §9.4, §19.9, §21.3, §27) | A second brief (`design_again.md`) argued the product should read as a decision library, not an LMS — see `docs/win.md` for the full comparison. Cross-checking it also surfaced places this document had gone stale against code already shipped: the question title is set in serif in the actual `PageTitle` component (§9.4), the mobile filter sheet applies live (§19.9), and the question paywall was rebuilt as a free body with a soft email gate weeks after §21.3 was written (§21.3, §27). Fixed here so the document describes what is actually true, not what v2.0 assumed. |
 
 ### 0.6 Reconciliations with the Research Specification
@@ -91,6 +92,23 @@ The v1.0 document was structurally sound: the principles, the surface inventory 
 | §19.9 required mobile filter changes to apply on sheet close; `design_again.md` §13/§17 expects a quick filter to update results immediately | §19.9 updated. The shipped filter sheet reuses the same live, per-tap `toggle()` as desktop — one state model for both, which turned out simpler to build and to reason about than a second batched-apply mode would have been. |
 
 Everything else `design_again.md` raises — the brand-concept motif (§5.1), the anti-pattern list (§5.2), visual-priority ranking (§3.7), and the single core journey to prototype first (§4) — was genuinely missing here and has been added, in this document's own format (numbered, `[DECIDED]`-tagged, cross-referenced), not pasted in as prose.
+
+### 0.8 Reconciliation with `Deciding_in_the_Dark_Product_Spec.md` `[DECIDED, 2026-08-12]`
+
+A product spec arrived after this document reached v2.3, and it reframes the product in a way that touches design, not just scope. It is **not** a second source of truth — this document remains the design authority — but its central argument is right and has been adopted.
+
+**The reframing: a content store, not a book with a paywall.** The spec's §1/§7.1 argue that reference content, courses, and templates are three distinct product types deserving three distinct experiences, rather than one format stretched over all three. This document had implicitly treated the 100 questions as *the* product with courses and templates attached to them. That was the wrong centre of gravity: it makes adding a fourth content type an architecture change rather than a catalogue decision.
+
+Adopted, and where it landed:
+
+| Spec point | Resolution here |
+|---|---|
+| Three content types, three experiences — a course has progress and resume, a template has neither and just downloads, reference has no order at all (§4) | §30.4 (new). The library gives each type its own row treatment and its own verb — **Continue** / **Download** / **Read** — rather than rendering every purchase as an identical card with a generic "Open". |
+| "My Library" as a named surface holding all purchased types, labelled, with progress and resume where relevant (§9) | §30.4 (new), built at `/library`. §30.1's dashboard sketch had *"Your library"* as a dashboard row; it is now its own destination, because a buyer looking for something they paid for should not have to work out which catalogue it came from. |
+| Admin must let a non-technical person add and publish all three types (§8, §9) | §31.7 (new) records what was actually built against §31.1–§31.5, including an honest list of what this document specifies that the build does not yet do. |
+| Reference content sold as purchasable domain packs, behind "a paywall that fully blocks unpaid content across all three types" (§4.1, §9) | **Partially rejected, owner-decided 2026-08-12.** This collides head-on with §21.3 and §27: question guidance is the free entry point, by explicit owner instruction. Resolution: questions stay free for everyone, and a domain pack becomes a purchasable *artefact* (a formatted PDF of that domain's questions plus a curated working order) rather than a paywall over text that is currently free. The spec's commercial goal is met; its access model is not adopted. `product_contents` already carries `question_set` polymorphically, so this is a catalogue addition when the artefact exists. |
+| "Content is blocks, not rigid lesson types" — video sitting *inside* the reading where useful (§7.2) | **Accepted, not yet built.** `lessons.lesson_type` is still the rigid `video | reading | download | mixed` enum. This is a real data-model change plus a new reader, named here so it is a known gap rather than a silent divergence. |
+| "At least one free template that captures an email" (§9) | **Adopted and built** (§27.4, 2026-08-12). §27.1 had argued the free question made this redundant; that was too narrow — the two convert different people. Both now exist: all 100 questions free, plus the Risk Register Template free behind an email. |
 
 ---
 
@@ -252,6 +270,30 @@ Direct owner instruction: *"the whole platform uses more white than my actual co
 - **Surfaces (ivory background, espresso ink, warm stone borders) were never touched** — they were already inside "ivory/black/white," just warm-toned rather than cool-neutral, which is a different axis than the hue constraint this addresses.
 
 The result reads as one accent hue used with real range — deep navy through soft slate — rather than either a single flat blue or the earlier five-colour spread. `frontend/src/lib/domainVisuals.ts` is the one place that maps a domain name to its colour token and icon; nothing else should hold that mapping.
+
+**`[SETTLED — TWO COLOURS, same day, third and final revision]`** The blue-only result was shipped, screenshotted, and rejected: *"the gradient doesn't look good in both mobile and desktop… use ivory, blue (primary) and champagne gold (secondary). Use shades, hues of this."*
+
+The single-hue constraint above had a failure mode that only showed up on a real screen. **A wash built from one blue family reads grey over ivory, not blue.** The domain hues are dark navies; at any opacity low enough to work as a background wash, they desaturate toward neutral. Three successive attempts at the question-page header wash — re-centring the gradient, masking its edges, mixing the domain colour halfway toward `--accent` — each fixed a real geometric defect and none of them fixed the colour, because the colour problem was the constraint itself, not the implementation.
+
+The settled palette is **two brand colours, not one and not five**:
+
+| Role | Colour | Tokens |
+|---|---|---|
+| Ground | Ivory | `--background`, `--card`, surfaces |
+| **Primary** | Blue | `--primary`, `--accent`, `--ring`, the five `--domain-*` |
+| **Secondary** | Champagne gold | `--gold`, `--gold-strong`, `--gold-soft`, `--secondary*`, sidebar |
+
+Shades and hues *within* those two families are open; a third hue family is not. The status/chart exemptions from the previous revision carry over unchanged.
+
+**The one rule that matters when reaching for gold** — it has three shades and contrast decides which, not taste:
+
+- `--gold` is genuine champagne and is **decorative-only** (2.5:1 on ivory). Rules, gradient stops, tile fills, ring accents. **Never text.**
+- `--gold-strong` is the antique shade that carries gold *as text* (4.63:1 light, 12.0:1 dark) — labels, icons, small type, and the terminating stop of `.text-gradient-brand` (a gradient's tail is still body-legible text, so ending a headline on champagne would fail contrast on its last few letters).
+- `--gold-soft` is a surface wash for tinting a card or tile.
+
+Putting `--gold` on a text node is the one way to misuse this family. §7.5.1's audit tables cover all three.
+
+**Gradients are linear now, not radial.** Every radial version of the two washes (`.hero-wash`, the question header) exposed its own elliptical edge somewhere inside its fixed-height box — the visible curved seam in the shipped screenshots. A vertical linear gradient has no edge to expose, and a mask fades both ends so nothing can be clipped at any viewport width. Both washes now layer blue and champagne this way.
 
 ### 5.1 What the name should evoke `[DECIDED]`
 
@@ -550,6 +592,33 @@ Every foreground/background pair in the supplied token set was measured against 
 **The one to watch:** dark `--domain-risk` at 4.71:1 clears AA but has the least headroom in the set. Any future darkening of that token, or any use of it on `--card` (`#1B1710`, slightly lighter than `--background`) rather than the page background, should be re-measured rather than assumed.
 
 **Not covered by this audit,** and deliberately so: the `--domain-*` tokens are also used at low opacity as icon-tile *backgrounds* (`color-mix(… 12%, transparent)`) and in the decorative header/hero washes. Those are non-text, non-meaning-bearing surfaces — the icon sitting on them carries the full-strength token colour, which is what the table above measures. A decorative wash has no contrast requirement (§7.6's "colour is never the only carrier of meaning" is what keeps that true).
+
+### 7.5.2 Contrast audit of the champagne-gold secondary `[DECIDED, 2026-08-11]`
+
+§5.3's final revision reinstated gold as the secondary brand colour, so the same measurement was run on the new `--gold*` tokens and on the champagne surfaces they sit against. **This audit changed a token** — unlike §7.5.1, it did not merely confirm one.
+
+Measured against four light surfaces: `--background` `#FBF9F4`, `--card` `#FFFFFF`, `--secondary` `#F0E7D2`, `--gold-soft` `#F3E9D2`.
+
+| Token | bg | card | secondary | gold-soft | Verdict |
+|---|---:|---:|---:|---:|---|
+| `--gold-strong` `#7C5C14` | 5.87:1 | 6.18:1 | 5.02:1 | 5.12:1 | **Pass on all four** |
+| ~~`--gold-strong` `#8A6A1E`~~ (rejected) | 4.80:1 | 5.05:1 | **4.10:1** | **4.18:1** | Failed AA on both champagne surfaces |
+| `--gold` `#C6A961` | 2.16:1 | 2.27:1 | 1.85:1 | — | **Decorative only, by design** |
+| `--secondary-foreground` `#4A3D22` | 10.07:1 | 10.60:1 | 8.61:1 | — | Pass |
+
+**The token this audit changed.** The champagne gold first shipped as `#8A6A1E`, chosen against ivory, where it passes at 4.80:1. But gold text is *most* likely to appear on the champagne surfaces — a gold label on a `--secondary` chip, a gold icon on a `--gold-soft` tile — and there it fell to 4.10:1 and 4.18:1: below AA for normal text, on exactly the pairing it was most likely to be used in. Darkened to `#7C5C14`, which clears 4.5:1 on all four surfaces (worst case 5.02:1), so "gold text" needs no per-surface check to be safe.
+
+**Dark theme** (`--background` `#141008`, `--card` `#1B1710`, `--secondary` `#2A2318`, `--gold-soft` `#2E2517`):
+
+| Token | bg | card | secondary | gold-soft | Verdict |
+|---|---:|---:|---:|---:|---|
+| `--gold-strong` `#E3CB92` | 11.94:1 | 11.24:1 | 9.78:1 | 9.49:1 | Pass, wide margin |
+| `--gold` `#C9AC6A` | 8.66:1 | 8.15:1 | 7.09:1 | — | Passes, but see below |
+| `--secondary-foreground` `#EDE2CB` | 14.76:1 | 13.89:1 | 12.09:1 | — | Pass |
+
+**Why `--gold` stays decorative-only even though it passes in dark.** On espresso, `#C9AC6A` reaches 8.66:1 and would be perfectly legible as text. The rule is kept absolute anyway: a token whose safety depends on which theme is active is a token that will eventually be used in the wrong one. `--gold` is decorative in both themes; `--gold-strong` is the text shade in both. One rule, no theme-conditional exceptions.
+
+**Note on `.text-gradient-brand`.** Its terminating stop is `--gold-strong`, never `--gold`. A gradient's tail is still body-legible text, so ending a headline on champagne would leave its last few letters at ~2:1.
 
 ### 7.6 Colour rules
 
@@ -1654,7 +1723,9 @@ A named brief deliverable — "at least one free entry point that earns an email
 
 Every question's guidance body, in full. Not a sample chapter for one domain — the entire library, always. The email address is earned per-reader, at the natural point they hit while reading (§21.3's blur gate on the tail of a long answer), not up front on the homepage before they've seen anything worth trading an email for.
 
-The separate "one free template" idea is not built and is not needed to satisfy the brief: the question body itself is the free, complete, useful thing (§27's original requirement), and it now works for a reader dropping into any one of 100 questions from search, not only the one domain someone picked as "the free one."
+**`[SUPERSEDED, 2026-08-12]`** — the paragraph below said the free template "is not built and is not needed." The owner has since built it, and the reasoning here was too narrow: a free *question* and a free *template* earn an email from two different people. The question converts a reader; the template converts someone who wants a working file today and has no interest in reading first (the product spec's §4.3 case — *"I need this one thing right now"*). See §27.4.
+
+> ~~The separate "one free template" idea is not built and is not needed to satisfy the brief: the question body itself is the free, complete, useful thing (§27's original requirement), and it now works for a reader dropping into any one of 100 questions from search, not only the one domain someone picked as "the free one."~~
 
 ### 27.2 The capture
 
@@ -1682,9 +1753,60 @@ Built as `EmailGatedBody.tsx` — no modal, no exit-intent popup, no homepage fo
 
 Instant, client-side — no round trip to an inbox. The unlock is stored once (`localStorage`) and applies to every question site-wide from then on, so a returning reader is never asked twice. Every gate between "I gave you my email" and "I got the thing" loses people; this shipped with zero gates between the two.
 
+### 27.4 The second free entry point — one free template `[DECIDED, built 2026-08-12]`
+
+Owner instruction, stating the whole commercial model in four lines:
+
+```
+Questions                        — free
+One template (Risk Register)     — free, but ask for an email first
+Other templates                  — paid
+Courses                          — paid
+```
+
+**Why both a free question and a free template, when §27.1 argued one was enough.** They convert different people. The question earns an email from someone who came to *read* and got value from the reading. The template earns one from someone who came to *do* — the product spec's §4.3 case, "I need this one thing right now," who will never read 900 words first. Free-question-only leaves that second person with nothing to take, which is the audience most likely to buy a paid template later.
+
+**`templates.is_free` is an explicit column, not an inference.** It is deliberately *not* derived from "has no product row", because a template that simply hasn't been priced yet is a **draft**, and one that is given away is a **lead magnet**. Collapsing those two states means every unfinished template is silently public. An admin toggles it in the template editor, and the control says what it does rather than being a bare "Free" checkbox.
+
+**The gate is a conversion device, not a boundary — and the code says so.** `GET /templates/{id}/download-url` serves a free template to anyone who asks, with no account and no entitlement check. The email form is client-side only. This is deliberate and is the same reasoning as §21.3: a server-side check on an *unverified* email address is security theatre, because anyone can type any address. Free means free. What the gate actually buys is the address of someone who wanted the file enough to type one.
+
+The same `localStorage` key as §27.3, on purpose: one email, once, unlocks **both** free entry points. Being signed in satisfies it outright — an account is strictly stronger evidence than the form collects.
+
+**Consequences that had to be handled, not ignored:**
+
+- **A free template cannot also be sold.** The A$29 `risk-register-template` product granted exactly this template plus a free question — after the change it charged for two things anyone can have, so it was **unpublished** (not deleted; reversible in one flag if a real paid template is attached to it later). The A$49 course is now the only published product.
+- **The catalogue card checks `is_free` first.** The free template has no product and no entitlement, so an `owned` branch never fires for it and a `product` branch would fall through to *"not yet available for purchase"* — the precise opposite of true.
+- **`/templates/:id` became a public route.** It sat behind the member auth guard; a free lead magnet that requires an account to reach is not a lead magnet. Paid templates at that route show a buy/sign-in prompt instead of a download, and the API remains the real boundary either way (verified: anonymous request for a paid template → 401).
+
 ## 28. Pricing
 
-### 28.1 Structure
+### 28.0 The commercial model `[DECIDED, 2026-08-12 — owner instruction, verbatim]`
+
+Read this before §28.1, which is an older sketch and is not what is live.
+
+```
+Questions                        — free
+One template (Risk Register)     — free, but ask for an email first
+Other templates                  — paid
+Courses                          — paid
+```
+
+That is the whole model. Four lines, and every access decision in the product follows from them:
+
+| What | Access | Where it's enforced |
+|---|---|---|
+| All 100 question bodies | Free to everyone, no account | API always returns `body`; blur + email is client-side lead capture (§21.3, §27.1) |
+| Risk Register Template | Free, email requested | `templates.is_free`; download endpoint serves it unauthenticated (§27.4) |
+| Every other template | Paid | `entitlements` → `product_contents` (`content_type='template'`) |
+| Courses (all lessons, video and reading) | Paid, no free preview | `entitlements` → `product_contents` (`content_type='lesson'`) |
+
+**Live catalogue as of 2026-08-12:** one published product — Risk Register Fundamentals, A$49. The A$29 template product was unpublished when its template became free, because it would otherwise have charged for two things anyone can have (§27.4). `docs/pricing.md` holds the price ladder and the tiering rules for everything added next.
+
+**The asymmetry to keep straight:** a course purchase *includes* the templates its lessons use; a template purchase never unlocks a course. That direction was a real bug — one product once bundled both — and is now enforced by the catalogue shape rather than by convention (`docs/pricing.md` §2, `db/seed/012`).
+
+### 28.1 Structure `[SUPERSEDED by §28.0 — retained for the layout pattern only]`
+
+The three-column layout below is still the right *shape* for a pricing page. The contents are stale: the prices are illustrative US$ figures that were never adopted (the ladder is AUD, `docs/pricing.md` §1), and the "Free" column describes one free domain of 20 questions, which is not the model — all 100 are free (§27.1).
 
 Three columns. Never two (no visual centre), never five (Research: the audience is not shopping tiers).
 
@@ -1838,6 +1960,30 @@ The three questions most people open first:
 
 Profile, email, password, purchase history, and a data export / delete request route. Purchase history rows: date, product, amount with currency, order reference in mono, and a receipt link. This is what someone expensing the purchase will screenshot.
 
+### 30.4 My Library `[DECIDED, built 2026-08-12]`
+
+A destination of its own at `/library`, second in the member sidebar directly under Dashboard — above Courses/Templates/Questions, because those three are places to *find* things and this is the one place that holds what you already own.
+
+**The organising rule: do not flatten the types.** This is the design consequence of §0.8's reframing, and it is the whole point of the page. Each content type keeps its own row treatment and its own verb:
+
+| Type | Carries | Verb | Deliberately absent |
+|---|---|---|---|
+| Course | Progress bar, `n of m lessons`, percentage | **Continue** / **Start** / **Review** | — |
+| Template | File name and size | **Download** | No progress bar, no lesson wrapper, no resume |
+| Reference | Domain | **Read** | No progress, no order — it is a lookup tool (§4.1 of the product spec) |
+
+Rendering all three as identical cards with a generic `Open` would be the failure mode: it re-imposes the course-shaped box on two things that are not courses.
+
+**Continue where you left off** sits at the top, above the full library, and is **courses only**. A template has no progress and reference content has no fixed order, so a mixed "continue" feed would have to invent a notion of progress for two types that do not have one. It appears only for courses genuinely part-way through — not for one never started, which belongs in the list below with a `Start` button.
+
+**Progress counts only what you are entitled to.** A partial purchase reports progress against the lessons it granted, never against the course's full lesson count. Counting locked lessons in the denominator would strand a buyer at 60% with no reachable way to finish — a progress bar that cannot reach 100% reads as a bug, and here it would be one.
+
+**Three states, not two.** Loading, error ("we couldn't load your library" + retry), and *empty*, which is neither: nothing is broken, there is simply nothing bought yet. Empty offers a route into the catalogue; it never shows a retry button that would do nothing.
+
+**Honesty about the Reference section.** Question guidance is free for everyone (§21.3), so this section is a record of what a purchase *included*, not an access list. The page says exactly that rather than implying the purchase unlocked it. The alternative — listing free content under a heading that reads as "unlocked" — is a small lie that a buyer can check in one click.
+
+One endpoint (`GET /me/library`), not three: the grouping belongs in the response, because the spec's point is that one place holds differently-shaped things, and three client fetches would have to be reassembled and could race.
+
 ## 31. Admin
 
 Admin is a product inside the product, and it is assessed on whether **someone who is not the developer** can add a course, a lesson and a template without asking for help (C4).
@@ -1933,6 +2079,39 @@ Every list: search, filter by status, sort, and the columns someone actually nee
 `/admin/orders`: date, customer email, product, amount + currency, Stripe reference (mono, copyable), entitlement status. Exportable as CSV. This is what "a purchase record we can reconcile" means in the brief.
 
 Plus a **manual entitlement grant** — the escape hatch for the inevitable payment that succeeded while the webhook failed. It logs who granted it, when and why.
+
+### 31.8 What was actually built `[BUILT 2026-08-12 — read this before trusting §31.1–§31.7]`
+
+§31.1–§31.7 above are the *specification*. This section is the honest record of the build, because a spec section that reads as shipped when it isn't is how a handover goes wrong.
+
+Before this, every content change was a hand-written SQL seed file in `db/seed/` — the catalogue was un-growable by anyone but a developer, which is the single largest gap the product spec named (§9: *"no code required"*).
+
+**Built and verified:**
+
+- 23 routes across `/admin/questions`, `/admin/templates`, `/admin/courses`, plus a React editor for each at `/admin/*`.
+- **The guard is applied at the router level, not per handler.** `dependencies=[Depends(require_admin)]` on the admin router means a new endpoint cannot ship unauthenticated because someone forgot a decorator — the failure mode BACKEND.md §5 warns about. Verified: 401 anonymous and with a forged token; 403 for a member.
+- **Every mutation writes an `audit_log` row.** That table existed since the first migration with **zero writers**. An admin surface that can unpublish paid content without a trace is what it was created for.
+- The seven-dimension question editor per §31.4 — controlled vocabularies, never free-form.
+- File upload for templates (25 MB cap, MIME allow-list not deny-list) routed through an admin-guarded endpoint rather than a presigned browser upload, so the bucket holding paid artefacts never accepts a direct write.
+- **Three publish-time guards that prevent the expensive failures**: a template with no file cannot be published (a paid download that 404s); a video lesson with no Mux asset cannot be published (an empty player shown to someone who just paid); and a tag value from the wrong dimension is rejected with a readable message — *"'XS (Under 2 weeks)' is a duration value and cannot be used as effort"* — because the foreign key alone proves only that a tag exists, not that it belongs where it was put.
+- Slugs auto-generate from titles but **deliberately do not follow a retitle**: question URLs are the product's shareable surface, and silently changing one breaks existing links with no redirect.
+- Nothing is published on create. A draft cannot appear in a public catalogue mid-edit.
+
+**Specified above but NOT built — known gaps, not oversights:**
+
+| §  | Specified | Reality |
+|---|---|---|
+| 31.2 | `Draft → In review → Published → Archived` | A boolean `published` only. No review state, no archive. |
+| 31.3 | Autosave every 20 s with a `Saved 12:04` timestamp | Explicit save only. **The highest-value gap** — §31.3 is right that losing typed guidance is the fastest way to lose an author. |
+| 31.3 | Inline help under every non-obvious field | Present on a few fields (preview, tags), not systematically. |
+| 31.3 | Validation inline on blur | Validation is server-side on submit; messages are readable, but the round trip is real. |
+| 31.3 | Typed confirmation for destructive actions | Unpublish is one click, no confirmation. Non-destructive and reversible, but §31.2's "summary of what will become public" is absent in both directions. |
+| 31.3 | Upload progress, byte size, encoding state | Byte size yes; progress no; **video is not uploaded through the app at all** — Mux asset/playback ids are pasted from the Mux dashboard. Proxying multi-GB video through this API would be worse than Mux's own resumable direct upload at every level. Two fields, works today, isolated to one endpoint when it is upgraded. |
+| 31.3 | The non-developer usability test as a deliverable | Not run. This is a Week 3 deliverable and remains one. |
+| 31.6 | Bulk publish/unpublish | Per-row only. Search and status filter exist on questions. |
+| 31.7 | `/admin/orders`, CSV export, manual entitlement grant | Not built. Manual grants are currently a SQL statement. |
+
+**Bootstrapping the first admin is deliberately outside the UI.** `backend/scripts/grant_admin.py` promotes an account by email and requires `DATABASE_URL` — i.e. whoever runs it already has full database access. Role escalation is the one action an admin UI must never offer: "any signed-in user can make themselves an admin" is not a bootstrap, it is a hole.
 
 ## 32. Transactional email
 

@@ -250,7 +250,11 @@ export function Dashboard() {
       )}
 
       <p className="mt-14 text-center text-sm text-muted-foreground">
-        One question and one template are live today — more are added weekly.
+        {/* Kept literally true against the database, not aspirational: 100 published
+            questions, one template, one course (counted 2026-08-11). The old line
+            said "one question and one template", written when that was the whole
+            catalogue and left stale by the 100-question seed and the course split. */}
+        All 100 questions are live today, plus one template and one course — more are added weekly.
       </p>
     </div>
   )

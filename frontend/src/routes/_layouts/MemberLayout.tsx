@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Link, NavLink, Navigate, Outlet } from 'react-router'
-import { GraduationCap, LayoutDashboard, LogOut, Menu, Sparkles, Tags, X } from 'lucide-react'
+import { GraduationCap, LayoutDashboard, Library, LogOut, Menu, ShieldCheck, Sparkles, Tags, X } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api/client'
+import { queryKeys } from '@/lib/query/keys'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { supabase } from '@/lib/auth/supabase'
 import { cn } from '@/lib/utils/cn'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
-function FullPageSpinner() {
+export function FullPageSpinner() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background" role="status" aria-label="Loading">
       <div className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
@@ -22,12 +25,29 @@ function FullPageSpinner() {
 // just from cards buried on the dashboard.
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  // "My Library" sits directly under Dashboard, above the catalogue links: the three
+  // below are places to *find* things, this is the one place that holds what you
+  // already own (product spec §2 step 6). A buyer looking for something they paid for
+  // should not have to work out which catalogue it came from.
+  { to: '/library', label: 'My Library', icon: Library, end: false },
   { to: '/courses', label: 'Courses', icon: GraduationCap, end: false },
   { to: '/templates', label: 'Templates', icon: Sparkles, end: false },
   { to: '/questions', label: 'Questions', icon: Tags, end: false },
 ] as const
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+  // Shown only to admins — and only as a shortcut. /admin is guarded independently on
+  // both the client (AdminLayout) and, the part that actually matters, the server
+  // (require_admin on every /admin/* route). A member who never sees this link and
+  // types the URL still gets nothing.
+  const user = useAuthStore((s) => s.user)
+  const { data: profile } = useQuery({
+    queryKey: queryKeys.me.profile(),
+    queryFn: () => api.get<{ is_admin: boolean }>('/me/profile').then((r) => r.data),
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+  })
+
   return (
     <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Member">
       {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
@@ -49,6 +69,17 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
           {label}
         </NavLink>
       ))}
+
+      {profile?.is_admin && (
+        <NavLink
+          to="/admin/questions"
+          onClick={onNavigate}
+          className="mt-2 flex items-center gap-3 rounded-lg border-t border-sidebar-border px-3 pb-2.5 pt-4 text-sm font-medium text-sidebar-foreground/70 transition-colors duration-150 hover:text-sidebar-accent-foreground"
+        >
+          <ShieldCheck className="size-[18px] shrink-0" aria-hidden="true" />
+          Content editor
+        </NavLink>
+      )}
     </nav>
   )
 }
@@ -92,17 +123,22 @@ function SidebarAccount() {
   )
 }
 
-// The auth guard, checked once here rather than re-implemented per page
-// (DESIGN.md §78's auth guard pattern). A client-side redirect is a UX nicety, not a
-// security control — every route this wraps still calls a FastAPI endpoint that
-// checks entitlement server-side (week1_plan.md Non-negotiable #3).
-export default function MemberLayout() {
-  const user = useAuthStore((s) => s.user)
-  const loading = useAuthStore((s) => s.loading)
+/** The signed-in chrome — sidebar, mobile sheet, `<Outlet/>` — with NO auth guard.
+ *
+ * Split out from MemberLayout below (2026-08-11, owner-reported: "clicking on
+ * Courses, Templates and Questions is making the sidebar disappear"). The cause was
+ * that those three destinations are *public* routes registered under
+ * MarketingLayout, while the sidebar linking to them lives in MemberLayout — so
+ * every click from the sidebar navigated out of the layout that drew the sidebar.
+ *
+ * The fix is not to move those routes behind the auth guard (they must stay
+ * publicly reachable — a visitor has to be able to browse the catalogue before
+ * buying). It's that the *chrome* should follow who is signed in, not which route
+ * is being viewed. CatalogueLayout.tsx picks between this and MarketingLayout on
+ * exactly that basis; this component is the half that needs to render without
+ * asserting anything about auth. */
+export function MemberChrome() {
   const [mobileOpen, setMobileOpen] = useState(false)
-
-  if (loading) return <FullPageSpinner />
-  if (!user) return <Navigate to="/sign-in" replace />
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -163,4 +199,18 @@ export default function MemberLayout() {
       </div>
     </div>
   )
+}
+
+// The auth guard, checked once here rather than re-implemented per page
+// (DESIGN.md §78's auth guard pattern). A client-side redirect is a UX nicety, not a
+// security control — every route this wraps still calls a FastAPI endpoint that
+// checks entitlement server-side (week1_plan.md Non-negotiable #3).
+export default function MemberLayout() {
+  const user = useAuthStore((s) => s.user)
+  const loading = useAuthStore((s) => s.loading)
+
+  if (loading) return <FullPageSpinner />
+  if (!user) return <Navigate to="/sign-in" replace />
+
+  return <MemberChrome />
 }

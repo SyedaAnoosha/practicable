@@ -5,6 +5,7 @@ from app.core.deps import get_current_user_id
 from app.api.v1.content import questions, lessons, templates, courses
 from app.api.v1.commerce import checkout, products, webhooks
 from app.api.v1 import leads, me
+from app.api.v1.admin.router import router as admin_router
 
 app = FastAPI(title="Practicable API", version="1.0.0")
 
@@ -29,6 +30,9 @@ app.include_router(products.router, tags=["commerce"])
 app.include_router(webhooks.router, tags=["commerce"])
 app.include_router(me.router, tags=["me"])
 app.include_router(leads.router, tags=["leads"])
+# Admin content editor (product spec §9). Every route inside is gated by require_admin
+# at the router level — see app/api/v1/admin/router.py.
+app.include_router(admin_router, tags=["admin"])
 
 
 @app.get("/health")

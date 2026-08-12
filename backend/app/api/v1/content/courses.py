@@ -291,6 +291,7 @@ async def get_course(
                 Product.published.is_(True),
             )
             .distinct()
+            .order_by(Product.price_amount)
         )
         related_products = [
             RelatedProductOut(slug=p.slug, name=p.name, price_amount=p.price_amount, currency=p.currency)

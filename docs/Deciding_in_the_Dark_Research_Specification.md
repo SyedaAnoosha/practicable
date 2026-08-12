@@ -1,5 +1,5 @@
 # Deciding in the Dark — Research & Product Specification
-**Pre-Build Decision Document · v2.2 · August 2026**
+**Pre-Build Decision Document · v2.3 · August 2026**
 
 *Prepared for: Effective Risk Management*
 *Status: Research finding / Inference / Recommendation clearly marked throughout*
@@ -9,6 +9,17 @@
 ## DOCUMENT HISTORY
 
 This is the **single, canonical specification** for the platform. v1.0 was the initial research pass; v1.1 (7 August 2026) audited it against the full 16-section research brief and current official pricing, patching gaps in place (marked `[AUDIT v1.1]`). v2.0 (7 August 2026) consolidated every earlier draft specification produced during this project's research phase into this one document — competitor detail, a formal project risk register, and a budget-constrained stack alternative. **v2.1 (7 August 2026) records an owner-directed stack pivot**, marked `[STACK PIVOT v2.1]`: the frontend/backend framework changed from Next.js to a decoupled React (Vite, TypeScript) frontend and FastAPI (Python) backend, with the FastAPI backend hosted on Render — Supabase, Stripe, Mux, Cloudflare R2, Resend, and PostHog are unaffected; the pivot changes *where* entitlement-checking code lives, not *whether or how* it happens. **v2.2 (7 August 2026) elevates scalability and extensibility to an explicit, standing owner directive**, marked `[OWNER DIRECTIVE]`: the system must always be scalable for new features and extensible, not merely tolerant of extension as a nice-to-have. Sections carrying old Next.js-specific detail are corrected in place rather than left to contradict later decisions.
+
+**v2.3 (12 August 2026) annotates this research against what was actually built**, marked `[BUILT]`. This document remains a *pre-build* research artefact and its reasoning is deliberately left intact — including where that reasoning turned out to be wrong. What changed is that sections whose recommendations have since been overtaken by a real decision or a real constraint now say so, in place, with the outcome:
+
+| § | What changed |
+|---|---|
+| 4.2 | Pricing `[OPEN DECISION]` **resolved** — AUD, and a different shape from the ranges proposed: questions free, one template free behind an email, other templates and all courses paid. |
+| 6.7 | Resend is **not** the live email path. Every domain-gated provider was blocked by the absence of a sending domain; the live chain is Gmail SMTP → Mailjet → Brevo → Resend. |
+| 6.8 | The custom admin was **built**; two implementation findings added, and the section's own `[WARNING]` explicitly **not** discharged. |
+| 8.1 | Two routes added (`/library`, `/admin/*`), plus a structural correction: "public page" and "member page" are not mutually exclusive. |
+
+Where this document and `DESIGN.md` disagree, `DESIGN.md` is the build authority — it is maintained against the code; this one is maintained against the research.
 
 ---
 
@@ -400,7 +411,22 @@ Domains are the top-level navigation for the practitioner who knows their proble
 | Full course + templates bundle | $149–$249 | Best value positioning |
 | Free entry point | $0, email required | One domain browsable; one sample template |
 
-**[OPEN DECISION]** Actual pricing is a business decision for the owner. The ranges above are research-informed estimates. The author should set pricing based on their knowledge of what practitioners pay for comparable consulting and training.
+**[OPEN DECISION — RESOLVED, 2026-08-12]** The owner has set the model. It is denominated in **AUD**, not the USD ranges above, and it is materially cheaper than this research proposed:
+
+```
+Questions                        — free
+One template (Risk Register)     — free, but ask for an email first
+Other templates                  — paid
+Courses                          — paid
+```
+
+Live catalogue: **Risk Register Fundamentals, A$49** (the only published product). The full ladder and tiering rules live in `docs/pricing.md`; the enforcement map is `DESIGN.md` §28.0.
+
+Three places this research's assumptions did not survive contact:
+
+1. **"Free entry point: one domain browsable; one sample template"** became *all 100 questions free, permanently, plus one free template.* Gating 80 of 100 questions to make 20 the "free domain" turned out to protect content that was never the paid product — the templates and courses are. See §4.1's own annotation and `DESIGN.md` §27.
+2. **The $30–49 conversion-band finding still applies**, but to templates and courses, not to reference content. It is the reason the A$29 template tier exists in the ladder at all.
+3. **A free template and a free question are not redundant.** They convert different people: the question converts a reader, the template converts someone who wants a working file today and will not read 900 words first (§4.3's "I need this one thing right now"). The build initially shipped only the free question on the argument that it made the free template unnecessary; that was wrong and has been corrected.
 
 ### Cross-check against digital-template marketplace data `[AUDIT v1.1]`
 
@@ -667,6 +693,25 @@ PRODUCT ──< BUNDLE_ITEM >── PRODUCT (bundles)
 
 **[RECOMMENDATION]** Resend, using plain HTML/Jinja2 templates rendered in Python. Free tier is sufficient for v1. SPF, DKIM, and DMARC must be configured on the sending domain — Resend provides step-by-step guides for this.
 
+**`[BUILT — CORRECTED IN PRACTICE, 2026-08-12]`** Resend is *not* the live path, and the reason matters for anyone repeating this research. Resend, Postmark, SendGrid and SES all require a verified sending **domain** (or blocked signup without a work-domain email), which this project does not have. Every provider was tried in order and the trail is documented in `docs/email.md`:
+
+| Provider | Outcome |
+|---|---|
+| Resend | Works, but its sandbox sender delivers **only** to the address the account is registered under. Retained as a labelled last resort. |
+| Postmark | Blocked signup without a work-domain email address. |
+| Brevo | Verifies a single sender *address* rather than a domain — correct shape, but the account sits in a manual-review "not yet activated" state. Dormant second fallback. |
+| SendGrid | Free plan retired; documented compliance-review holds on new accounts. |
+| MailerSend | Hard 2-recipient trial cap. |
+| Mailjet | Delivers to arbitrary real recipients immediately on a fresh free account. Live and verified. |
+| **Gmail SMTP (app password)** | **The first transport tried as of 2026-08-12.** No domain, no provider review, reaches any real recipient. `docs/gmail.md`. |
+
+The live chain is **Gmail SMTP → Mailjet → Brevo → Resend**, each tier running only if the one before is unconfigured or fails.
+
+Two findings worth carrying forward:
+
+1. **A silently-degrading email chain is worse than a loud failure.** A real order fell through to Resend, whose sandbox sender redirected the *buyer's* receipt to the owner. The owner received two emails a minute apart — one of them a "thank you for your purchase" addressed to someone else — and the actual buyer received nothing, with no signal that anything had gone wrong. The redirect is still the right behaviour (a delivered email beats a log line nobody reads), but it now arrives subject-prefixed `[Not delivered to buyer]` with a banner naming the address that did not receive it.
+2. **Gmail forces the From address** to the authenticated account on personal accounts. A custom sender address is impossible on this transport — only the display name survives. That is an accepted interim, not a permanent answer; the real end state is a verified sending domain, at which point tier 1 gets deleted rather than migrated.
+
 **Required email types for v1:**
 1. Welcome email (on sign-up)
 2. Purchase receipt (triggered by Stripe webhook)
@@ -695,6 +740,15 @@ PRODUCT ──< BUNDLE_ITEM >── PRODUCT (bundles)
 The Supabase Studio (the Supabase dashboard) can serve as a secondary admin for power users who need to run queries or handle edge cases. Document this in the handover pack.
 
 **[WARNING]** "Non-technical person adds a course" is achievable in the custom admin; "non-technical person adds a course without calling you" requires the admin to handle errors gracefully, have inline help text, and have been tested by someone who is not the developer. Allocate real time in Week 3 for this test and for fixing the failures.
+
+**`[BUILT, 2026-08-12]`** The custom-admin recommendation was followed and is live: 23 FastAPI routes plus React editors for questions, courses and templates. Two implementation findings this research did not anticipate, both of which generalise:
+
+- **Apply the role check at the router, not the handler.** `dependencies=[Depends(require_admin)]` on the admin router means a newly added endpoint cannot ship unauthenticated because someone forgot the dependency. The per-handler approach this section implies is one omission away from an open write endpoint.
+- **Publish-time content checks prevent the expensive failures.** A published template with no file uploaded is a paid download that 404s; a published video lesson with no Mux asset is an empty player shown to someone who just paid. Both are refused with a readable message. Nothing else in the system would have caught either.
+
+The `[WARNING]` above stands and is **not** discharged: the non-developer usability test has not been run, and the build is missing several things `DESIGN.md` §31.3 requires — most importantly **autosave**, whose absence is exactly the "loses 40 minutes of typed guidance" failure that warning is about. `DESIGN.md` §31.8 carries the full gap list.
+
+Video is a partial exception to "upload videos through a FastAPI endpoint": Mux asset/playback ids are pasted from the Mux dashboard rather than proxied through this API, because Mux's own resumable direct upload beats anything achievable by streaming multi-GB files through a Python worker.
 
 **Post-v1:** Sanity is the strongest candidate for a full editorial upgrade. The free tier supports 3 users; Growth is $15/user/month. A Sanity Studio could be added in v2 without disrupting the core architecture.
 
@@ -816,6 +870,13 @@ The brief's security section (§7) asks explicitly for rate limiting, logging, a
 # PART EIGHT — UX AND INFORMATION ARCHITECTURE
 
 ## 8.1 Site structure (proposed)
+
+**`[BUILT — additions, 2026-08-12]`** Two routes this section did not anticipate, both now live:
+
+- **`/library`** — "My Library": everything a user has bought, across all three content types, labelled by type, with progress and a resume point for courses only. This section proposed purchased content be reached through the dashboard; a separate destination proved necessary once there were genuinely different *kinds* of purchase, because a buyer looking for something they paid for should not have to work out which catalogue it came from. `DESIGN.md` §30.4.
+- **`/admin/*`** — the content editor (§6.8), role-guarded server-side.
+
+One structural correction: `/questions`, `/courses` and `/templates` are public but are *also* where signed-in members spend their time. Registering them under a public-only layout while the member sidebar linked to them meant every sidebar click navigated out of the member area. The fix was to make the page chrome follow the *visitor* rather than the route — the same URL renders inside the member sidebar for a signed-in user and inside the public header for everyone else. Worth designing for up front: "public page" and "member page" are not mutually exclusive categories.
 
 ```
 PUBLIC (no login required)

@@ -38,6 +38,16 @@ class RelatedLessonOut(BaseModel):
     lesson_title: str
     lesson_type: str
     owned: bool
+    # The cheapest published product that actually grants THIS lesson, or None if
+    # nothing sells it yet. Added with the template/course split (db/seed/012): the
+    # page used to send every locked lesson to `related_content[0]`, which was safe
+    # only while a single product bundled the template and the course together. Once
+    # they became separate purchases, that link pointed a locked *course* lesson at
+    # the A$29 *template* — a checkout that takes the money and still leaves the
+    # lesson locked. The unlocking product has to be resolved per lesson, not guessed
+    # from the question's own upsell list.
+    unlock_product_slug: Optional[str] = None
+    unlock_product_name: Optional[str] = None
 
 router = APIRouter()
 
@@ -236,6 +246,11 @@ async def get_question(
             ProductContent.content_id == question.id,
             Product.published.is_(True),
         )
+        # Cheapest first. Since the template/course split (db/seed/012) more than one
+        # product can grant the same question, and the frontend's buy card reads
+        # related_content[0] — so without this the page could quote the A$49 course
+        # when the A$29 template is the cheaper way in.
+        .order_by(Product.price_amount)
     )
     related_content = [
         RelatedProductOut(slug=p.slug, name=p.name, price_amount=p.price_amount, currency=p.currency)
@@ -294,8 +309,29 @@ async def get_question(
         )
         .order_by(QuestionLesson.sort_order)
     )
+    related_lesson_rows = related_lesson_result.all()
+
+    # Which product unlocks each of these lessons — one batched query, keyed by lesson,
+    # cheapest product per lesson wins. Batched rather than per-lesson for the same
+    # reason the tag loaders above are (the N+1 that made GET /questions take 90s once
+    # there were 100 rows); this list is short today but the shape shouldn't regress.
+    unlock_by_lesson: dict[uuid.UUID, Product] = {}
+    if related_lesson_rows:
+        unlock_result = await session.execute(
+            select(ProductContent.content_id, Product)
+            .join(Product, Product.id == ProductContent.product_id)
+            .where(
+                ProductContent.content_type == ResourceType.LESSON.value,
+                ProductContent.content_id.in_([lesson.id for lesson, _, _ in related_lesson_rows]),
+                Product.published.is_(True),
+            )
+            .order_by(Product.price_amount.desc())  # desc + overwrite => cheapest wins
+        )
+        for lesson_id, product in unlock_result.all():
+            unlock_by_lesson[lesson_id] = product
+
     related_lessons = []
-    for lesson, module, course in related_lesson_result.all():
+    for lesson, module, course in related_lesson_rows:
         owned = (
             await has_access_to(
                 user_id=uuid.UUID(user_id),
@@ -306,6 +342,7 @@ async def get_question(
             if user_id
             else False
         )
+        unlock_product = unlock_by_lesson.get(lesson.id)
         related_lessons.append(
             RelatedLessonOut(
                 course_slug=course.slug,
@@ -314,6 +351,8 @@ async def get_question(
                 lesson_title=lesson.title,
                 lesson_type=lesson.lesson_type,
                 owned=owned,
+                unlock_product_slug=unlock_product.slug if unlock_product else None,
+                unlock_product_name=unlock_product.name if unlock_product else None,
             )
         )
 

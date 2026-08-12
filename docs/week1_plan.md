@@ -121,6 +121,44 @@ instruction. Only a question's written guidance is free (see the Research
 Specification's §4.1/8.2 annotations for how that model itself changed from the
 original "teaser paragraph" design to "full body, email-gated client-side").
 
+**[POST-WEEK-1 UPDATE, 2026-08-12]** A second wave of work, again pulling items
+forward from later weeks, and again recorded here rather than retrofitted into the
+Day 1–5 record below:
+
+- **The commercial model is now settled** (owner instruction, `DESIGN.md` §28.0):
+  questions free · one template (Risk Register) free behind an email · other templates
+  paid · courses paid. Migration `007` adds `templates.is_free`; the free template's
+  download endpoint serves it with no account and no entitlement, because a server-side
+  check on an unverified email address would be theatre. Consequence handled rather
+  than ignored: the A$29 template product was **unpublished**, since it had come to
+  charge for two things anyone can now have.
+- **The template/course entitlement bug is fixed** — one product had bundled both, so
+  a template purchase granted the whole course. Split into two separately-priced
+  products (`db/seed/012`), existing buyers grandfathered, verified directly against
+  the entitlement engine (template-only holder: template ✓, lessons ✗).
+- **The admin content editor is built** (was Week 3) — see the Scope guardrails note.
+- **My Library** (`/library`) — purchased items across all three content types with
+  progress and resume.
+- **Gmail SMTP added as the first email transport** (`docs/gmail.md`), after a real
+  order delivered both of its emails from Resend's sandbox sender: the buyer received
+  nothing and the owner received two, one of which was the buyer's receipt. The Resend
+  fallback now labels a redirected copy `[Not delivered to buyer]` instead of letting
+  it read as a normal receipt.
+- **A layout bug worth recording** because it was invisible to every automated check:
+  the member sidebar linked to `/questions`, `/courses` and `/templates`, which were
+  registered under the *public* layout — so every click from the sidebar navigated out
+  of the layout drawing the sidebar. Fixed by making the chrome follow the visitor
+  (`CatalogueLayout.tsx`), **not** by putting the catalogue behind the auth guard,
+  which would have broken the funnel to fix a cosmetic bug.
+
+**A data note, not a build note:** on 2026-08-12 every user-data table was found empty
+(`auth.users`, `users`, `orders`, `entitlements`, `lesson_progress`, `leads`,
+`audit_log`), while all content tables were intact. This was an external wipe of the
+Supabase Auth accounts, not a migration or a code path. It means the Week 1 evidence
+below — the real buyer, the real order, the real entitlement — describes rows that no
+longer exist. The verifications were genuine when made; the records are gone.
+`backend/scripts/grant_admin.py` re-establishes an admin once an account exists again.
+
 **[STATUS, updated 2026-08-11]** Every item in this chain is now either verified
 working against real production infrastructure, or explicitly named as the one thing
 left that only a human on a physical device can do. The three blockers named in the
@@ -163,9 +201,9 @@ click-through, below.
 
 - Multiple courses, modules, or lessons — one of each only. **[SUPERSEDED, 2026-08-11]** Multiple lessons per course (all three lesson types) and a real multi-module course are now built — see the post-Week-1 update above and `docs/handover.md`. Still true: only one *course* exists (a second is data entry, not new engineering).
 - The full question-discovery / multi-tag filter UI. Week 1 needs exactly one question page to exist and be reachable. **[RECONCILED]** `DESIGN.md` §60 originally listed the functional discovery page as a Week 1 item too — the owner confirmed keeping this exclusion instead, deferring it to Week 2 so the five-day budget stays protected for the commerce chain. `theme.css`, the six core components, and header/footer/layout (also §60) remain Week 1 work regardless, since Day 1's design-tokens step (Phase 1, step 7) already covers them.
-- Admin CRUD interface (Week 3). Content goes in via Supabase Studio directly this week.
-- Progress tracking / resume (Week 2). **[SUPERSEDED, 2026-08-11]** Lesson-level completion and a live course-percentage rollup are now built — see the post-Week-1 update above.
-- Multiple products, bundles, or pricing tiers — one template product only.
+- Admin CRUD interface (Week 3). Content goes in via Supabase Studio directly this week. **[SUPERSEDED, 2026-08-12]** Built and live: 23 admin routes plus a React editor for questions, courses and templates (`/admin/*`), with the guard applied at the *router* level so a new endpoint cannot ship unauthenticated, and an `audit_log` row written on every mutation — that table had existed since migration 001 with zero writers. Content no longer goes in via hand-written SQL seed files. `DESIGN.md` §31.8 lists what was built **and what was not** (no autosave, no draft/review/archive states, no `/admin/orders`, video ids pasted rather than uploaded).
+- Progress tracking / resume (Week 2). **[SUPERSEDED, 2026-08-11]** Lesson-level completion and a live course-percentage rollup are now built — see the post-Week-1 update above. **[EXTENDED, 2026-08-12]** Surfaced to the user as **My Library** (`/library`) — purchased items across all three content types, labelled by type, with a "continue where you left off" rail. `DESIGN.md` §30.4.
+- Multiple products, bundles, or pricing tiers — one template product only. **[SUPERSEDED, 2026-08-12]** There are now two products, because the original single product was a real bug: it bundled the template *and* the whole course, so buying the A$29 template silently granted the A$49 course (owner-reported: "a real major bug"). Split in `db/seed/012`, with existing buyers grandfathered. The template has since become the free lead magnet, so that product is unpublished and the course is the only published one — see `docs/pricing.md` §2 and `DESIGN.md` §28.0.
 - Certificates of any kind — not cheap to add correctly; do not start.
 - Polished visual design — but **do** apply the Week 1 design tokens (below) from the first screen, since retrofitting consistency later never works.
 - Analytics instrumentation beyond what's trivial to add alongside — full instrumentation is a Week 2 task.
@@ -199,7 +237,7 @@ click-through, below.
 4. **Scaffold the backend:** Python virtual environment; install `fastapi`, `uvicorn`, `sqlalchemy` + `asyncpg` (async ORM/driver) + `alembic` (migrations — `BACKEND.md` §8.1), `supabase` (service-role client, admin ops only — `BACKEND.md` §6), `python-jose` (JWT verification), `stripe`, `mux-python`, `boto3` (R2), `resend`. A minimal `/health` endpoint. This scaffold and the full 22-model schema already exist in `backend/` — this step is confirming `pip install -r requirements.txt` actually installs everything the models import (it didn't, until this pass added `sqlalchemy`/`asyncpg`/`alembic`), not building from zero. Push to GitHub, connect to Render.
 5. **Set up environment variables**, split correctly (never mixed):
    - **Frontend (`.env.local` → Vercel):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL`.
-   - **Backend (`.env` → Render):** `DATABASE_URL` (session-pooler port 5432, not transaction-pooler 6543 — see `docs/RUNNING.md`'s troubleshooting table), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_AUDIENCE` (JWT verification itself is now via Supabase's JWKS endpoint, not a shared secret — `SUPABASE_JWT_SECRET` is unused), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `MUX_SIGNING_KEY_ID`, `MUX_SIGNING_KEY_PRIVATE`, `SUPABASE_STORAGE_S3_ENDPOINT`, `SUPABASE_STORAGE_REGION`, `SUPABASE_STORAGE_ACCESS_KEY_ID`, `SUPABASE_STORAGE_SECRET_ACCESS_KEY`, `SUPABASE_STORAGE_BUCKET_NAME`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `ALLOWED_ORIGIN`.
+   - **Backend (`.env` → Render):** `DATABASE_URL` (session-pooler port 5432, not transaction-pooler 6543 — see `docs/RUNNING.md`'s troubleshooting table), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_AUDIENCE` (JWT verification itself is now via Supabase's JWKS endpoint, not a shared secret — `SUPABASE_JWT_SECRET` is unused), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `MUX_SIGNING_KEY_ID`, `MUX_SIGNING_KEY_PRIVATE`, `SUPABASE_STORAGE_S3_ENDPOINT`, `SUPABASE_STORAGE_REGION`, `SUPABASE_STORAGE_ACCESS_KEY_ID`, `SUPABASE_STORAGE_SECRET_ACCESS_KEY`, `SUPABASE_STORAGE_BUCKET_NAME`, `GMAIL_USER`, `GMAIL_APP_PASSWORD` (the first email transport tried, `docs/gmail.md`), `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `BREVO_API_KEY`, `BREVO_SMTP_LOGIN`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `RESEND_API_KEY`, `OWNER_NOTIFICATION_EMAIL`, `ALLOWED_ORIGIN`.
 6. **Configure FastAPI's CORS middleware** immediately, restricted to the Vercel URL and `localhost:5173` — do this Day 1, not when the first cross-origin error appears.
 7. **Establish `theme.css` first, per `DESIGN.md` §60's own Week 1 sequence** ("half a day, and it governs everything after") — this is not a placeholder step to revisit later, it is a `[DECIDED]`, contrast-audited system:
    - **Colour**: the full light/dark token set in `DESIGN.md` §7.4/§7.5 verbatim — not the placeholder hex values from earlier drafts. It has already been through a WCAG 2.2 contrast audit (six dark-mode pairs, including the focus ring, were corrected there); do not re-derive or simplify it.
@@ -388,7 +426,7 @@ click-through, below.
 ## Quick-reference
 
 ### Stack
-React 19 (Vite, TypeScript) + Tailwind v4 + shadcn/ui + react-router v8 + TanStack Query + Zustand + Axios, on Vercel · FastAPI (Python), on Render · Supabase (Postgres + Auth + RLS) · Stripe (Checkout + webhooks) · Mux (signed JWT video) · Supabase Storage (presigned downloads — swapped in for the originally-planned Cloudflare R2; same S3-compatible API, no card required on the free tier, one fewer external account) · Brevo (swapped in for Resend — Resend needs a verified sending *domain*, which this project doesn't have yet; Brevo verifies a single sender *email address* instead, see `docs/email.md`)
+React 19 (Vite, TypeScript) + Tailwind v4 + shadcn/ui + react-router v8 + TanStack Query + Zustand + Axios, on Vercel · FastAPI (Python), on Render · Supabase (Postgres + Auth + RLS) · Stripe (Checkout + webhooks) · Mux (signed JWT video) · Supabase Storage (presigned downloads — swapped in for the originally-planned Cloudflare R2; same S3-compatible API, no card required on the free tier, one fewer external account) · Email: **Gmail SMTP first** (app password, reaches any real recipient with no provider review — `docs/gmail.md`), then Mailjet, then Brevo, then Resend as a labelled last resort. Originally planned as Resend alone, which needs a verified sending *domain* this project doesn't have; see `docs/email.md` for the full provider trail.
 
 ### Entity list for the Day 1 schema
 `users` · `sections` · `authors` · `domains` · `questions` · `question_relations` · `tag_values` · `courses` · `modules` · `lessons` · `templates` · `question_templates` · `question_lessons` · `products` · `product_contents` · `orders` · `order_items` · `entitlements` · `lesson_progress`
@@ -399,7 +437,7 @@ React 19 (Vite, TypeScript) + Tailwind v4 + shadcn/ui + react-router v8 + TanSta
 
 **Frontend (`.env.local` → Vercel):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL`
 
-**Backend (`.env` → Render):** `DATABASE_URL` (session-pooler port 5432, not transaction-pooler 6543 — see `docs/RUNNING.md`'s troubleshooting table), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_AUDIENCE` (JWT verification itself is now via Supabase's JWKS endpoint, not a shared secret — `SUPABASE_JWT_SECRET` is unused), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `MUX_SIGNING_KEY_ID`, `MUX_SIGNING_KEY_PRIVATE`, `SUPABASE_STORAGE_S3_ENDPOINT`, `SUPABASE_STORAGE_REGION`, `SUPABASE_STORAGE_ACCESS_KEY_ID`, `SUPABASE_STORAGE_SECRET_ACCESS_KEY`, `SUPABASE_STORAGE_BUCKET_NAME`, `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `ALLOWED_ORIGIN`
+**Backend (`.env` → Render):** `DATABASE_URL` (session-pooler port 5432, not transaction-pooler 6543 — see `docs/RUNNING.md`'s troubleshooting table), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_AUDIENCE` (JWT verification itself is now via Supabase's JWKS endpoint, not a shared secret — `SUPABASE_JWT_SECRET` is unused), `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `MUX_SIGNING_KEY_ID`, `MUX_SIGNING_KEY_PRIVATE`, `SUPABASE_STORAGE_S3_ENDPOINT`, `SUPABASE_STORAGE_REGION`, `SUPABASE_STORAGE_ACCESS_KEY_ID`, `SUPABASE_STORAGE_SECRET_ACCESS_KEY`, `SUPABASE_STORAGE_BUCKET_NAME`, `GMAIL_USER`, `GMAIL_APP_PASSWORD` (the first email transport tried, `docs/gmail.md`), `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `BREVO_API_KEY`, `BREVO_SMTP_LOGIN`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `RESEND_API_KEY`, `OWNER_NOTIFICATION_EMAIL`, `ALLOWED_ORIGIN`
 
 **Never cross these two lists** — a backend secret in the frontend list ships to every visitor's browser.
 

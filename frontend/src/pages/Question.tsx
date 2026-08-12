@@ -53,6 +53,10 @@ interface RelatedLesson {
   lesson_title: string
   lesson_type: string
   owned: boolean
+  // The product that actually unlocks THIS lesson (cheapest, if several do), resolved
+  // per-lesson server-side. Null when nothing sells it yet.
+  unlock_product_slug?: string | null
+  unlock_product_name?: string | null
 }
 
 interface QuestionData {
@@ -185,11 +189,32 @@ export function Question() {
              per domain. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-0 h-[26rem] w-screen -translate-x-1/2"
+        className="pointer-events-none absolute left-1/2 top-0 h-[30rem] w-screen -translate-x-1/2"
         style={{
-          background: `radial-gradient(70rem 22rem at 50% 0%, color-mix(in srgb, color-mix(in srgb, ${domainColor} 50%, var(--accent)) 22%, transparent), transparent 72%)`,
-          maskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 45%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 45%, transparent 100%)',
+          // Two layers, and the second one is the point. A wash built only from blue
+          // reads GREY over ivory no matter how it's mixed — the third attempt at
+          // this proved it (the domain hues are dark navies; at any opacity low
+          // enough to read as a wash, they desaturate). Champagne gold, the secondary
+          // brand colour, is what makes it read as a deliberate warm tint rather than
+          // a dirty smudge, and it's why the palette went back to two colours.
+          //
+          // Both layers are LINEAR, not radial. Every previous version used a radial
+          // ellipse, and an ellipse inside a fixed-height box always shows its own
+          // edge somewhere — that was the visible curved seam under the tag grid in
+          // the screenshots. A vertical linear gradient has no edge to expose; the
+          // horizontal one just leans the colour to one side.
+          backgroundImage: [
+            `linear-gradient(180deg, color-mix(in srgb, ${domainColor} 22%, var(--accent)) 0%, transparent 65%)`,
+            `linear-gradient(115deg, transparent 30%, color-mix(in srgb, var(--gold) 55%, transparent) 100%)`,
+          ].join(','),
+          // Low enough that body text over it is unaffected; the mask does the rest.
+          opacity: 0.16,
+          // Fades in from nothing (so the header keeps its own edge and a sliver of
+          // plain ivory sits above the breadcrumb, as asked) and out to nothing well
+          // before the box ends — so the wash can never be clipped by its own
+          // container at any viewport width.
+          maskImage: 'linear-gradient(to bottom, transparent 0%, black 14%, black 42%, transparent 92%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 14%, black 42%, transparent 92%)',
         }}
       />
 
@@ -333,8 +358,13 @@ export function Question() {
               </span>
               Put it into practice with {question.related_content[0].name}
             </CardTitle>
+            {/* Was "The working template and video lesson that go with this
+                guidance" — true only while one product bundled both. After the
+                template/course split the cheapest related product is the template
+                alone, so promising a video lesson here would have been selling
+                something this A$29 purchase no longer grants. */}
             <CardDescription>
-              The working template and video lesson that go with this guidance.
+              The working tool that goes with this guidance.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
@@ -433,16 +463,19 @@ export function Question() {
                     >
                       Continue
                     </Link>
-                  ) : question.related_content[0] ? (
-                    // Buys by *product* slug, not the course's own slug (§21.4) — the
-                    // product that unlocks this question's companion content is the
-                    // same one that unlocks the course, per this product's current
-                    // shape (one bundle, not a separately-sold course, docs/pricing.md).
+                  ) : lesson.unlock_product_slug ? (
+                    // Buys by *product* slug, not the course's own slug (§21.4), and
+                    // specifically the product that unlocks THIS lesson — not
+                    // related_content[0]. That shortcut was correct only while one
+                    // bundle sold everything; after the template/course split
+                    // (db/seed/012) it sent a locked course lesson to the A$29
+                    // template checkout, which would have charged the buyer and left
+                    // the lesson exactly as locked as before.
                     <Link
-                      to={`/buy/${question.related_content[0].slug}`}
+                      to={`/buy/${lesson.unlock_product_slug}`}
                       className="shrink-0 text-sm font-medium text-muted-foreground hover:text-foreground"
                     >
-                      Included with the course
+                      {lesson.unlock_product_name ?? 'Unlock'}
                     </Link>
                   ) : (
                     <span className="shrink-0 text-sm text-muted-foreground">Locked</span>
