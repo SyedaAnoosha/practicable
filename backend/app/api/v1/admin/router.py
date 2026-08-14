@@ -13,9 +13,10 @@ from fastapi import APIRouter, Depends
 
 from app.core.deps import require_admin
 
-from . import courses, questions, templates
+from . import courses, orders, questions, templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 router.include_router(questions.router)
 router.include_router(templates.router)
 router.include_router(courses.router)
+router.include_router(orders.router)

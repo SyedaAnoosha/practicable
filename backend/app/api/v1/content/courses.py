@@ -50,6 +50,12 @@ class CourseSummaryOut(BaseModel):
     module_count: int
     lesson_count: int
     owned: bool
+    # week2_plan.md Phase 4 (`/store`'s ContentTypeCard needs a real price for every
+    # type, W2-R5's "every price shown is real"). `/courses` never carried one before —
+    # CoursesCatalogue.tsx simply didn't show one — so this mirrors TemplateSummaryOut's
+    # existing cheapest-published-product resolution rather than inventing a second
+    # pattern. None only when no published product currently sells this course.
+    product: Optional[RelatedProductOut]
 
 
 class LessonOutlineOut(BaseModel):
@@ -139,6 +145,29 @@ async def list_courses(
                     owned = True
                     break
 
+        product_out = None
+        if lessons:
+            product_result = await session.execute(
+                select(Product)
+                .join(ProductContent, ProductContent.product_id == Product.id)
+                .where(
+                    ProductContent.content_type == "lesson",
+                    ProductContent.content_id.in_([l.id for l in lessons]),
+                    Product.published.is_(True),
+                )
+                # Cheapest first — same load-bearing reason TemplateSummaryOut orders
+                # this way: a lesson can theoretically be sold by more than one product,
+                # and an unordered .first() would sometimes quote the wrong one.
+                .order_by(Product.price_amount)
+                .distinct()
+            )
+            product = product_result.scalars().first()
+            if product:
+                product_out = RelatedProductOut(
+                    slug=product.slug, name=product.name,
+                    price_amount=product.price_amount, currency=product.currency,
+                )
+
         out.append(
             CourseSummaryOut(
                 id=str(course.id),
@@ -150,6 +179,7 @@ async def list_courses(
                 module_count=len(modules),
                 lesson_count=len(lessons),
                 owned=owned,
+                product=product_out,
             )
         )
     return out

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { supabase } from '@/lib/auth/supabase'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { identifyUser, trackPageview } from '@/lib/analytics'
 
 /** Announces the new page on every route change for screen-reader users, who
  * otherwise get told nothing when a SPA navigates (DESIGN.md §42.2).
@@ -11,11 +12,16 @@ import { useAuthStore } from '@/stores/useAuthStore'
  * (which changes the text via the new pathname) still produces exactly one
  * announcement — without the setState-in-effect pattern lint forbids. */
 function RouteAnnouncer() {
-  // Subscribes this component to navigation: a pathname change re-renders it,
-  // which recomputes the announcement text below. The location object itself is
-  // not read — the re-render (and the aria-live text change) is the point.
-  useLocation()
+  const location = useLocation()
   const message = `${document.title} — page loaded`
+
+  // week2_plan.md Phase 5 — page views are tracked from here rather than PostHog's
+  // own history-API autocapture (disabled in analytics.ts's init), so a view fires
+  // exactly once per real SPA navigation, in the same place that already re-renders
+  // on every pathname change for the announcement above.
+  useEffect(() => {
+    trackPageview(location.pathname)
+  }, [location.pathname])
 
   return (
     <div role="status" aria-live="polite" className="sr-only">
@@ -35,12 +41,16 @@ export default function RootLayout() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
+      // A user id only — never the email getSession() also returns. W2-R8: "no
+      // event carries PII beyond a user id."
+      if (session?.user) identifyUser(session.user.id)
     })
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      if (session?.user) identifyUser(session.user.id)
     })
 
     return () => subscription.unsubscribe()

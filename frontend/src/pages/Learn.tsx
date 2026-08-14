@@ -55,6 +55,24 @@ interface LessonNav {
   title: string
 }
 
+// One ordered piece of the lesson's content (week2_plan.md Phase 2 / Product Spec
+// §7.2's mixed-content lessons). `body`/`download`/`has_video` below stay populated
+// too — every pre-Phase-2 lesson was backfilled into exactly one block matching them —
+// but a NEW mixed lesson only exists here, as a sequence. The backend has already
+// applied entitlement/free-template filtering to this list (case 11): whatever
+// appears here is exactly what this viewer is allowed to see, in render order.
+interface LessonBlockData {
+  id: string
+  block_type: 'text' | 'video' | 'file' | 'callout'
+  sort_order: number
+  heading: string | null
+  text_body: string | null
+  video_ready: boolean | null
+  file_name: string | null
+  file_size_bytes: number | null
+  file_is_free: boolean | null
+}
+
 interface LessonDetail {
   id: string
   slug: string
@@ -63,6 +81,7 @@ interface LessonDetail {
   lesson_type: LessonType
   body: string | null
   download: { file_name: string; file_size_bytes: number; is_free: boolean } | null
+  blocks: LessonBlockData[]
   has_video: boolean
   entitled: boolean
   completed: boolean
@@ -94,12 +113,16 @@ const LESSON_ICON: Record<LessonType, typeof PlayCircle> = {
   mixed: PlayCircle,
 }
 
-function VideoBlock({ lessonId }: { lessonId: string }) {
+// `tokenUrl` is either the lesson-scoped endpoint (legacy single-video lessons) or a
+// block-scoped one (`/lesson-blocks/{id}/playback-token`, for a mixed lesson with more
+// than one video) — the entitlement check happened server-side before this ever runs;
+// this component only knows which URL mints ITS token.
+function VideoBlock({ tokenUrl, queryKey }: { tokenUrl: string; queryKey: readonly unknown[] }) {
   const [MuxPlayer, setMuxPlayer] = useState<ComponentType<MuxPlayerProps> | null>(null)
 
   const { data: playbackToken, isLoading, error } = useQuery({
-    queryKey: queryKeys.lessons.playbackToken(lessonId),
-    queryFn: () => api.get<PlaybackToken>(`/lessons/${lessonId}/playback-token`).then((res) => res.data),
+    queryKey,
+    queryFn: () => api.get<PlaybackToken>(tokenUrl).then((res) => res.data),
   })
 
   // Dynamically imported — a large dependency most sessions never need
@@ -131,15 +154,15 @@ function VideoBlock({ lessonId }: { lessonId: string }) {
   )
 }
 
-function DownloadBlock({ lessonId, fileName }: { lessonId: string; fileName: string }) {
+// `downloadUrl` is either the lesson-scoped endpoint or a block-scoped one
+// (`/lesson-blocks/{id}/download-url`, for a mixed lesson with more than one file).
+function DownloadBlock({ downloadUrl, fileName }: { downloadUrl: string; fileName: string }) {
   const [status, setStatus] = useState<'idle' | 'preparing' | 'downloaded' | 'error'>('idle')
 
   const handleDownload = async () => {
     setStatus('preparing')
     try {
-      const { data } = await api.get<{ download_url: string; file_name: string }>(
-        `/lessons/${lessonId}/download-url`,
-      )
+      const { data } = await api.get<{ download_url: string; file_name: string }>(downloadUrl)
       // DESIGN.md §26.4/§26.5: fetch the presigned URL on click, use it immediately,
       // discard it — never render it as a visible href.
       const fileResponse = await fetch(data.download_url)
@@ -181,7 +204,7 @@ function DownloadBlock({ lessonId, fileName }: { lessonId: string; fileName: str
  * every entry point — and satisfied outright by being signed in. Once cleared it hands
  * off to the ordinary DownloadBlock, so there is exactly one download implementation.
  */
-function FreeDownloadBlock({ lessonId, fileName }: { lessonId: string; fileName: string }) {
+function FreeDownloadBlock({ downloadUrl, fileName }: { downloadUrl: string; fileName: string }) {
   const gate = useEmailGate('course_lesson_free_template')
 
   if (gate.unlocked) {
@@ -190,7 +213,7 @@ function FreeDownloadBlock({ lessonId, fileName }: { lessonId: string; fileName:
         <Badge variant="success" className="self-start">
           Free
         </Badge>
-        <DownloadBlock lessonId={lessonId} fileName={fileName} />
+        <DownloadBlock downloadUrl={downloadUrl} fileName={fileName} />
       </div>
     )
   }
@@ -206,6 +229,74 @@ function FreeDownloadBlock({ lessonId, fileName }: { lessonId: string; fileName:
       isPending={gate.isPending}
       isError={gate.isError}
     />
+  )
+}
+
+/** Renders `lesson.blocks` in order — the backend has already decided what belongs in
+ * this list for the current viewer (case 11: an unentitled viewer's list already
+ * contains only free file blocks, nothing more), so this component never re-checks
+ * entitlement itself, only chooses how each block TYPE renders.
+ */
+function LessonBlocks({ blocks }: { blocks: LessonBlockData[] }) {
+  return (
+    <>
+      {blocks.map((block) => {
+        switch (block.block_type) {
+          case 'text':
+            return (
+              <div key={block.id} className="flex flex-col gap-2">
+                {block.heading && <h2 className="text-h4 font-semibold text-foreground">{block.heading}</h2>}
+                {block.text_body && (
+                  <p className="whitespace-pre-line font-serif text-read text-pretty text-foreground">
+                    {block.text_body}
+                  </p>
+                )}
+              </div>
+            )
+          case 'callout':
+            // Visually distinct from a plain text block — an aside, not the main
+            // reading flow, so it earns a border and tint rather than blending in.
+            return (
+              <div
+                key={block.id}
+                className="flex flex-col gap-2 rounded-xl border-l-4 bg-accent/5 px-5 py-4"
+                style={{ borderLeftColor: 'var(--accent)' }}
+              >
+                {block.heading && <p className="text-sm font-semibold text-foreground">{block.heading}</p>}
+                {block.text_body && (
+                  <p className="whitespace-pre-line font-serif text-read text-pretty text-foreground">
+                    {block.text_body}
+                  </p>
+                )}
+              </div>
+            )
+          case 'video':
+            return (
+              <VideoBlock
+                key={block.id}
+                tokenUrl={`/lesson-blocks/${block.id}/playback-token`}
+                queryKey={queryKeys.lessonBlocks.playbackToken(block.id)}
+              />
+            )
+          case 'file':
+            return block.file_is_free ? (
+              <FreeDownloadBlock
+                key={block.id}
+                downloadUrl={`/lesson-blocks/${block.id}/download-url`}
+                fileName={block.file_name ?? 'Download'}
+              />
+            ) : (
+              <DownloadBlock
+                key={block.id}
+                downloadUrl={`/lesson-blocks/${block.id}/download-url`}
+                fileName={block.file_name ?? 'Download'}
+              />
+            )
+          default:
+            return null
+        }
+      })}
+    </>
   )
 }
 
@@ -410,12 +501,15 @@ export function Learn() {
                 standalone lead magnet, so paywalling it inside the course would mean
                 the same file was free on /templates and locked here — an inconsistency
                 a buyer spots immediately. The lesson's writing stays locked; only the
-                download is exempt, and it still asks for an email first. */}
-            {lesson.download?.is_free && (
-              <FreeDownloadBlock
-                lessonId={lesson.id}
-                fileName={lesson.download.file_name}
-              />
+                download is exempt, and it still asks for an email first. `blocks` is
+                already filtered server-side to free-only content for an unentitled
+                viewer (case 11), so rendering it here needs no extra check. */}
+            {lesson.blocks.length > 0 ? (
+              <LessonBlocks blocks={lesson.blocks} />
+            ) : (
+              lesson.download?.is_free && (
+                <FreeDownloadBlock downloadUrl={`/lessons/${lesson.id}/download-url`} fileName={lesson.download.file_name} />
+              )
             )}
             <EmptyState
               title="This lesson is part of a course you don't have yet."
@@ -429,14 +523,31 @@ export function Learn() {
           </div>
         ) : (
           <div className="mt-8 flex flex-col gap-8">
-            {lesson.has_video && <VideoBlock lessonId={lesson.id} />}
-            {lesson.body && (
-              /* text-read carries the §10 serif rhythm (1.7 line-height); the old
-                 leading-relaxed override silently flattened it — same fix as
-                 EmailGatedBody. text-pretty for even paragraph shaping. */
-              <p className="whitespace-pre-line font-serif text-read text-pretty text-foreground">{lesson.body}</p>
+            {/* `blocks` covers every current lesson (every pre-Phase-2 lesson was
+                backfilled into exactly one block) — the has_video/body/download trio
+                below is a fallback for the zero-block edge case only, never rendered
+                alongside `blocks` (that would show the same content twice). */}
+            {lesson.blocks.length > 0 ? (
+              <LessonBlocks blocks={lesson.blocks} />
+            ) : (
+              <>
+                {lesson.has_video && (
+                  <VideoBlock
+                    tokenUrl={`/lessons/${lesson.id}/playback-token`}
+                    queryKey={queryKeys.lessons.playbackToken(lesson.id)}
+                  />
+                )}
+                {lesson.body && (
+                  /* text-read carries the §10 serif rhythm (1.7 line-height); the old
+                     leading-relaxed override silently flattened it. text-pretty for
+                     even paragraph shaping. */
+                  <p className="whitespace-pre-line font-serif text-read text-pretty text-foreground">{lesson.body}</p>
+                )}
+                {lesson.download && (
+                  <DownloadBlock downloadUrl={`/lessons/${lesson.id}/download-url`} fileName={lesson.download.file_name} />
+                )}
+              </>
             )}
-            {lesson.download && <DownloadBlock lessonId={lesson.id} fileName={lesson.download.file_name} />}
 
             <div className="flex flex-col gap-4 border-t border-border pt-6">
               <Button

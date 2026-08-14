@@ -1,3 +1,4 @@
+import time
 import uuid
 
 import stripe
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Product, User, WebhookEvent
 from app.db.session import get_session
+from app.integrations.posthog_client import capture_entitlement_delay, capture_purchase_completed
 from app.integrations.stripe_client import construct_webhook_event
 from app.services.email_service import send_receipt_email, send_sale_notification_email
 from app.services.order_service import create_order_from_checkout
@@ -65,6 +67,22 @@ async def stripe_webhook(
 
                 webhook_event.processed = True
                 await session.commit()
+
+                # week2_plan.md Phase 5 / BACKEND.md §6.5 — server-side, right after the
+                # entitlement actually exists. `entitlement_delay` is timed from Stripe's
+                # own event timestamp (genuine processing latency), not from when the
+                # webhook handler started running.
+                capture_purchase_completed(
+                    user_id=user_id, order_id=str(order.id), product_id=product_id,
+                    amount_cents=order.total_amount_cents, currency=order.currency,
+                )
+                capture_entitlement_delay(
+                    user_id=user_id, order_id=str(order.id),
+                    # `.get(..., now)` rather than `event["created"]`: real Stripe events
+                    # always carry it, but a synthetic/malformed one (a test fixture, or a
+                    # future event shape) should degrade to a 0-second delay, not 500.
+                    seconds_waited=max(0.0, time.time() - event.get("created", time.time())),
+                )
 
                 # After commit, never inside the transaction — a failed send must not roll
                 # back a successful purchase.

@@ -13,12 +13,24 @@ import { Input } from '@/components/ui/Input'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { TAG_VARIANT, cardTags } from '@/lib/tags'
 
-// Week 1 scope guardrail: one reachable question and one reachable product, not the
-// discovery/filter UI (deferred to Week 2 — week1_plan.md Scope guardrails).
-const WEEK1_QUESTION_SLUG = 'we-have-a-risk-register-but-no-one-uses-it'
-const WEEK1_PRODUCT_SLUG = 'risk-register-template'
-
-const FINDER_CHIPS = ['Do it in a fortnight', 'Do it cheaply', 'Show your regulator']
+// This page names no content. It previously hardcoded two slugs as a Week 1 scope
+// guardrail — one question, one product — and the product one (`risk-register-template`)
+// later stopped being published: the request 404'd and the card's CTA led nowhere, with
+// nothing on screen to say the product had gone away. A slug written into a component
+// cannot notice that the catalogue changed underneath it.
+//
+// Both now come from the published lists (`/questions`, `/products`), so this page shows
+// what is actually live and renders nothing at all when something isn't — which is the
+// honest state, not a broken card.
+// Each chip carries the real catalogue filter it stands for, so all three no longer
+// land on the same place. The params match QuestionsCatalogue's FILTER_PARAMS and the
+// tag values match the seeded vocabulary (duration XS/S/M/L/XL, cost $/$$/$$$,
+// regulator pressure N/L/M/H).
+const FINDER_CHIPS = [
+  { label: 'Do it in a fortnight', param: 'duration', value: 'S' },
+  { label: 'Do it cheaply', param: 'cost', value: '$' },
+  { label: 'Show your regulator', param: 'regulator_pressure', value: 'H' },
+] as const
 
 interface QuestionTag {
   dimension: string
@@ -26,9 +38,11 @@ interface QuestionTag {
   display_label: string
 }
 
-interface QuestionData {
+interface QuestionSummary {
+  id: string
+  slug: string
   title: string
-  subtitle?: string
+  subtitle?: string | null
   preview: string
   domain: string
   tags: QuestionTag[]
@@ -52,6 +66,7 @@ const CONTENT_ICON: Record<string, typeof PlayCircle> = {
 
 interface ProductData {
   id: string
+  slug: string
   name: string
   description: string
   price_amount: number
@@ -71,15 +86,24 @@ export function Dashboard() {
   const user = useAuthStore((s) => s.user)
   const firstName = (user?.user_metadata?.name as string | undefined)?.split(' ')[0]
 
-  const { data: question } = useQuery({
-    queryKey: queryKeys.questions.detail(WEEK1_QUESTION_SLUG),
-    queryFn: () => api.get<QuestionData>(`/questions/${WEEK1_QUESTION_SLUG}`).then((res) => res.data),
+  // The list endpoints, not a detail fetch by slug. `/questions` already returns
+  // everything this card needs (title, subtitle, preview, domain, tags), so the
+  // featured question costs no extra request — the finder below reuses the same
+  // cached list.
+  const { data: questions } = useQuery({
+    queryKey: queryKeys.questions.list(),
+    queryFn: () => api.get<QuestionSummary[]>('/questions/index').then((res) => res.data),
   })
+  const question = questions?.[0]
 
-  const { data: product } = useQuery({
-    queryKey: queryKeys.products.detail(WEEK1_PRODUCT_SLUG),
-    queryFn: () => api.get<ProductData>(`/products/${WEEK1_PRODUCT_SLUG}`).then((res) => res.data),
+  const { data: products } = useQuery({
+    queryKey: queryKeys.products.list(),
+    queryFn: () => api.get<ProductData[]>('/products').then((res) => res.data),
   })
+  // Newest published product. "Featured" is not yet a real editorial concept — there is
+  // no flag for it on `products` — so this is recency, and it is worth saying plainly
+  // rather than dressing a default up as a curation decision.
+  const product = products?.[0]
 
   // Without this, the product card here still showed "See what's included" / price
   // even for someone who already bought it — ProductBuy.tsx got this same fix, but
@@ -90,13 +114,13 @@ export function Dashboard() {
   })
   const alreadyOwnsProduct = !!product && !!entitlements?.product_ids.includes(product.id)
 
-  // Only one real question exists in the catalogue today (the rest of the real
-  // 100-question content, docs/questions/, hasn't been loaded into the database yet —
-  // that's data entry, not a design gap). The finder is real, working navigation, not
-  // a decorative input pretending to search a hundred rows that aren't there yet.
+  // Real navigation, not a decorative input. A typed query goes to the catalogue with
+  // the search applied so the visitor lands on results rather than on whichever single
+  // question this page happened to feature; an empty submit just opens the catalogue.
   const goToQuestion = (e?: FormEvent) => {
     e?.preventDefault()
-    navigate(`/questions/${WEEK1_QUESTION_SLUG}`)
+    const q = query.trim()
+    navigate(q ? `/questions?q=${encodeURIComponent(q)}` : '/questions')
   }
 
   return (
@@ -134,14 +158,13 @@ export function Dashboard() {
               Try:
             </span>
             {FINDER_CHIPS.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => goToQuestion()}
+              <Link
+                key={chip.label}
+                to={`/questions?${chip.param}=${encodeURIComponent(chip.value)}`}
                 className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
-                {chip}
-              </button>
+                {chip.label}
+              </Link>
             ))}
           </div>
         </div>
@@ -171,7 +194,7 @@ export function Dashboard() {
                   </Badge>
                 ))}
               </div>
-              <Link to={`/questions/${WEEK1_QUESTION_SLUG}`} className="mt-6 inline-flex">
+              <Link to={`/questions/${question.slug}`} className="mt-6 inline-flex">
                 <Button>
                   Read the answer <ArrowRight className="size-4" aria-hidden="true" />
                 </Button>
@@ -239,7 +262,7 @@ export function Dashboard() {
                     {formatCurrency(product.price_amount, product.currency)}
                   </p>
                   <p className="text-xs text-muted-foreground">One-time purchase · lifetime access</p>
-                  <Link to={`/buy/${WEEK1_PRODUCT_SLUG}`}>
+                  <Link to={`/buy/${product.slug}`}>
                     <Button>See what's included</Button>
                   </Link>
                 </div>
@@ -249,13 +272,24 @@ export function Dashboard() {
         </section>
       )}
 
-      <p className="mt-14 text-center text-sm text-muted-foreground">
-        {/* Kept literally true against the database, not aspirational: 100 published
-            questions, one template, one course (counted 2026-08-11). The old line
-            said "one question and one template", written when that was the whole
-            catalogue and left stale by the 100-question seed and the course split. */}
-        All 100 questions are live today, plus one template and one course — more are added weekly.
-      </p>
+      {/* Counted from the response rather than written down. This line has already been
+          wrong twice — it said "one question and one template" after the 100-question
+          seed landed, then "100 questions, one template, one course" after the catalogue
+          moved on again. A hand-maintained count of a database is a claim that goes
+          stale silently, on the page where a paying member is deciding whether to trust
+          what else it says. */}
+      {questions && questions.length > 0 && (
+        <p className="mt-14 text-center text-sm text-muted-foreground">
+          {questions.length === 1 ? '1 question is' : `All ${questions.length} questions are`} live
+          today
+          {products && products.length > 0 && (
+            <>
+              , plus {products.length} {products.length === 1 ? 'product' : 'products'} in the store
+            </>
+          )}
+          {' '}— more are added weekly.
+        </p>
+      )}
     </div>
   )
 }

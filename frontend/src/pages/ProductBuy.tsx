@@ -5,6 +5,7 @@ import { Download, FileQuestion, PlayCircle } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
+import { track } from '@/lib/analytics'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -62,6 +63,11 @@ export function ProductBuy() {
     if (!product) return
     setIsRedirecting(true)
     setError('')
+    // week2_plan.md Phase 5 — fired on the click that actually starts checkout, before
+    // the redirect; the drop-off signal is the gap between this and the server-side
+    // `purchase_completed` in PostHog, not a separate client-side "abandoned" event
+    // (see analytics.ts's note on why that one was dropped).
+    track('checkout_started', { product_slug: product.slug, price: product.price_amount })
     try {
       const { data } = await api.post<{ checkout_url: string }>('/checkout/session', {
         product_id: product.id,

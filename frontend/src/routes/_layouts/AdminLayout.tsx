@@ -1,6 +1,6 @@
 import { Link, NavLink, Navigate, Outlet } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, FileText, GraduationCap, ShieldCheck, Tags } from 'lucide-react'
+import { ArrowLeft, FileText, GraduationCap, Receipt, ShieldCheck, Tags } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
@@ -21,6 +21,7 @@ const ADMIN_NAV = [
   { to: '/admin/questions', label: 'Questions', icon: Tags },
   { to: '/admin/courses', label: 'Courses', icon: GraduationCap },
   { to: '/admin/templates', label: 'Templates', icon: FileText },
+  { to: '/admin/orders', label: 'Orders', icon: Receipt },
 ] as const
 
 /**

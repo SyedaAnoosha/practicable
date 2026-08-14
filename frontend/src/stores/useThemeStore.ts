@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 export type Theme = 'light' | 'dark'
 
-// Same namespaced key convention as lib EmailGatedBody's 'practicable:email_unlocked'.
+// Same namespaced key convention as Template.tsx's 'practicable:email_unlocked'.
 const STORAGE_KEY = 'practicable:theme'
 
 // Must stay in sync with the inline script in index.html (which runs before first

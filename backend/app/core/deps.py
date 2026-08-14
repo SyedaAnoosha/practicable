@@ -57,16 +57,12 @@ async def get_current_user_id_optional(
     return token.user_id if token else None
 
 
-async def get_current_user(
-    token: VerifiedToken = Depends(verify_jwt_full),
-    session: AsyncSession = Depends(get_session),
-) -> User:
-    """Resolve the verified JWT into a local `users` row, creating it on first sight.
-
-    Sign-up happens client-side against Supabase Auth, so nothing else ever inserts into
-    `public.users`. Without this, the first entitlement/order write for a new user hits a
-    foreign-key violation — `users.id` IS the Supabase auth id, with no mapping table.
-    """
+async def _resolve_or_create_user(*, token: VerifiedToken, session: AsyncSession) -> User:
+    """Shared by `get_current_user` and `get_current_user_optional` so the first-sight
+    insert exists in exactly one place. Sign-up happens client-side against Supabase
+    Auth, so nothing else ever inserts into `public.users`. Without this, the first
+    entitlement/order write for a new user hits a foreign-key violation — `users.id` IS
+    the Supabase auth id, with no mapping table."""
     user_id = uuid.UUID(token.user_id)
     result = await session.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -87,6 +83,31 @@ async def get_current_user(
     # After the commit above, so a failure here can never roll back the user row.
     await _record_signup_lead(user=user, session=session)
     return user
+
+
+async def get_current_user(
+    token: VerifiedToken = Depends(verify_jwt_full),
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    """401 if absent or invalid — the version every gated route with a required actor
+    should depend on."""
+    return await _resolve_or_create_user(token=token, session=session)
+
+
+async def get_current_user_optional(
+    token: VerifiedToken | None = Depends(verify_jwt_optional),
+    session: AsyncSession = Depends(get_session),
+) -> User | None:
+    """None if absent — for routes that are public but need the full `User` (role
+    included) when someone is signed in, e.g. to resolve admin bypass correctly. Plain
+    `get_current_user_id_optional` only returns the id string, which is enough for an
+    entitlement lookup but not enough to know whether this caller is an admin — that gap
+    is exactly what let lessons.py/templates.py's inline entitlement checks silently skip
+    admin bypass (and its audit row) entirely; see `app/core/entitlements.py`'s
+    `has_access_to_or_admin`, 2026-08-13."""
+    if token is None:
+        return None
+    return await _resolve_or_create_user(token=token, session=session)
 
 
 async def require_admin(user: User = Depends(get_current_user)) -> User:

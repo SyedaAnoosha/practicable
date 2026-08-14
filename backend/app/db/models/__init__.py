@@ -9,6 +9,7 @@ from app.db.models.question import (
 )
 from app.db.models.course import Course, Module
 from app.db.models.lesson import Lesson, LessonType
+from app.db.models.lesson_block import LessonBlock, LessonBlockType
 from app.db.models.module_question import ModuleQuestion
 from app.db.models.template import Template
 from app.db.models.media import Media, MediaStatus
@@ -17,6 +18,7 @@ from app.db.models.order import Order, OrderItem, OrderStatus
 from app.db.models.entitlement import Entitlement, GrantedVia
 from app.db.models.progress import LessonProgress, CourseProgress
 from app.db.models.lead import Lead
+from app.db.models.contact_message import ContactMessage
 from app.db.models.audit import AuditLog
 from app.db.models.webhook_event import WebhookEvent
 
@@ -30,6 +32,7 @@ __all__ = [
     "Question", "QuestionLeadershipTrait", "QuestionRelation", "QuestionTemplate", "QuestionLesson",
     "Course", "Module",
     "Lesson", "LessonType",
+    "LessonBlock", "LessonBlockType",
     "ModuleQuestion",
     "Template",
     "Media", "MediaStatus",
@@ -38,6 +41,7 @@ __all__ = [
     "Entitlement", "GrantedVia",
     "LessonProgress", "CourseProgress",
     "Lead",
+    "ContactMessage",
     "AuditLog",
     "WebhookEvent",
 ]

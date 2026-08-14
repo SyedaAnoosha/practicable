@@ -68,6 +68,8 @@
   --color-domain-resilience: var(--domain-resilience);
   --color-domain-ai: var(--domain-ai);
 
+  --color-stage: var(--stage);
+  --color-stage-foreground: var(--stage-foreground);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -127,7 +129,12 @@
   --text-lead--line-height: 1.55;
   --text-body: 1rem;
   --text-body--line-height: 1.55;
-  --text-read: 1.0625rem;
+  /* 18px, not 17px `[CHANGED 2026-08-13]`. Two reasons, both about the new serif:
+     Newsreader carries a smaller x-height than Source Serif 4, so 17px of it read
+     visibly smaller than the 16px sans beside it — the opposite of the optical match
+     this token exists to hold. And the owner's page review called out that too much
+     of the product is set small to be confidently scannable. 18px fixes both. */
+  --text-read: 1.125rem;
   --text-read--line-height: 1.7;
   --text-sm: 0.875rem;
   --text-sm--line-height: 1.5;
@@ -158,6 +165,26 @@
      below are exempt — red=error / green=success are conventions worth keeping. */
   --primary: #10213E;
   --primary-foreground: #F7F2E9;
+  /* The dark full-bleed plane the hero and footer stand on. A SEPARATE token from
+     --primary on purpose: --primary inverts between themes (navy in light, a light
+     #6FA8DC in dark), so `bg-primary` on a full-bleed stage turned the hero and
+     footer PALE in dark mode — reported 2026-08-12. --stage means "dark" in both
+     themes and never flips.
+     Measured: stage-foreground on stage is 14.39:1 light / 17.08:1 dark, and the
+     alpha steps used on it (75/65/55%) clear 5.2:1 at their weakest. */
+  --stage: #10213E;
+  --stage-foreground: #F7F2E9;
+  /* The aurora ramp — four rungs of one blue, climbing in lightness and saturation,
+     consumed only by `.stage-aurora` below. A separate family from --accent/--primary
+     on purpose: those two are *interactive* colours whose values are pinned by text
+     contrast on ivory, and --accent additionally inverts between themes. These four are
+     decorative-only paint, free to run as bright as the composition wants because
+     `.stage-aurora` keeps the top rungs out of the text column by construction.
+     Light theme climbs to a near-white sky (#8ED2FB); dark stops at a mid azure. */
+  --stage-deep: #050B18;         /* the near-black the composition opens on */
+  --stage-glow-1: #10305F;       /* deep blue — the widest, quietest bloom */
+  --stage-glow-2: #1F6FC4;       /* azure — the body of the ramp */
+  --stage-glow-3: #8ED2FB;       /* sky, near-white — the corner core only (1.48:1, never under text) */
   --secondary: #F0E7D2;          /* champagne surface — secondary buttons, sidebar, chips */
   --secondary-foreground: #4A3D22;
   --accent: #1D5FA8;             /* vivid blue — the one interactive accent, 6.13:1 on ivory */
@@ -237,10 +264,27 @@
   --chart-4: #5C6B4F;
   --chart-5: #7A8699;
 
-  /* Type */
-  --font-sans: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
-  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  /* Type — three faces that tell ONE story: a newspaper's brand grotesque, a
+     newspaper's reading serif, and a mono with enough character to read as a choice.
+     `[CHANGED 2026-08-13 — owner direction]` The previous set (Bricolage Grotesque /
+     Source Serif 4 / JetBrains Mono) was replaced because it had drifted into the
+     default palette every AI mockup reaches for. Source Serif 4 and JetBrains Mono were
+     named explicitly; Bricolage went with them because a grotesque chosen for its
+     opsz axis, sitting beside two replaced faces, no longer belonged to a system.
+
+     Georgia and Times New Roman are gone from the fallback stack for the same reason —
+     they were only ever visible during a FOUT, but a named fallback is still a choice.
+
+     Schibsted Grotesk  — drawn FOR a news publisher. Variable 400–900. The editorial
+                          authority this product claims, in the interface layer.
+     Newsreader         — variable, with a real optical-size axis (6–72), drawn for
+                          sustained reading on screen. Replaces Source Serif 4's job
+                          and its reasoning, not just its name.
+     Azeret Mono        — variable 100–900, squared-off and deliberate. Reads as data
+                          because it was chosen, not because it was the default mono. */
+  --font-sans: 'Schibsted Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Newsreader', ui-serif, serif;
+  --font-mono: 'Azeret Mono', ui-monospace, SFMono-Regular, monospace;
   --letter-spacing: -0.01em;
 
   /* Geometry */
@@ -300,7 +344,10 @@
     line-height: 1.4;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.2em;
+    /* 0.16em, not 0.2em `[CHANGED 2026-08-13]`: Azeret Mono sets appreciably wider than
+       JetBrains Mono did, so the tracking that made the old mono read as a deliberate
+       device made this one read as spaced-out letters. */
+    letter-spacing: 0.16em;
     color: var(--muted-foreground);
   }
   .eyebrow::before {
@@ -357,6 +404,138 @@
        own container at any viewport width. */
     mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 42%, transparent 92%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 42%, transparent 92%);
+  }
+
+  /* ── The aurora: the dark plane the hero, the auth panel and the footer stand on ──
+     Modelled on the Watermelon reference the brand direction came from, which gets its
+     drama from one thing: a *ramp through one hue family* — near-black, deep, mid,
+     bright — driven diagonally into a corner, with a soft dark plume drawn back across
+     the top so the bright end reads as light behind weather rather than a flat wash.
+     Rendered here in blue, and lives in one class rather than three inline gradient
+     stacks so the hero, the auth panel and the footer cannot drift apart.
+
+     Six layers, painted last-listed-first:
+       6. base ramp     deep → stage → a hint of glow-1, on the 148° diagonal
+       5/4/3. blooms    glow-1 (widest) → glow-2 → glow-3 (tightest), all anchored at or
+              past the bottom-right corner. Nesting them like this is what makes the
+              climb read as continuous light instead of three stacked discs.
+       2. plume         deep, pulled across the upper third
+       1. scrim         deep, strongest at the left edge, gone by 62%
+
+     Layer 1 is the load-bearing one. --stage-glow-3 is 1.48:1 against
+     --stage-foreground in the light theme, so it can never sit under text; the scrim
+     plus the corner anchoring keeps the text column dark by construction rather than by
+     hoping the copy stays short. Measured, alpha composited (light theme, worst case —
+     the scrim over glow-2, the brightest rung that can reach the copy):
+       stage-foreground on scrim(70%)+glow-2   13.45:1
+       same, even if glow-3 reached it          9.23:1
+       same @75% (the lead paragraph)           8.13:1
+       same @65%                                6.46:1
+       --gold on the scrimmed plane             6.61:1
+     The dark theme runs 1–3 points higher throughout.
+
+     Static paint, so there is no reduced-motion branch; consumers that animate it in
+     do so with Motion, which `<MotionConfig reducedMotion="user">` already governs. */
+  .stage-aurora {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-color: var(--stage);
+    /* Both knobs exist for the footer — see `.stage-aurora--quiet`. */
+    opacity: var(--aurora-opacity, 1);
+    background-image:
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--stage-deep) 62%, transparent) 0%,
+        color-mix(in srgb, var(--stage-deep) 30%, transparent) 34%,
+        transparent 62%
+      ),
+      radial-gradient(
+        128% 96% at -12% 112%,
+        color-mix(in srgb, var(--stage-deep) 90%, transparent) 0%,
+        color-mix(in srgb, var(--stage-deep) 72%, transparent) 44%,
+        color-mix(in srgb, var(--stage-deep) 30%, transparent) 72%,
+        transparent 92%
+      ),
+      radial-gradient(
+        115% 55% at 34% 2%,
+        color-mix(in srgb, var(--stage-deep) 94%, transparent) 0%,
+        color-mix(in srgb, var(--stage-deep) 46%, transparent) 46%,
+        transparent 78%
+      ),
+      radial-gradient(50% 46% at var(--aurora-core, 106% 106%), var(--stage-glow-3) 0%, transparent 62%),
+      radial-gradient(80% 68% at 98% 102%, var(--stage-glow-2) 0%, transparent 66%),
+      radial-gradient(126% 104% at 84% 108%, var(--stage-glow-1) 0%, transparent 70%),
+      linear-gradient(
+        148deg,
+        var(--stage-deep) 0%,
+        var(--stage) 52%,
+        color-mix(in srgb, var(--stage-glow-1) 60%, var(--stage)) 100%
+      );
+  }
+
+  /* The reference's faint vertical filaments rising out of the bloom. Masked to the
+     bright corner — spread across the whole plane they would read as a UI artefact
+     (a stuck scrollbar, a rendering seam) rather than atmosphere. */
+  .stage-aurora::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      90deg,
+      transparent 0 94px,
+      color-mix(in srgb, var(--stage-glow-3) 22%, transparent) 94px 95px,
+      transparent 95px 190px
+    );
+    mask-image: radial-gradient(66% 58% at 88% 100%, black 0%, transparent 72%);
+    -webkit-mask-image: radial-gradient(66% 58% at 88% 100%, black 0%, transparent 72%);
+  }
+
+  /* Footer tuning. The footer differs from the hero and the auth panel in one way that
+     matters: its content spans the full width, so the bottom-right corner — where every
+     other consumer has nothing but ground — carries the domain list and the legal row.
+     Dimming alone does not fix that (glow-3 at 32% opacity still only reaches 3.78:1
+     under the footer's /65 copy), so this pushes the core off-canvas as well and keeps
+     only its outer falloff. Worst case then lands on a dimmed glow-2, ~5.3:1. */
+  .stage-aurora--quiet {
+    --aurora-opacity: 0.5;
+    --aurora-core: 108% 155%;
+  }
+
+  /* Rail tuning — the member sidebar `[ADDED 2026-08-13, owner direction: "similar
+     gradient like hero in sidebar too"]`.
+
+     The rail is the hardest shape the aurora has been asked to fill, and for a reason
+     the other three consumers do not have: it is ~256px wide and a full viewport tall,
+     with content running edge to edge the whole way down. The hero and the auth panel
+     both keep their copy in a column that leaves the bright corner empty; the footer at
+     least has its bright corner at the *end* of the content. A rail has no empty corner
+     at all — the account row sits exactly where `.stage-aurora` puts glow-3.
+
+     So this variant does three things rather than the footer's two:
+       1. pushes the core off-canvas BELOW the rail (`50% 128%`), so only the outer
+          falloff climbs into the bottom of the column,
+       2. re-centres it horizontally — in a narrow column an off-centre bloom reads as a
+          lighting error rather than atmosphere,
+       3. dims harder than the footer (0.42 vs 0.5), because the same absolute brightness
+          occupies far more of a 256px column than of a full-width band.
+
+     `[UNVERIFIED — needs a rendered-pixel check]` The numbers above are reasoned, not
+     sampled. §7.5.3 is explicit that this class's contrast claims are only meaningful
+     when measured from the composited page at the point the text actually lands, and
+     that the token-level maths said "safe" for the auth panel while the real paragraph
+     sat at 4.36:1. Sample the nav labels (which render at 80%) and the account row
+     (70%) at 1440x900 in BOTH themes before this is treated as audited. */
+  .stage-aurora--rail {
+    --aurora-opacity: 0.42;
+    --aurora-core: 50% 128%;
+  }
+
+  /* The filaments are a wide-canvas device. In a 256px column the 94px repeat lands as
+     two or three hard vertical lines, which is precisely the "stuck scrollbar / render
+     seam" failure the mask on `.stage-aurora::after` exists to prevent. */
+  .stage-aurora--rail::after {
+    content: none;
   }
 
   /* Gradient text — the brand headline device: navy through blue into antique gold.
@@ -421,9 +600,22 @@
      token names, same rule ("strong is the text-safe one"), inverted values. */
   --primary: #6FA8DC;
   --primary-foreground: #0B1A2E;
+  /* Deeper and cooler than --background (#141008, a warm near-black) so the stage
+     still reads as its own plane. Their luminances are near-identical (1.02:1), so
+     the separation is carried by hue plus the hairline border the consumers draw —
+     brightening it instead would defeat the point of a dark stage. */
+  --stage: #080D18;
+  --stage-foreground: #EAF1FA;
+  /* Same four rungs, held two steps lower. The dark theme's ground is already near-
+     black, so the ramp needs less range to read as a climb — and a sky-bright core on
+     a night page reads as a light leak rather than atmosphere. */
+  --stage-deep: #02060E;
+  --stage-glow-1: #0A2147;
+  --stage-glow-2: #14538F;
+  --stage-glow-3: #4794D8;
   --secondary: #2A2318;
   --secondary-foreground: #EDE2CB;
-  --accent: #7FB8E8;
+  --accent: #b6deff;
   --accent-foreground: #0B1A2E;
 
   --gold: #C9AC6A;               /* champagne — decorative only, as in :root */

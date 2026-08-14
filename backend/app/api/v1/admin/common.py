@@ -1,5 +1,4 @@
 """Shared helpers for the admin routes: audit writing, slugs, and 404s."""
-import json
 import re
 import unicodedata
 import uuid
@@ -9,37 +8,14 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AuditLog, User
+from app.db.models import User
 
-
-async def record_audit(
-    session: AsyncSession,
-    *,
-    actor: User,
-    action: str,
-    target_type: str,
-    target_id: uuid.UUID,
-    context: Optional[dict[str, Any]] = None,
-) -> None:
-    """Write one `audit_log` row. The ONLY way admin mutations get recorded.
-
-    Does not commit — the caller's transaction does, so an audit row can't survive a
-    mutation that rolled back. `context` is JSON, truncated to the column's 2000 chars,
-    and holds the shape of the change, never full body text: this is a trail, not a
-    version history.
-    """
-    payload = None
-    if context is not None:
-        payload = json.dumps(context, default=str)[:2000]
-    session.add(
-        AuditLog(
-            actor_user_id=actor.id,
-            action=action,
-            target_type=target_type,
-            target_id=target_id,
-            context=payload,
-        )
-    )
+# Re-exported, not duplicated: `app/core/entitlements.py` needs the same writer for the
+# admin-bypass audit row, and a core module cannot import from `api/` without inverting
+# the layer direction §1.3 exists to protect. The implementation lives in
+# `services/audit_service.py`; every admin route still imports it from this module so
+# nothing else in `admin/*` had to change.
+from app.services.audit_service import record_audit  # noqa: F401
 
 
 def slugify(value: str) -> str:

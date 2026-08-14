@@ -5,18 +5,22 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { cn } from '@/lib/utils/cn'
-import { SUPPORT_MAILTO } from '@/lib/support'
+import { motion } from 'motion/react'
+import { staggerContainer, riseItem, inViewOnce } from '@/lib/motion'
+import { StatusDot } from '@/components/ui/StatusDot'
+import { NewsletterForm } from '@/components/marketing/NewsletterForm'
 
 const DOMAINS = ['Risk', 'Cyber', 'Compliance', 'Resilience', 'AI']
 
-// DESIGN.md §17.1's exact nav: Questions, Courses, Templates, About — four items,
-// each a real catalogue now that /questions, /courses and /templates all exist
-// (previously this linked straight to the one hardcoded question, since nothing else
-// was reachable yet).
+// week2_plan.md Phase 4 / W2-R5: "the marketing header links /store, replacing
+// rather than appending (§17.1's five-item ceiling)." Courses and Templates are
+// folded into Store — which now IS the umbrella catalogue for both, alongside
+// Reference packs — rather than appended as a fifth item; Questions stays top-level
+// on its own because it's the flagship free discovery surface, not just a shopping
+// link, and demoting it into the store would bury the brief's stated proof of value.
 const NAV_ITEMS = [
   { to: '/questions', label: 'Questions' },
-  { to: '/courses', label: 'Courses' },
-  { to: '/templates', label: 'Templates' },
+  { to: '/store', label: 'Store' },
   { to: '/#about', label: 'About' },
 ] as const
 
@@ -78,7 +82,7 @@ export default function MarketingLayout() {
         {/* Tightened, 2026-08-11 (owner design critique) — py-4/gap-6 read a shade
             too roomy for a reference-tool header; py-3.5/gap-5 is the same
             structure, just less "marketing site." */}
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-5 px-5 py-3.5 sm:px-8">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-5 px-5 py-3.5 sm:px-8">
           <Link to="/" className="flex items-center gap-2.5 font-sans text-base font-semibold tracking-tight">
             <span className="size-2.5 rounded-[3px] bg-primary ring-1 ring-inset ring-primary-edge" aria-hidden="true" />
             Practicable
@@ -196,23 +200,67 @@ export default function MarketingLayout() {
           a single-subject product, which it isn't. Terms/Privacy are marked coming
           soon rather than linked to pages that don't exist yet — a labelled gap, not a
           dead click pretending to work. */}
-      <footer className="border-t border-border">
-        <div className="mx-auto w-full max-w-6xl px-5 py-14 sm:px-8">
+      <motion.footer
+        variants={staggerContainer}
+        initial="hidden"
+        whileInView="visible"
+        viewport={inViewOnce}
+        className="relative isolate overflow-hidden bg-stage text-stage-foreground"
+      >
+        {/* footer-19's two background effects, retoned. The original uses a violet glow
+            over near-black; this runs the hero's own blue aurora, so the page opens and
+            closes on the same plane — but on the `--quiet` variant, because unlike the
+            hero this surface has content in all four corners (see theme.css). The
+            dotted grid is footer-19's second layer, kept as-is. */}
+        <div aria-hidden="true" className="stage-aurora stage-aurora--quiet -z-10" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.07]"
+          style={{
+            backgroundImage: 'radial-gradient(circle at 2px 2px, white 1.5px, transparent 0)',
+            backgroundSize: '24px 24px',
+          }}
+        />
+
+        {/* footer-7's newsletter row: pulsing status dot over a large light-weight
+            headline on the left, an inline joined input+button on the right. The two
+            controls share one 48px row with no gap and squared inner corners, which is
+            what makes it read as a single object rather than a field beside a button. */}
+        <div className="mx-auto w-full max-w-7xl px-5 pb-12 pt-16 sm:px-8">
+          <div className="flex flex-col gap-8 border-b border-stage-foreground/15 pb-12 lg:flex-row lg:items-end lg:justify-between">
+            <motion.div variants={riseItem} className="flex max-w-xl flex-col gap-5">
+              <StatusDot label="One question a fortnight" tone="gold" on="stage" />
+              <h2 className="text-3xl font-light leading-tight tracking-tight sm:text-4xl">
+                A real question from a risk leader, and one thing to do about it.
+              </h2>
+            </motion.div>
+
+            <motion.div variants={riseItem} className="w-full max-w-md">
+              <NewsletterForm />
+            </motion.div>
+          </div>
+        </div>
+
+        <div className="mx-auto w-full max-w-7xl px-5 pb-14 sm:px-8">
           <div className="grid grid-cols-2 gap-10 sm:grid-cols-4">
             <div className="col-span-2">
               <p className="flex items-center gap-2 font-sans text-lg font-semibold tracking-tight">
-                <span className="size-2.5 rounded-[3px] bg-primary ring-1 ring-inset ring-primary-edge" aria-hidden="true" />
+                {/* Gold, not `bg-primary` like the header's copy of this mark: in the
+                    light theme --primary and --stage are the same navy, so the header
+                    version renders as an invisible square down here. Gold is 7.06:1 on
+                    the stage and is already the brand's mark colour on dark. */}
+                <span className="size-2.5 rounded-[3px] bg-gold ring-1 ring-inset ring-stage-foreground/20" aria-hidden="true" />
                 Practicable
               </p>
-              <p className="mt-3 max-w-xs text-sm text-muted-foreground">
+              <p className="mt-3 max-w-xs text-sm text-stage-foreground/65">
                 Practical answers for risk practitioners — real questions, real guidance, real tools you can
                 use today.
               </p>
             </div>
 
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Domains</p>
-              <ul className="mt-3 flex flex-col gap-2 text-sm text-muted-foreground">
+              <p className="text-xs font-medium uppercase tracking-wide text-stage-foreground/50">Domains</p>
+              <ul className="mt-3 flex flex-col gap-2 text-sm text-stage-foreground/65">
                 {DOMAINS.map((d) => (
                   <li key={d}>{d}</li>
                 ))}
@@ -220,20 +268,42 @@ export default function MarketingLayout() {
             </div>
 
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Company</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-stage-foreground/50">Company</p>
               <ul className="mt-3 flex flex-col gap-2 text-sm">
                 <li>
-                  <a href={SUPPORT_MAILTO} className="text-muted-foreground transition-colors duration-150 hover:text-foreground">
+                  {/* Now a real page rather than a `mailto:`. A mailto is a dead end on
+                      a corporate laptop with no mail client wired to the browser — the
+                      exact machine most of this audience is reading on. The page keeps
+                      the address visible on it, so nothing is taken away. */}
+                  <Link to="/contact" className="text-stage-foreground/65 transition-colors duration-150 hover:text-stage-foreground">
                     Contact
-                  </a>
+                  </Link>
                 </li>
-                <li className="text-muted-foreground/50">Terms — coming soon</li>
-                <li className="text-muted-foreground/50">Privacy — coming soon</li>
+                {/* week2_plan.md Phase 5 / W2-R7 — real drafts now, replacing the
+                    "coming soon" placeholders. Each page carries its own
+                    [DRAFT — FOR REVIEW] banner; the footer link itself doesn't need
+                    to repeat that, the same way /contact's link doesn't announce
+                    that the page behind it is real. */}
+                <li>
+                  <Link to="/legal/terms" className="text-stage-foreground/65 transition-colors duration-150 hover:text-stage-foreground">
+                    Terms
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/legal/privacy" className="text-stage-foreground/65 transition-colors duration-150 hover:text-stage-foreground">
+                    Privacy
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/legal/refunds" className="text-stage-foreground/65 transition-colors duration-150 hover:text-stage-foreground">
+                    Refunds
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>
 
-          <div className="mt-10 flex flex-col gap-2 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-10 flex flex-col gap-2 border-t border-stage-foreground/15 pt-6 text-xs text-stage-foreground/55 sm:flex-row sm:items-center sm:justify-between">
             <p>© {new Date().getFullYear()} Practicable. All rights reserved.</p>
             {/* One-time purchase / lifetime access is a confirmed decision
                 (week1_plan.md decision #8 area); a specific refund window is not — that
@@ -242,7 +312,7 @@ export default function MarketingLayout() {
             <p>One-time purchase · lifetime access.</p>
           </div>
         </div>
-      </footer>
+      </motion.footer>
     </div>
   )
 }

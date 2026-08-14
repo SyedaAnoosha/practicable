@@ -11,12 +11,27 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.core.deps import get_current_user_id, get_current_user_id_optional
-from app.core.entitlements import ResourceType, has_access_to
-from app.db.models import Course, CourseProgress, Lesson, LessonProgress, Media, Module, ModuleQuestion, Question, Template
+from app.core.deps import get_current_user, get_current_user_optional
+from app.core.entitlements import ResourceType, has_access_to, has_access_to_or_admin
+from app.db.models import (
+    Course,
+    CourseProgress,
+    Lesson,
+    LessonBlock,
+    LessonBlockType,
+    LessonProgress,
+    Media,
+    Module,
+    ModuleQuestion,
+    Question,
+    Template,
+    User,
+)
 from app.db.session import get_session
 from app.integrations.mux_client import generate_mux_playback_token
+from app.integrations.posthog_client import capture_download_failed
 from app.integrations.storage_client import generate_presigned_url
 
 router = APIRouter()
@@ -27,11 +42,31 @@ def _lesson_type_value(lesson_type) -> str:
 
 
 async def _lesson_entitled(*, lesson: Lesson, user_id: Optional[str], session: AsyncSession) -> bool:
-    """No free-preview bypass — lessons and video are never free."""
+    """No free-preview bypass — lessons and video are never free.
+
+    Deliberately plain — no admin bypass. Used for the course-outline sidebar's per-lesson
+    `locked` icon, which is cosmetic navigation state, not a decision about whether
+    protected content (body/video/file) is served. Writing an audited bypass row for every
+    lesson in a sidebar an admin happens to scroll past would flood the audit log with
+    events that reveal nothing sensitive; the routes that actually serve content
+    (`get_playback_token`, `get_lesson_download_url`, `mark_lesson_complete`, and the
+    single "current lesson" body below) use `_lesson_entitled_or_admin` instead.
+    """
     if not user_id:
         return False
     return await has_access_to(
         user_id=uuid.UUID(user_id), resource_type=ResourceType.LESSON, resource_id=lesson.id, session=session
+    )
+
+
+async def _lesson_entitled_or_admin(*, lesson: Lesson, user: Optional[User], session: AsyncSession) -> bool:
+    """The content-serving counterpart to `_lesson_entitled` above — admin bypass, audited.
+    Takes the resolved `User` (role included), not just an id string, which is what the
+    plain id-only dependencies (`get_current_user_id[_optional]`) can't provide."""
+    if not user:
+        return False
+    return await has_access_to_or_admin(
+        user=user, resource_type=ResourceType.LESSON, resource_id=lesson.id, session=session
     )
 
 
@@ -81,6 +116,32 @@ class SidebarModuleOut(BaseModel):
     questions: list[SidebarQuestionOut]
 
 
+class LessonBlockOut(BaseModel):
+    """One ordered piece of the lesson's content (Product Spec §7.2 / week2_plan.md
+    Phase 2). `body`/`download` above stay populated too — the single-block backfill
+    of every pre-Phase-2 lesson means they and `blocks` describe the same content — but
+    new mixed-content lessons only exist here, as a sequence.
+
+    No URL or Mux token is ever embedded: a `video`/`file` block's own content is minted
+    on demand from `id` via /lesson-blocks/{id}/playback-token or /download-url, exactly
+    like the lesson-level endpoints below (BACKEND.md §4.1 — check, then mint, never
+    embed a link that outlives the check that authorized it).
+    """
+
+    id: str
+    block_type: str
+    sort_order: int
+    # text / callout only.
+    heading: Optional[str] = None
+    text_body: Optional[str] = None
+    # video only — readiness, nothing else; the token comes from its own endpoint.
+    video_ready: Optional[bool] = None
+    # file only — mirrors LessonDownloadOut; the URL comes from its own endpoint.
+    file_name: Optional[str] = None
+    file_size_bytes: Optional[int] = None
+    file_is_free: Optional[bool] = None
+
+
 class LessonDetailOut(BaseModel):
     id: str
     slug: str
@@ -89,6 +150,7 @@ class LessonDetailOut(BaseModel):
     lesson_type: str
     body: Optional[str]
     download: Optional[LessonDownloadOut]
+    blocks: list[LessonBlockOut]
     has_video: bool
     entitled: bool
     completed: bool
@@ -105,10 +167,11 @@ async def get_lesson_in_course(
     course_slug: str,
     lesson_slug: str,
     session: AsyncSession = Depends(get_session),
-    user_id: Optional[str] = Depends(get_current_user_id_optional),
+    user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Powers /learn/:courseSlug/:lessonSlug. Public at the API layer; the frontend still
     keeps the /learn route behind the member auth guard."""
+    user_id = str(user.id) if user else None
     course = (
         await session.execute(select(Course).where(Course.slug == course_slug, Course.published.is_(True)))
     ).scalar_one_or_none()
@@ -125,7 +188,10 @@ async def get_lesson_in_course(
     if not module or module.course_id != course.id:
         raise HTTPException(status_code=404, detail="Lesson not found in this course")
 
-    entitled = await _lesson_entitled(lesson=lesson, user_id=user_id, session=session)
+    # The bypass-with-audit path: this decides whether `body` (the actual protected
+    # content) is returned below, unlike the sidebar loop's `_lesson_entitled` calls
+    # further down, which only decide a cosmetic lock icon.
+    entitled = await _lesson_entitled_or_admin(lesson=lesson, user=user, session=session)
 
     modules = (
         (await session.execute(select(Module).where(Module.course_id == course.id).order_by(Module.sort_order)))
@@ -221,6 +287,54 @@ async def get_lesson_in_course(
 
     media = (await session.execute(select(Media).where(Media.lesson_id == lesson.id))).scalar_one_or_none()
 
+    # Same per-block-type gating the lesson-level fields below already use: text/video
+    # blocks have no free-preview mechanic (never shown unless `entitled`), but a `file`
+    # block whose template is the free lead magnet stays free wherever it appears —
+    # matching `download_out`'s rule two paragraphs down, for the same reason.
+    lesson_blocks = (
+        (
+            await session.execute(
+                select(LessonBlock)
+                .where(LessonBlock.lesson_id == lesson.id)
+                .options(selectinload(LessonBlock.media), selectinload(LessonBlock.template))
+                .order_by(LessonBlock.sort_order)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    block_outs: list[LessonBlockOut] = []
+    for b in lesson_blocks:
+        b_type = _lesson_type_value(b.block_type)
+        if b_type in ("text", "callout"):
+            if not entitled:
+                continue
+            block_outs.append(
+                LessonBlockOut(
+                    id=str(b.id), block_type=b_type, sort_order=b.sort_order, heading=b.heading, text_body=b.text_body
+                )
+            )
+        elif b_type == "video":
+            if not entitled:
+                continue
+            ready = b.media is not None and b.media.status == "ready" and bool(b.media.mux_playback_id)
+            block_outs.append(
+                LessonBlockOut(id=str(b.id), block_type=b_type, sort_order=b.sort_order, video_ready=ready)
+            )
+        elif b_type == "file":
+            if not b.template or not (entitled or b.template.is_free):
+                continue
+            block_outs.append(
+                LessonBlockOut(
+                    id=str(b.id),
+                    block_type=b_type,
+                    sort_order=b.sort_order,
+                    file_name=b.template.file_name,
+                    file_size_bytes=b.template.file_size_bytes,
+                    file_is_free=b.template.is_free,
+                )
+            )
+
     # A free template stays free wherever it appears. The Risk Register Template is both
     # the standalone lead magnet AND one of this course's lessons, and gating it here
     # would have meant the same file was free on /templates and paywalled inside the
@@ -246,6 +360,7 @@ async def get_lesson_in_course(
         lesson_type=_lesson_type_value(lesson.lesson_type),
         body=lesson.body if entitled else None,
         download=download_out,
+        blocks=block_outs,
         has_video=media is not None and media.status == "ready",
         entitled=entitled,
         completed=lesson.id in completed_lesson_ids,
@@ -262,7 +377,7 @@ async def get_lesson_in_course(
 async def get_playback_token(
     lesson_id: str,
     session: AsyncSession = Depends(get_session),
-    user_id: str = Depends(get_current_user_id),
+    user: User = Depends(get_current_user),
 ):
     """Get signed Mux playback token for a lesson."""
 
@@ -282,7 +397,7 @@ async def get_playback_token(
         raise HTTPException(status_code=400, detail="Video still processing")
 
     # Checked before Mux is called — a signed URL minted then discarded still existed.
-    entitled = await _lesson_entitled(lesson=lesson, user_id=user_id, session=session)
+    entitled = await _lesson_entitled_or_admin(lesson=lesson, user=user, session=session)
     if not entitled:
         raise HTTPException(
             status_code=403,
@@ -308,8 +423,10 @@ async def get_lesson_download_url(
     lesson_id: str,
     session: AsyncSession = Depends(get_session),
     # Optional so a free template inside a course is downloadable with no account, exactly
-    # as it is on /templates. Paid artefacts still 401 below when this is None.
-    user_id: Optional[str] = Depends(get_current_user_id_optional),
+    # as it is on /templates. Paid artefacts still 401 below when this is None. The full
+    # User (not just the id) so an admin without the entitlement gets the audited bypass
+    # rather than a plain 403 — see `has_access_to_or_admin`.
+    user: Optional[User] = Depends(get_current_user_optional),
 ):
     """The download-type lesson's artefact, gated by LESSON entitlement (course access) —
     unless the underlying template is the free lead magnet, in which case it is free here
@@ -332,12 +449,12 @@ async def get_lesson_download_url(
     # templates.py. The email capture fronting this in the UI is a conversion device,
     # not a boundary, so it is not enforced here either.
     if not template.is_free:
-        if user_id is None:
+        if user is None:
             raise HTTPException(
                 status_code=401,
                 detail={"error": {"code": "not_authenticated", "message": "Sign in to download this file."}},
             )
-        entitled = await _lesson_entitled(lesson=lesson, user_id=user_id, session=session)
+        entitled = await _lesson_entitled_or_admin(lesson=lesson, user=user, session=session)
         if not entitled:
             raise HTTPException(
                 status_code=403,
@@ -349,7 +466,14 @@ async def get_lesson_download_url(
                 },
             )
 
-    download_url = generate_presigned_url(template.storage_key)
+    try:
+        download_url = generate_presigned_url(template.storage_key)
+    except Exception as e:
+        capture_download_failed(
+            user_id=str(user.id) if user else "anonymous",
+            resource_type="lesson_download", resource_id=str(lesson.id), reason=str(e),
+        )
+        raise
     return LessonDownloadUrlOut(
         download_url=download_url, file_name=template.file_name, file_size_bytes=template.file_size_bytes
     )
@@ -364,16 +488,17 @@ class CompleteOut(BaseModel):
 async def mark_lesson_complete(
     lesson_id: str,
     session: AsyncSession = Depends(get_session),
-    user_id: str = Depends(get_current_user_id),
+    user: User = Depends(get_current_user),
 ):
     """The "Mark complete" button. Recomputes the CourseProgress rollup live, so the
     catalogue's percentage badge and the outline's checkmarks can't drift apart."""
+    user_id = str(user.id)
     lesson_uuid = uuid.UUID(lesson_id)
     lesson = (await session.execute(select(Lesson).where(Lesson.id == lesson_uuid))).scalar_one_or_none()
     if not lesson:
         raise HTTPException(status_code=404, detail="Lesson not found")
 
-    entitled = await _lesson_entitled(lesson=lesson, user_id=user_id, session=session)
+    entitled = await _lesson_entitled_or_admin(lesson=lesson, user=user, session=session)
     if not entitled:
         raise HTTPException(
             status_code=403,
@@ -454,3 +579,105 @@ async def mark_lesson_complete(
             await session.commit()
 
     return CompleteOut(completed=True, course_progress_percent=course_progress_percent)
+
+
+# ── Block-scoped content endpoints ─────────────────────────────────────────────────
+# week2_plan.md Phase 2 step 4: "entitlement is checked once per lesson, not per
+# block — but each video block still mints its own short-lived Mux token and each
+# file block its own presigned URL, on demand, exactly as today." The lesson-scoped
+# endpoints above stay as they are (they still work correctly on every backfilled
+# lesson, which has exactly one block matching its old single media/template row) —
+# these are the new path for a lesson with more than one video or file block.
+
+
+@router.get("/lesson-blocks/{block_id}/playback-token", response_model=PlaybackTokenOut)
+async def get_block_playback_token(
+    block_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """Block-scoped counterpart to /lessons/{lesson_id}/playback-token. The entitlement
+    check still runs against the block's PARENT LESSON — buying a lesson unlocks every
+    block inside it, not each block individually — but the Mux token is minted for
+    THIS block's own media row, so a lesson with two video blocks serves each correctly."""
+    block = (
+        await session.execute(
+            select(LessonBlock)
+            .where(LessonBlock.id == uuid.UUID(block_id))
+            .options(selectinload(LessonBlock.media), selectinload(LessonBlock.lesson))
+        )
+    ).scalar_one_or_none()
+    if not block or block.block_type != LessonBlockType.VIDEO:
+        raise HTTPException(status_code=404, detail="Video block not found")
+
+    media = block.media
+    if not media or not media.mux_playback_id:
+        raise HTTPException(status_code=404, detail="Video not ready")
+    if media.status != "ready":
+        raise HTTPException(status_code=400, detail="Video still processing")
+
+    # Checked before Mux is called — a signed URL minted then discarded still existed.
+    entitled = await _lesson_entitled_or_admin(lesson=block.lesson, user=user, session=session)
+    if not entitled:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": {"code": "not_entitled", "message": "This lesson is part of a course you don't have yet."}},
+        )
+
+    token = generate_mux_playback_token(media.mux_playback_id)
+    return PlaybackTokenOut(playback_id=media.mux_playback_id, token=token)
+
+
+@router.get("/lesson-blocks/{block_id}/download-url", response_model=LessonDownloadUrlOut)
+async def get_block_download_url(
+    block_id: str,
+    session: AsyncSession = Depends(get_session),
+    # Optional for the same reason as the lesson-scoped endpoint: a free-template file
+    # block is downloadable with no account at all.
+    user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Block-scoped counterpart to /lessons/{lesson_id}/download-url — same free-template
+    exception, same entitlement-on-the-parent-lesson rule, see get_block_playback_token."""
+    block = (
+        await session.execute(
+            select(LessonBlock)
+            .where(LessonBlock.id == uuid.UUID(block_id))
+            .options(selectinload(LessonBlock.template), selectinload(LessonBlock.lesson))
+        )
+    ).scalar_one_or_none()
+    if not block or block.block_type != LessonBlockType.FILE:
+        raise HTTPException(status_code=404, detail="File block not found")
+
+    template = block.template
+    if not template:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    if not template.is_free:
+        if user is None:
+            raise HTTPException(
+                status_code=401,
+                detail={"error": {"code": "not_authenticated", "message": "Sign in to download this file."}},
+            )
+        entitled = await _lesson_entitled_or_admin(lesson=block.lesson, user=user, session=session)
+        if not entitled:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": {
+                        "code": "not_entitled",
+                        "message": "This lesson is part of a course you don't have yet.",
+                    }
+                },
+            )
+
+    try:
+        download_url = generate_presigned_url(template.storage_key)
+    except Exception as e:
+        capture_download_failed(
+            user_id=str(user.id) if user else "anonymous",
+            resource_type="lesson_block_download", resource_id=str(block.id), reason=str(e),
+        )
+        raise
+    return LessonDownloadUrlOut(
+        download_url=download_url, file_name=template.file_name, file_size_bytes=template.file_size_bytes
+    )

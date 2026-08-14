@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -18,20 +18,25 @@ import {
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { domainColorVar, domainVisual } from '@/lib/domainVisuals'
+import { track } from '@/lib/analytics'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils/cn'
-
-interface QuestionTag {
-  dimension: string
-  value: string
-  display_label: string
-  // The real ordinal scale (tag_values.sort_order): Quick < Mod. < Project < Trans.,
-  // XS < S < M < L < XL. Filter options sort by this, not by encounter order.
-  sort_order: number
-}
+import {
+  MULTI_DIMENSIONS,
+  ORDINAL_DIMENSIONS,
+  buildTagLookup,
+  partitionQuestions,
+  rankRelaxationCandidates,
+  type MultiDimension,
+  type OrdinalDimension,
+  type QuestionFilters,
+  type ScoredQuestion,
+  type TagRef,
+} from '@/lib/scoring'
 
 interface QuestionSummary {
   id: string
@@ -40,7 +45,12 @@ interface QuestionSummary {
   subtitle: string | null
   preview: string
   domain: string
-  tags: QuestionTag[]
+  domain_slug: string
+  tags: TagRef[]
+}
+
+function isMultiDimension(dim: string): dim is MultiDimension {
+  return (MULTI_DIMENSIONS as readonly string[]).includes(dim)
 }
 
 // Same icon/label map as Question.tsx's definition grid — one dimension, one icon.
@@ -62,19 +72,169 @@ const DIMENSION_LABELS: Record<string, string> = {
   regulator_pressure: 'Regulator pressure',
   leadership_traits: 'Leadership traits',
 }
-const DIMENSION_ORDER = ['effort', 'duration', 'cost', 'roi_horizon', 'tier', 'regulator_pressure', 'leadership_traits']
+// §19.5's practitioner-reasoning order: where do I work, how long, what can I
+// spend, how much of my own time, does anyone external care, how fast does it pay
+// off, how foundational vs transformational.
+const DIMENSION_ORDER = [...ORDINAL_DIMENSIONS, 'tier', 'leadership_traits']
 
 // Real taxonomy values, not fuzzy text — a chip only ever matches a real tag row.
-const QUICK_FILTERS = [
-  { label: '2 weeks or less', dimension: 'duration', values: ['XS', 'S'] },
-  { label: 'Low cost', dimension: 'cost', values: ['$'] },
-  { label: 'Regulator pressure', dimension: 'regulator_pressure', values: ['M', 'H'] },
-  { label: 'Leadership support', dimension: 'leadership_traits', values: ['1', '2', '3', '4', '5'] },
-] as const
+// Counts against the live catalogue (2026-08-13): duration s 25, cost low 73,
+// regulator_pressure h 24, roi_horizon quick 59.
+//
+// §19.7 lists a fifth chip, "Build leadership support" (`tier: strategic` +
+// `leadership_traits: any`), deliberately deferred: it sets a SINGLE-dimension
+// value on one dimension plus an open-ended "any value present" match on a second,
+// multi-select one — `toggleQuickFilter` below only handles one dimension at a
+// time. Worth adding once there's a real second multi-dimension chip to justify
+// generalising the helper, not for one chip alone.
+const QUICK_FILTERS: { label: string; dimension: string; values: readonly string[] }[] = [
+  { label: 'Do it in a fortnight', dimension: 'duration', values: ['s'] },
+  { label: 'Do it cheaply', dimension: 'cost', values: ['low'] },
+  { label: 'Show your regulator', dimension: 'regulator_pressure', values: ['h'] },
+  { label: 'Quick payback', dimension: 'roi_horizon', values: ['quick'] },
+]
 
 // One URL param per dimension (+domain), so filters are shareable and Home's domain
-// blocks and quick filters can link straight in.
-const FILTER_PARAMS = ['domain', ...DIMENSION_ORDER]
+// blocks and quick filters can link straight in. Multi-select dims (tier,
+// leadership_traits) use REPEATED params (`?tier=a&tier=b`), read with `getAll`.
+const SINGLE_FILTER_PARAMS: readonly ('domain' | OrdinalDimension)[] = ['domain', ...ORDINAL_DIMENSIONS]
+const ALL_FILTER_PARAMS: readonly string[] = [...SINGLE_FILTER_PARAMS, ...MULTI_DIMENSIONS]
+
+function filtersFromSearchParams(searchParams: URLSearchParams): QuestionFilters {
+  // Built via a narrowly-typed intermediate object (single index type, single value
+  // type) rather than indexing QuestionFilters directly — QuestionFilters mixes
+  // string and string[] fields, which TS can't safely index-assign through a loop
+  // variable without a cast.
+  const single: Partial<Record<'domain' | OrdinalDimension, string>> = {}
+  for (const dim of SINGLE_FILTER_PARAMS) {
+    const value = searchParams.get(dim)
+    if (value) single[dim] = value
+  }
+  return {
+    ...single,
+    tier: searchParams.getAll('tier'),
+    leadership_traits: searchParams.getAll('leadership_traits'),
+  }
+}
+
+/** `12 exact · +9 close` — tabular-nums so digits don't jitter, aria-live so a
+ * screen reader announces the recount on every tap without the user needing to
+ * refocus anything. Updates with no round trip: both numbers come from a
+ * `partitionQuestions` call already computed against the cached index. */
+function ResultCount({
+  exactCount,
+  closeCount,
+  hasFilters,
+  totalCount,
+}: {
+  exactCount: number
+  closeCount: number
+  hasFilters: boolean
+  totalCount: number
+}) {
+  return (
+    <p className="text-sm text-muted-foreground" aria-live="polite">
+      {!hasFilters ? (
+        <>
+          <span className="font-semibold tabular-nums text-primary">{totalCount}</span>{' '}
+          {totalCount === 1 ? 'question' : 'questions'}
+        </>
+      ) : (
+        <>
+          <span className="font-semibold tabular-nums text-primary">{exactCount}</span> exact
+          {closeCount > 0 && (
+            <>
+              {' '}
+              · <span className="font-semibold tabular-nums text-foreground">+{closeCount}</span> close
+            </>
+          )}
+        </>
+      )}
+    </p>
+  )
+}
+
+/** A close row's badge — informational, never an error: no `--destructive`, no
+ * warning icon, text is never dimmed (§19.3). Names the dimension that missed and
+ * the question's actual value on it, e.g. "Duration: 3-6 months". */
+function MatchBadge({ dimension, actual, tagLookup }: { dimension: string; actual: unknown; tagLookup: Map<string, TagRef> }) {
+  const label = DIMENSION_LABELS[dimension] ?? dimension
+  const values = Array.isArray(actual) ? actual : actual != null ? [actual as string] : []
+  if (values.length === 0) return null
+  const text = values.map((v) => tagLookup.get(`${dimension}:${v}`)?.display_label ?? v).join(', ')
+  return (
+    <Badge variant="secondary">
+      {label}: {text}
+    </Badge>
+  )
+}
+
+/** §19.4/§57.5 — the suggested relaxations are computed from the cached index, not
+ * hard-coded: rank the active filters by how few questions each admits alone, and
+ * offer the two most restrictive as one-tap recoveries. */
+function ZeroResults({
+  candidates,
+  filters,
+  tagLookup,
+  onRelax,
+  onClearAll,
+}: {
+  candidates: string[]
+  filters: QuestionFilters
+  tagLookup: Map<string, TagRef>
+  onRelax: (dimension: string) => void
+  onClearAll: () => void
+}) {
+  const label = (dim: string): string => {
+    if (dim === 'domain') return filters.domain ?? dim
+    if (isMultiDimension(dim)) {
+      const values = filters[dim]
+      return values.map((v) => tagLookup.get(`${dim}:${v}`)?.display_label ?? v).join(', ')
+    }
+    // `dim` is a plain string here (it came off `rankRelaxationCandidates`'s
+    // return, not a narrowed literal), so it's resolved through a switch rather
+    // than an index-signature cast — see filtersFromSearchParams's comment above
+    // for why QuestionFilters can't be indexed directly by an arbitrary string.
+    const value: string | undefined =
+      dim === 'effort'
+        ? filters.effort
+        : dim === 'duration'
+          ? filters.duration
+          : dim === 'cost'
+            ? filters.cost
+            : dim === 'roi_horizon'
+              ? filters.roi_horizon
+              : dim === 'regulator_pressure'
+                ? filters.regulator_pressure
+                : undefined
+    return value ? (tagLookup.get(`${dim}:${value}`)?.display_label ?? value) : dim
+  }
+
+  return (
+    <EmptyState
+      className="mt-6"
+      icon={FileQuestion}
+      title="No questions match every filter."
+      description={
+        candidates.length > 0
+          ? `The tightest constraint is ${DIMENSION_LABELS[candidates[0]] ?? candidates[0]}: ${label(candidates[0])}. Try relaxing it, or another, below.`
+          : 'Try removing a filter or searching for a different term.'
+      }
+      action={
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {candidates.slice(0, 2).map((dim) => (
+            <Button key={dim} variant="outline" size="sm" onClick={() => onRelax(dim)}>
+              Relax {DIMENSION_LABELS[dim] ?? dim}
+            </Button>
+          ))}
+          <Button variant="ghost" size="sm" onClick={onClearAll}>
+            Clear all
+          </Button>
+        </div>
+      }
+    />
+  )
+}
 
 function FilterPanel({
   questions,
@@ -87,6 +247,11 @@ function FilterPanel({
 }) {
   // Only offer values actually present in the data, so no option returns zero results.
   const domainOptions = useMemo(() => [...new Set(questions.map((q) => q.domain))].sort(), [questions])
+  const domainSlugByName = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const q of questions) map.set(q.domain, q.domain_slug)
+    return map
+  }, [questions])
   const dimensionOptions = useMemo(() => {
     const byDimension = new Map<string, Map<string, { label: string; sortOrder: number }>>()
     for (const q of questions) {
@@ -100,8 +265,28 @@ function FilterPanel({
 
   const toggle = (param: string, value: string) => {
     const next = new URLSearchParams(searchParams)
-    if (next.get(param) === value) next.delete(param)
-    else next.set(param, value)
+    if (next.get(param) === value) {
+      next.delete(param)
+    } else {
+      next.set(param, value)
+      // week2_plan.md Phase 5 — fired on APPLY, not on clear: "is the seven-tag
+      // system actually used" asks which filters get reached for, not every tap.
+      track('filter_applied', { dimension: param, value })
+    }
+    setSearchParams(next)
+  }
+
+  // Multi-select (tier, leadership_traits — DESIGN.md §19.5 point 7): repeated
+  // query params, toggled independently, "any of these" semantics at the scoring
+  // layer.
+  const toggleMulti = (param: string, value: string) => {
+    const next = new URLSearchParams(searchParams)
+    const current = next.getAll(param)
+    next.delete(param)
+    const adding = !current.includes(value)
+    const updated = adding ? [...current, value] : current.filter((v) => v !== value)
+    for (const v of updated) next.append(param, v)
+    if (adding) track('filter_applied', { dimension: param, value })
     setSearchParams(next)
   }
 
@@ -122,14 +307,15 @@ function FilterPanel({
               smaller problem than seven badges per row. */}
           <div className="mt-2.5 flex flex-col gap-0.5">
             {domainOptions.map((d) => {
-              const active = searchParams.get('domain') === d
+              const slug = domainSlugByName.get(d) ?? d
+              const active = searchParams.get('domain') === slug
               const color = domainColorVar(d)
               const Icon = domainVisual(d).icon
               return (
                 <button
                   key={d}
                   type="button"
-                  onClick={() => toggle('domain', d)}
+                  onClick={() => toggle('domain', slug)}
                   aria-pressed={active}
                   className={cn(
                     'flex items-center gap-2 rounded-md border-l-2 px-2.5 py-1.5 text-left text-sm transition-colors duration-150',
@@ -153,9 +339,11 @@ function FilterPanel({
       {DIMENSION_ORDER.filter((dim) => dimensionOptions.has(dim)).map((dim) => {
         const Icon = DIMENSION_ICONS[dim] ?? Filter
         const values = dimensionOptions.get(dim)!
+        const multi = isMultiDimension(dim)
         // Regulator pressure keeps the one emphasis colour; every other tile is
         // secondary by design.
         const isUrgent = dim === 'regulator_pressure'
+        const activeMultiValues = multi ? searchParams.getAll(dim) : []
         return (
           <div key={dim}>
             <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -175,12 +363,12 @@ function FilterPanel({
               {[...values.entries()]
                 .sort(([, a], [, b]) => a.sortOrder - b.sortOrder)
                 .map(([value, { label }]) => {
-                  const active = searchParams.get(dim) === value
+                  const active = multi ? activeMultiValues.includes(value) : searchParams.get(dim) === value
                   return (
                     <button
                       key={value}
                       type="button"
-                      onClick={() => toggle(dim, value)}
+                      onClick={() => (multi ? toggleMulti(dim, value) : toggle(dim, value))}
                       aria-pressed={active}
                       className={cn(
                         'rounded-md border-l-2 px-2.5 py-1.5 text-left text-sm transition-colors duration-150',
@@ -191,6 +379,10 @@ function FilterPanel({
                           : 'border-l-transparent text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
                       )}
                     >
+                      {/* A checkbox glyph, not a radio dot, on the two multi-select
+                          groups — the semantics really are "any of these", and the
+                          UI should say so without needing a legend. */}
+                      {multi && <span aria-hidden="true">{active ? '☑ ' : '☐ '}</span>}
                       {label}
                     </button>
                   )
@@ -203,52 +395,170 @@ function FilterPanel({
   )
 }
 
+const CLOSE_PREVIEW_COUNT = 3
+
+function QuestionRow({
+  scored,
+  showBadges,
+  showMatchList,
+  activeFilterLabels,
+  tagLookup,
+}: {
+  scored: ScoredQuestion<QuestionSummary>
+  showBadges: boolean
+  showMatchList: boolean
+  activeFilterLabels: { param: string; label: string }[]
+  tagLookup: Map<string, TagRef>
+}) {
+  const question = scored.question
+  const color = domainColorVar(question.domain)
+  const DomainIcon = domainVisual(question.domain).icon
+  return (
+    <li>
+      <Link
+        to={`/questions/${question.slug}`}
+        className={cn(
+          'group -mx-4 block rounded-lg border-l-2 px-4 py-6 transition-colors duration-150 hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none',
+          // §19.3: close rows carry a lighter left rule than exact rows — the ONLY
+          // structural difference besides the badge. Text opacity is never touched.
+          showBadges
+            ? 'border-l-border'
+            : 'border-l-transparent hover:border-l-[var(--row-domain-color)] focus-visible:border-l-[var(--row-domain-color)]',
+        )}
+        style={{ '--row-domain-color': color } as CSSProperties}
+      >
+        <p className="eyebrow gap-1.5" style={{ color }}>
+          <DomainIcon className="size-3" aria-hidden="true" />
+          {question.domain}
+        </p>
+        <h3 className="mt-1.5 text-h4 font-semibold text-foreground group-hover:text-primary">{question.title}</h3>
+        {question.subtitle && <p className="mt-1 text-sm text-muted-foreground">{question.subtitle}</p>}
+
+        {showBadges && scored.misses.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {scored.misses.map((m) => (
+              <MatchBadge key={m.dimension} dimension={m.dimension} actual={m.actual} tagLookup={tagLookup} />
+            ))}
+          </div>
+        )}
+
+        {/* Match explanation for exact rows — restating filters this (necessarily
+            fully-matching) result satisfies, never a fabricated relevance score. */}
+        {showMatchList && activeFilterLabels.length > 0 && (
+          <ul className="mt-3 flex flex-col gap-1">
+            {activeFilterLabels.map((f) => (
+              <li key={f.param} className="flex items-center gap-1.5 text-xs text-success">
+                <span aria-hidden="true">✓</span> {f.label}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary">Read the answer →</span>
+      </Link>
+    </li>
+  )
+}
+
 // The /questions catalogue: an honest filter system where every option offered is
-// derived from what's actually published, plus editorial result rows and a match
-// explanation naming which active filters each visible result satisfies.
+// derived from what's actually published, results are a RANKING (exact + close, a
+// divider between them) rather than a strict gate that can return nothing, and the
+// live count updates on every tap with zero round trips — the whole index is
+// fetched once and scored client-side (DESIGN.md §57.1; see questions.py's module
+// docstring for the matching backend note).
 export function QuestionsCatalogue() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [query, setQuery] = useState('')
+  // Seeded from `?q=` so a search started elsewhere arrives here already applied.
+  // Debounced back into the URL below (§19.6: debounce SEARCH only, never a filter
+  // tap) rather than on every keystroke, so typing doesn't spam browser history.
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
+  const [debouncedQuery, setDebouncedQuery] = useState(query)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const [showAllClose, setShowAllClose] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 250)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (debouncedQuery) next.set('q', debouncedQuery)
+        else next.delete('q')
+        return next
+      },
+      { replace: true },
+    )
+    // Reset the "show all close matches" expansion whenever the query settles —
+    // a fresh search is a fresh result list, not a continuation of the last one.
+    setShowAllClose(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery])
 
   const { data: questions, isLoading } = useQuery({
     queryKey: queryKeys.questions.list(),
-    queryFn: () => api.get<QuestionSummary[]>('/questions').then((res) => res.data),
+    queryFn: () => api.get<QuestionSummary[]>('/questions/index').then((res) => res.data),
   })
 
-  const activeFilters = useMemo(
-    () =>
-      FILTER_PARAMS.map((param) => ({ param, value: searchParams.get(param) })).filter(
-        (f): f is { param: string; value: string } => f.value !== null,
-      ),
-    [searchParams],
-  )
+  const filters = useMemo(() => filtersFromSearchParams(searchParams), [searchParams])
+  const tagLookup = useMemo(() => buildTagLookup(questions?.flatMap((q) => q.tags) ?? []), [questions])
 
-  const visible = useMemo(() => {
-    if (!questions) return []
-    const q = query.trim().toLowerCase()
-    return questions.filter((item) => {
-      const textOk = !q || item.title.toLowerCase().includes(q) || item.preview.toLowerCase().includes(q)
-      const filtersOk = activeFilters.every(({ param, value }) => {
-        if (param === 'domain') return item.domain === value
-        return item.tags.some((t) => t.dimension === param && t.value === value)
-      })
-      return textOk && filtersOk
-    })
-  }, [questions, query, activeFilters])
+  const { exact, close, hasFilters } = useMemo(() => {
+    if (!questions)
+      return {
+        exact: [] as ScoredQuestion<QuestionSummary>[],
+        close: [] as ScoredQuestion<QuestionSummary>[],
+        hasFilters: false,
+      }
+    const term = debouncedQuery.trim().toLowerCase()
+    const searched = term
+      ? questions.filter((item) => item.title.toLowerCase().includes(term) || item.preview.toLowerCase().includes(term))
+      : questions
+    return partitionQuestions(searched, filters, tagLookup)
+  }, [questions, filters, tagLookup, debouncedQuery])
+
+  const relaxationCandidates = useMemo(() => {
+    if (!questions || !hasFilters || exact.length > 0 || close.length > 0) return []
+    const term = debouncedQuery.trim().toLowerCase()
+    const searched = term
+      ? questions.filter((item) => item.title.toLowerCase().includes(term) || item.preview.toLowerCase().includes(term))
+      : questions
+    return rankRelaxationCandidates(searched, filters)
+  }, [questions, filters, hasFilters, exact.length, close.length, debouncedQuery])
+
+  const activeFilterCount = ALL_FILTER_PARAMS.reduce((n, p) => n + (searchParams.getAll(p).length > 0 ? 1 : 0), 0)
 
   const activeFilterLabels = useMemo(() => {
-    if (!questions) return []
-    return activeFilters.map(({ param, value }) => {
-      if (param === 'domain') return { param, value, label: value }
-      const tag = questions.flatMap((q) => q.tags).find((t) => t.dimension === param && t.value === value)
-      return { param, value, label: tag?.display_label ?? value }
-    })
-  }, [questions, activeFilters])
+    const labels: { param: string; value: string; label: string }[] = []
+    for (const param of SINGLE_FILTER_PARAMS) {
+      const value = searchParams.get(param)
+      if (!value) continue
+      if (param === 'domain') {
+        const question = questions?.find((q) => q.domain_slug === value)
+        labels.push({ param, value, label: question?.domain ?? value })
+      } else {
+        labels.push({ param, value, label: tagLookup.get(`${param}:${value}`)?.display_label ?? value })
+      }
+    }
+    for (const param of MULTI_DIMENSIONS) {
+      for (const value of searchParams.getAll(param)) {
+        labels.push({ param, value, label: tagLookup.get(`${param}:${value}`)?.display_label ?? value })
+      }
+    }
+    return labels
+  }, [searchParams, questions, tagLookup])
 
-  const clearFilter = (param: string) => {
+  const clearFilter = (param: string, value?: string) => {
     const next = new URLSearchParams(searchParams)
-    next.delete(param)
+    if (value && isMultiDimension(param)) {
+      const remaining = next.getAll(param).filter((v) => v !== value)
+      next.delete(param)
+      for (const v of remaining) next.append(param, v)
+    } else {
+      next.delete(param)
+    }
     setSearchParams(next)
   }
   const clearAll = () => setSearchParams({})
@@ -256,13 +566,16 @@ export function QuestionsCatalogue() {
   const toggleQuickFilter = (dimension: string, values: readonly string[]) => {
     const next = new URLSearchParams(searchParams)
     const current = next.get(dimension)
-    if (current && (values as readonly string[]).includes(current)) {
+    if (current && values.includes(current)) {
       next.delete(dimension)
     } else {
       next.set(dimension, values[0])
     }
     setSearchParams(next)
   }
+
+  const visibleClose = showAllClose ? close : close.slice(0, CLOSE_PREVIEW_COUNT)
+  const isZeroResults = hasFilters && exact.length === 0 && close.length === 0
 
   return (
     <div className="relative isolate mx-auto w-full max-w-6xl px-5 py-12 sm:px-8">
@@ -274,7 +587,7 @@ export function QuestionsCatalogue() {
       <div aria-hidden="true" className="page-wash absolute left-1/2 top-0 -z-10 h-[30rem] w-screen -translate-x-1/2" />
       <PageTitle
         eyebrow="Find"
-        title="Questions"
+        title="What are you trying to solve?"
         description="Real questions from risk leaders, each tagged by effort, cost, duration and more."
       />
 
@@ -291,7 +604,7 @@ export function QuestionsCatalogue() {
             id="library-search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search the questions…"
+            placeholder="Search the 100 questions…"
             className="h-12 rounded-xl border-border-strong/60 pl-11 focus-visible:outline-primary"
           />
         </div>
@@ -300,7 +613,7 @@ export function QuestionsCatalogue() {
             I need something I can…
           </span>
           {QUICK_FILTERS.map((chip) => {
-            const active = activeFilterLabels.some((f) => f.param === chip.dimension && (chip.values as readonly string[]).includes(f.value))
+            const active = activeFilterLabels.some((f) => f.param === chip.dimension && chip.values.includes(f.value))
             return (
               <button
                 key={chip.label}
@@ -330,28 +643,28 @@ export function QuestionsCatalogue() {
 
         <div>
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              {isLoading ? (
-                'Loading…'
-              ) : (
-                <>
-                  <span className="font-semibold tabular-nums text-primary">{visible.length}</span>{' '}
-                  {visible.length === 1 ? 'question' : 'questions'}
-                </>
-              )}
-            </p>
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading…</p>
+            ) : (
+              <ResultCount
+                exactCount={exact.length}
+                closeCount={close.length}
+                hasFilters={hasFilters}
+                totalCount={questions?.length ?? 0}
+              />
+            )}
             <button
               type="button"
               onClick={() => setMobileFiltersOpen(true)}
               className={cn(
                 'flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors lg:hidden',
-                activeFilters.length > 0
+                activeFilterCount > 0
                   ? 'border-primary/30 bg-primary/10 text-primary'
                   : 'border-border text-foreground hover:bg-secondary/60',
               )}
             >
               <Filter className="size-3.5" aria-hidden="true" />
-              Filters {activeFilters.length > 0 && `(${activeFilters.length})`}
+              Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
             </button>
           </div>
 
@@ -361,16 +674,20 @@ export function QuestionsCatalogue() {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {activeFilterLabels.map((f) => (
                 <button
-                  key={f.param}
+                  key={`${f.param}-${f.value}`}
                   type="button"
-                  onClick={() => clearFilter(f.param)}
+                  onClick={() => clearFilter(f.param, f.value)}
                   className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-primary transition-colors hover:border-primary/40 hover:bg-primary/15"
                 >
                   {f.label}
                   <X className="size-3" aria-hidden="true" />
                 </button>
               ))}
-              <button type="button" onClick={clearAll} className="text-xs font-medium text-muted-foreground underline hover:text-foreground">
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-xs font-medium text-muted-foreground underline hover:text-foreground"
+              >
                 Clear all
               </button>
             </div>
@@ -384,103 +701,92 @@ export function QuestionsCatalogue() {
             </div>
           )}
 
-          {!isLoading && visible.length === 0 && (
+          {!isLoading && questions && questions.length === 0 && (
             <EmptyState
               className="mt-6"
               icon={FileQuestion}
-              title={activeFilters.length > 0 || query ? 'No questions matched' : 'No questions yet'}
-              description={
-                activeFilters.length > 0 || query
-                  ? 'Try removing a filter or searching for a different term.'
-                  : 'The first question is on its way — check back soon.'
-              }
-              action={
-                activeFilters.length > 0 || query ? (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      clearAll()
-                      setQuery('')
-                    }}
-                  >
-                    Clear filters
-                  </Button>
-                ) : undefined
-              }
+              title="No questions yet"
+              description="The first question is on its way — check back soon."
             />
           )}
 
-          {/* Editorial result rows (§36) — a left accent rule on hover/focus, in
-              that result's own domain colour, rather than a Card. The colour is
-              chosen from data per-row, so it's set as a CSS custom property via
-              inline style and consumed through a literal Tailwind arbitrary-value
-              class (`border-l-[var(--row-domain-color)]`) — that string is static
-              in source, so the JIT compiler generates it normally; a runtime-
-              interpolated class name like `border-l-${color}` would not. */}
-          <ul className="mt-4 flex flex-col divide-y divide-border">
-            {visible.map((question) => {
-              const color = domainColorVar(question.domain)
-              const DomainIcon = domainVisual(question.domain).icon
-              return (
-                <li key={question.slug}>
-                  <Link
-                    to={`/questions/${question.slug}`}
-                    className="group -mx-4 block rounded-lg border-l-2 border-l-transparent px-4 py-6 transition-colors duration-150 hover:border-l-[var(--row-domain-color)] hover:bg-secondary/40 focus-visible:border-l-[var(--row-domain-color)] focus-visible:bg-secondary/40 focus-visible:outline-none"
-                    style={{ '--row-domain-color': color } as CSSProperties}
-                  >
-                    <p className="eyebrow gap-1.5" style={{ color }}>
-                      <DomainIcon className="size-3" aria-hidden="true" />
-                      {question.domain}
+          {!isLoading && questions && questions.length > 0 && isZeroResults && (
+            <ZeroResults
+              candidates={relaxationCandidates}
+              filters={filters}
+              tagLookup={tagLookup}
+              onRelax={(dim) => clearFilter(dim)}
+              onClearAll={() => {
+                clearAll()
+                setQuery('')
+              }}
+            />
+          )}
+
+          {!isLoading && !isZeroResults && (exact.length > 0 || close.length > 0) && (
+            <>
+              {/* No "N exact matches" header in the unfiltered state — that
+                  language only makes sense once there's something to be exact
+                  ABOUT. ResultCount above already covers the plain count. */}
+              {hasFilters && (
+                <p className="mt-6 text-sm font-medium text-foreground">
+                  {exact.length} exact match{exact.length === 1 ? '' : 'es'}
+                </p>
+              )}
+              <ul
+                className={cn(
+                  'flex flex-col divide-y divide-border',
+                  hasFilters ? 'mt-2 border-t border-border' : 'mt-4',
+                )}
+              >
+                {exact.map((scored) => (
+                  <QuestionRow
+                    key={scored.question.slug}
+                    scored={scored}
+                    showBadges={false}
+                    showMatchList={hasFilters}
+                    activeFilterLabels={activeFilterLabels}
+                    tagLookup={tagLookup}
+                  />
+                ))}
+              </ul>
+
+              {close.length > 0 && (
+                <>
+                  <div className="mt-8">
+                    <p className="text-sm font-medium text-foreground">
+                      {close.length} close match{close.length === 1 ? '' : 'es'}
                     </p>
-                    <h3 className="mt-1.5 text-h4 font-semibold text-foreground group-hover:text-primary">
-                      {question.title}
-                    </h3>
-                    {question.subtitle && <p className="mt-1 text-sm text-muted-foreground">{question.subtitle}</p>}
-                    {/* <p className="mt-3 flex flex-wrap gap-1.5 text-xs">
-                      {question.tags
-                        .filter((t) => t.dimension !== 'leadership_traits')
-                        .slice(0, 3)
-                        .map((t) => (
-                          <span
-                            key={`${t.dimension}-${t.value}`}
-                            className={cn(
-                              'rounded-full px-2 py-0.5 font-medium',
-                              t.dimension === 'regulator_pressure'
-                                ? 'bg-accent/10 text-accent'
-                                : 'bg-secondary text-secondary-foreground',
-                            )}
-                          >
-                            {t.display_label}
-                          </span>
-                        ))}
-                    </p> */}
-
-                    {/* Match explanation — only once a filter is actually active, and
-                        only restating filters this (necessarily fully-matching) result
-                        satisfies, never a fabricated relevance score. */}
-                    {activeFilterLabels.length > 0 && (
-                      <ul className="mt-3 flex flex-col gap-1">
-                        {activeFilterLabels.map((f) => (
-                          <li key={f.param} className="flex items-center gap-1.5 text-xs text-success">
-                            <span aria-hidden="true">✓</span> {f.label}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary">
-                      Read the answer →
-                    </span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Relax one filter to see these as exact.</p>
+                  </div>
+                  <ul className="mt-2 flex flex-col divide-y divide-border border-t border-border">
+                    {visibleClose.map((scored) => (
+                      <QuestionRow
+                        key={scored.question.slug}
+                        scored={scored}
+                        showBadges
+                        showMatchList={false}
+                        activeFilterLabels={activeFilterLabels}
+                        tagLookup={tagLookup}
+                      />
+                    ))}
+                  </ul>
+                  {!showAllClose && close.length > CLOSE_PREVIEW_COUNT && (
+                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setShowAllClose(true)}>
+                      Show all {close.length} close matches
+                    </Button>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
 
       {/* Mobile filter sheet — never a squeezed sidebar (§24.2's rule applied here
-          too), same slide-over pattern used across the app. */}
+          too), same slide-over pattern used across the app. Changes apply live, per
+          tap (§19.9) — the sheet reuses the exact same toggle handlers as the
+          desktop rail rather than a second batched-apply state. */}
       {mobileFiltersOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileFiltersOpen(false)} aria-hidden="true" />
@@ -499,7 +805,7 @@ export function QuestionsCatalogue() {
             <div className="p-5">
               {questions && <FilterPanel questions={questions} searchParams={searchParams} setSearchParams={setSearchParams} />}
             </div>
-            {activeFilters.length > 0 && (
+            {activeFilterCount > 0 && (
               <div className="border-t border-border p-5">
                 <Button variant="outline" className="w-full" onClick={clearAll}>
                   Clear all filters

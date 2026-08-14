@@ -1,10 +1,30 @@
-"""Public question catalogue and detail routes."""
+"""Public question catalogue and detail routes.
 
-from fastapi import APIRouter, Depends, HTTPException
+`/questions/index` and the scored `/questions` (week2_plan.md Phase 3 / DESIGN.md
+§57.1) are deliberately two different response shapes at two different paths, not
+one endpoint branching on query params — a client that wants the lightweight
+cacheable list and a client that wants a scored, filtered ranking are asking two
+different questions, and giving them different Pydantic response models is what
+makes case 10's "the index never carries `body`" guarantee a structural fact about
+the model rather than a runtime check someone could accidentally bypass.
+
+At today's ~100-question scale, `QuestionsCatalogue.tsx` fetches `/questions/index`
+ONCE and does all filtering/scoring/counting client-side with `scoring.ts` against
+the cached list — DESIGN.md §57.1's explicit resolution of v1's contradiction
+between "no client-side filtering of the entire database" and "the live count must
+update with no round trip": at this size they don't conflict. The scored `/questions`
+endpoint below is the authoritative, server-side twin of that same algorithm
+(`question_service.py` — parity-tested against the identical fixture scoring.ts is),
+built and tested now specifically so the swap to server-side filtering at the
+~500-question/250KB cutover (§57.1) is a data-source change in one page, not a new
+subsystem written under pressure at that point.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Union
 from app.db.session import get_session
 from app.db.models import (
     Question,
@@ -21,6 +41,13 @@ from app.db.models import (
 )
 from app.core.deps import get_current_user_id_optional
 from app.core.entitlements import ResourceType, has_access_to
+from app.services.question_service import (
+    QuestionFilters,
+    ScorableQuestion,
+    TagRef,
+    partition_questions,
+    rank_relaxation_candidates,
+)
 import uuid
 
 
@@ -61,6 +88,11 @@ class QuestionSummaryOut(BaseModel):
     subtitle: Optional[str]
     preview: str
     domain: str
+    # The stable identifier scoring/filtering compares against — `domain` above is
+    # the display name, which the owner can reword without breaking a filter or a
+    # bookmarked URL (`?domain=third-party-risk` stays valid; `?domain=Third-Party
+    # Risk` would not survive a rename).
+    domain_slug: str
     tags: List[TagOut]
 
 class QuestionOut(BaseModel):
@@ -69,9 +101,9 @@ class QuestionOut(BaseModel):
     title: str
     subtitle: Optional[str]
     preview: str
-    # Always present — the written question is the free entry point, not the paid
-    # product. The frontend soft-gates it behind an email capture (blur + /leads),
-    # which is a conversion surface, not a server-side restriction.
+    # Always present, and always rendered in full — the written question is the free
+    # entry point, not the paid product. The frontend used to soft-gate it behind an
+    # email capture; that gate has been removed, so this is now a plain free read.
     body: str
     domain: str
     tags: List[TagOut]
@@ -139,28 +171,156 @@ def _tags_for_question(question: Question, tag_map: dict, traits_by_question: di
     return tags
 
 
-@router.get("/questions", response_model=List[QuestionSummaryOut])
-async def list_questions(session: AsyncSession = Depends(get_session)):
-    """The question index — public. Every question's written guidance is free to read
-    (the email gate lives client-side), so no entitlement check is needed here."""
+async def _load_published_questions(session: AsyncSession):
+    """The shared data both `/questions/index` and the scored `/questions` need —
+    one place, so the two routes see identical content and can't drift into
+    disagreeing about what "published" means. Four queries total either way,
+    however many questions there are."""
     result = await session.execute(
-        select(Question).where(Question.published.is_(True)).order_by(Question.created_at)
+        select(Question).where(Question.published.is_(True)).order_by(Question.title)
     )
     questions = result.scalars().all()
-
-    # Four queries total, however many questions there are.
     domains = await _load_domains(session)
     tag_map = await _load_tag_value_map(session)
     traits_by_question = await _load_leadership_traits(session, [q.id for q in questions], tag_map)
+    return questions, domains, tag_map, traits_by_question
 
-    return [
-        QuestionSummaryOut(
-            id=str(q.id), slug=q.slug, title=q.title, subtitle=q.subtitle,
-            preview=q.preview, domain=domains[q.domain_id].name,
-            tags=_tags_for_question(q, tag_map, traits_by_question),
+
+def _question_summary(q: Question, domains: dict, tag_map: dict, traits_by_question: dict) -> QuestionSummaryOut:
+    domain = domains[q.domain_id]
+    return QuestionSummaryOut(
+        id=str(q.id), slug=q.slug, title=q.title, subtitle=q.subtitle,
+        preview=q.preview, domain=domain.name, domain_slug=domain.slug,
+        tags=_tags_for_question(q, tag_map, traits_by_question),
+    )
+
+
+@router.get("/questions/index", response_model=List[QuestionSummaryOut])
+async def list_questions_index(session: AsyncSession = Depends(get_session)):
+    """The cacheable question index (DESIGN.md §57.1) — public, no `body` field ever
+    (gating case 10). Every question's written guidance is free to read (the email
+    gate lives client-side, and has since been removed entirely), so no entitlement
+    check is needed here. `QuestionsCatalogue.tsx` fetches this once and does all
+    filtering/scoring/live-counting against it with `scoring.ts` — see this file's
+    module docstring for why that, not a round trip per filter tap, is correct at
+    today's scale."""
+    questions, domains, tag_map, traits_by_question = await _load_published_questions(session)
+    # Title order, not creation order: matches the tie-break `partition_questions`/
+    # `partitionQuestions` rely on being stable against (equal-score rows keep
+    # whatever order they arrived in), and reads better as a plain unfiltered list.
+    return [_question_summary(q, domains, tag_map, traits_by_question) for q in questions]
+
+
+class QuestionMissOut(BaseModel):
+    dimension: str
+    requested: Union[str, List[str]]
+    actual: Optional[Union[str, List[str]]]
+    # 1 = adjacent, null = far or unknown — both scored 0; matches scoring.ts's Miss.
+    distance: Optional[int]
+
+
+class ScoredQuestionOut(QuestionSummaryOut):
+    score: int
+    misses: List[QuestionMissOut]
+
+
+class QuestionSearchOut(BaseModel):
+    exact: List[QuestionSummaryOut]
+    close: List[ScoredQuestionOut]
+    exact_count: int
+    close_count: int
+    has_filters: bool
+    # §57.5's zero-result recovery — active filter dimensions ranked most-
+    # restrictive-first, so the frontend can offer the top two as one-tap
+    # relaxations. Only non-empty when there ARE zero results (see the route below).
+    relaxation_candidates: List[str]
+
+
+def _scorable_question(item: Question, domains: dict, tag_map: dict, traits_by_question: dict) -> ScorableQuestion:
+    tags: dict[str, TagRef] = {
+        tag_map[tag_id].dimension: TagRef(
+            dimension=tag_map[tag_id].dimension, value=tag_map[tag_id].value,
+            display_label=tag_map[tag_id].display_label, sort_order=tag_map[tag_id].sort_order,
         )
-        for q in questions
-    ]
+        for field in _TAG_FK_DIMENSIONS
+        if (tag_id := getattr(item, field)) and tag_id in tag_map
+    }
+    traits = tuple(
+        TagRef(dimension=t.dimension, value=t.value, display_label=t.display_label, sort_order=t.sort_order)
+        for t in traits_by_question.get(item.id, [])
+    )
+    return ScorableQuestion(id=str(item.id), domain_slug=domains[item.domain_id].slug, tags=tags, leadership_traits=traits)
+
+
+@router.get("/questions", response_model=QuestionSearchOut)
+async def search_questions(
+    session: AsyncSession = Depends(get_session),
+    domain: Optional[str] = None,
+    effort: Optional[str] = None,
+    duration: Optional[str] = None,
+    cost: Optional[str] = None,
+    roi_horizon: Optional[str] = None,
+    regulator_pressure: Optional[str] = None,
+    tier: List[str] = Query(default=[]),
+    leadership_traits: List[str] = Query(default=[]),
+    q: Optional[str] = None,
+):
+    """The authoritative, server-side scored search (DESIGN.md §57) — see this
+    file's module docstring for why `QuestionsCatalogue.tsx` does not call this on
+    every filter tap today. `app/services/question_service.py` implements the
+    identical rule `frontend/src/lib/scoring.ts` does; the two are parity-tested
+    against the shared `tests/fixtures/scoring_cases.json`.
+    """
+    questions, domains, tag_map, traits_by_question = await _load_published_questions(session)
+
+    # Free-text search runs BEFORE scoring, as a filter over title/preview, not as a
+    # scored dimension (§57.4) — mixing keyword relevance into the constraint score
+    # would produce a ranking nobody could explain, and explicability is the point.
+    if q and (needle := q.strip().lower()):
+        questions = [
+            item for item in questions if needle in item.title.lower() or needle in item.preview.lower()
+        ]
+
+    scorable = [_scorable_question(item, domains, tag_map, traits_by_question) for item in questions]
+    summaries_by_id = {
+        str(item.id): _question_summary(item, domains, tag_map, traits_by_question) for item in questions
+    }
+    tag_lookup = {
+        (t.dimension, t.value): TagRef(dimension=t.dimension, value=t.value, display_label=t.display_label, sort_order=t.sort_order)
+        for t in tag_map.values()
+    }
+    filters = QuestionFilters(
+        domain=domain, effort=effort, duration=duration, cost=cost,
+        roi_horizon=roi_horizon, regulator_pressure=regulator_pressure,
+        tier=tuple(tier), leadership_traits=tuple(leadership_traits),
+    )
+    exact, close, has_filters = partition_questions(scorable, filters, tag_lookup)
+
+    # Only computed when there's actually a dead end to recover from — cheap either
+    # way (it's a scan over the already-loaded list), but a non-empty result here
+    # when exact/close aren't both empty would be a confusing API to consume.
+    relaxation_candidates = (
+        rank_relaxation_candidates(scorable, filters) if has_filters and not exact and not close else []
+    )
+
+    return QuestionSearchOut(
+        exact=[summaries_by_id[s.question.id] for s in exact],
+        close=[
+            ScoredQuestionOut(
+                **summaries_by_id[s.question.id].model_dump(),
+                score=s.score,
+                misses=[
+                    QuestionMissOut(dimension=m.dimension, requested=m.requested, actual=m.actual, distance=m.distance)
+                    for m in s.misses
+                ],
+            )
+            for s in close
+        ],
+        exact_count=len(exact),
+        close_count=len(close),
+        has_filters=has_filters,
+        relaxation_candidates=relaxation_candidates,
+    )
 
 
 @router.get("/questions/{slug}", response_model=QuestionOut)
@@ -244,11 +404,7 @@ async def get_question(
         session, [rq.id for rq in related_questions_rows], tag_map
     )
     related_questions = [
-        QuestionSummaryOut(
-            id=str(rq.id), slug=rq.slug, title=rq.title, subtitle=rq.subtitle,
-            preview=rq.preview, domain=domains[rq.domain_id].name,
-            tags=_tags_for_question(rq, tag_map, related_traits_by_question),
-        )
+        _question_summary(rq, domains, tag_map, related_traits_by_question)
         for rq in related_questions_rows
     ]
 

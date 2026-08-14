@@ -14,12 +14,16 @@ export default defineConfig({
     // DESIGN.md §9.5: self-host the three-face type system at build time rather than
     // linking Google Fonts at runtime — a live third-party font request on every page
     // load is a privacy/performance issue this product's own buyers would notice.
-    // theme.css has named these fonts since Day 1 but nothing ever actually loaded
-    // them, so every page has silently been rendering in system-ui/Georgia fallbacks.
+    //
+    // `[CHANGED 2026-08-13]` Bricolage Grotesque / Source Serif 4 / JetBrains Mono →
+    // Schibsted Grotesk / Newsreader / Azeret Mono. See theme.css's `--font-*` block for
+    // the reasoning. Keep these three URLs and theme.css's stacks in step: this plugin
+    // fetches at build time, so a face named in CSS but missing here fails silently to a
+    // system fallback and looks like a rendering bug rather than a config one.
     webfontDownload([
-      'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&display=swap',
-      'https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap',
-      'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap',
+      'https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap',
+      'https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap',
+      'https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600&display=swap',
     ]),
   ],
   resolve: {

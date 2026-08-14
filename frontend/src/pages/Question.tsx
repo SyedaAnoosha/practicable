@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -20,6 +21,7 @@ import { cn } from '@/lib/utils/cn'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { domainColorVar, domainVisual } from '@/lib/domainVisuals'
+import { track } from '@/lib/analytics'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { Button } from '@/components/ui/Button'
@@ -28,7 +30,6 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { SectionHeading } from '@/components/ui/SectionHeading'
-import { EmailGatedBody } from '@/components/content/EmailGatedBody'
 
 interface Tag {
   dimension: string
@@ -115,6 +116,13 @@ export function Question() {
     queryFn: () => api.get<QuestionData>(`/questions/${slug}`).then((res) => res.data),
     enabled: !!slug,
   })
+
+  // week2_plan.md Phase 5 — keyed on the slug value, not the query's object identity,
+  // so a background refetch of the same question doesn't double-count a view.
+  useEffect(() => {
+    if (question) track('content_viewed', { type: 'question', slug: question.slug })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [question?.slug])
 
   if (isLoading) {
     return (
@@ -209,8 +217,16 @@ export function Question() {
 
         {/* All seven tags as a definition grid, deliberately not a row of badges. Every
             tile carries this question's domain colour; regulator pressure keeps the
-            accent blue so the one urgent signal still stands out. */}
-        <dl className="animate-enter mt-6 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4" style={{ animationDelay: '160ms' }}>
+            accent blue so the one urgent signal still stands out.
+
+            `[FIXED 2026-08-13]` Was a real `<dl>`, with each tile's icon `<span>` sitting
+            as a sibling of the `<dt>`/`<dd>` pair inside the wrapping div. Per the HTML
+            spec a `<dl>`'s (or its wrapping div's) children may only be dt/dd groups —
+            axe's `definition-list`/`dlitem`/`only-dlitems` rules flagged this on every
+            tile. These are labelled metadata values, not a glossary of defined terms,
+            so a plain div structure is the more accurate semantic fit anyway, not just
+            the expedient fix. */}
+        <div className="animate-enter mt-6 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4" style={{ animationDelay: '160ms' }}>
           {Array.from(
             question.tags
               .reduce((byDimension, tag) => {
@@ -240,26 +256,28 @@ export function Question() {
                   <Icon className="size-3.5" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
-                  <dt className="font-mono text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  <p className="font-mono text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-muted-foreground">
                     {TAG_LABELS[dimension] ??
                       dimension.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())}
-                  </dt>
+                  </p>
                   {/* Leadership traits is multi-select, so its row comma-joins values. */}
-                  <dd className="text-sm font-medium leading-snug text-foreground">
+                  <p className="text-sm font-medium leading-snug text-foreground">
                     {tags.map((tag) => tag.display_label).join(', ')}
-                  </dd>
+                  </p>
                 </div>
               </div>
             )
           })}
-        </dl>
+        </div>
 
       <section className="mt-10 max-w-7xl">
         <SectionHeading>Guidance</SectionHeading>
 
-        {/* Free to read, soft-gated behind an email rather than a purchase. `gated`
+        {/* Free to read, no gate at all — not even a soft email prompt. `gated`
             below controls only the upsell card, never whether this text is shown. */}
-        <EmailGatedBody body={question.body} />
+        <p className="mt-4 whitespace-pre-line font-serif text-read text-pretty text-foreground">
+          {question.body}
+        </p>
       </section>
 
       {/* The paid product — a direct buy surface shown alongside the free guidance

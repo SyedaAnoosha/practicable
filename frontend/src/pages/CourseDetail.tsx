@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { CircleCheck, Download, FileText, GraduationCap, HelpCircle, Lock, PlayCircle } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
+import { track } from '@/lib/analytics'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
@@ -92,6 +94,11 @@ export function CourseDetail() {
     queryFn: () => api.get<CourseDetailData>(`/courses/${slug}`).then((res) => res.data),
     enabled: !!slug,
   })
+
+  useEffect(() => {
+    if (course) track('content_viewed', { type: 'course', slug: course.slug })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course?.slug])
 
   if (isLoading) {
     return (

@@ -11,6 +11,11 @@ import { queryClient } from '@/lib/query/queryClient'
 // only global stylesheet this app has now.
 import './styles/theme.css'
 import App from './App.tsx'
+import { initAnalytics } from '@/lib/analytics'
+
+// week2_plan.md Phase 5 / W2-R8. No-ops with no visible effect if the project key
+// isn't configured or the visitor has Do Not Track set — see analytics.ts.
+initAnalytics()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

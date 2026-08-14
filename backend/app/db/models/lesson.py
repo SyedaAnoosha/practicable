@@ -38,3 +38,6 @@ class Lesson(Base, IdMixin, TimestampMixin):
     module: Mapped["Module"] = relationship("Module", back_populates="lessons")
     media: Mapped["Media"] = relationship("Media", back_populates="lesson", uselist=False)
     download_template: Mapped["Template | None"] = relationship("Template")
+    blocks: Mapped[list["LessonBlock"]] = relationship(
+        "LessonBlock", back_populates="lesson", order_by="LessonBlock.sort_order"
+    )

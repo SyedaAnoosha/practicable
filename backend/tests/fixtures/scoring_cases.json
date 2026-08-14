@@ -1,0 +1,192 @@
+{
+  "_comment": "Shared between backend/tests/test_question_service.py and frontend/src/lib/scoring.test.ts (week2_plan.md Phase 3 step 2 / Non-negotiable #10). Both suites read this file and must agree on every case. tag_values mirrors the real ordinal scale (DESIGN.md §57.3/§19.2); domain/tier/leadership_traits values are representative, not the live catalogue's exact list.",
+  "tag_values": [
+    { "dimension": "effort", "value": "quick", "display_label": "Quick", "sort_order": 1 },
+    { "dimension": "effort", "value": "moderate", "display_label": "Moderate", "sort_order": 2 },
+    { "dimension": "effort", "value": "project", "display_label": "Project", "sort_order": 3 },
+    { "dimension": "effort", "value": "transformation", "display_label": "Transformation", "sort_order": 4 },
+    { "dimension": "duration", "value": "under_2_weeks", "display_label": "Under 2 weeks", "sort_order": 1 },
+    { "dimension": "duration", "value": "2_6_weeks", "display_label": "2-6 weeks", "sort_order": 2 },
+    { "dimension": "duration", "value": "6_12_weeks", "display_label": "6-12 weeks", "sort_order": 3 },
+    { "dimension": "duration", "value": "3_6_months", "display_label": "3-6 months", "sort_order": 4 },
+    { "dimension": "duration", "value": "over_6_months", "display_label": "Over 6 months", "sort_order": 5 },
+    { "dimension": "cost", "value": "low", "display_label": "Low cost", "sort_order": 1 },
+    { "dimension": "cost", "value": "medium", "display_label": "Medium cost", "sort_order": 2 },
+    { "dimension": "cost", "value": "high", "display_label": "High cost", "sort_order": 3 },
+    { "dimension": "regulator_pressure", "value": "none", "display_label": "No regulator pressure", "sort_order": 1 },
+    { "dimension": "regulator_pressure", "value": "low", "display_label": "Low regulator pressure", "sort_order": 2 },
+    { "dimension": "regulator_pressure", "value": "moderate", "display_label": "Moderate regulator pressure", "sort_order": 3 },
+    { "dimension": "regulator_pressure", "value": "high", "display_label": "High regulator pressure", "sort_order": 4 },
+    { "dimension": "roi_horizon", "value": "quick", "display_label": "Quick payback", "sort_order": 1 },
+    { "dimension": "roi_horizon", "value": "mid", "display_label": "Mid-term payback", "sort_order": 2 },
+    { "dimension": "roi_horizon", "value": "strategic", "display_label": "Strategic payback", "sort_order": 3 },
+    { "dimension": "tier", "value": "foundational", "display_label": "Foundational", "sort_order": 1 },
+    { "dimension": "tier", "value": "tactical", "display_label": "Tactical", "sort_order": 2 },
+    { "dimension": "tier", "value": "strategic", "display_label": "Strategic", "sort_order": 3 },
+    { "dimension": "tier", "value": "transformational", "display_label": "Transformational", "sort_order": 4 },
+    { "dimension": "leadership_traits", "value": "decisive", "display_label": "Decisive", "sort_order": 1 },
+    { "dimension": "leadership_traits", "value": "collaborative", "display_label": "Collaborative", "sort_order": 2 },
+    { "dimension": "leadership_traits", "value": "analytical", "display_label": "Analytical", "sort_order": 3 }
+  ],
+  "cases": [
+    {
+      "name": "v1 bug: one exact + one far must NOT be exact",
+      "filters": { "effort": "quick", "duration": "2_6_weeks" },
+      "question": { "domain": "third-party-risk", "tags": { "effort": "quick", "duration": "over_6_months" } },
+      "expected": {
+        "score": 2,
+        "active_constraints": 2,
+        "exact_count": 1,
+        "is_exact": false,
+        "misses": [{ "dimension": "duration", "distance": null }]
+      }
+    },
+    {
+      "name": "one exact + one adjacent -> close, one miss reported",
+      "filters": { "effort": "quick", "duration": "2_6_weeks" },
+      "question": { "domain": "third-party-risk", "tags": { "effort": "quick", "duration": "6_12_weeks" } },
+      "expected": {
+        "score": 3,
+        "active_constraints": 2,
+        "exact_count": 1,
+        "is_exact": false,
+        "misses": [{ "dimension": "duration", "distance": 1 }]
+      }
+    },
+    {
+      "name": "zero active filters -> score_question itself reports not-exact (0 of 0 satisfied); partition_questions/partitionQuestions is what special-cases this to 'everything is exact' when nothing is filtered",
+      "filters": {},
+      "question": { "domain": "third-party-risk", "tags": { "effort": "quick" } },
+      "expected": { "score": 0, "active_constraints": 0, "exact_count": 0, "is_exact": false, "misses": [] }
+    },
+    {
+      "name": "unknown/removed tag value on the filter side -> no credit, no crash",
+      "filters": { "effort": "does_not_exist" },
+      "question": { "domain": "third-party-risk", "tags": { "effort": "quick" } },
+      "expected": {
+        "score": 0,
+        "active_constraints": 1,
+        "exact_count": 0,
+        "is_exact": false,
+        "misses": [{ "dimension": "effort", "distance": null }]
+      }
+    },
+    {
+      "name": "question has no tag on a filtered dimension -> no credit, no crash",
+      "filters": { "cost": "low" },
+      "question": { "domain": "third-party-risk", "tags": {} },
+      "expected": {
+        "score": 0,
+        "active_constraints": 1,
+        "exact_count": 0,
+        "is_exact": false,
+        "misses": [{ "dimension": "cost", "distance": null }]
+      }
+    },
+    {
+      "name": "domain mismatch is a categorical miss, not a graded one",
+      "filters": { "domain": "governance" },
+      "question": { "domain": "third-party-risk", "tags": {} },
+      "expected": {
+        "score": 0,
+        "active_constraints": 1,
+        "exact_count": 0,
+        "is_exact": false,
+        "misses": [{ "dimension": "domain", "distance": null }]
+      }
+    },
+    {
+      "name": "domain match is exact",
+      "filters": { "domain": "third-party-risk" },
+      "question": { "domain": "third-party-risk", "tags": {} },
+      "expected": { "score": 2, "active_constraints": 1, "exact_count": 1, "is_exact": true, "misses": [] }
+    },
+    {
+      "name": "every active constraint exact across five dimensions -> exact",
+      "filters": {
+        "effort": "quick", "duration": "under_2_weeks", "cost": "low",
+        "roi_horizon": "quick", "regulator_pressure": "high"
+      },
+      "question": {
+        "domain": "third-party-risk",
+        "tags": {
+          "effort": "quick", "duration": "under_2_weeks", "cost": "low",
+          "roi_horizon": "quick", "regulator_pressure": "high"
+        }
+      },
+      "expected": { "score": 10, "active_constraints": 5, "exact_count": 5, "is_exact": true, "misses": [] }
+    },
+    {
+      "name": "leadership_traits: full overlap (all requested traits present) -> exact",
+      "filters": { "leadership_traits": ["decisive", "analytical"] },
+      "question": { "domain": "third-party-risk", "tags": {}, "leadership_traits": ["decisive", "analytical", "collaborative"] },
+      "expected": { "score": 2, "active_constraints": 1, "exact_count": 1, "is_exact": true, "misses": [] }
+    },
+    {
+      "name": "leadership_traits: partial overlap -> close, not exact",
+      "filters": { "leadership_traits": ["decisive", "analytical"] },
+      "question": { "domain": "third-party-risk", "tags": {}, "leadership_traits": ["decisive"] },
+      "expected": {
+        "score": 1,
+        "active_constraints": 1,
+        "exact_count": 0,
+        "is_exact": false,
+        "misses": [{ "dimension": "leadership_traits", "distance": 1 }]
+      }
+    },
+    {
+      "name": "leadership_traits: zero overlap -> far, not exact",
+      "filters": { "leadership_traits": ["decisive"] },
+      "question": { "domain": "third-party-risk", "tags": {}, "leadership_traits": ["collaborative"] },
+      "expected": {
+        "score": 0,
+        "active_constraints": 1,
+        "exact_count": 0,
+        "is_exact": false,
+        "misses": [{ "dimension": "leadership_traits", "distance": null }]
+      }
+    },
+    {
+      "name": "tier: question's one value is a strict subset check -- two requested, one matches -> close (DESIGN.md's overlap rule), not exact",
+      "filters": { "tier": ["tactical", "strategic"] },
+      "question": { "domain": "third-party-risk", "tags": { "tier": "strategic" } },
+      "expected": {
+        "score": 1,
+        "active_constraints": 1,
+        "exact_count": 0,
+        "is_exact": false,
+        "misses": [{ "dimension": "tier", "distance": 1 }]
+      }
+    },
+    {
+      "name": "tier: single requested value matching the question's one value -> exact",
+      "filters": { "tier": ["strategic"] },
+      "question": { "domain": "third-party-risk", "tags": { "tier": "strategic" } },
+      "expected": { "score": 2, "active_constraints": 1, "exact_count": 1, "is_exact": true, "misses": [] }
+    },
+    {
+      "name": "adjacent on one end of the scale still scores close, not far",
+      "filters": { "cost": "high" },
+      "question": { "domain": "third-party-risk", "tags": { "cost": "medium" } },
+      "expected": {
+        "score": 1,
+        "active_constraints": 1,
+        "exact_count": 0,
+        "is_exact": false,
+        "misses": [{ "dimension": "cost", "distance": 1 }]
+      }
+    },
+    {
+      "name": "two steps away on a five-point scale is far, not close",
+      "filters": { "duration": "under_2_weeks" },
+      "question": { "domain": "third-party-risk", "tags": { "duration": "6_12_weeks" } },
+      "expected": {
+        "score": 0,
+        "active_constraints": 1,
+        "exact_count": 0,
+        "is_exact": false,
+        "misses": [{ "dimension": "duration", "distance": null }]
+      }
+    }
+  ]
+}

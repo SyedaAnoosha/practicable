@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     # send sale notifications (which quote buyer address and amount) to a stale recipient.
     # Empty means email_service.py logs and sends nothing rather than guessing.
     owner_notification_email: str = ""
+    # ── Analytics ────────────────────────────────────────────────────────────────
+    # week2_plan.md Phase 5 / W2-R8. Empty by default so the app boots without it —
+    # posthog_client.py no-ops rather than erroring when this isn't set, same pattern
+    # as resend_api_key above. Same project key the frontend uses (VITE_POSTHOG_KEY);
+    # a project API key is meant to be shared across a project's client and server SDKs.
+    posthog_api_key: str = ""
+    posthog_host: str = "https://us.i.posthog.com"
     # Comma-separated for multiple frontend origins (production alias, previews, www vs
     # non-www); a single value works unchanged. CORS preflight is an exact string match
     # against this list, so a mismatch is what produces "400 Disallowed CORS origin".

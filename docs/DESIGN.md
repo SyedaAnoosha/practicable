@@ -70,13 +70,15 @@ The v1.0 document was structurally sound: the principles, the surface inventory 
 | 19 | **Copy and voice rules added** (§6) | The brief assesses whether the product "looks worth paying for". Interface copy is half of that judgement and v1 covered only button verbs. |
 | 20 | **Design tokens exported as code** (§50) | The brief's design-system deliverable is a *documented component set*, not a document describing one. Tokens now live in one CSS file and one TS file, generated from the same source. |
 | 22 | **Reconciled against the product spec; commercial model settled; Library and admin recorded as built** (§0.8, §27.4, §28.0, §30.4, §31.8) | A product spec arrived after v2.3 and reframed the product as a three-type content store rather than a question library with attachments — right, and adopted. The same pass settled the commercial model in one place (free questions, one free template, paid everything else), specified My Library, and recorded what the admin build actually does versus what §31.1–§31.7 specify — the latter mattering most, because a spec section that reads as shipped when it isn't is how a handover goes wrong. |
+| 23 | **Marketing surfaces rebuilt on the Watermelon UI blocks; the `--stage` plane and the aurora specified; `/contact` built** (§7.5.3, §7.6, §32.4, §33.3, §47.1) | The hero, footer and auth screens were rebuilt against six reference blocks the owner selected. Two things came out of it that are rules rather than styling: `--primary` **inverts between themes**, so every use of it on the dark full-bleed plane was correct in one theme and broken in the other — it shipped seven times, including a footer mark square that was invisible navy-on-navy in the light theme, which is why `--stage` now exists and §7.6 carries the rule. And the aurora's contrast had to be measured from *rendered pixels*, not from token values: the token maths said the auth panel was safe while the actual paragraph, at its actual 75% opacity and actual width, sat on 4.36:1. |
+| 24 | **All three typefaces replaced; the member rail moved onto the `--stage` plane** (§9.0–§9.3, §10, §17.2) | Owner direction. The old set (Bricolage Grotesque / Source Serif 4 / JetBrains Mono) included two faces named on a list of typefaces AI site builders default to; the third was replaced with them because a type system is a set, not three independent picks, and a face justified on its `opsz` axis standing beside two replaced faces stops being an argument. `--text-read` moved 17px → 18px as a consequence of the new serif's x-height, not as a separate preference. The same direction put the hero's gradient on the member sidebar, which is a *plane* change rather than a colour one — the rail is now dark in both themes, so every child had to move to `stage` tokens in the same pass or reproduce the §7.6 inversion bug. |
 | 21 | **Reconciled against `design_again.md` and updated to match decisions already shipped** (§3.7, §5.1–5.2, §9.4, §19.9, §21.3, §27) | A second brief (`design_again.md`) argued the product should read as a decision library, not an LMS — see `docs/win.md` for the full comparison. Cross-checking it also surfaced places this document had gone stale against code already shipped: the question title is set in serif in the actual `PageTitle` component (§9.4), the mobile filter sheet applies live (§19.9), and the question paywall was rebuilt as a free body with a soft email gate weeks after §21.3 was written (§21.3, §27). Fixed here so the document describes what is actually true, not what v2.0 assumed. |
 
 ### 0.6 Reconciliations with the Research Specification
 
 | Tension | Resolution |
 |---|---|
-| Research 12.5 recommends serif headings; v1 chose Bricolage Grotesque | §9 `[DECIDED]`: Bricolage Grotesque for display/UI, **Source Serif 4** for long-form reading. The serif carries the editorial credibility the research asks for, in the place where it actually earns its keep — the 200–500 word guidance body. |
+| Research 12.5 recommends serif headings; v1 chose Bricolage Grotesque | §9 `[DECIDED, faces REPLACED 2026-08-13]`: a grotesque for display/UI, a text-grade serif for long-form reading. The serif carries the editorial credibility the research asks for, in the place where it actually earns its keep — the 200–500 word guidance body. The *faces* changed in §9.0 (owner direction); the pairing argument did not. 
 | Research 3.2 specifies a Postgres `WHERE` query; v1 §57 requires instant client-side counts | §57.1 `[DECIDED]`: FastAPI owns the query contract and the authoritative result. The client caches the published question **index** (title, slug, domain, seven tags, 160-char preview) for instant recount. Bodies are never in the index. |
 | Research 9.2 offers semantic search as "should have"; v1 does not mention it | §22.4 `[V2]`: the discovery UI reserves the layout slot and the empty-state copy for it, so adding pgvector later is a query change, not a redesign. |
 | Research 12.6 says do not build certificates; brief says propose if cheap | §59 `[DECIDED]`: not built. §24.4 specifies the completion moment that delivers the same psychological payoff for roughly an hour of work. |
@@ -473,9 +475,10 @@ Every foreground/background pair in the supplied token set was measured against 
   --chart-5: #B4530C;   /* CHANGED from #F97316 — 2.8:1 on white failed as a legend swatch */
 
   /* Type */
-  --font-sans: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
-  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  /* [REPLACED 2026-08-13 — see §9.0 for why all three moved at once] */
+  --font-sans: 'Schibsted Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Newsreader', ui-serif, serif;
+  --font-mono: 'Azeret Mono', ui-monospace, SFMono-Regular, monospace;
   --letter-spacing: -0.01em;
 
   /* Geometry */
@@ -620,12 +623,78 @@ Measured against four light surfaces: `--background` `#FBF9F4`, `--card` `#FFFFF
 
 **Note on `.text-gradient-brand`.** Its terminating stop is `--gold-strong`, never `--gold`. A gradient's tail is still body-legible text, so ending a headline on champagne would leave its last few letters at ~2:1.
 
+### 7.5.3 The stage plane and the aurora `[DECIDED, 2026-08-13]`
+
+The hero, the auth panel and the footer all stand on one dark full-bleed plane. This
+subsection covers the two tokens that make that possible and the ramp painted on top of
+them, because both came out of shipped defects rather than out of a palette exercise.
+
+**`--stage` exists because `--primary` inverts.** These surfaces were originally
+`bg-primary`. `--primary` is midnight navy in the light theme and `#6FA8DC` — a *light*
+blue — in the dark one, so switching to dark mode turned the hero and the footer pale at
+exactly the moment they should have been darkest. `--stage` means "the dark plane" in
+both themes and never flips:
+
+| | `--stage` | `--stage-foreground` | fg on stage |
+|---|---|---|---:|
+| Light | `#10213E` | `#F7F2E9` | 14.39:1 |
+| Dark | `#080D18` | `#EAF1FA` | 17.08:1 |
+
+Dark `--stage` sits at 1.02:1 against dark `--background` — near-identical luminance.
+That is inherent to putting a dark plane on a near-black page, and it is not a bug to be
+fixed by brightening the stage: the separation is carried by the cool-vs-warm hue shift
+and the hairline border the consumers draw, not by brightness.
+
+**The aurora** (`.stage-aurora`) is the paint on that plane — a four-rung ramp of one
+blue driven diagonally into the bottom-right corner, with a dark plume across the top.
+The rungs are decorative-only tokens, deliberately a separate family from
+`--accent`/`--primary`, whose values are pinned by *text* contrast on ivory:
+
+| | `--stage-deep` | `--stage-glow-1` | `--stage-glow-2` | `--stage-glow-3` |
+|---|---|---|---|---|
+| Light | `#050B18` | `#10305F` | `#1F6FC4` | `#8ED2FB` |
+| Dark | `#02060E` | `#0A2147` | `#14538F` | `#4794D8` |
+
+`--stage-glow-3` is **1.48:1** against `--stage-foreground` in the light theme. It can
+never sit under text, and the class enforces that structurally rather than by hoping the
+copy stays short: the bright rungs are anchored at or past the bottom-right corner, and
+two scrim layers — one from the left edge, one anchored bottom-left where every consumer
+puts its headline — hold the text region down.
+
+Measured from the *rendered page* rather than from the token values, sampling the pixels
+under the auth panel's copy at 1440×900 (light theme, the tighter of the two):
+
+| Sample | Ratio |
+|---|---:|
+| Headline row, panel left edge → right edge of the text | 17.40 → 10.85:1 |
+| Paragraph row **at 75% opacity**, left edge → right edge of the text | 9.93 → 6.30:1 |
+| Same paragraph row before the bottom-left scrim was added | **4.36:1 at full opacity** |
+
+That last row is the reason this is measured against a screenshot and not a swatch. The
+token-level maths said the plane was safe; the composited pixels under the actual
+paragraph, at the actual opacity, at the actual width, were not. **A gradient's contrast
+claim is only meaningful at the point the text lands on it.**
+
+**The footer takes `.stage-aurora--quiet`.** It is the one consumer with content in all
+four corners, so dimming alone is not enough — glow-3 at 32% opacity still only reaches
+3.78:1 under the footer's `/65` copy. The modifier pushes the bright core off-canvas as
+well and keeps only its outer falloff.
+
 ### 7.6 Colour rules
 
 - **Colour is never the only carrier of meaning.** Every status has an icon or a word alongside it. Every tag has a label. Every chart series has a direct label, not just a legend swatch.
 - **`--border` is decorative; `--border-strong` is meaningful.** Use `--border` to group. Use `--border-strong` (or `--ring`) whenever the border *is* the message: selected filter chip, focused input, error field, current lesson.
 - **Dark mode is not an inversion.** Check imagery, video posters and template previews at both themes (§16.3).
 - **Never hard-code white.** `bg-white` in a component is a dark-mode bug in waiting.
+- **On the stage plane, use the `stage` tokens — never `primary`.** `--primary`,
+  `--primary-foreground` and `--accent` all invert between themes, so any of them used on
+  `bg-stage` is correct in one theme and wrong in the other. This is not hypothetical: it
+  shipped seven times (the hero search input and its three result-list labels, the
+  newsletter form's field and button, the footer's mark square, which rendered as an
+  *invisible* navy square on navy in the light theme) before being caught, and each
+  instance passed review because it read correctly in whichever theme the author had
+  open. **A token that flips is safe only on a surface that flips with it.** Grep for
+  `primary` inside anything carrying `bg-stage` before adding to these files.
 - **Charts are exempt from the semantic-token rule** only inside chart components, and only using `--chart-*`.
 
 ## 8. Tailwind theme mapping `[DECIDED]`
@@ -718,41 +787,66 @@ Tailwind CSS v4 uses a CSS-first configuration. There is no `tailwind.config.js`
 }
 ```
 
-## 9. Typefaces `[DECIDED]`
+## 9. Typefaces `[DECIDED — REPLACED 2026-08-13]`
 
 Three faces, three jobs. Adding a fourth needs a written reason.
 
-### 9.1 Bricolage Grotesque — display and interface
+### 9.0 Why the previous three were replaced `[OWNER DIRECTION, 2026-08-13]`
+
+v2.0 through v2.5 specified **Bricolage Grotesque / Source Serif 4 / JetBrains Mono**. The owner ruled that set out by name, as part of a broader instruction: the product must not be set in the typefaces that AI site builders and landing-page generators reach for by default, because the result reads as generated rather than commissioned.
+
+The named list, verbatim: *Inter, Roboto, Open Sans, Playfair Display, Lora, Instrument Serif, Space Grotesk, Manrope, Space Mono, JetBrains Mono, Fira Code, Source Serif 4, Times New Roman, Georgia.*
+
+That directly struck **Source Serif 4** and **JetBrains Mono**, and it struck **Georgia** and **Times New Roman** from the serif fallback stack. Bricolage Grotesque was not on the list, and was replaced anyway, for two reasons:
+
+1. **A type system is a set, not three independent picks.** A grotesque chosen for its optical-size axis, left standing beside two faces replaced for reading as defaults, stops being part of an argument.
+2. **Bricolage has itself become a house font of the generated-site look** since it was chosen — the same failure mode the instruction is aimed at, arriving a year later.
+
+**What is lost, stated honestly:** §9.1 justified Bricolage on its `opsz` axis, and the replacement has no optical-size axis. That was a real advantage and it is genuinely given up. The mitigation is that the type scale already carries per-token tracking (§10) — `-0.03em` at display down to `+0.06em` on uppercase eyebrows — so the optical correction that `opsz` automated is now specified explicitly. It is more to hold, and it is written down rather than inferred.
+
+The three replacements are not three independent searches. They tell **one story — a professional publisher's masthead, its reading page, and its data tables:**
+
+### 9.1 Schibsted Grotesk — display and interface
 
 Headings, navigation, buttons, labels, product names, card titles, short interface copy.
 
-Bricolage has an optical-size axis (`opsz` 12–96), which is the specific reason it earns its place: the same family gives a tightly-set 96px hero and a legible 12px badge without either looking like the other stretched. It has enough character to not read as a default, and enough restraint to not read as a startup.
+Drawn as the brand face for a **news publisher**, which is the exact register §5 asks for: "a good professional publisher that isn't afraid of colour — confident, not shouting." It carries a genuine editorial authority in its skeleton rather than in an applied style, and it holds up at both a 72px hero and a 12px badge — a grotesque built to be a masthead *and* a caption.
 
-Set headings with negative tracking (`--letter-spacing: -0.01em`, tightening to `-0.02em` at display sizes). Weight range in use: **400, 500, 600, 700**. Not 300 — it goes soft at body sizes and undermines the authority we want.
+Variable, weight axis **400–900**. Weight range in use: **400, 500, 600, 700**. Not 300, and not 800/900 — a heading that needs 800 to read as important has a hierarchy problem, not a weight problem.
 
-### 9.2 Source Serif 4 — long-form reading
+Set headings with negative tracking (`--letter-spacing: -0.01em`, tightening to `-0.02em` at display sizes).
 
-Question guidance bodies, reading lessons, book excerpts, the author's essays.
+### 9.2 Newsreader — long-form reading
 
-This is the reconciliation of the Research Spec's serif recommendation (12.5) with v1's sans-only direction. The serif is confined to the place where it does real work — 200–500 words of guidance a practitioner will actually read — where it signals published work rather than web copy, and where a serif genuinely improves sustained reading.
+Question guidance bodies, reading lessons and text blocks, book excerpts, the author's essays, legal pages.
 
-Source Serif 4 over Georgia because it is a variable font with a proper optical-size axis, it has a text-grade design (Georgia's large x-height and wide set were drawn for 1996 screens), and self-hosting one variable file is cheaper than the fallback risk. Georgia stays as the fallback so an FOUT degrades gracefully rather than reflowing dramatically.
+This remains the reconciliation of the Research Spec's serif recommendation (12.5) with a sans interface. The serif stays confined to where it does real work — 200–500 words of guidance a practitioner will actually read — where it signals published work rather than web copy.
+
+Newsreader **inherits Source Serif 4's reasoning as well as its job**: it is a variable font with a proper optical-size axis (`opsz` **6–72**), and it is a text-grade design drawn specifically for sustained reading on screen rather than a print face ported to it. It is the one place in the new set where the `opsz` argument survives intact.
+
+**`--text-read` moved 17px → 18px** as part of this change (§10). Newsreader carries a smaller x-height than Source Serif 4, so 17px of it read visibly smaller than the 16px sans beside it — the opposite of the optical match that token exists to hold. 18px also answers the owner's page review, which called out that too much of the product is set small to scan confidently.
+
+Fallback is `ui-serif, serif` — Georgia and Times New Roman are struck. A fallback is only visible during a FOUT, but a *named* fallback is still a choice, and self-hosting keeps that window short.
 
 **Do not use the serif for the whole application.** Never for navigation, buttons, labels, tables, admin, or anything under 16px.
 
-### 9.3 JetBrains Mono — data and identifiers
+### 9.3 Azeret Mono — data and identifiers
 
-Question IDs, tag values in admin, order numbers, timestamps, file sizes, API identifiers, anything a person might need to read character by character or copy exactly.
+Question IDs, tag values in admin, order numbers, Stripe references, timestamps, file sizes, API identifiers — anything a person might read character by character or copy exactly. Also the `.eyebrow` device.
 
 Mono is a signal that a string is *data*, not prose. Used at `text-xs` and `text-sm` only.
+
+Azeret Mono is squared-off and deliberate, with enough personality to read as chosen rather than as the mono every interface reaches for to look technical. Variable, **100–900**; in use at **400, 500, 600**.
+
+**It sets appreciably wider than JetBrains Mono**, which has one concrete consequence already applied: `.eyebrow`'s uppercase tracking dropped **0.2em → 0.16em**, because the tracking that made the old mono read as a deliberate device made this one read as spaced-out letters. Check any other tracked-uppercase mono against the same risk.
 
 ### 9.4 Pairing rules
 
 | Context | Face |
 |---|---|
-| Product/commerce page titles, section headings, card titles | Sans (Bricolage) |
+| Product/commerce page titles, section headings, card titles | Sans (Schibsted Grotesk) |
 | The question itself, on a question page | Serif, large, tight — an editorial headline, not a card title (see below) |
-| Guidance body, reading lesson body, author essay | Serif (Source Serif 4) |
+| Guidance body, reading lesson body, author essay | Serif (Newsreader) |
 | Lead paragraph / summary answer | Serif, `text-lg`, `--muted-foreground` |
 | Every control, label, nav item, table, admin screen | Sans |
 | IDs, prices in a reconciliation table, timestamps | Mono |
@@ -775,9 +869,9 @@ export default defineConfig({
     react({ babel: { plugins: [['babel-plugin-react-compiler', {}]] } }),
     tailwindcss(),
     webfontDownload([
-      'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&display=swap',
-      'https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400..600&display=swap',
-      'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap',
+      'https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap',
+      'https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap',
+      'https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600&display=swap',
     ]),
   ],
 })
@@ -791,10 +885,11 @@ Self-hosting is preferred for three reasons, in this order of importance here:
 
 **Rules**
 
-- `font-display: swap`, and preload **only** the two weights used above the fold — Bricolage 600 and Source Serif 4 400. Preloading all nine files is slower than preloading none.
+- `font-display: swap`, and preload **only** the two weights used above the fold — Schibsted Grotesk 600 and Newsreader 400. Preloading all nine files is slower than preloading none.
 - Variable fonts only, one file per family. Do not ship nine static weight files.
 - Subset to Latin plus Latin-Extended. The author names and question text need the extended range (§49.2's fixture with `Ní Bhraonáin` exists partly to catch a bad subset).
-- Set the fallback stacks so an FOUT degrades gracefully rather than reflowing: Georgia behind Source Serif 4, `ui-sans-serif`/`system-ui` behind Bricolage. Check the swap visually on a throttled connection — if the hero jumps, adjust `size-adjust` on the fallback.
+- Set the fallback stacks so an FOUT degrades gracefully rather than reflowing: `ui-serif`/`serif` behind Newsreader, `ui-sans-serif`/`system-ui` behind Schibsted Grotesk. Georgia and Times New Roman are **struck by name** (§9.0) and must not reappear here. Check the swap visually on a throttled connection — if the hero jumps, adjust `size-adjust` on the fallback.
+- **`theme.css` and `vite.config.ts` must name the same three families.** This plugin fetches at build time, so a face named in CSS but missing from the config fails silently to a system fallback — which looks like a rendering bug and gets debugged as one.
 
 ## 10. Type scale `[DECIDED]`
 
@@ -809,7 +904,9 @@ A 1.25 (major third) ratio at the base, loosening at display sizes, expressed as
   --text-h4:      1.25rem;    /* 20px */
   --text-lead:    1.1875rem;  /* 19px — lead paragraphs, serif */
   --text-body:    1rem;       /* 16px */
-  --text-read:    1.0625rem;  /* 17px — serif reading body, optically matched to 16px sans */
+  --text-read:    1.125rem;   /* 18px — serif reading body, optically matched to 16px sans.
+                                 17px until 2026-08-13; Newsreader's smaller x-height made
+                                 17px read SMALLER than the sans beside it (§9.2). */
   --text-sm:      0.875rem;   /* 14px */
   --text-xs:      0.75rem;    /* 12px — the floor. Nothing smaller ships. */
 }
@@ -823,7 +920,7 @@ A 1.25 (major third) ratio at the base, loosening at display sizes, expressed as
 | `h3` | Card title, lesson title | 1.25 | -0.01em |
 | `h4` | Subsection, form group heading | 1.35 | -0.01em |
 | `lead` | Lead paragraph, short answer | 1.55 | 0 |
-| `read` | Serif reading body | **1.7** | 0 |
+| `read` | Serif reading body — **18px** since 2026-08-13 (§9.2) | **1.7** | 0 |
 | `body` | Sans body, UI text | 1.55 | 0 |
 | `sm` | Metadata, form labels, helper text | 1.5 | 0 |
 | `xs` | Eyebrows, badges, table meta | 1.4 | **+0.06em** (uppercase eyebrows only) |
@@ -969,7 +1066,7 @@ Never a permanent heavy shadow on every card. In dark mode, elevation reads from
 - Icons carry meaning or they do not appear. No decorative icons beside headings.
 - An icon-only button always has an `aria-label` and a tooltip.
 - The icon for a concept is fixed across the whole product — one lock, one download, one check, one lesson-type set. §50.3 holds the map.
-- Stroke width 1.75 (Lucide default 2 is slightly heavy next to Bricolage at small sizes).
+- Stroke width 1.75 (Lucide default 2 is slightly heavy next to Schibsted Grotesk at small sizes).
 
 ### 14.1 The fixed icon map
 
@@ -1027,7 +1124,7 @@ The platform is content-led. Images are used where they carry information, not t
 
 ### 16.2 Course artwork system `[PROVISIONAL]`
 
-Until there is a real art direction: a flat panel using `--primary` at full bleed, the domain name in mono `text-xs` uppercase at top-left, and the course title in Bricolage 600 at 28px, ranged left, with 32px padding. Generated from data, so a new course does not need a designer. Revisit once there are more than four courses.
+Until there is a real art direction: a flat panel using `--primary` at full bleed, the domain name in mono `text-xs` uppercase at top-left, and the course title in Schibsted Grotesk 600 at 28px, ranged left, with 32px padding. Generated from data, so a new course does not need a designer. Revisit once there are more than four courses.
 
 ### 16.3 Dark mode check
 
@@ -1336,7 +1433,7 @@ Cards show a **purpose-written `preview` field** (≤160 characters, authored), 
 
 ### 20.4 Reading typography for guidance
 
-Guidance bodies render inside a `.prose-guidance` class: Source Serif 4 at `--text-read`, line-height 1.7, measure capped at 68ch, paragraph spacing 1em, `h2`/`h3` in sans for contrast against the serif body, blockquotes with a `--border-strong` left rule, and lists with proper hanging indents.
+Guidance bodies render inside a `.prose-guidance` class: Newsreader at `--text-read` (18px), line-height 1.7, measure capped at 68ch, paragraph spacing 1em, `h2`/`h3` in sans for contrast against the serif body, blockquotes with a `--border-strong` left rule, and lists with proper hanging indents.
 
 ## 21. Question detail page
 
@@ -2143,6 +2240,46 @@ Email is not the web. The design system applies in spirit, not in implementation
 
 `[OWNER]` The contracting entity name and address on the receipt is an open decision and blocks launch.
 
+### 32.4 Inbound: the contact page `[BUILT 2026-08-13]`
+
+`/contact` is the only surface where mail travels *toward* the business. Built from
+Watermelon UI's contact-7: a centred dot-and-label over a large heading, then one rounded
+card holding the form, with two blurred `clip-path` polygons behind the section.
+
+**The form writes to a table, not to an inbox.** `contact_messages` (name, email,
+enquiry type, message, `notified`) exists rather than a `source='contact'` row in
+`leads`, because `leads` holds an address and an entry point and has nowhere to put what
+the person actually said. Routing the form through it would have persisted the email and
+silently discarded the message — the one part the sender cared about.
+
+The row is committed **before** the owner notification is attempted, and a failed
+notification does not fail the request. The mail transport is a sandbox sender right now
+(see `backend/app/services/email_service.py` and `docs/email.md`), so coupling the two
+would make a working form look broken. `notified` records
+whether the alert actually went out, so an enquiry that arrived during an outage can be
+found by querying rather than by trusting that someone read that day's logs.
+
+**The notification escapes every interpolated value.** It is the only email in the system
+built from wholly untrusted input — a stranger with no account chooses the name and the
+entire message body. `reply_to` is set to the sender's address so the owner can answer by
+pressing reply; it is a convenience, not a claim, since nothing about that address was
+verified.
+
+Three departures from the reference, each for a reason:
+
+- **The phone field is dropped.** There is no number to call and no one staffing one.
+- **The agreement checkbox becomes a plain sentence.** It is a one-line privacy
+  statement, not a decision; a checkbox implies a choice and adds a step before a message
+  can be sent.
+- **Success replaces the form** rather than appearing above it. Leaving a filled-in form
+  on screen after a successful send is how the same message gets sent three times.
+
+The support address stays visible on the page beneath the form. A contact page whose only
+route is a form that might fail to submit leaves the visitor nowhere to go. For the same
+reason the footer link now points here rather than at a `mailto:` — a `mailto:` is a dead
+end on a corporate laptop with no mail client wired to the browser, which is the exact
+machine most of this audience is reading on.
+
 ---
 
 # PART D — THE COMPONENT SYSTEM
@@ -2196,6 +2333,30 @@ Add only what is used. Do not run the CLI's "add everything" at init.
 | `EmptyState` / `ErrorState` / `LoadingState` | The three non-happy paths |
 | `LeadCapture` | Free entry point form (§27.2) |
 | `AdminTable` / `AdminForm` / `PublishStatusBadge` | Admin shells |
+
+### 33.3 Marketing devices `[ADDED 2026-08-13]`
+
+Extracted from the Watermelon UI blocks the marketing surfaces were rebuilt on (hero-1,
+footer-7, footer-19, auth-08, auth-10, contact-7). Each earned a file by appearing in
+more than one block — a device used once belongs in the page that uses it.
+
+| Component | Job |
+|---|---|
+| `StatusDot` | Pulsing dot + label opening a section. Appears in three of the six reference blocks. Takes `on="stage"` when it sits on the dark plane — see below |
+| `TypewriterTitle` | The rotating headline clause (from `docs/comps.md`). Animated text is `aria-hidden` behind an `sr-only` full label, and it handles `useReducedMotion()` explicitly because `MotionConfig` cannot stop a `setTimeout` loop |
+| `AuthField` | auth-08's icon-prefixed input with a password reveal toggle |
+| `NewsletterForm` | footer-7's joined input + button, posting to the real `/leads` |
+| `CornerFrame` | The bracketed corner rule |
+| `.stage-aurora` | Not a component — the CSS class carrying the dark plane's gradient (§7.5.3). One class, three consumers, so the hero, the auth panel and the footer cannot drift apart |
+
+**Two of these carried a colour bug that is worth stating as a pattern.** `StatusDot`
+pinned `text-foreground` for its label, which is near-black espresso in the light theme —
+on the dark stage the label rendered invisible. Its `gold` tone used `--gold-strong`, the
+*text-safe* antique shade, which is likewise all but invisible as a decorative dot on
+navy. Both are the §7.6 inversion trap in a different costume: **a shared component
+cannot pin a foreground token, because it does not know which plane it is standing on.**
+The label now inherits its colour; the dot takes an explicit `on` prop, because a dot is
+decorative and wants the *opposite* shade from what text wants.
 
 ## 34. Component contracts
 
@@ -2731,6 +2892,7 @@ If any answer is "we'll work that out when we build it", the screen is not ready
 /about                  Author and publisher
 /search                 Search results
 /free                   Free entry point landing
+/contact                Contact — form + the support address  [BUILT 2026-08-13]
 /legal/terms            Terms of service
 /legal/privacy          Privacy policy
 /legal/refunds          Refund policy

@@ -6,9 +6,10 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
 from app.db.session import get_session
-from app.db.models import Product, ProductContent, Template
-from app.core.deps import get_current_user_id, get_current_user_id_optional
-from app.core.entitlements import ResourceType, has_access_to
+from app.db.models import Product, ProductContent, Template, User
+from app.core.deps import get_current_user_id_optional, get_current_user_optional
+from app.core.entitlements import ResourceType, has_access_to, has_access_to_or_admin
+from app.integrations.posthog_client import capture_download_failed
 from app.integrations.storage_client import generate_presigned_url
 import uuid
 
@@ -139,8 +140,11 @@ async def get_template_download_url(
     template_id: str,
     session: AsyncSession = Depends(get_session),
     # Optional so a free template is downloadable with no account. Paid templates still
-    # 401 below when this is None.
-    user_id: Optional[str] = Depends(get_current_user_id_optional),
+    # 401 below when this is None. The full User (not just the id) so an admin without
+    # the entitlement gets the audited bypass rather than a plain 403 — see
+    # `has_access_to_or_admin`; this route called `has_access_to` directly before
+    # 2026-08-13, which had no concept of role at all.
+    user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get presigned Supabase Storage download URL for a template."""
 
@@ -156,21 +160,25 @@ async def get_template_download_url(
     # Free means free: no entitlement, no account, no check. The email capture fronting
     # this in the UI is a conversion device, not a boundary, so it isn't enforced here.
     if template.is_free:
-        return DownloadUrlOut(
-            download_url=generate_presigned_url(template.storage_key),
-            file_name=template.file_name,
-            file_size_bytes=template.file_size_bytes,
-        )
+        try:
+            download_url = generate_presigned_url(template.storage_key)
+        except Exception as e:
+            capture_download_failed(
+                user_id=str(user.id) if user else "anonymous",
+                resource_type="template", resource_id=str(template.id), reason=str(e),
+            )
+            raise
+        return DownloadUrlOut(download_url=download_url, file_name=template.file_name, file_size_bytes=template.file_size_bytes)
 
-    if user_id is None:
+    if user is None:
         raise HTTPException(
             status_code=401,
             detail={"error": {"code": "not_authenticated", "message": "Sign in to download this template."}},
         )
 
     # Checked before the URL is minted (BACKEND.md §4.1) — never mint-then-discard.
-    entitled = await has_access_to(
-        user_id=uuid.UUID(user_id),
+    entitled = await has_access_to_or_admin(
+        user=user,
         resource_type=ResourceType.TEMPLATE,
         resource_id=template.id,
         session=session,
@@ -182,8 +190,14 @@ async def get_template_download_url(
         )
 
     # Generate presigned URL
-    download_url = generate_presigned_url(template.storage_key)
-    
+    try:
+        download_url = generate_presigned_url(template.storage_key)
+    except Exception as e:
+        capture_download_failed(
+            user_id=str(user.id), resource_type="template", resource_id=str(template.id), reason=str(e),
+        )
+        raise
+
     return DownloadUrlOut(
         download_url=download_url,
         file_name=template.file_name,

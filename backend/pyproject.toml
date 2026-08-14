@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+# `import main` / `import app.*` need the backend root on sys.path — pytest normally
+# adds test-file directories, not the invocation root, so this is required rather than
+# a convenience.
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# Explicit rather than left to the deprecation-warning default. Test FUNCTIONS get a
+# fresh event loop per test regardless of this setting (pytest-asyncio's auto-added
+# `asyncio` marker carries no loop_scope, which resolves to "function" — see
+# `_get_marked_loop_scope`), so fixtures must match that or an asyncpg connection opened
+# under one loop gets handed to a task on another ("attached to a different loop").
+# tests/conftest.py sidesteps this a second, more robust way too: the test engine uses
+# NullPool, so every connection is opened fresh on whichever loop is actually running.
+asyncio_default_fixture_loop_scope = "function"

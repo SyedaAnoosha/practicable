@@ -29,16 +29,13 @@ class ProductOut(BaseModel):
     contents: list[ProductContentOut]
 
 
-@router.get("/products/{slug}", response_model=ProductOut)
-async def get_product(slug: str, session: AsyncSession = Depends(get_session)):
-    """Public product detail — the pre-checkout summary (DESIGN.md §29.1). No
-    entitlement check here: browsing what a product contains, before buying it, is
-    exactly what this endpoint is for."""
-    result = await session.execute(select(Product).where(Product.slug == slug))
-    product = result.scalar_one_or_none()
-    if not product or not product.published:
-        raise HTTPException(status_code=404, detail="Product not found")
+async def _resolve_contents(product: Product, session: AsyncSession) -> list[ProductContentOut]:
+    """Label and route every item a product contains.
 
+    Extracted so the list and detail routes below return byte-identical content rows.
+    Each type's route is computed here, once, rather than guessed from `content_type` in
+    the frontend.
+    """
     contents_result = await session.execute(
         select(ProductContent).where(ProductContent.product_id == product.id)
     )
@@ -73,6 +70,10 @@ async def get_product(slug: str, session: AsyncSession = Depends(get_session)):
             href = f"/questions/{question.slug}" if question else None
         contents.append(ProductContentOut(content_type=pc.content_type, label=label or pc.content_type, href=href))
 
+    return contents
+
+
+def _to_out(product: Product, contents: list[ProductContentOut]) -> ProductOut:
     return ProductOut(
         id=str(product.id),
         slug=product.slug,
@@ -82,3 +83,37 @@ async def get_product(slug: str, session: AsyncSession = Depends(get_session)):
         currency=product.currency,
         contents=contents,
     )
+
+
+@router.get("/products", response_model=list[ProductOut])
+async def list_products(session: AsyncSession = Depends(get_session)):
+    """Every published product, newest first — public, like the detail route.
+
+    This exists so no surface has to name a product by slug to show one. The dashboard
+    previously hardcoded `risk-register-template`, which stopped being published: the
+    request 404'd and the card's CTA led nowhere, with nothing in the UI to indicate the
+    product had simply gone away. A list answers "what is actually for sale right now"
+    and returns an empty array when the answer is nothing, which a consumer can render
+    honestly. A hardcoded slug can only 404.
+
+    `published` is the filter, so unpublishing something removes it from every surface
+    at once rather than leaving a dead card behind on whichever page named it.
+    """
+    result = await session.execute(
+        select(Product).where(Product.published.is_(True)).order_by(Product.created_at.desc())
+    )
+    products = result.scalars().all()
+    return [_to_out(p, await _resolve_contents(p, session)) for p in products]
+
+
+@router.get("/products/{slug}", response_model=ProductOut)
+async def get_product(slug: str, session: AsyncSession = Depends(get_session)):
+    """Public product detail — the pre-checkout summary (DESIGN.md §29.1). No
+    entitlement check here: browsing what a product contains, before buying it, is
+    exactly what this endpoint is for."""
+    result = await session.execute(select(Product).where(Product.slug == slug))
+    product = result.scalar_one_or_none()
+    if not product or not product.published:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    return _to_out(product, await _resolve_contents(product, session))

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_user
 from app.db.models import Entitlement, ProductContent, Role, User
 from app.db.session import get_session
+from app.services.audit_service import record_admin_bypass
 
 
 class ResourceType(str, enum.Enum):
@@ -59,6 +60,35 @@ async def has_access_to(
     return result.first() is not None
 
 
+async def has_access_to_or_admin(
+    *, user: User, resource_type: ResourceType, resource_id: UUID, session: AsyncSession
+) -> bool:
+    """The same admin-bypass-with-audit semantics as `require_entitlement`'s dependency
+    below, for the handful of routes that resolve their entitlement check inline instead
+    of through that factory — `app/api/v1/content/lessons.py`'s playback-token,
+    download-url and complete routes, and `templates.py`'s download-url route.
+
+    `[FOUND AND FIXED, 2026-08-13]` Those routes called `has_access_to` directly, which
+    has no concept of role at all — an admin with no purchase got the same 403 as any
+    other unentitled member, and (before this existed) there was no way for them to reach
+    the audited bypass path even if the routes HAD special-cased `Role.ADMIN`, because the
+    audit write lived only inside `require_entitlement`'s closure. This is `BACKEND.md`
+    §1.1's "dispersion" failure mode, found while writing the gating suite's admin-bypass
+    test: it asserted a row that the *first* fix (closing the `# TODO` in
+    `require_entitlement`) did not actually produce, because these four routes never call
+    `require_entitlement` in the first place. A full migration onto that dependency
+    factory is tracked as follow-up — it expects a path parameter literally named
+    `resource_id`, which none of these four routes use, so renaming them is a slightly
+    larger, separate change. This closes the audit gap now without that renaming.
+    """
+    if user.role == Role.ADMIN:
+        await record_admin_bypass(session, actor=user, resource_type=resource_type.value, resource_id=resource_id)
+        return True
+    return await has_access_to(
+        user_id=user.id, resource_type=resource_type, resource_id=resource_id, session=session
+    )
+
+
 def require_entitlement(resource_type: ResourceType):
     """FastAPI dependency factory. The ONLY way a gated route is protected.
 
@@ -80,7 +110,13 @@ def require_entitlement(resource_type: ResourceType):
         session: AsyncSession = Depends(get_session),
     ) -> UUID:
         if user.role == Role.ADMIN:
-            # TODO: no admin bypass without an audit row — write one before relying on this.
+            # BACKEND.md §4.3: "no admin bypass without an audit row." Runs before the
+            # endpoint does anything else (§4.1), same as the entitlement check it
+            # replaces — an admin reading gated content must leave a trace whether or
+            # not they hold the underlying entitlement.
+            await record_admin_bypass(
+                session, actor=user, resource_type=resource_type.value, resource_id=resource_id
+            )
             return resource_id
         if not await has_access_to(
             user_id=user.id, resource_type=resource_type, resource_id=resource_id, session=session

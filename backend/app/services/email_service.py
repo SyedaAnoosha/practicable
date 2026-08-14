@@ -10,6 +10,7 @@ delivery. See docs/gmail.md §8 and docs/email.md.
 """
 
 import asyncio
+import html as html_lib
 import logging
 
 import requests
@@ -24,26 +25,47 @@ RESEND_SEND_URL = "https://api.resend.com/emails"
 SANDBOX_SENDER = "Practicable <onboarding@resend.dev>"
 
 
-def _send_via_resend(*, to_email: str, subject: str, html: str, text: str) -> None:
+def _send_via_resend(
+    *, to_email: str, subject: str, html: str, text: str, reply_to: str | None = None
+) -> None:
+    payload = {
+        "from": SANDBOX_SENDER,
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+        "text": text,
+    }
+    # Used by the contact form so the owner can answer an enquiry by pressing reply,
+    # rather than copying an address out of the message body. Only ever set to an
+    # address the sender proved nothing about, so it is a convenience, not a claim.
+    if reply_to:
+        payload["reply_to"] = reply_to
+
     response = requests.post(
         RESEND_SEND_URL,
         headers={"Authorization": f"Bearer {settings.resend_api_key}", "Content-Type": "application/json"},
-        json={"from": SANDBOX_SENDER, "to": [to_email], "subject": subject, "html": html, "text": text},
+        json=payload,
         timeout=10,
     )
     response.raise_for_status()
 
 
-async def _send(*, to_email: str, subject: str, html: str, text: str, context: str) -> None:
-    """Shared send path for both email types below. Never raises (BACKEND.md §6.1) — a
+async def _send(
+    *, to_email: str, subject: str, html: str, text: str, context: str, reply_to: str | None = None
+) -> bool:
+    """Shared send path for the email types below. Never raises (BACKEND.md §6.1) — a
     failed send must not undo an already-committed order.
+
+    Returns whether the message was actually handed to Resend, so a caller that records
+    delivery state (contact_messages.notified) can tell "sent" from "swallowed". The
+    receipt and sale-alert callers ignore it: their side effect is the log line.
 
     `to_email` is the INTENDED recipient; everything is currently redirected to
     settings.owner_notification_email (see the module note).
     """
     if not settings.resend_api_key:
         logger.error("Cannot send %s: RESEND_API_KEY is not set.", context)
-        return
+        return False
 
     # No fallback to the buyer's address: the sandbox would 403. Fail loudly instead.
     if not settings.owner_notification_email:
@@ -52,7 +74,7 @@ async def _send(*, to_email: str, subject: str, html: str, text: str, context: s
             "can only deliver to the Resend account's own address.",
             context,
         )
-        return
+        return False
 
     recipient = settings.owner_notification_email
 
@@ -79,7 +101,14 @@ async def _send(*, to_email: str, subject: str, html: str, text: str, context: s
         ) + html
 
     try:
-        await asyncio.to_thread(_send_via_resend, to_email=recipient, subject=subject, html=html, text=text)
+        await asyncio.to_thread(
+            _send_via_resend,
+            to_email=recipient,
+            subject=subject,
+            html=html,
+            text=text,
+            reply_to=reply_to,
+        )
         if recipient == to_email:
             logger.info("Sent %s to %s via Resend.", context, recipient)
         else:
@@ -90,9 +119,11 @@ async def _send(*, to_email: str, subject: str, html: str, text: str, context: s
                 recipient,
                 to_email,
             )
+        return True
     except requests.RequestException as e:
         body = getattr(e.response, "text", "")
         logger.error("Resend send failed for %s to %s: %s %s", context, recipient, e, body)
+        return False
 
 
 async def send_receipt_email(
@@ -164,4 +195,59 @@ async def send_sale_notification_email(
             f"Product: {product_name}"
         ),
         context=f"sale notification for order {order_id}",
+    )
+
+
+async def send_contact_notification_email(
+    *,
+    name: str,
+    from_email: str,
+    enquiry_type: str | None,
+    message: str,
+) -> bool:
+    """To the owner: someone used the public contact form. Returns whether it was sent,
+    so the caller can record that on the stored row (contact_messages.notified).
+
+    Every interpolated value here is escaped. This is the only email in this module
+    built from wholly untrusted input — a stranger with no account chooses the name and
+    the entire message body — so unescaped interpolation would let any visitor put
+    arbitrary markup, including a link wearing someone else's text, into the owner's
+    inbox. `<br>` is applied after escaping, so newlines survive but nothing else does.
+    """
+    if not settings.owner_notification_email:
+        logger.error(
+            "OWNER_NOTIFICATION_EMAIL is not set — a contact message from %s could not be "
+            "notified. It is still stored in contact_messages.",
+            from_email,
+        )
+        return False
+
+    safe_name = html_lib.escape(name)
+    safe_email = html_lib.escape(from_email)
+    safe_type = html_lib.escape(enquiry_type) if enquiry_type else "Not specified"
+    safe_message = html_lib.escape(message).replace("\n", "<br>")
+
+    return await _send(
+        to_email=settings.owner_notification_email,
+        subject=f"Contact form: {name}",
+        html=f"""
+            <h1>New enquiry from the contact page</h1>
+            <p><strong>From:</strong> {safe_name} &lt;{safe_email}&gt;</p>
+            <p><strong>About:</strong> {safe_type}</p>
+            <hr>
+            <p>{safe_message}</p>
+            <hr>
+            <p style="color:#666;font-size:12px">Reply directly to this email to answer them.</p>
+        """,
+        text=(
+            f"New enquiry from the contact page\n\n"
+            f"From: {name} <{from_email}>\n"
+            f"About: {enquiry_type or 'Not specified'}\n\n"
+            f"{'-' * 60}\n\n"
+            f"{message}\n\n"
+            f"{'-' * 60}\n"
+            f"Reply directly to this email to answer them."
+        ),
+        context=f"contact notification from {from_email}",
+        reply_to=from_email,
     )

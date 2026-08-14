@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Playwright/vitest run output — screenshots, traces, error-context.md from
+# `npx playwright test`. Was missing here, which is how a real accessibility-test
+# failure's screenshot ended up staged for commit (frontend/test-results/*, 2026-08-14).
+test-results/
+playwright-report/
+coverage/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

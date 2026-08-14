@@ -1,11 +1,39 @@
+# Env files — real secrets. .env.example/.env.local.example stay tracked.
 .env
-node-modules/
-pycache/
-__pycache__/**/*
+.env.local
+
+# Python
 __pycache__/
-.venv/
 *.pyc
-py.*
+.venv/
+.pytest_cache/
+
+# Node (frontend/.gitignore covers node_modules/dist in more detail; kept here too
+# so a stray node_modules anywhere in the tree — not just frontend/ — is still caught)
+node_modules/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test run artifacts (Playwright, pytest) — never commit a screenshot or trace from
+# a local test run. frontend/.gitignore also excludes these from that directory
+# specifically; repeated here so any future test-output directory elsewhere in the
+# tree is covered too.
+test-results/
+playwright-report/
+
+# An unrelated local app (FreeBuff) writes its SQLite db/wal/shm files into this repo
+# directory — not project data, never intentional to commit. `.freebuff/` (a
+# directory), not `*.freebuff` (a file extension) — the latter matches nothing here.
+.freebuff/
+
+# Real binary assets live in Supabase Storage, not git (BACKEND.md — the API never
+# proxies file bytes, and neither does version control). docs/videos and
+# docs/templates are the known content dirs; the extension list below is the
+# blanket backstop for anything dropped elsewhere in the tree.
 docs/videos/*
 docs/templates/*
 *.xlsx
@@ -16,3 +44,5 @@ docs/templates/*
 *.zip
 *.dotx
 *.mp4
+
+frontend/test-results/*

@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { Download, FileSpreadsheet, Mail } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
+import { track } from '@/lib/analytics'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -30,10 +31,10 @@ interface TemplateDetail {
 
 type DownloadStatus = 'idle' | 'preparing' | 'downloaded' | 'error' | 'not-entitled'
 
-// The same key EmailGatedBody uses, deliberately. Giving an email once should unlock
-// every free entry point — the free question's guidance AND the free template — not
-// re-prompt at each one. The point is capturing the address, not counting how many
-// times we asked for it.
+// Historically shared with the free question's reading gate, which has since been
+// removed — questions are unconditionally free to read now (no email prompt at all).
+// This key lives on for the free template's own download gate, the one remaining
+// place that still asks for an email before handing over a file.
 const UNLOCK_STORAGE_KEY = 'practicable:email_unlocked'
 
 function readUnlocked(): boolean {
@@ -52,7 +53,7 @@ export function Template() {
   const [email, setEmail] = useState('')
 
   // Being signed in is stronger evidence than the lead form collects, so it satisfies
-  // the gate outright — same rule as the free question (EmailGatedBody.tsx).
+  // the gate outright.
   const signedIn = useAuthStore((s) => s.user) !== null
 
   const { data: template, isLoading } = useQuery({
@@ -70,8 +71,25 @@ export function Template() {
         // Storage unavailable — still unlock this render via state.
       }
       setEmailGiven(true)
+      track('email_captured', { source: 'free_template' })
     },
   })
+
+  // week2_plan.md Phase 5. Both effects above any early return (isLoading/!template
+  // below), per the rules of hooks — computed from the query data directly rather
+  // than the post-guard `template` variable those returns gate.
+  useEffect(() => {
+    if (template) track('content_viewed', { type: 'template', slug: template.slug })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template?.slug])
+
+  const gateShown = useRef(false)
+  useEffect(() => {
+    if (template?.is_free && !signedIn && !emailGiven && !gateShown.current) {
+      gateShown.current = true
+      track('email_gate_shown', { source: 'free_template' })
+    }
+  }, [template?.is_free, signedIn, emailGiven])
 
   // DESIGN.md §26.4/§26.5: fetch the presigned URL on click, use it immediately,
   // discard it — never render it as a visible href. A 60-second URL sitting in the
