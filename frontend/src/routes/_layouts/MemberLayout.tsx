@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink, Navigate, Outlet } from 'react-router'
-import { BadgeDollarSign, GraduationCap, LayoutDashboard, Library, LogOut, Menu, ShieldCheck, Sparkles, Store, Tags, X } from 'lucide-react'
+import { GraduationCap, LayoutDashboard, Library, LogOut, Menu, ShieldCheck, Sparkles, Store, Tags, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
