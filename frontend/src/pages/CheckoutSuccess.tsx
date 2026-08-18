@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries } from '@tanstack/react-query'
 import { CircleCheck } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useCartStore } from '@/stores/useCartStore'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { SUPPORT_MAILTO } from '@/lib/support'
@@ -23,12 +24,8 @@ interface ProductData {
 }
 
 // What the buyer should do next depends on what they actually bought. A template-only
-// purchase has no lesson to start, and telling someone who just bought a spreadsheet to
-// "start the first lesson" sends them to a course they don't own.
-//
-// Order matters: a course that bundles a template is still a course, so `lesson` wins.
-// `href` is computed server-side per content type (ProductContentOut), so this doesn't
-// re-derive routes the API already knows.
+// purchase has no lesson to start. Order matters: a course that bundles a template is
+// still a course, so `lesson` wins. `href` is computed server-side per content type.
 function nextStep(contents: ProductContent[]): { label: string; href: string } {
   const lesson = contents.find((c) => c.content_type === 'lesson')
   if (lesson) return { label: 'Start the first lesson', href: lesson.href ?? '/dashboard' }
@@ -36,42 +33,45 @@ function nextStep(contents: ProductContent[]): { label: string; href: string } {
   const template = contents.find((c) => c.content_type === 'template')
   if (template) return { label: 'Download your template', href: template.href ?? '/library' }
 
-  // question_set, or a product whose contents didn't load — the library lists
-  // everything they own, so it is always a safe destination.
+  // Falls back to the library, which is always a safe destination.
   return { label: 'Go to your library', href: '/library' }
 }
 
 const POLL_INTERVAL_MS = 1500
-// Checked against a real production webhook round-trip (Stripe -> Render -> DB commit):
-// it landed ~20s after the checkout session completed — right at this constant's old
-// value, so a real paying user could hit the "still being set up" fallback moments
-// before their entitlement actually arrived. Given headroom rather than the exact
-// observed number, since that 20s isn't guaranteed to be the worst case.
+// A production webhook round-trip landed ~20s after checkout completed, so this is
+// given headroom above that rather than the exact observed number.
 const POLL_TIMEOUT_MS = 45_000
 
-// DESIGN.md §29.4 [DECIDED] — "the webhook race". Stripe redirects here before the
-// webhook that actually creates the entitlement necessarily arrives, so this page
-// cannot assume access exists yet: it polls, shows a loading primary action while
-// doing so, and — critically — never shows a locked screen or a bare spinner to
-// someone who has already paid.
+// The webhook race: Stripe redirects here before the webhook that creates the
+// entitlement necessarily arrives, so this page polls rather than assuming access
+// exists, and never shows a locked screen or bare spinner to someone who already paid.
+//
+// week3_plan.md W3-R11 — `product_slugs` (plural, comma-joined) replaces the old
+// singular `product_slug`; a direct "Buy" is just the one-slug case of the same param,
+// not a second code path (checkout.py builds this same query string either way).
 export function CheckoutSuccess() {
   const [searchParams] = useSearchParams()
-  const productSlug = searchParams.get('product_slug') ?? ''
+  const productSlugs = (searchParams.get('product_slugs') ?? searchParams.get('product_slug') ?? '')
+    .split(',')
+    .filter(Boolean)
   const user = useAuthStore((s) => s.user)
+  const clearCart = useCartStore((s) => s.clear)
   const [entitled, setEntitled] = useState(false)
   const [timedOut, setTimedOut] = useState(false)
-  // Date.now() is impure — set in the polling effect below (where a side effect is
-  // allowed), not here at render time.
+  // Date.now() is impure — set in the polling effect below, not at render time.
   const startedAt = useRef<number | null>(null)
 
-  const { data: product } = useQuery({
-    queryKey: queryKeys.products.detail(productSlug),
-    queryFn: () => api.get<ProductData>(`/products/${productSlug}`).then((res) => res.data),
-    enabled: !!productSlug,
+  const productQueries = useQueries({
+    queries: productSlugs.map((slug) => ({
+      queryKey: queryKeys.products.detail(slug),
+      queryFn: () => api.get<ProductData>(`/products/${slug}`).then((res) => res.data),
+    })),
   })
+  const products = productQueries.map((q) => q.data).filter((p): p is ProductData => !!p)
+  const allProductsLoaded = products.length === productSlugs.length && productSlugs.length > 0
 
   useEffect(() => {
-    if (!product || entitled) return
+    if (!allProductsLoaded || entitled) return
 
     startedAt.current = Date.now()
     let cancelled = false
@@ -79,8 +79,11 @@ export function CheckoutSuccess() {
       try {
         const { data } = await api.get<{ product_ids: string[] }>('/me/entitlements')
         if (cancelled) return
-        if (data.product_ids.includes(product.id)) {
+        // ALL products in the cart, not just one — the cart drains only once the
+        // whole order is confirmed, never partway through (W3-R11's ordering rule).
+        if (products.every((p) => data.product_ids.includes(p.id))) {
           setEntitled(true)
+          clearCart()
           return
         }
       } catch {
@@ -98,12 +101,14 @@ export function CheckoutSuccess() {
       cancelled = true
       clearTimeout(timeoutId)
     }
-  }, [product, entitled])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `products` is derived fresh every render from productQueries; re-keying on it would re-run the poll loop on every tick.
+  }, [allProductsLoaded, entitled, clearCart])
 
-  const step = nextStep(product?.contents ?? [])
+  const step = nextStep(products.flatMap((p) => p.contents))
+  const isCart = productSlugs.length > 1
 
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
+    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-8">
       <Card>
         <CardHeader>
           {/* The success moment gets the same icon-tile treatment as the buy cards'
@@ -115,9 +120,9 @@ export function CheckoutSuccess() {
           <CardTitle className="mt-3">{entitled ? "You're in." : 'Payment confirmed.'}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {product && (
+          {products.length > 0 && (
             <p className="text-foreground">
-              {product.name}
+              {isCart ? products.map((p) => p.name).join(', ') : products[0].name}
               <br />
               <span className="text-sm text-muted-foreground">
                 Payment confirmed

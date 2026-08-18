@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, ForeignKey, DateTime
+from sqlalchemy import String, ForeignKey, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, TimestampMixin, str_enum
 import enum
@@ -23,6 +23,12 @@ class Entitlement(Base, IdMixin, TimestampMixin):
 
     # Optional expiry for temporary access.
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # week3_plan.md W3-R5 — a refund revokes rather than deletes: the row (and its
+    # audit trail) survives, `revoked_at` is what the gate checks. `revoked_reason` is
+    # required by the refund endpoint, never inferred.
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User")

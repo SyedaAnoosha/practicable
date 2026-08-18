@@ -1,0 +1,22 @@
+Thank you for your purchase
+
+Your order has been completed. Here is your receipt.
+
+Order reference: {{ order_id }}
+{{ "Products" if product_names|length > 1 else "Product" }}:
+{% for name in product_names %}
+- {{ name }}
+{% endfor %}
+Date: {{ order_date }}
+{% if tax_line %}
+Tax: {{ tax_line }}
+{% endif %}
+Amount: {{ amount_display }}
+
+View in your library: {{ primary_link }}
+{% if refund_position_text %}
+{{ refund_position_text }}{% if refunds_url %} Read our refund policy: {{ refunds_url }}{% endif %}
+{% endif %}
+Billed by:
+Effective Risk Management
+ABN: to be confirmed

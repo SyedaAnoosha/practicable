@@ -2,12 +2,15 @@
 import re
 import unicodedata
 import uuid
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.publish_state import apply_publish_state
+from app.db.base import PublishState
 from app.db.models import User
 
 # Re-exported, not duplicated: `app/core/entitlements.py` needs the same writer for the
@@ -16,6 +19,30 @@ from app.db.models import User
 # `services/audit_service.py`; every admin route still imports it from this module so
 # nothing else in `admin/*` had to change.
 from app.services.audit_service import record_audit  # noqa: F401
+
+
+class PublishStateIn(BaseModel):
+    """Shared publish-toggle body for questions/templates/courses/lessons (migration
+    012, week3_plan.md Phase 5 step 4). `published` is the legacy boolean every existing
+    caller and test already sends; `publish_state` is the new fourth-state field the
+    `PublishStateChip` UI sends explicitly. Both are accepted so old and new clients
+    keep working against the same endpoint — see `apply_publish_state_or_422`."""
+    published: bool
+    publish_state: Optional[Literal["draft", "in_review", "published", "archived"]] = None
+
+
+def apply_publish_state_or_422(entity: Any, payload: PublishStateIn) -> PublishState:
+    """Wraps `core.publish_state.apply_publish_state`, turning its ValueError (the two
+    fields disagree) into this API's normal 422 error envelope instead of a raw 500 from
+    migration 012's CHECK constraint at commit time."""
+    requested = PublishState(payload.publish_state) if payload.publish_state else None
+    try:
+        return apply_publish_state(entity, published=payload.published, publish_state=requested)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "publish_state_mismatch", "message": str(exc)}},
+        )
 
 
 def slugify(value: str) -> str:

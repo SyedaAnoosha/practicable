@@ -19,6 +19,13 @@ export const queryKeys = {
   lessonBlocks: {
     playbackToken: (blockId: string) => ['lesson-blocks', 'playback', blockId] as const,
   },
+  // Domain packs (week2_plan.md W2-R6). Keyed by product slug, not template id — a
+  // pack is addressed by the product that sells it; its PDF is an implementation
+  // detail the detail response happens to carry.
+  packs: {
+    list: () => ['packs', 'list'] as const,
+    detail: (slug: string) => ['packs', 'detail', slug] as const,
+  },
   templates: {
     list: () => ['templates', 'list'] as const,
     detail: (id: string) => ['templates', 'detail', id] as const,

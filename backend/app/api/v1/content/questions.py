@@ -1,23 +1,14 @@
 """Public question catalogue and detail routes.
 
-`/questions/index` and the scored `/questions` (week2_plan.md Phase 3 / DESIGN.md
-§57.1) are deliberately two different response shapes at two different paths, not
-one endpoint branching on query params — a client that wants the lightweight
-cacheable list and a client that wants a scored, filtered ranking are asking two
-different questions, and giving them different Pydantic response models is what
-makes case 10's "the index never carries `body`" guarantee a structural fact about
-the model rather than a runtime check someone could accidentally bypass.
+`/questions/index` and the scored `/questions` are deliberately two different response
+shapes at two different paths, not one endpoint branching on query params: the index
+never carries `body`, as a structural fact about its model rather than a runtime check.
 
-At today's ~100-question scale, `QuestionsCatalogue.tsx` fetches `/questions/index`
-ONCE and does all filtering/scoring/counting client-side with `scoring.ts` against
-the cached list — DESIGN.md §57.1's explicit resolution of v1's contradiction
-between "no client-side filtering of the entire database" and "the live count must
-update with no round trip": at this size they don't conflict. The scored `/questions`
-endpoint below is the authoritative, server-side twin of that same algorithm
-(`question_service.py` — parity-tested against the identical fixture scoring.ts is),
-built and tested now specifically so the swap to server-side filtering at the
-~500-question/250KB cutover (§57.1) is a data-source change in one page, not a new
-subsystem written under pressure at that point.
+At today's scale, `QuestionsCatalogue.tsx` fetches `/questions/index` once and does all
+filtering/scoring/counting client-side with `scoring.ts`. The scored `/questions`
+endpoint below is the authoritative server-side twin of that algorithm
+(`question_service.py`), so a later swap to server-side filtering at scale is a
+data-source change, not a new subsystem.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -40,7 +31,7 @@ from app.db.models import (
     Course,
 )
 from app.core.deps import get_current_user_id_optional
-from app.core.entitlements import ResourceType, has_access_to
+from app.core.entitlements import ResourceType, resolve_granted_content_ids, resolve_product_ids
 from app.services.question_service import (
     QuestionFilters,
     ScorableQuestion,
@@ -88,12 +79,16 @@ class QuestionSummaryOut(BaseModel):
     subtitle: Optional[str]
     preview: str
     domain: str
-    # The stable identifier scoring/filtering compares against — `domain` above is
-    # the display name, which the owner can reword without breaking a filter or a
-    # bookmarked URL (`?domain=third-party-risk` stays valid; `?domain=Third-Party
-    # Risk` would not survive a rename).
+    # The stable identifier scoring/filtering compares against — `domain` above is the
+    # display name, which the owner can reword without breaking a bookmarked filter URL.
     domain_slug: str
     tags: List[TagOut]
+    # The homepage's curated picks (week3_plan.md §20.6). Carried on every summary
+    # response (not a separate `?featured=true`-only field set) so `Home.tsx` can derive
+    # its featured row from the one `/questions/index` fetch it already makes for
+    # everything else on the page, at no extra round trip.
+    featured: bool = False
+    featured_sort: Optional[int] = None
 
 class QuestionOut(BaseModel):
     id: str
@@ -102,8 +97,7 @@ class QuestionOut(BaseModel):
     subtitle: Optional[str]
     preview: str
     # Always present, and always rendered in full — the written question is the free
-    # entry point, not the paid product. The frontend used to soft-gate it behind an
-    # email capture; that gate has been removed, so this is now a plain free read.
+    # entry point, not the paid product.
     body: str
     domain: str
     tags: List[TagOut]
@@ -172,10 +166,8 @@ def _tags_for_question(question: Question, tag_map: dict, traits_by_question: di
 
 
 async def _load_published_questions(session: AsyncSession):
-    """The shared data both `/questions/index` and the scored `/questions` need —
-    one place, so the two routes see identical content and can't drift into
-    disagreeing about what "published" means. Four queries total either way,
-    however many questions there are."""
+    """The shared data both `/questions/index` and the scored `/questions` need, so the
+    two routes can't drift on what "published" means. Four queries either way."""
     result = await session.execute(
         select(Question).where(Question.published.is_(True)).order_by(Question.title)
     )
@@ -192,22 +184,35 @@ def _question_summary(q: Question, domains: dict, tag_map: dict, traits_by_quest
         id=str(q.id), slug=q.slug, title=q.title, subtitle=q.subtitle,
         preview=q.preview, domain=domain.name, domain_slug=domain.slug,
         tags=_tags_for_question(q, tag_map, traits_by_question),
+        featured=q.featured, featured_sort=q.featured_sort,
     )
 
 
 @router.get("/questions/index", response_model=List[QuestionSummaryOut])
-async def list_questions_index(session: AsyncSession = Depends(get_session)):
-    """The cacheable question index (DESIGN.md §57.1) — public, no `body` field ever
-    (gating case 10). Every question's written guidance is free to read (the email
-    gate lives client-side, and has since been removed entirely), so no entitlement
-    check is needed here. `QuestionsCatalogue.tsx` fetches this once and does all
-    filtering/scoring/live-counting against it with `scoring.ts` — see this file's
-    module docstring for why that, not a round trip per filter tap, is correct at
-    today's scale."""
+async def list_questions_index(
+    session: AsyncSession = Depends(get_session),
+    featured: Optional[bool] = None,
+):
+    """The cacheable question index — public, no `body` field ever. Every question is
+    free to read, so no entitlement check is needed. `QuestionsCatalogue.tsx` fetches
+    this once and does all filtering/scoring/live-counting against it client-side.
+
+    `?featured=true` (week3_plan.md §20.6 / Phase 5 step 6) narrows to the owner's
+    curated homepage picks, ordered by `featured_sort` (nulls last, so a featured
+    question with no explicit order still appears rather than vanishing). `Home.tsx`
+    doesn't call this directly — it already holds the full list from its own
+    unfiltered fetch and filters client-side — but the parameter exists as first-class
+    API surface for any other caller that wants the curated set without the rest."""
     questions, domains, tag_map, traits_by_question = await _load_published_questions(session)
-    # Title order, not creation order: matches the tie-break `partition_questions`/
-    # `partitionQuestions` rely on being stable against (equal-score rows keep
-    # whatever order they arrived in), and reads better as a plain unfiltered list.
+    if featured is True:
+        questions = sorted(
+            (q for q in questions if q.featured),
+            key=lambda q: (q.featured_sort is None, q.featured_sort, q.title),
+        )
+    elif featured is False:
+        questions = [q for q in questions if not q.featured]
+    # Title order otherwise, not creation order: the tie-break scoring relies on being
+    # stable against, and reads better as a plain unfiltered list.
     return [_question_summary(q, domains, tag_map, traits_by_question) for q in questions]
 
 
@@ -215,7 +220,7 @@ class QuestionMissOut(BaseModel):
     dimension: str
     requested: Union[str, List[str]]
     actual: Optional[Union[str, List[str]]]
-    # 1 = adjacent, null = far or unknown — both scored 0; matches scoring.ts's Miss.
+    # 1 = adjacent, null = far or unknown — both scored 0.
     distance: Optional[int]
 
 
@@ -230,9 +235,8 @@ class QuestionSearchOut(BaseModel):
     exact_count: int
     close_count: int
     has_filters: bool
-    # §57.5's zero-result recovery — active filter dimensions ranked most-
-    # restrictive-first, so the frontend can offer the top two as one-tap
-    # relaxations. Only non-empty when there ARE zero results (see the route below).
+    # Zero-result recovery: active filter dimensions ranked most-restrictive-first, so
+    # the frontend can offer the top two as one-tap relaxations.
     relaxation_candidates: List[str]
 
 
@@ -265,17 +269,16 @@ async def search_questions(
     leadership_traits: List[str] = Query(default=[]),
     q: Optional[str] = None,
 ):
-    """The authoritative, server-side scored search (DESIGN.md §57) — see this
-    file's module docstring for why `QuestionsCatalogue.tsx` does not call this on
-    every filter tap today. `app/services/question_service.py` implements the
-    identical rule `frontend/src/lib/scoring.ts` does; the two are parity-tested
-    against the shared `tests/fixtures/scoring_cases.json`.
+    """The authoritative, server-side scored search — see this file's module docstring
+    for why `QuestionsCatalogue.tsx` doesn't call this on every filter tap today.
+    `question_service.py` implements the identical rule `scoring.ts` does; the two are
+    parity-tested against a shared fixture.
     """
     questions, domains, tag_map, traits_by_question = await _load_published_questions(session)
 
     # Free-text search runs BEFORE scoring, as a filter over title/preview, not as a
-    # scored dimension (§57.4) — mixing keyword relevance into the constraint score
-    # would produce a ranking nobody could explain, and explicability is the point.
+    # scored dimension — mixing keyword relevance into the constraint score would
+    # produce a ranking nobody could explain.
     if q and (needle := q.strip().lower()):
         questions = [
             item for item in questions if needle in item.title.lower() or needle in item.preview.lower()
@@ -296,9 +299,7 @@ async def search_questions(
     )
     exact, close, has_filters = partition_questions(scorable, filters, tag_lookup)
 
-    # Only computed when there's actually a dead end to recover from — cheap either
-    # way (it's a scan over the already-loaded list), but a non-empty result here
-    # when exact/close aren't both empty would be a confusing API to consume.
+    # Only computed when there's actually a dead end to recover from.
     relaxation_candidates = (
         rank_relaxation_candidates(scorable, filters) if has_filters and not exact and not close else []
     )
@@ -348,16 +349,13 @@ async def get_question(
     tags = _tags_for_question(question, tag_map, traits_by_question)
 
     # 200 either way, never 403 — the paywall is a conversion surface, not an error.
-    is_entitled = (
-        await has_access_to(
-            user_id=uuid.UUID(user_id),
-            resource_type=ResourceType.QUESTION,
-            resource_id=question.id,
-            session=session,
-        )
-        if user_id
-        else False
+    # `product_ids` is resolved once and reused for every entitlement check below,
+    # rather than each one re-resolving it in its own round trip.
+    product_ids = await resolve_product_ids(user_id=uuid.UUID(user_id), session=session) if user_id else set()
+    granted_question_ids = await resolve_granted_content_ids(
+        product_ids=product_ids, resource_type=ResourceType.QUESTION, session=session
     )
+    is_entitled = question.id in granted_question_ids
     
     # The related-template card is a direct buy surface, resolved via product_contents.
     related_result = await session.execute(
@@ -439,18 +437,19 @@ async def get_question(
         for lesson_id, product in unlock_result.all():
             unlock_by_lesson[lesson_id] = product
 
+    # One bulk ownership check for every related lesson, rather than one `has_access_to`
+    # round trip per lesson.
+    granted_lesson_ids = (
+        await resolve_granted_content_ids(
+            product_ids=product_ids, resource_type=ResourceType.LESSON, session=session
+        )
+        if related_lesson_rows
+        else set()
+    )
+
     related_lessons = []
     for lesson, module, course in related_lesson_rows:
-        owned = (
-            await has_access_to(
-                user_id=uuid.UUID(user_id),
-                resource_type=ResourceType.LESSON,
-                resource_id=lesson.id,
-                session=session,
-            )
-            if user_id
-            else False
-        )
+        owned = lesson.id in granted_lesson_ids
         unlock_product = unlock_by_lesson.get(lesson.id)
         related_lessons.append(
             RelatedLessonOut(

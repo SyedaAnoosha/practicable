@@ -2,8 +2,11 @@ import base64
 import time
 
 import jwt  # PyJWT — not python-jose, which has no top-level `jwt` module
+import requests
 
 from app.core.config import settings
+
+MUX_API_BASE = "https://api.mux.com"
 
 
 def generate_mux_playback_token(playback_id: str, expiry_minutes: int = 30) -> str:
@@ -36,3 +39,50 @@ def generate_mux_playback_token(playback_id: str, expiry_minutes: int = 30) -> s
         algorithm="RS256",
         headers={"kid": settings.mux_signing_key_id},
     )
+
+
+def _auth() -> tuple[str, str]:
+    if not settings.mux_token_id or not settings.mux_token_secret:
+        raise RuntimeError("MUX_TOKEN_ID / MUX_TOKEN_SECRET are not configured.")
+    return (settings.mux_token_id, settings.mux_token_secret)
+
+
+def create_direct_upload() -> dict:
+    """week3_plan.md Phase 5 step 1 — the admin never sees a Mux secret and the
+    frontend never calls Mux directly: this is the ONE place MUX_TOKEN_ID/SECRET are
+    used to talk to Mux's Video API. Returns Mux's own `{id, url}` — `id` is what
+    `get_upload_status` below polls, `url` is what the browser PUTs the video file to,
+    directly, bypassing this backend entirely for the actual bytes.
+
+    `playback_policy: ["signed"]` matches `generate_mux_playback_token` above — an
+    asset created any other way here would be playable with no signed token at all,
+    quietly reopening the gate this whole signing scheme exists to close.
+    """
+    response = requests.post(
+        f"{MUX_API_BASE}/video/v1/uploads",
+        auth=_auth(),
+        json={
+            "new_asset_settings": {"playback_policy": ["signed"]},
+            "cors_origin": settings.frontend_url or "*",
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    return response.json()["data"]
+
+
+def get_upload_status(upload_id: str) -> dict:
+    """Mux's own upload-progress record: `status` moves waiting -> asset_created (or
+    errored/cancelled). `asset_id` is only present once `asset_created`."""
+    response = requests.get(f"{MUX_API_BASE}/video/v1/uploads/{upload_id}", auth=_auth(), timeout=10)
+    response.raise_for_status()
+    return response.json()["data"]
+
+
+def get_asset(asset_id: str) -> dict:
+    """`status` moves preparing -> ready (or errored) as Mux encodes the upload.
+    `playback_ids` is empty until the asset exists; the signed playback id is what
+    `set_lesson_video` stores once this reports `ready`."""
+    response = requests.get(f"{MUX_API_BASE}/video/v1/assets/{asset_id}", auth=_auth(), timeout=10)
+    response.raise_for_status()
+    return response.json()["data"]

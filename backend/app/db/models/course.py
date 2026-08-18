@@ -1,21 +1,23 @@
 from sqlalchemy import String, Text, ForeignKey, Integer, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base, IdMixin, TimestampMixin
+from app.db.base import Base, IdMixin, PublishStateMixin, TimestampMixin
 import uuid
 
-class Course(Base, IdMixin, TimestampMixin):
+class Course(Base, IdMixin, TimestampMixin, PublishStateMixin):
     __tablename__ = "courses"
-    
+
     slug: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     subtitle: Mapped[str | None] = mapped_column(String(500), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    
+
     section_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sections.id"), nullable=False)
     author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("authors.id"), nullable=False)
-    
+
+    # `publish_state` (migration 012) comes from PublishStateMixin, kept in sync with
+    # this column automatically — see that mixin's docstring.
     published: Mapped[bool] = mapped_column(default=False)
-    
+
     # Relationships
     section: Mapped["Section"] = relationship("Section")
     author: Mapped["Author"] = relationship("Author")

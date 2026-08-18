@@ -28,7 +28,7 @@ from app.db.models import (
 )
 from app.db.session import get_session
 
-from .common import ensure_unique_slug, get_or_404, record_audit, slugify
+from .common import PublishStateIn, apply_publish_state_or_422, ensure_unique_slug, get_or_404, record_audit, slugify
 
 router = APIRouter()
 
@@ -65,15 +65,14 @@ class LessonOut(BaseModel):
     body: Optional[str]
     sort_order: int
     published: bool
+    publish_state: str
     download_template_id: Optional[str]
     mux_playback_id: Optional[str]
     # A video lesson with no Mux asset renders an empty player after purchase — surfaced
     # so the editor can block publishing it.
     is_ready: bool
-    # Ordered content blocks (week2_plan.md Phase 2). Populated for every lesson, not
-    # only `mixed` ones — a video/reading/download lesson still carries the one block
-    # the migration backfilled it into, so the editor can show it read-only alongside
-    # the legacy fields above rather than presenting two disagreeing sources of truth.
+    # Ordered content blocks, populated for every lesson, not only `mixed` ones — a
+    # video/reading/download lesson still carries the one block it was backfilled into.
     blocks: list[LessonBlockOut]
 
 
@@ -91,6 +90,7 @@ class CourseRowOut(BaseModel):
     title: str
     subtitle: Optional[str]
     published: bool
+    publish_state: str
     module_count: int
     lesson_count: int
 
@@ -102,6 +102,7 @@ class CourseDetailOut(BaseModel):
     subtitle: Optional[str]
     description: str
     published: bool
+    publish_state: str
     modules: list[ModuleOut]
 
 
@@ -124,13 +125,10 @@ def _lesson_out(lesson: Lesson, media: Optional[Media], blocks: Optional[list[Le
     blocks = blocks or []
     playback_id = media.mux_playback_id if media else None
     if lesson.lesson_type == LessonType.MIXED:
-        # A MIXED lesson is authored entirely through blocks (week2_plan.md Phase 2),
-        # not the legacy body/media/download_template_id fields, which stay unpopulated
-        # for it — and it may legitimately hold more than one video block (more than one
-        # Media row sharing this lesson_id), which the legacy single-`media` lookup
-        # above cannot represent at all. Readiness is judged block-by-block instead:
-        # step 7's rule — zero blocks, an unattached video block, or an unattached file
-        # block all block publishing.
+        # A MIXED lesson is authored entirely through blocks, not the legacy fields, and
+        # may hold more than one video block, which the single-`media` lookup above can't
+        # represent. Readiness is judged block-by-block instead: zero blocks, an
+        # unattached video block, or an unattached file block all block publishing.
         is_ready = bool(blocks) and all(
             (b.block_type != LessonBlockType.VIDEO or (b.media is not None and bool(b.media.mux_playback_id)))
             and (b.block_type != LessonBlockType.FILE or b.template_id is not None)
@@ -150,6 +148,7 @@ def _lesson_out(lesson: Lesson, media: Optional[Media], blocks: Optional[list[Le
         description=lesson.description,
         lesson_type=_enum_value(lesson.lesson_type),
         body=lesson.body, sort_order=lesson.sort_order, published=lesson.published,
+        publish_state=lesson.publish_state.value,
         download_template_id=str(lesson.download_template_id) if lesson.download_template_id else None,
         mux_playback_id=playback_id, is_ready=is_ready,
         blocks=[_block_out(b) for b in (blocks or [])],
@@ -181,7 +180,7 @@ async def list_courses(session: AsyncSession = Depends(get_session)):
     return [
         CourseRowOut(
             id=str(c.id), slug=c.slug, title=c.title, subtitle=c.subtitle,
-            published=c.published,
+            published=c.published, publish_state=c.publish_state.value,
             module_count=module_counts.get(c.id, 0),
             lesson_count=lesson_counts.get(c.id, 0),
         )
@@ -243,6 +242,7 @@ async def get_course(course_id: uuid.UUID, session: AsyncSession = Depends(get_s
     return CourseDetailOut(
         id=str(course.id), slug=course.slug, title=course.title,
         subtitle=course.subtitle, description=course.description, published=course.published,
+        publish_state=course.publish_state.value,
         modules=[
             ModuleOut(
                 id=str(m.id), title=m.title, description=m.description, sort_order=m.sort_order,
@@ -308,24 +308,22 @@ async def update_course(
     return await get_course(course_id, session)
 
 
-class PublishIn(BaseModel):
-    published: bool
-
-
 @router.post("/admin/courses/{course_id}/publish", response_model=CourseDetailOut)
 async def set_course_published(
     course_id: uuid.UUID,
-    payload: PublishIn,
+    payload: PublishStateIn,
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
     course = await get_or_404(session, Course, course_id, "Course")
+    was_state = course.publish_state.value
     was = course.published
-    course.published = payload.published
+    new_state = apply_publish_state_or_422(course, payload)
     await record_audit(
         session, actor=admin,
         action="publish_course" if payload.published else "unpublish_course",
-        target_type="course", target_id=course.id, context={"from": was, "to": payload.published},
+        target_type="course", target_id=course.id,
+        context={"from": was, "to": payload.published, "state_from": was_state, "state_to": new_state.value},
     )
     await session.commit()
     return await get_course(course_id, session)
@@ -512,7 +510,7 @@ async def set_lesson_video(
 @router.post("/admin/lessons/{lesson_id}/publish", response_model=CourseDetailOut)
 async def set_lesson_published(
     lesson_id: uuid.UUID,
-    payload: PublishIn,
+    payload: PublishStateIn,
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
@@ -520,10 +518,8 @@ async def set_lesson_published(
     video lesson with no Mux asset renders an empty player to someone who just paid."""
     lesson = await get_or_404(session, Lesson, lesson_id, "Lesson")
     if payload.published:
-        # `.first()`, not `scalar_one_or_none()` — a MIXED lesson with more than one
-        # video block legitimately has more than one Media row sharing this lesson_id,
-        # and this lookup is only ever used for the legacy single-media display/check
-        # below, never authoritative for a MIXED lesson (see `_lesson_out`).
+        # `.first()`, not `scalar_one_or_none()`: a MIXED lesson can legitimately have
+        # more than one Media row, and this lookup is never authoritative for one.
         media = (
             (await session.execute(select(Media).where(Media.lesson_id == lesson.id)))
             .scalars()
@@ -557,29 +553,30 @@ async def set_lesson_published(
                     }
                 },
             )
+    was_state = lesson.publish_state.value
     was = lesson.published
-    lesson.published = payload.published
+    new_state = apply_publish_state_or_422(lesson, payload)
     await record_audit(
         session, actor=admin,
         action="publish_lesson" if payload.published else "unpublish_lesson",
-        target_type="lesson", target_id=lesson.id, context={"from": was, "to": payload.published},
+        target_type="lesson", target_id=lesson.id,
+        context={"from": was, "to": payload.published, "state_from": was_state, "state_to": new_state.value},
     )
     await session.commit()
     return await get_course(await _course_id_for_lesson(session, lesson), session)
 
 
-# ── Lesson blocks (week2_plan.md Phase 2) ───────────────────────────────────────────
+# ── Lesson blocks ────────────────────────────────────────────────────────────────
 # Ordered content — text, video, file, callout — for a lesson authored as more than one
-# piece. Reordering is up/down buttons, not drag-and-drop, per the plan's explicit
-# choice: fewer moving parts, keyboard-operable for free, no drag library dependency.
+# piece. Reordering is up/down buttons, not drag-and-drop: fewer moving parts,
+# keyboard-operable for free, no drag library dependency.
 
 class LessonBlockWriteIn(BaseModel):
     block_type: LessonBlockType
     # text / callout only.
     heading: Optional[str] = Field(default=None, max_length=500)
     text_body: Optional[str] = None
-    # file only — an existing Template row's id (the same rows AdminTemplates.tsx
-    # manages), not a new upload here.
+    # file only — an existing Template row's id, not a new upload here.
     template_id: Optional[uuid.UUID] = None
 
 
@@ -686,11 +683,10 @@ async def move_lesson_block(
 
     if 0 <= swap_idx < len(siblings):
         other = siblings[swap_idx]
-        # A three-step swap, not a direct exchange: `lesson_blocks` has a UNIQUE
-        # (lesson_id, sort_order) constraint (009_lesson_blocks.py), checked immediately
-        # per statement in Postgres (not deferred) — writing `other`'s old value onto
-        # `block` while `other` still holds it collides mid-flush. -1 is never a real
-        # sort_order (backfill and create both start at 0), so it's a safe scratch value.
+        # A three-step swap, not a direct exchange: the UNIQUE (lesson_id, sort_order)
+        # constraint is checked immediately per statement, so writing `other`'s old
+        # value onto `block` while `other` still holds it collides mid-flush. -1 is
+        # never a real sort_order, so it's a safe scratch value.
         block_order, other_order = block.sort_order, other.sort_order
         block.sort_order = -1
         await session.flush()
@@ -732,9 +728,8 @@ async def set_lesson_block_video(
         else None
     )
     if media is None:
-        # `lesson_id` is a NOT NULL legacy column on `media` (pre-blocks schema) — set to
-        # this block's lesson so the row is still valid, but `block.media_id` (set below)
-        # is what actually associates it with THIS block, not lesson-wide uniqueness.
+        # `lesson_id` is a NOT NULL legacy column on `media` — set for validity, but
+        # `block.media_id` (set below) is what actually associates it with THIS block.
         media = Media(lesson_id=block.lesson_id)
         session.add(media)
         await session.flush()

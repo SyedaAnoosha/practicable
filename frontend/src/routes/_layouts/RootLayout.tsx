@@ -1,24 +1,22 @@
 import { useEffect } from 'react'
-import { Outlet, useLocation } from 'react-router'
+import { Outlet, useLocation, useNavigationType } from 'react-router'
 import { supabase } from '@/lib/auth/supabase'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { identifyUser, trackPageview } from '@/lib/analytics'
+import { CartDrawer } from '@/components/cart/CartDrawer'
 
 /** Announces the new page on every route change for screen-reader users, who
- * otherwise get told nothing when a SPA navigates (DESIGN.md §42.2).
+ * otherwise get told nothing when a SPA navigates.
  *
  * The message is derived during render rather than synced through an effect: an
  * aria-live region only announces when its text actually changes, so a navigation
- * (which changes the text via the new pathname) still produces exactly one
- * announcement — without the setState-in-effect pattern lint forbids. */
+ * still produces exactly one announcement without a setState-in-effect. */
 function RouteAnnouncer() {
   const location = useLocation()
   const message = `${document.title} — page loaded`
 
-  // week2_plan.md Phase 5 — page views are tracked from here rather than PostHog's
-  // own history-API autocapture (disabled in analytics.ts's init), so a view fires
-  // exactly once per real SPA navigation, in the same place that already re-renders
-  // on every pathname change for the announcement above.
+  // Page views are tracked from here rather than PostHog's own autocapture (disabled
+  // in analytics.ts), in the same place that already re-renders on pathname change.
   useEffect(() => {
     trackPageview(location.pathname)
   }, [location.pathname])
@@ -30,9 +28,29 @@ function RouteAnnouncer() {
   )
 }
 
+/** Puts a new page at the top of itself. A browser does this for free on a full page
+ * load; a SPA does not, so following a footer link from the bottom of a long page
+ * landed the reader at the bottom of the next one.
+ *
+ * Three navigations are left alone: back/forward (`POP`, returning to where the
+ * reader was), an in-page anchor (a hash is a request to scroll somewhere specific),
+ * and a query-string-only change (keyed on `pathname` alone, since /questions holds
+ * its whole filter state in the URL and would otherwise reset scroll on every tap). */
+function ScrollToTop() {
+  const { pathname, hash } = useLocation()
+  const navigationType = useNavigationType()
+
+  useEffect(() => {
+    if (navigationType === 'POP' || hash) return
+    window.scrollTo(0, 0)
+  }, [pathname, hash, navigationType])
+
+  return null
+}
+
 // Providers, the skip link, and the one place the Supabase session is subscribed to —
 // every layout and page reads session state from useAuthStore, never from Supabase
-// directly (DESIGN.md §80, §42.4).
+// directly.
 export default function RootLayout() {
   const setSession = useAuthStore((s) => s.setSession)
   const setLoading = useAuthStore((s) => s.setLoading)
@@ -41,8 +59,7 @@ export default function RootLayout() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setLoading(false)
-      // A user id only — never the email getSession() also returns. W2-R8: "no
-      // event carries PII beyond a user id."
+      // A user id only — never the email getSession() also returns.
       if (session?.user) identifyUser(session.user.id)
     })
 
@@ -65,7 +82,12 @@ export default function RootLayout() {
         Skip to content
       </a>
       <RouteAnnouncer />
+      <ScrollToTop />
       <Outlet />
+      {/* One instance for the whole app — every layout's CartButton just calls
+          useCartStore.open() rather than rendering its own drawer, so the cart can
+          never desync between the marketing header and the member sidebar. */}
+      <CartDrawer />
     </>
   )
 }

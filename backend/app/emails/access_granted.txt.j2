@@ -1,0 +1,13 @@
+You now have access
+
+Your purchase of {{ product_name }} is complete, and everything it includes is
+available now.
+{% if content_items %}
+{% for item in content_items %}
+- {{ item.label }}
+{% endfor %}
+{% endif %}
+Go to your library: {{ primary_link }}
+
+Sign in with the email address you used to buy — {{ to_email }} — and it will already
+be there.

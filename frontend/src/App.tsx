@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from 'react-router'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
 
 import RootLayout from '@/routes/_layouts/RootLayout'
 import MarketingLayout from '@/routes/_layouts/MarketingLayout'
@@ -17,11 +17,14 @@ import { CoursesCatalogue } from '@/pages/CoursesCatalogue'
 import { CourseDetail } from '@/pages/CourseDetail'
 import { TemplatesCatalogue } from '@/pages/TemplatesCatalogue'
 import { Store } from '@/pages/Store'
+import { PackDetail } from '@/pages/PackDetail'
 import { Terms } from '@/pages/legal/Terms'
 import { Privacy } from '@/pages/legal/Privacy'
 import { Refunds } from '@/pages/legal/Refunds'
 import { SignIn } from '@/pages/SignIn'
 import { SignUp } from '@/pages/SignUp'
+import { ForgotPassword } from '@/pages/ForgotPassword'
+import { ResetPassword } from '@/pages/ResetPassword'
 import { Lesson } from '@/pages/Lesson'
 import { Learn } from '@/pages/Learn'
 import { Template } from '@/pages/Template'
@@ -48,8 +51,8 @@ const router = createBrowserRouter([
           // visitor reaches from the footer, and a member reaching it mid-session is
           // still asking the business a question rather than browsing content.
           { path: '/contact', element: <Contact /> },
-          // week2_plan.md Phase 5 / W2-R7 — draft legal pages, marketing chrome like
-          // Contact above: reachable from the footer, no account needed to read them.
+          // Draft legal pages, marketing chrome like Contact above: reachable from the
+          // footer, no account needed to read them.
           { path: '/legal/terms', element: <Terms /> },
           { path: '/legal/privacy', element: <Privacy /> },
           { path: '/legal/refunds', element: <Refunds /> },
@@ -70,11 +73,16 @@ const router = createBrowserRouter([
           // Public: the free lead-magnet template must be reachable with no account.
           // Paid templates here show a buy/sign-in prompt instead of a download.
           { path: '/templates/:templateId', element: <Template /> },
-          // week2_plan.md Phase 4 / W2-R5 — the storefront: three labelled content
-          // types in the Product Spec's own order. Individual catalogues above stay
-          // reachable directly; /store is the index that introduces the shape of all
-          // three at once.
+          // The storefront: three labelled content types. Individual catalogues above
+          // stay reachable directly; /store is the index introducing all three at once.
           { path: '/store', element: <Store /> },
+          // The domain-pack product page. Public like every other product page: reading
+          // what a pack contains needs no account, and the questions it lists are free.
+          { path: '/store/packs/:slug', element: <PackDetail /> },
+          // Owner direction 2026-08-16: no standalone pricing page — one-time prices
+          // for every product live on /store instead (see Store.tsx's bundle callout
+          // and footer). A bare redirect, not a 404, for anyone with the old link.
+          { path: '/pricing', element: <Navigate to="/store" replace /> },
         ],
       },
       {
@@ -82,6 +90,11 @@ const router = createBrowserRouter([
         children: [
           { path: '/sign-in', element: <SignIn /> },
           { path: '/sign-up', element: <SignUp /> },
+          { path: '/forgot-password', element: <ForgotPassword /> },
+          // Lands here from the emailed link; Supabase's client establishes the
+          // recovery session from the URL fragment before this route ever renders
+          // (see ResetPassword.tsx's own comment for the full mechanism).
+          { path: '/reset-password', element: <ResetPassword /> },
         ],
       },
       {

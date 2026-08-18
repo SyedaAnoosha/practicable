@@ -6,9 +6,9 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.deps import get_current_user_id
-from app.api.v1.content import questions, lessons, templates, courses
+from app.api.v1.content import questions, lessons, templates, courses, packs
 from app.api.v1.commerce import checkout, products, webhooks
-from app.api.v1 import contact, leads, me
+from app.api.v1 import auth, contact, leads, me
 from app.api.v1.admin.router import router as admin_router
 
 # Uvicorn configures only its own `uvicorn.*` loggers, leaving root at WARNING — which
@@ -33,12 +33,16 @@ app.include_router(questions.router, tags=["questions"])
 app.include_router(lessons.router, tags=["lessons"])
 app.include_router(templates.router, tags=["templates"])
 app.include_router(courses.router, tags=["courses"])
+# Domain packs (W2-R6). A reading surface only — the PDF still downloads through
+# templates.py's gated route, so this adds no new entitlement path.
+app.include_router(packs.router, tags=["packs"])
 app.include_router(checkout.router, tags=["commerce"])
 app.include_router(products.router, tags=["commerce"])
 app.include_router(webhooks.router, tags=["commerce"])
 app.include_router(me.router, tags=["me"])
 app.include_router(leads.router, tags=["leads"])
 app.include_router(contact.router, tags=["contact"])
+app.include_router(auth.router, tags=["auth"])
 # Every route inside is gated by require_admin at the router level.
 app.include_router(admin_router, tags=["admin"])
 

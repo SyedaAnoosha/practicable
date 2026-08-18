@@ -9,32 +9,27 @@ import { motion } from 'motion/react'
 import { staggerContainer, riseItem, inViewOnce } from '@/lib/motion'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { NewsletterForm } from '@/components/marketing/NewsletterForm'
+import { CartButton } from '@/components/cart/CartButton'
 
 const DOMAINS = ['Risk', 'Cyber', 'Compliance', 'Resilience', 'AI']
 
-// week2_plan.md Phase 4 / W2-R5: "the marketing header links /store, replacing
-// rather than appending (§17.1's five-item ceiling)." Courses and Templates are
-// folded into Store — which now IS the umbrella catalogue for both, alongside
-// Reference packs — rather than appended as a fifth item; Questions stays top-level
-// on its own because it's the flagship free discovery surface, not just a shopping
-// link, and demoting it into the store would bury the brief's stated proof of value.
+// Courses and Templates are folded into Store, the umbrella catalogue for both plus
+// Reference packs. Questions stays top-level: it's the flagship free discovery
+// surface, not just a shopping link.
 const NAV_ITEMS = [
   { to: '/questions', label: 'Questions' },
   { to: '/store', label: 'Store' },
   { to: '/#about', label: 'About' },
 ] as const
 
-// DESIGN.md §17.1: the public header is logo → nav (five items max) → Sign in →
-// Get started, and Get started routes to the free entry point (§27), not to sign-up —
-// the free thing is the better first ask.
+// The public header: logo → nav → Sign in → Get started. Get started routes to the
+// free entry point, not to sign-up — the free thing is the better first ask.
 export default function MarketingLayout() {
   const user = useAuthStore((s) => s.user)
   const location = useLocation()
-  // Mobile slide-over (§17.1's menu-collapse rule at five items — the nav is too
-  // wide for phones, so it becomes a sheet, same pattern as MemberLayout's).
+  // Mobile slide-over: the nav is too wide for phones, so it becomes a sheet.
   const [menuOpen, setMenuOpen] = useState(false)
-  // Escape closes the sheet (matching dialog conventions); the scroll handler below
-  // is the only other effect on this page, so a second listener is cheap.
+  // Escape closes the sheet, matching dialog conventions.
   useEffect(() => {
     if (!menuOpen) return
     const onKey = (e: KeyboardEvent) => {
@@ -43,10 +38,8 @@ export default function MarketingLayout() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [menuOpen])
-  // DESIGN.md §13.3: the public header gains shadow-sm after 8px of scroll — the
-  // one surface that earns a permanent hairline border plus a scroll shadow.
-  // Initialised from the current scroll position so a mid-page reload doesn't
-  // flash an un-shadowed header.
+  // The header gains shadow-sm after 8px of scroll. Initialised from the current
+  // scroll position so a mid-page reload doesn't flash an un-shadowed header.
   const [scrolled, setScrolled] = useState(() => window.scrollY > 8)
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -54,10 +47,8 @@ export default function MarketingLayout() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Deep links to in-page anchors (#free-pack, #about) work from any public page:
-  // navigate home first, then scroll — instantly under prefers-reduced-motion.
-  // This assumes Home renders those sections synchronously (both do, today); if one
-  // ever becomes data-gated, the one-shot lookup below would need a retry.
+  // Deep links to in-page anchors work from any public page: navigate home first,
+  // then scroll. Assumes Home renders those sections synchronously.
   useEffect(() => {
     const id = location.hash.slice(1)
     if (!id) return
@@ -79,9 +70,7 @@ export default function MarketingLayout() {
         {/* The gilt edge: a 2px navy-to-blue hairline along the very top of the
             page — the one decorative device the marketing surfaces get. */}
         <div aria-hidden="true" className="h-0.5 w-full bg-linear-to-r from-primary via-primary/70 to-accent" />
-        {/* Tightened, 2026-08-11 (owner design critique) — py-4/gap-6 read a shade
-            too roomy for a reference-tool header; py-3.5/gap-5 is the same
-            structure, just less "marketing site." */}
+        {/* py-3.5/gap-5 — a tighter rhythm than a typical marketing-site header. */}
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-5 px-5 py-3.5 sm:px-8">
           <Link to="/" className="flex items-center gap-2.5 font-sans text-base font-semibold tracking-tight">
             <span className="size-2.5 rounded-[3px] bg-primary ring-1 ring-inset ring-primary-edge" aria-hidden="true" />
@@ -99,6 +88,7 @@ export default function MarketingLayout() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
+            <CartButton />
             <ThemeToggle />
             {user ? (
               <Link to="/dashboard" className="hidden sm:block">
@@ -133,8 +123,8 @@ export default function MarketingLayout() {
         </div>
       </header>
 
-      {/* Mobile slide-over (§17.1) — same sheet pattern as MemberLayout: an
-          overlay + left-docked panel with the nav items as tall touch targets. */}
+      {/* Mobile slide-over, same sheet pattern as MemberLayout: an overlay + left-
+          docked panel with the nav items as tall touch targets. */}
       {menuOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMenuOpen(false)} aria-hidden="true" />
@@ -195,11 +185,8 @@ export default function MarketingLayout() {
         <Outlet />
       </main>
 
-      {/* DESIGN.md §17.4: three columns plus a legal row. The domain list is the
-          extensibility signal (§3.5) — burying it would teach the next visitor this is
-          a single-subject product, which it isn't. Terms/Privacy are marked coming
-          soon rather than linked to pages that don't exist yet — a labelled gap, not a
-          dead click pretending to work. */}
+      {/* Three columns plus a legal row. The domain list signals the product covers
+          more than one subject. */}
       <motion.footer
         variants={staggerContainer}
         initial="hidden"
@@ -207,11 +194,8 @@ export default function MarketingLayout() {
         viewport={inViewOnce}
         className="relative isolate overflow-hidden bg-stage text-stage-foreground"
       >
-        {/* footer-19's two background effects, retoned. The original uses a violet glow
-            over near-black; this runs the hero's own blue aurora, so the page opens and
-            closes on the same plane — but on the `--quiet` variant, because unlike the
-            hero this surface has content in all four corners (see theme.css). The
-            dotted grid is footer-19's second layer, kept as-is. */}
+        {/* The hero's own blue aurora on the `--quiet` variant, since this surface has
+            content in all four corners. Plus a dotted grid layer. */}
         <div aria-hidden="true" className="stage-aurora stage-aurora--quiet -z-10" />
         <div
           aria-hidden="true"
@@ -222,11 +206,10 @@ export default function MarketingLayout() {
           }}
         />
 
-        {/* footer-7's newsletter row: pulsing status dot over a large light-weight
-            headline on the left, an inline joined input+button on the right. The two
-            controls share one 48px row with no gap and squared inner corners, which is
-            what makes it read as a single object rather than a field beside a button. */}
-        <div className="mx-auto w-full max-w-7xl px-5 pb-12 pt-16 sm:px-8">
+        {/* Newsletter row: pulsing status dot over a headline on the left, an inline
+            joined input+button on the right, sharing one row with no gap so it reads
+            as a single object. */}
+        <div className="mx-auto w-full max-w-7xl px-5 pb-12 pt-11 sm:px-8">
           <div className="flex flex-col gap-8 border-b border-stage-foreground/15 pb-12 lg:flex-row lg:items-end lg:justify-between">
             <motion.div variants={riseItem} className="flex max-w-xl flex-col gap-5">
               <StatusDot label="One question a fortnight" tone="gold" on="stage" />
@@ -241,14 +224,12 @@ export default function MarketingLayout() {
           </div>
         </div>
 
-        <div className="mx-auto w-full max-w-7xl px-5 pb-14 sm:px-8">
+        <div className="mx-auto w-full max-w-7xl px-5 pb-9 sm:px-8">
           <div className="grid grid-cols-2 gap-10 sm:grid-cols-4">
             <div className="col-span-2">
               <p className="flex items-center gap-2 font-sans text-lg font-semibold tracking-tight">
-                {/* Gold, not `bg-primary` like the header's copy of this mark: in the
-                    light theme --primary and --stage are the same navy, so the header
-                    version renders as an invisible square down here. Gold is 7.06:1 on
-                    the stage and is already the brand's mark colour on dark. */}
+                {/* Gold, not `bg-primary` like the header's copy: --primary and --stage
+                    are the same navy in light mode, so that would be invisible here. */}
                 <span className="size-2.5 rounded-[3px] bg-gold ring-1 ring-inset ring-stage-foreground/20" aria-hidden="true" />
                 Practicable
               </p>
@@ -271,19 +252,14 @@ export default function MarketingLayout() {
               <p className="text-xs font-medium uppercase tracking-wide text-stage-foreground/50">Company</p>
               <ul className="mt-3 flex flex-col gap-2 text-sm">
                 <li>
-                  {/* Now a real page rather than a `mailto:`. A mailto is a dead end on
-                      a corporate laptop with no mail client wired to the browser — the
-                      exact machine most of this audience is reading on. The page keeps
-                      the address visible on it, so nothing is taken away. */}
+                  {/* A real page rather than a `mailto:`, which dead-ends on a machine
+                      with no mail client wired to the browser. */}
                   <Link to="/contact" className="text-stage-foreground/65 transition-colors duration-150 hover:text-stage-foreground">
                     Contact
                   </Link>
                 </li>
-                {/* week2_plan.md Phase 5 / W2-R7 — real drafts now, replacing the
-                    "coming soon" placeholders. Each page carries its own
-                    [DRAFT — FOR REVIEW] banner; the footer link itself doesn't need
-                    to repeat that, the same way /contact's link doesn't announce
-                    that the page behind it is real. */}
+                {/* Each legal page carries its own [DRAFT — FOR REVIEW] banner; the
+                    footer link doesn't need to repeat that. */}
                 <li>
                   <Link to="/legal/terms" className="text-stage-foreground/65 transition-colors duration-150 hover:text-stage-foreground">
                     Terms
@@ -303,12 +279,11 @@ export default function MarketingLayout() {
             </div>
           </div>
 
-          <div className="mt-10 flex flex-col gap-2 border-t border-stage-foreground/15 pt-6 text-xs text-stage-foreground/55 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-6 flex flex-col gap-2 border-t border-stage-foreground/15 pt-6 text-xs text-stage-foreground/55 sm:flex-row sm:items-center sm:justify-between">
             <p>© {new Date().getFullYear()} Practicable. All rights reserved.</p>
-            {/* One-time purchase / lifetime access is a confirmed decision
-                (week1_plan.md decision #8 area); a specific refund window is not — that
-                still needs an explicit owner call before it's stated as a real policy
-                anywhere a buyer can see it. */}
+            {/* One-time purchase / lifetime access is confirmed; a specific refund
+                window is not — that needs an explicit owner call before it's stated
+                as policy anywhere a buyer can see it. */}
             <p>One-time purchase · lifetime access.</p>
           </div>
         </div>

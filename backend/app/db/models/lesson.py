@@ -1,6 +1,6 @@
 from sqlalchemy import String, Text, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base, IdMixin, TimestampMixin, str_enum
+from app.db.base import Base, IdMixin, PublishStateMixin, TimestampMixin, str_enum
 import enum
 import uuid
 
@@ -10,7 +10,7 @@ class LessonType(str, enum.Enum):
     DOWNLOAD = "download"
     MIXED = "mixed"
 
-class Lesson(Base, IdMixin, TimestampMixin):
+class Lesson(Base, IdMixin, TimestampMixin, PublishStateMixin):
     __tablename__ = "lessons"
 
     slug: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
@@ -32,6 +32,8 @@ class Lesson(Base, IdMixin, TimestampMixin):
     module_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("modules.id"), nullable=True)
     sort_order: Mapped[int] = mapped_column(default=0)
 
+    # `publish_state` (migration 012) comes from PublishStateMixin, kept in sync with
+    # this column automatically — see that mixin's docstring.
     published: Mapped[bool] = mapped_column(default=False)
 
     # Relationships

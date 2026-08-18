@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink, Navigate, Outlet } from 'react-router'
-import { GraduationCap, LayoutDashboard, Library, LogOut, Menu, ShieldCheck, Sparkles, Store, Tags, X } from 'lucide-react'
+import { BadgeDollarSign, GraduationCap, LayoutDashboard, Library, LogOut, Menu, ShieldCheck, Sparkles, Store, Tags, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { supabase } from '@/lib/auth/supabase'
 import { cn } from '@/lib/utils/cn'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { CartButton } from '@/components/cart/CartButton'
 
 export function FullPageSpinner() {
   return (
@@ -147,6 +148,10 @@ function SidebarAccount() {
           {(name ?? '?').slice(0, 1).toUpperCase()}
         </span>
         <p className="min-w-0 flex-1 truncate text-sm font-medium text-stage-foreground/85">{name ?? 'Your account'}</p>
+        <CartButton
+          on="stage"
+          className="text-stage-foreground/70 hover:bg-stage-foreground/8 hover:text-stage-foreground"
+        />
         <ThemeToggle className="border-stage-foreground/20 text-stage-foreground/70 hover:border-stage-foreground/40 hover:text-stage-foreground" />
         <button
           type="button"

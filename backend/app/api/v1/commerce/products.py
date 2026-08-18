@@ -29,48 +29,93 @@ class ProductOut(BaseModel):
     contents: list[ProductContentOut]
 
 
-async def _resolve_contents(product: Product, session: AsyncSession) -> list[ProductContentOut]:
-    """Label and route every item a product contains.
+async def _resolve_contents_bulk(
+    products: list[Product], session: AsyncSession
+) -> dict[str, list[ProductContentOut]]:
+    """Label and route every item every given product contains, in a fixed number of
+    queries regardless of how many products or contents there are.
 
     Extracted so the list and detail routes below return byte-identical content rows.
     Each type's route is computed here, once, rather than guessed from `content_type` in
     the frontend.
+
+    `[FIXED]` This used to be a per-product, per-content-row loop of awaited queries —
+    one round trip to look up the row, plus (for a lesson) up to two more to walk
+    module → course for the /learn href. Each round trip to Postgres here costs on the
+    order of hundreds of ms, so a product with a handful of contents cost multiple
+    seconds; `list_products` made that worse by repeating the whole thing per product,
+    serially. This resolves every type in one bulk query each, then assembles every
+    product's content list from in-memory maps — no query count that scales with the
+    catalogue's size.
     """
+    if not products:
+        return {}
+
+    product_ids = [p.id for p in products]
     contents_result = await session.execute(
-        select(ProductContent).where(ProductContent.product_id == product.id)
+        select(ProductContent).where(ProductContent.product_id.in_(product_ids))
     )
-    contents: list[ProductContentOut] = []
-    for pc in contents_result.scalars().all():
+    all_contents = list(contents_result.scalars().all())
+
+    template_ids = [pc.content_id for pc in all_contents if pc.content_type == "template"]
+    lesson_ids = [pc.content_id for pc in all_contents if pc.content_type == "lesson"]
+    question_ids = [pc.content_id for pc in all_contents if pc.content_type == "question_set"]
+
+    template_titles: dict = {}
+    if template_ids:
+        r = await session.execute(select(Template.id, Template.title).where(Template.id.in_(template_ids)))
+        template_titles = dict(r.all())
+
+    lessons_by_id: dict = {}
+    if lesson_ids:
+        r = await session.execute(select(Lesson).where(Lesson.id.in_(lesson_ids)))
+        lessons_by_id = {lesson.id: lesson for lesson in r.scalars().all()}
+
+    module_ids = [l.module_id for l in lessons_by_id.values() if l.module_id]
+    modules_by_id: dict = {}
+    if module_ids:
+        r = await session.execute(select(Module).where(Module.id.in_(module_ids)))
+        modules_by_id = {m.id: m for m in r.scalars().all()}
+
+    course_ids = [m.course_id for m in modules_by_id.values()]
+    course_slugs_by_id: dict = {}
+    if course_ids:
+        r = await session.execute(select(Course.id, Course.slug).where(Course.id.in_(course_ids)))
+        course_slugs_by_id = dict(r.all())
+
+    questions_by_id: dict = {}
+    if question_ids:
+        r = await session.execute(select(Question).where(Question.id.in_(question_ids)))
+        questions_by_id = {q.id: q for q in r.scalars().all()}
+
+    contents_by_product: dict[str, list[ProductContentOut]] = {str(p.id): [] for p in products}
+    for pc in all_contents:
         label = None
         href = None
         if pc.content_type == "template":
-            r = await session.execute(select(Template.title).where(Template.id == pc.content_id))
-            label = r.scalar_one_or_none()
+            label = template_titles.get(pc.content_id)
             href = f"/templates/{pc.content_id}"
         elif pc.content_type == "lesson":
-            r = await session.execute(select(Lesson).where(Lesson.id == pc.content_id))
-            lesson = r.scalar_one_or_none()
+            lesson = lessons_by_id.get(pc.content_id)
             label = lesson.title if lesson else None
             # The full learning interface lives at /learn/:courseSlug/:lessonSlug; the
             # bare /lessons/:id player is only a fallback for an orphaned lesson.
             href = f"/lessons/{pc.content_id}"
             if lesson and lesson.module_id:
-                module_r = await session.execute(select(Module).where(Module.id == lesson.module_id))
-                module = module_r.scalar_one_or_none()
-                if module:
-                    course_r = await session.execute(select(Course.slug).where(Course.id == module.course_id))
-                    course_slug = course_r.scalar_one_or_none()
-                    if course_slug:
-                        href = f"/learn/{course_slug}/{lesson.slug}"
+                module = modules_by_id.get(lesson.module_id)
+                course_slug = course_slugs_by_id.get(module.course_id) if module else None
+                if course_slug:
+                    href = f"/learn/{course_slug}/{lesson.slug}"
         elif pc.content_type == "question_set":
-            r = await session.execute(select(Question).where(Question.id == pc.content_id))
-            question = r.scalar_one_or_none()
+            question = questions_by_id.get(pc.content_id)
             label = question.title if question else None
             # Questions are public, so they route by slug under MarketingLayout.
             href = f"/questions/{question.slug}" if question else None
-        contents.append(ProductContentOut(content_type=pc.content_type, label=label or pc.content_type, href=href))
+        contents_by_product[str(pc.product_id)].append(
+            ProductContentOut(content_type=pc.content_type, label=label or pc.content_type, href=href)
+        )
 
-    return contents
+    return contents_by_product
 
 
 def _to_out(product: Product, contents: list[ProductContentOut]) -> ProductOut:
@@ -102,8 +147,9 @@ async def list_products(session: AsyncSession = Depends(get_session)):
     result = await session.execute(
         select(Product).where(Product.published.is_(True)).order_by(Product.created_at.desc())
     )
-    products = result.scalars().all()
-    return [_to_out(p, await _resolve_contents(p, session)) for p in products]
+    products = list(result.scalars().all())
+    contents_by_product = await _resolve_contents_bulk(products, session)
+    return [_to_out(p, contents_by_product[str(p.id)]) for p in products]
 
 
 @router.get("/products/{slug}", response_model=ProductOut)
@@ -116,4 +162,5 @@ async def get_product(slug: str, session: AsyncSession = Depends(get_session)):
     if not product or not product.published:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    return _to_out(product, await _resolve_contents(product, session))
+    contents_by_product = await _resolve_contents_bulk([product], session)
+    return _to_out(product, contents_by_product[str(product.id)])

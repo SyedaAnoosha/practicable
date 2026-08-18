@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Download, FileQuestion, PlayCircle } from 'lucide-react'
+import { Download, FileQuestion, PlayCircle, ShoppingCart } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { track } from '@/lib/analytics'
+import { useCartStore } from '@/stores/useCartStore'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -16,8 +17,7 @@ interface ProductContent {
   href: string | null
 }
 
-// See Dashboard.tsx for the backend side of this — products.py now computes the
-// right route per content_type; this just picks the icon that matches.
+// See Dashboard.tsx for the backend side of this — products.py now computes the right route per content_type; this just picks the icon that matches.
 const CONTENT_ICON: Record<string, typeof PlayCircle> = {
   lesson: PlayCircle,
   template: Download,
@@ -59,6 +59,10 @@ export function ProductBuy() {
   })
   const alreadyOwned = !!product && !!entitlements?.product_ids.includes(product.id)
 
+  const addItem = useCartStore((s) => s.addItem)
+  const openCart = useCartStore((s) => s.open)
+  const inCart = useCartStore((s) => (product ? s.has(product.id) : false))
+
   const handleCheckout = async () => {
     if (!product) return
     setIsRedirecting(true)
@@ -69,14 +73,25 @@ export function ProductBuy() {
     // (see analytics.ts's note on why that one was dropped).
     track('checkout_started', { product_slug: product.slug, price: product.price_amount })
     try {
+      // week3_plan.md W3-R11 — `product_ids` is always a list; a direct "Buy" here is
+      // just the one-item case of the same cart checkout the drawer uses.
       const { data } = await api.post<{ checkout_url: string }>('/checkout/session', {
-        product_id: product.id,
+        product_ids: [product.id],
       })
       window.location.href = data.checkout_url
     } catch {
       setIsRedirecting(false)
       setError("We couldn't start checkout. Please try again.")
     }
+  }
+
+  const handleAddToCart = () => {
+    if (!product) return
+    addItem({
+      id: product.id, slug: product.slug, name: product.name,
+      price_amount: product.price_amount, currency: product.currency,
+    })
+    openCart()
   }
 
   if (isLoading) {
@@ -90,7 +105,7 @@ export function ProductBuy() {
 
   if (!product) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-5 py-16 sm:px-8">
+      <div className="mx-auto w-full max-w-2xl px-5 py-11 sm:px-8">
         <EmptyState
           title="We couldn't find that product."
           description="It may have been moved or unpublished."
@@ -105,7 +120,7 @@ export function ProductBuy() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
+    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-8">
       {/* Same accent-blue left-rule family as the question page's buy card and the course
           buy surface — the conversion moment earns the accent. */}
       <Card
@@ -164,9 +179,22 @@ export function ProductBuy() {
               </Link>
             </>
           ) : (
-            <Button onClick={handleCheckout} loading={isRedirecting} className="w-full">
-              Continue to secure checkout
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button onClick={handleCheckout} loading={isRedirecting} className="w-full sm:flex-1">
+                Continue to secure checkout
+              </Button>
+              {/* Sits alongside, not instead of, Buy — a buyer who wants one thing
+                  still gets the one-click path (week3_plan.md W3-R11). */}
+              <Button
+                onClick={handleAddToCart}
+                variant="outline"
+                disabled={inCart}
+                className="w-full sm:w-auto"
+              >
+                <ShoppingCart className="size-4" aria-hidden="true" />
+                {inCart ? 'In your cart' : 'Add to cart'}
+              </Button>
+            </div>
           )}
 
           {error && (

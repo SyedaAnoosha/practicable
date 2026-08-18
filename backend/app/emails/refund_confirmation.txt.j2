@@ -1,0 +1,13 @@
+Your refund is confirmed
+
+We've refunded order {{ order_id }}.
+
+Amount refunded: {{ amount_display }}
+Expected in your account: {{ refund_eta }}
+{% if removed_items %}
+Access removed:
+{% for label in removed_items %}
+- {{ label }}
+{% endfor %}
+{% endif %}
+If anything here looks wrong, reply to this email and we'll sort it out.

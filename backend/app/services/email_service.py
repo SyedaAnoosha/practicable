@@ -1,129 +1,164 @@
-"""Transactional email (buyer receipts, owner sale alerts) over Resend.
+"""Transactional email, over Mailjet.
 
-WARNING: while this file is Resend-only, NO REAL CUSTOMER RECEIVES ANY EMAIL — every
-send is redirected to the owner's inbox and labelled undelivered, because Resend's
-sandbox sender can only deliver to its own account address. This is a deliberate
-holding position for a test-mode store and must be reversed before taking real money.
-Gmail and Brevo SMTP were removed because Render blocks outbound port 587; Mailjet was
-working over REST when it was removed by choice, and is the fastest route back to real
-delivery. See docs/gmail.md §8 and docs/email.md.
+Mailjet is the only transport (week3_plan.md W3-R1, restored 2026-08-15). It was
+working over REST when it was removed by choice on 2026-08-12, not because it failed —
+see docs/email.md and docs/gmail.md §9 for the full provider history. It reaches an
+arbitrary real recipient directly, no domain and no sandbox redirect required, and it
+survives Render's outbound-port-587 block that makes Gmail/Brevo SMTP structurally
+impossible on this host (docs/gmail.md §8).
+
+Every send is rendered from a Jinja2 template under app/emails/ with autoescaping on —
+load-bearing for send_contact_notification_email, the one call in this module built
+from wholly untrusted public-form input — and carries a plain-text alternative from the
+matching `.txt.j2` sibling, per DESIGN.md §20.7.
+
+Never raises (BACKEND.md §6.1): a failed send must not undo an already-committed order.
+A failure is a logger.error and a `False` return, not an exception.
+
+**Delivery is confirmed by querying Mailjet's API for the message's status, never by
+the absence of an error line in the logs** — non-negotiable #12. `send_mailjet` returns
+the Mailjet message id for exactly this reason; `get_message_status` queries it.
 """
 
 import asyncio
-import html as html_lib
 import logging
+from datetime import datetime, timezone
 
 import requests
+from jinja2 import Environment, PackageLoader, select_autoescape
 
 from app.core.config import settings
+from app.core.labels import REFUND_POSITION_TEXT
 
 logger = logging.getLogger(__name__)
 
-RESEND_SEND_URL = "https://api.resend.com/emails"
+MAILJET_SEND_URL = "https://api.mailjet.com/v3.1/send"
+MAILJET_MESSAGE_URL = "https://api.mailjet.com/v3/REST/message"
 
-# Sending from a real address requires verifying a domain at resend.com/domains.
-SANDBOX_SENDER = "Practicable <onboarding@resend.dev>"
+# select_autoescape's default extension matching is a plain `.endswith(".html")` check,
+# which never matches a name like "welcome.html.j2" — passing the compound suffix here
+# is what actually turns autoescaping on for these templates. ".txt.j2" is deliberately
+# left out: escaping HTML entities into a plain-text email would corrupt it.
+_env = Environment(
+    loader=PackageLoader("app", "emails"),
+    autoescape=select_autoescape(enabled_extensions=("html.j2",)),
+    trim_blocks=True,
+    lstrip_blocks=True,
+)
 
 
-def _send_via_resend(
-    *, to_email: str, subject: str, html: str, text: str, reply_to: str | None = None
-) -> None:
-    payload = {
-        "from": SANDBOX_SENDER,
-        "to": [to_email],
-        "subject": subject,
-        "html": html,
-        "text": text,
+def _render(template_stem: str, **context) -> tuple[str, str]:
+    """Renders a template's HTML body and its plain-text sibling from the same context.
+    A template missing one half of the pair is a build-time error (TemplateNotFound),
+    not a silent single-part send — DESIGN.md §20.7 requires both on every send."""
+    html = _env.get_template(f"{template_stem}.html.j2").render(**context)
+    text = _env.get_template(f"{template_stem}.txt.j2").render(**context)
+    return html, text
+
+
+def _send_via_mailjet(*, to_email: str, subject: str, html: str, text: str, reply_to: str | None = None) -> str:
+    """Blocking call — only ever run via asyncio.to_thread from _send() below, so a slow
+    Mailjet response cannot stall the event loop mid Stripe-webhook-handler.
+
+    Returns Mailjet's MessageID for the accepted recipient, so a caller can later query
+    `get_message_status` instead of trusting a 200 alone. Mailjet can return HTTP 200
+    with a per-message failure inside the body (batch-send semantics, relevant even at
+    our one-message scale), so the response body's own Status field is what's checked.
+    """
+    message: dict = {
+        "From": {"Email": settings.mailjet_sender_email, "Name": settings.mailjet_sender_name},
+        "To": [{"Email": to_email}],
+        "Subject": subject,
+        "TextPart": text,
+        "HTMLPart": html,
     }
-    # Used by the contact form so the owner can answer an enquiry by pressing reply,
-    # rather than copying an address out of the message body. Only ever set to an
-    # address the sender proved nothing about, so it is a convenience, not a claim.
     if reply_to:
-        payload["reply_to"] = reply_to
+        message["ReplyTo"] = {"Email": reply_to}
 
     response = requests.post(
-        RESEND_SEND_URL,
-        headers={"Authorization": f"Bearer {settings.resend_api_key}", "Content-Type": "application/json"},
-        json=payload,
+        MAILJET_SEND_URL,
+        auth=(settings.mailjet_api_key, settings.mailjet_secret_key),
+        json={"Messages": [message]},
         timeout=10,
     )
     response.raise_for_status()
+
+    result = response.json().get("Messages", [{}])[0]
+    if result.get("Status") != "success":
+        raise requests.RequestException(f"Mailjet rejected the message: {result}")
+
+    to_info = (result.get("To") or [{}])[0]
+    return str(to_info.get("MessageID", ""))
+
+
+async def get_message_status(message_id: str) -> dict:
+    """Queries Mailjet's Message resource for a message's actual delivery state.
+
+    Non-negotiable #12: 'an email that cannot be received is not an email.' Delivery is
+    confirmed here, at the provider, not inferred from Render's logs staying quiet —
+    handover.md §4 item 3 records that exact reasoning being wrong twice already.
+    """
+    if not message_id:
+        return {}
+    response = await asyncio.to_thread(
+        requests.get,
+        f"{MAILJET_MESSAGE_URL}/{message_id}",
+        auth=(settings.mailjet_api_key, settings.mailjet_secret_key),
+        timeout=10,
+    )
+    response.raise_for_status()
+    data = response.json().get("Data", [])
+    return data[0] if data else {}
 
 
 async def _send(
     *, to_email: str, subject: str, html: str, text: str, context: str, reply_to: str | None = None
 ) -> bool:
-    """Shared send path for the email types below. Never raises (BACKEND.md §6.1) — a
-    failed send must not undo an already-committed order.
-
-    Returns whether the message was actually handed to Resend, so a caller that records
-    delivery state (contact_messages.notified) can tell "sent" from "swallowed". The
-    receipt and sale-alert callers ignore it: their side effect is the log line.
-
-    `to_email` is the INTENDED recipient; everything is currently redirected to
-    settings.owner_notification_email (see the module note).
-    """
-    if not settings.resend_api_key:
-        logger.error("Cannot send %s: RESEND_API_KEY is not set.", context)
-        return False
-
-    # No fallback to the buyer's address: the sandbox would 403. Fail loudly instead.
-    if not settings.owner_notification_email:
-        logger.error(
-            "Cannot send %s: OWNER_NOTIFICATION_EMAIL is not set, and the Resend sandbox "
-            "can only deliver to the Resend account's own address.",
-            context,
+    """Shared send path for every email function below. Returns whether Mailjet actually
+    accepted the message, so a caller that records delivery state (e.g.
+    contact_messages.notified) can tell "sent" from "swallowed"."""
+    missing = [
+        name
+        for name, value in (
+            ("MAILJET_API_KEY", settings.mailjet_api_key),
+            ("MAILJET_SECRET_KEY", settings.mailjet_secret_key),
+            ("MAILJET_SENDER_EMAIL", settings.mailjet_sender_email),
         )
+        if not value
+    ]
+    if missing:
+        logger.error("Cannot send %s to %s: missing %s.", context, to_email, ", ".join(missing))
         return False
-
-    recipient = settings.owner_notification_email
-
-    # If this is someone else's mail being redirected, say so in the message itself —
-    # an unlabelled buyer receipt in the owner's inbox reads as their own purchase and
-    # gives no hint that the buyer was never emailed.
-    if recipient != to_email:
-        subject = f"[Not delivered to buyer] {subject}"
-        notice_text = (
-            f"This is a copy of an email that was NOT delivered to {to_email}.\n"
-            f"The store is running on a sandbox email sender that can only reach the\n"
-            f"owner's own address, so it was redirected to you instead.\n"
-            f"The recipient has not received it — follow up manually.\n\n"
-            f"{'-' * 60}\n\n"
-        )
-        text = notice_text + text
-        html = (
-            '<div style="border:2px solid #B3402E;padding:12px;margin-bottom:16px;font-family:sans-serif">'
-            f"<strong>This email was not delivered to {to_email}.</strong><br>"
-            "The store is running on a sandbox email sender that can only reach your own "
-            "address, so it was redirected to you. The recipient has <strong>not</strong> "
-            "received it — follow up manually."
-            "</div>"
-        ) + html
 
     try:
-        await asyncio.to_thread(
-            _send_via_resend,
-            to_email=recipient,
-            subject=subject,
-            html=html,
-            text=text,
-            reply_to=reply_to,
+        message_id = await asyncio.to_thread(
+            _send_via_mailjet, to_email=to_email, subject=subject, html=html, text=text, reply_to=reply_to
         )
-        if recipient == to_email:
-            logger.info("Sent %s to %s via Resend.", context, recipient)
-        else:
-            logger.warning(
-                "Sent %s to the owner (%s) instead of the intended recipient %s — "
-                "the buyer has NOT been emailed.",
-                context,
-                recipient,
-                to_email,
-            )
+        logger.info("Sent %s to %s via Mailjet (message id %s).", context, to_email, message_id)
         return True
     except requests.RequestException as e:
         body = getattr(e.response, "text", "")
-        logger.error("Resend send failed for %s to %s: %s %s", context, recipient, e, body)
+        logger.error("Mailjet send failed for %s to %s: %s %s", context, to_email, e, body)
         return False
+
+
+def _format_amount(amount_cents: int, currency: str) -> str:
+    return f"{currency} {amount_cents / 100:.2f}"
+
+
+# ── The six buyer-facing emails (DESIGN.md §32.3 + the refund confirmation W3-R5 adds) ──
+
+
+async def send_welcome_email(
+    *, to_email: str, product_name: str, content_items: list[dict], primary_link: str
+) -> bool:
+    """To a first-time buyer: what they now have access to, a direct link, the author.
+    Fired once, alongside send_access_granted_email, only on a buyer's first-ever order —
+    see the webhook handler for the "is this their first order" check."""
+    html, text = _render(
+        "welcome", product_name=product_name, content_items=content_items, primary_link=primary_link
+    )
+    return await _send(to_email=to_email, subject="Welcome to Practicable", html=html, text=text, context="welcome email")
 
 
 async def send_receipt_email(
@@ -131,32 +166,107 @@ async def send_receipt_email(
     order_id: str,
     amount_cents: int,
     currency: str,
-    product_name: str,
-):
-    """To the buyer: confirms their purchase went through. Currently redirected to the
-    owner and labelled undelivered — the "Order for" line identifies whose receipt it is."""
-    amount_display = f"{currency} {amount_cents / 100:.2f}"
-    await _send(
+    product_names: list[str],
+    primary_link: str = "",
+    tax_line: str | None = None,
+    order_date: datetime | None = None,
+) -> bool:
+    """To the buyer: order reference, every product the order contains, amount, date,
+    and the currently-drafted contracting entity (decision #27, closed — 'Effective
+    Risk Management', ABN left [OWNER]) — a document someone can submit to finance.
+
+    `product_names` is a list, not a single string, since week3_plan.md W3-R11: one
+    receipt for a whole cart checkout, itemising every product, not one receipt per
+    product. A direct "Buy" (the pre-cart path) is the one-item-list case of the same
+    call, not a second code path."""
+    amount_display = _format_amount(amount_cents, currency)
+    # %-d (no leading zero) is glibc/macOS-only; %d is portable but zero-pads, so the
+    # leading zero is stripped by hand instead — this runs on Windows in dev and Linux
+    # on Render, and %-d raises ValueError on the former.
+    display_date = (order_date or datetime.now(timezone.utc)).strftime("%d %B %Y").lstrip("0")
+    html, text = _render(
+        "receipt",
+        order_id=order_id,
+        product_names=product_names,
+        amount_display=amount_display,
+        order_date=display_date,
+        tax_line=tax_line,
+        primary_link=primary_link or settings.frontend_url.rstrip("/") + "/library",
+        refund_position_text=REFUND_POSITION_TEXT,
+        refunds_url=settings.frontend_url.rstrip("/") + "/legal/refunds",
+    )
+    return await _send(
         to_email=to_email,
         subject="Your receipt from Practicable",
-        html=f"""
-            <h1>Thank you for your purchase</h1>
-            <p>Your order #{order_id} has been completed.</p>
-            <p><strong>Order for:</strong> {to_email}</p>
-            <p><strong>Amount:</strong> {amount_display}</p>
-            <p><strong>Product:</strong> {product_name}</p>
-            <p>You can access your purchased content in your library.</p>
-        """,
-        text=(
-            f"Thank you for your purchase\n\n"
-            f"Your order #{order_id} has been completed.\n"
-            f"Order for: {to_email}\n"
-            f"Amount: {amount_display}\n"
-            f"Product: {product_name}\n\n"
-            f"You can access your purchased content in your library."
-        ),
+        html=html,
+        text=text,
         context=f"receipt email for order {order_id}",
     )
+
+
+async def send_access_granted_email(
+    *, to_email: str, product_name: str, content_items: list[dict], primary_link: str
+) -> bool:
+    """To the buyer: what they bought, a direct link, how to sign in. Sent on every
+    purchase (unlike welcome, which is first-purchase-only)."""
+    html, text = _render(
+        "access_granted",
+        to_email=to_email,
+        product_name=product_name,
+        content_items=content_items,
+        primary_link=primary_link,
+    )
+    return await _send(
+        to_email=to_email, subject=f"You now have access to {product_name}", html=html, text=text, context="access granted email"
+    )
+
+
+async def send_password_reset_email(*, to_email: str, reset_url: str, expires_in: str = "1 hour") -> bool:
+    """One link, its expiry stated, and what to do if this wasn't requested."""
+    html, text = _render("password_reset", reset_url=reset_url, expires_in=expires_in)
+    return await _send(
+        to_email=to_email, subject="Reset your Practicable password", html=html, text=text, context="password reset email"
+    )
+
+
+async def send_free_entry_point_email(*, to_email: str, primary_link: str) -> bool:
+    """The durable link a /leads capture earned, plus one honest sentence about what
+    else exists — sent once per (email, source), from the leads capture path."""
+    html, text = _render("free_entry_point", primary_link=primary_link)
+    return await _send(
+        to_email=to_email, subject="Your link to Practicable", html=html, text=text, context="free entry point email"
+    )
+
+
+async def send_refund_confirmation_email(
+    *,
+    to_email: str,
+    order_id: str,
+    amount_cents: int,
+    currency: str,
+    removed_items: list[str],
+    refund_eta: str = "5–10 business days",
+) -> bool:
+    """The original order reference, the amount refunded, what access was removed, and
+    when the money should land — wired from the refund endpoint in Phase 4 (W3-R5)."""
+    amount_display = _format_amount(amount_cents, currency)
+    html, text = _render(
+        "refund_confirmation",
+        order_id=order_id,
+        amount_display=amount_display,
+        removed_items=removed_items,
+        refund_eta=refund_eta,
+    )
+    return await _send(
+        to_email=to_email,
+        subject=f"Your refund for order {order_id}",
+        html=html,
+        text=text,
+        context=f"refund confirmation for order {order_id}",
+    )
+
+
+# ── Internal, owner-facing emails ──
 
 
 async def send_sale_notification_email(
@@ -165,35 +275,31 @@ async def send_sale_notification_email(
     amount_cents: int,
     currency: str,
     product_name: str,
-):
-    """To the owner: a sale just happened. Sent alongside the buyer's receipt from the
-    same webhook handler, and arrives without the redirect banner."""
+) -> bool:
+    """To the owner: a sale just happened. Sent alongside the buyer's receipt, from the
+    same webhook handler, after the same commit."""
     if not settings.owner_notification_email:
         logger.error(
             "OWNER_NOTIFICATION_EMAIL is not set — skipping the sale notification for "
-            "order %s. Set it in this environment to start receiving sale alerts.",
+            "order %s. The buyer's receipt is unaffected. Set it in this environment to "
+            "start receiving sale alerts.",
             order_id,
         )
-        return
+        return False
 
-    amount_display = f"{currency} {amount_cents / 100:.2f}"
-    await _send(
+    amount_display = _format_amount(amount_cents, currency)
+    html, text = _render(
+        "sale_notification",
+        order_id=order_id,
+        buyer_email=buyer_email,
+        product_name=product_name,
+        amount_display=amount_display,
+    )
+    return await _send(
         to_email=settings.owner_notification_email,
         subject=f"New sale: {product_name}",
-        html=f"""
-            <h1>You made a sale</h1>
-            <p>Order #{order_id} was just completed.</p>
-            <p><strong>Buyer:</strong> {buyer_email}</p>
-            <p><strong>Amount:</strong> {amount_display}</p>
-            <p><strong>Product:</strong> {product_name}</p>
-        """,
-        text=(
-            f"You made a sale\n\n"
-            f"Order #{order_id} was just completed.\n"
-            f"Buyer: {buyer_email}\n"
-            f"Amount: {amount_display}\n"
-            f"Product: {product_name}"
-        ),
+        html=html,
+        text=text,
         context=f"sale notification for order {order_id}",
     )
 
@@ -208,11 +314,10 @@ async def send_contact_notification_email(
     """To the owner: someone used the public contact form. Returns whether it was sent,
     so the caller can record that on the stored row (contact_messages.notified).
 
-    Every interpolated value here is escaped. This is the only email in this module
-    built from wholly untrusted input — a stranger with no account chooses the name and
-    the entire message body — so unescaped interpolation would let any visitor put
-    arbitrary markup, including a link wearing someone else's text, into the owner's
-    inbox. `<br>` is applied after escaping, so newlines survive but nothing else does.
+    Every interpolated value here is wholly untrusted public input — a stranger with no
+    account chooses the name and the entire message body — so this relies on the Jinja
+    environment's autoescaping (see `_env` above) rather than a hand-rolled escape, which
+    is exactly the class of bug hand-rolling invites (one call site forgets one field).
     """
     if not settings.owner_notification_email:
         logger.error(
@@ -222,32 +327,14 @@ async def send_contact_notification_email(
         )
         return False
 
-    safe_name = html_lib.escape(name)
-    safe_email = html_lib.escape(from_email)
-    safe_type = html_lib.escape(enquiry_type) if enquiry_type else "Not specified"
-    safe_message = html_lib.escape(message).replace("\n", "<br>")
-
+    html, text = _render(
+        "contact_notification", name=name, from_email=from_email, enquiry_type=enquiry_type, message=message
+    )
     return await _send(
         to_email=settings.owner_notification_email,
         subject=f"Contact form: {name}",
-        html=f"""
-            <h1>New enquiry from the contact page</h1>
-            <p><strong>From:</strong> {safe_name} &lt;{safe_email}&gt;</p>
-            <p><strong>About:</strong> {safe_type}</p>
-            <hr>
-            <p>{safe_message}</p>
-            <hr>
-            <p style="color:#666;font-size:12px">Reply directly to this email to answer them.</p>
-        """,
-        text=(
-            f"New enquiry from the contact page\n\n"
-            f"From: {name} <{from_email}>\n"
-            f"About: {enquiry_type or 'Not specified'}\n\n"
-            f"{'-' * 60}\n\n"
-            f"{message}\n\n"
-            f"{'-' * 60}\n"
-            f"Reply directly to this email to answer them."
-        ),
+        html=html,
+        text=text,
         context=f"contact notification from {from_email}",
         reply_to=from_email,
     )

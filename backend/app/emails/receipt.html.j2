@@ -1,0 +1,82 @@
+{% extends "base.html.j2" %}
+{% import "_button.html.j2" as btn %}
+{% block title %}Your receipt from Practicable{% endblock %}
+{% block preheader %}Receipt for order {{ order_id }} — {{ amount_display }}.{% endblock %}
+{% block content %}
+<h1 style="font-family:Georgia,'Times New Roman',serif; font-size:22px; line-height:1.3; color:#1C1712; margin:0 0 16px;">Thank you for your purchase</h1>
+<p style="margin:0 0 24px;">Your order has been completed. Here is your receipt.</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #E6DFD0; border-radius:6px; margin:0 0 24px;">
+  <tr>
+    <td style="padding:16px 20px; border-bottom:1px solid #E6DFD0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#6E675A;">Order reference</td>
+          <td align="right" style="font-family:'Courier New',Courier,monospace; font-size:13px; color:#1C1712;">{{ order_id }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:16px 20px; border-bottom:1px solid #E6DFD0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        {% for name in product_names %}
+        <tr>
+          {% if loop.first %}
+          <td style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#6E675A; vertical-align:top;">{{ "Products" if product_names|length > 1 else "Product" }}</td>
+          {% else %}
+          <td></td>
+          {% endif %}
+          <td align="right" style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#1C1712; padding-top:{{ '0' if loop.first else '4px' }};">{{ name }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:16px 20px; border-bottom:1px solid #E6DFD0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#6E675A;">Date</td>
+          <td align="right" style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#1C1712;">{{ order_date }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  {% if tax_line %}
+  <tr>
+    <td style="padding:16px 20px; border-bottom:1px solid #E6DFD0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#6E675A;">Tax</td>
+          <td align="right" style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#1C1712;">{{ tax_line }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  {% endif %}
+  <tr>
+    <td style="padding:16px 20px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:14px; font-weight:bold; color:#1C1712;">Amount</td>
+          <td align="right" style="font-family:'Courier New',Courier,monospace; font-size:16px; font-weight:bold; color:#7C5C14;">{{ amount_display }}</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+  <tr><td>{{ btn.button(primary_link, "View in your library") }}</td></tr>
+</table>
+{% if refund_position_text %}
+<p style="margin:0 0 24px; font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#6E675A;">
+  {{ refund_position_text }}
+  {% if refunds_url %}<a href="{{ refunds_url }}" style="color:#10213E;">Read our refund policy.</a>{% endif %}
+</p>
+{% endif %}
+<p style="margin:0 0 4px; font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#6E675A;">Billed by:</p>
+<p style="margin:0; font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:13px; color:#6E675A;">
+  Effective Risk Management<br>
+  ABN: to be confirmed
+</p>
+{% endblock %}

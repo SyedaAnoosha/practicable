@@ -1,6 +1,6 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Check, Loader2, Plus, Upload, X } from 'lucide-react'
+import { AlertTriangle, Loader2, Plus, Upload } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
@@ -8,6 +8,14 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
+import { FieldError } from '@/components/ui/FieldError'
+import { required, useFieldValidation } from '@/lib/useFieldValidation'
+import { UploadField } from '@/components/admin/UploadField'
+import { PublishStateChip, type PublishStateValue } from '@/components/admin/PublishStateChip'
+
+// Kept in sync by hand with ALLOWED_MIME_TYPES in backend/app/api/v1/admin/templates.py.
+const ACCEPTED_TEMPLATE_TYPES = '.xlsx,.xls,.docx,.doc,.pptx,.ppt,.pdf,.csv,.zip'
+const MAX_TEMPLATE_BYTES = 25 * 1024 * 1024
 
 interface TemplateRow {
   id: string
@@ -18,6 +26,7 @@ interface TemplateRow {
   file_size_bytes: number
   mime_type: string
   published: boolean
+  publish_state: PublishStateValue
   is_free: boolean
   has_file: boolean
 }
@@ -45,8 +54,15 @@ export function AdminTemplates() {
   const [description, setDescription] = useState('')
   const [isFree, setIsFree] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [uploadingId, setUploadingId] = useState<string | null>(null)
-  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
+  // Which row's UploadField is expanded — one at a time, collapsed back to the
+  // compact row view once a file lands (week3_plan.md Phase 5 step 2/3).
+  const [uploadRowId, setUploadRowId] = useState<string | null>(null)
+
+  // week2_plan.md §20.8 / W2-R9 — blur, not submit.
+  const v = useFieldValidation<{ title: string; description: string }>({
+    title: required('Title'),
+    description: required('Description'),
+  })
 
   const { data: templates, isLoading } = useQuery({
     queryKey: queryKeys.admin.templates(),
@@ -71,6 +87,7 @@ export function AdminTemplates() {
     setDescription('')
     setIsFree(false)
     setError(null)
+    v.reset()
   }
 
   const saveMutation = useMutation({
@@ -85,35 +102,16 @@ export function AdminTemplates() {
     onError: (e) => setError(readError(e)),
   })
 
-  const publishMutation = useMutation({
-    mutationFn: ({ id, published }: { id: string; published: boolean }) =>
-      api.post(`/admin/templates/${id}/publish`, { published }),
+  const setPublishState = useMutation({
+    mutationFn: ({ id, state }: { id: string; state: PublishStateValue }) =>
+      api.post(`/admin/templates/${id}/publish`, { published: state === 'published', publish_state: state }),
     onSuccess: invalidate,
     onError: (e) => setError(readError(e)),
   })
 
-  // multipart/form-data, not JSON — the file goes through our admin-guarded endpoint
-  // rather than a presigned browser upload, so the bucket holding paid artefacts never
-  // accepts a direct write. Content-Type is left unset deliberately: the browser must
-  // add the multipart boundary itself, and setting it by hand strips that.
-  const uploadMutation = useMutation({
-    mutationFn: async ({ id, file }: { id: string; file: File }) => {
-      const form = new FormData()
-      form.append('file', file)
-      return api.post(`/admin/templates/${id}/file`, form)
-    },
-    onSuccess: () => {
-      setUploadingId(null)
-      invalidate()
-    },
-    onError: (e) => {
-      setUploadingId(null)
-      setError(readError(e))
-    },
-  })
-
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
+    if (!v.validateAll({ title, description })) return
     setError(null)
     saveMutation.mutate()
   }
@@ -135,6 +133,7 @@ export function AdminTemplates() {
               setDescription('')
               setIsCreating(true)
               setError(null)
+              v.reset()
             }}
           >
             <Plus className="size-4" aria-hidden="true" /> New template
@@ -159,6 +158,8 @@ export function AdminTemplates() {
                 className="mt-1.5"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                onBlur={() => v.onBlur('title', title)}
+                error={v.errorFor('title')}
                 placeholder="Risk Register Template"
               />
             </label>
@@ -170,8 +171,10 @@ export function AdminTemplates() {
                 className={cn(inputClass, 'mt-1.5')}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                onBlur={() => v.onBlur('description', description)}
                 placeholder="A ready-to-use risk register spreadsheet…"
               />
+              <FieldError message={v.errorFor('description')} />
             </label>
             {/* Free is a real product decision, not the absence of a price, so it is
                 an explicit control. A template with no product attached is a draft;
@@ -211,17 +214,23 @@ export function AdminTemplates() {
       {!showEditor && (
         <>
           {isLoading ? (
-            <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground">
+            <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading templates…
             </p>
           ) : (
             <ul className="mt-8 flex flex-col divide-y divide-border border-t border-border">
               {templates?.map((t) => (
-                <li key={t.id} className="flex flex-wrap items-center gap-4 py-5">
+                <li key={t.id} className="flex flex-col gap-3 py-5">
+                <div className="flex flex-wrap items-center gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-sans font-medium text-foreground">{t.title}</p>
-                      {t.published ? <Badge variant="success">Live</Badge> : <Badge variant="muted">Draft</Badge>}
+                      <PublishStateChip
+                        value={t.publish_state}
+                        disabled={setPublishState.isPending && setPublishState.variables?.id === t.id}
+                        title={!t.has_file ? 'Upload the file before publishing it.' : undefined}
+                        onChange={(state) => setPublishState.mutate({ id: t.id, state })}
+                      />
                       {t.is_free && <Badge>Free</Badge>}
                     </div>
                     {t.has_file ? (
@@ -240,27 +249,10 @@ export function AdminTemplates() {
                   </div>
 
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <input
-                      type="file"
-                      className="sr-only"
-                      ref={(el) => {
-                        fileInputs.current[t.id] = el
-                      }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        setError(null)
-                        setUploadingId(t.id)
-                        uploadMutation.mutate({ id: t.id, file })
-                        e.target.value = ''
-                      }}
-                      aria-label={`Upload file for ${t.title}`}
-                    />
                     <Button
                       size="sm"
                       variant="outline"
-                      loading={uploadingId === t.id}
-                      onClick={() => fileInputs.current[t.id]?.click()}
+                      onClick={() => setUploadRowId(uploadRowId === t.id ? null : t.id)}
                     >
                       <Upload className="size-4" aria-hidden="true" />
                       {t.has_file ? 'Replace file' : 'Upload file'}
@@ -274,29 +266,28 @@ export function AdminTemplates() {
                         setIsFree(t.is_free)
                         setEditingId(t.id)
                         setError(null)
+                        v.reset()
                       }}
                     >
                       Edit
                     </Button>
-                    <Button
-                      size="sm"
-                      variant={t.published ? 'ghost' : 'primary'}
-                      disabled={!t.published && !t.has_file}
-                      title={!t.published && !t.has_file ? 'Upload the file first' : undefined}
-                      loading={publishMutation.isPending && publishMutation.variables?.id === t.id}
-                      onClick={() => publishMutation.mutate({ id: t.id, published: !t.published })}
-                    >
-                      {t.published ? (
-                        <>
-                          <X className="size-4" aria-hidden="true" /> Unpublish
-                        </>
-                      ) : (
-                        <>
-                          <Check className="size-4" aria-hidden="true" /> Publish
-                        </>
-                      )}
-                    </Button>
                   </div>
+                </div>
+
+                {uploadRowId === t.id && (
+                  <UploadField
+                    kind="template"
+                    templateId={t.id}
+                    accept={ACCEPTED_TEMPLATE_TYPES}
+                    acceptedTypesText={`Accepted: ${ACCEPTED_TEMPLATE_TYPES.replaceAll('.', ' .').trim()}. Up to ${MAX_TEMPLATE_BYTES / (1024 * 1024)}MB.`}
+                    maxSizeBytes={MAX_TEMPLATE_BYTES}
+                    existingFileLabel={t.has_file ? `${t.file_name} · ${formatBytes(t.file_size_bytes)}` : undefined}
+                    onComplete={() => {
+                      invalidate()
+                      setUploadRowId(null)
+                    }}
+                  />
+                )}
                 </li>
               ))}
             </ul>

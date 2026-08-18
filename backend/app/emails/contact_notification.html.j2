@@ -1,0 +1,17 @@
+{% extends "base.html.j2" %}
+{% block title %}Contact form: {{ name }}{% endblock %}
+{% block preheader %}New enquiry from {{ name }} ({{ enquiry_type or "not specified" }}).{% endblock %}
+{% block content %}
+{# Autoescape (Environment(autoescape=select_autoescape())) does the escaping here —
+   `name`, `from_email`, `enquiry_type` and `message` are all wholly untrusted input
+   from a public, unauthenticated form. Nothing below is marked |safe. #}
+<h1 style="font-family:Georgia,'Times New Roman',serif; font-size:22px; line-height:1.3; color:#1C1712; margin:0 0 16px;">New enquiry from the contact page</h1>
+<p style="margin:0 0 4px;"><strong>From:</strong> {{ name }} &lt;{{ from_email }}&gt;</p>
+<p style="margin:0 0 16px;"><strong>About:</strong> {{ enquiry_type or "Not specified" }}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #E6DFD0; border-bottom:1px solid #E6DFD0; margin:0 0 16px;">
+  <tr>
+    <td style="padding:16px 0; white-space:pre-wrap;">{{ message }}</td>
+  </tr>
+</table>
+<p style="margin:0; font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:12px; color:#6E675A;">Reply directly to this email to answer them.</p>
+{% endblock %}

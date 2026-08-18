@@ -1,4 +1,4 @@
-from app.db.base import Base
+from app.db.base import Base, PublishState
 from app.db.models.user import User, Role
 from app.db.models.section import Section
 from app.db.models.author import Author
@@ -24,6 +24,7 @@ from app.db.models.webhook_event import WebhookEvent
 
 __all__ = [
     "Base",
+    "PublishState",
     "User", "Role",
     "Section",
     "Author",

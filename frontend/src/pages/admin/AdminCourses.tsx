@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ArrowLeft,
-  Check,
   ChevronDown,
   ChevronUp,
   Download,
@@ -13,7 +12,6 @@ import {
   Trash2,
   Type,
   Video,
-  X,
 } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
@@ -22,8 +20,12 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
+import { FieldError } from '@/components/ui/FieldError'
 import { AutosaveIndicator } from '@/components/admin/AutosaveIndicator'
+import { UploadField } from '@/components/admin/UploadField'
+import { PublishStateChip, type PublishStateValue } from '@/components/admin/PublishStateChip'
 import { useAutosave } from '@/lib/useAutosave'
+import { required, requiredSelect, useFieldValidation } from '@/lib/useFieldValidation'
 
 interface CourseRow {
   id: string
@@ -31,6 +33,7 @@ interface CourseRow {
   title: string
   subtitle?: string | null
   published: boolean
+  publish_state: PublishStateValue
   module_count: number
   lesson_count: number
 }
@@ -56,6 +59,7 @@ interface AdminLesson {
   body?: string | null
   sort_order: number
   published: boolean
+  publish_state: PublishStateValue
   download_template_id?: string | null
   mux_playback_id?: string | null
   is_ready: boolean
@@ -90,6 +94,7 @@ interface CourseDetail {
   subtitle?: string | null
   description: string
   published: boolean
+  publish_state: PublishStateValue
   modules: AdminModule[]
 }
 
@@ -261,6 +266,24 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
   )
   const [blockFileDraft, setBlockFileDraft] = useState<{ blockId: string; templateId: string } | null>(null)
 
+  // week2_plan.md §20.8 / W2-R9 — one small validator per form, matching the fields
+  // that form actually holds. Kept separate rather than one giant shape because these
+  // modals are mutually exclusive (only one draft is ever open at a time) and each
+  // needs its own touched/error state reset when it opens.
+  const moduleV = useFieldValidation<{ title: string }>({ title: required('Module title') })
+  const lessonV = useFieldValidation<{ title: string }>({ title: required('Lesson title') })
+  const videoV = useFieldValidation<{ assetId: string; playbackId: string }>({
+    assetId: required('Mux asset ID'),
+    playbackId: required('Mux playback ID'),
+  })
+  const blockVideoV = useFieldValidation<{ assetId: string; playbackId: string }>({
+    assetId: required('Mux asset ID'),
+    playbackId: required('Mux playback ID'),
+  })
+  const blockFileV = useFieldValidation<{ templateId: string }>({
+    templateId: requiredSelect('a template'),
+  })
+
   const { data: course, isLoading } = useQuery({
     queryKey: queryKeys.admin.course(courseId),
     queryFn: () => api.get<CourseDetail>(`/admin/courses/${courseId}`).then((r) => r.data),
@@ -303,10 +326,14 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
     ),
   )
   const setVideo = useMutation(
-    mutate(() =>
-      api.put<CourseDetail>(`/admin/lessons/${videoDraft?.lessonId}/video`, {
-        mux_asset_id: videoDraft?.assetId,
-        mux_playback_id: videoDraft?.playbackId,
+    // Takes its variables explicitly (`v`), not from `videoDraft` closure state — the
+    // caller (UploadField's onComplete) sets state and fires this mutation in the same
+    // tick, and a state update isn't visible in this render's closures until the next
+    // render. Reading `v` instead sidesteps that race entirely.
+    mutate((v: { lessonId: string; assetId: string; playbackId: string }) =>
+      api.put<CourseDetail>(`/admin/lessons/${v.lessonId}/video`, {
+        mux_asset_id: v.assetId,
+        mux_playback_id: v.playbackId,
       }),
     ),
   )
@@ -321,14 +348,20 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
       }),
     ),
   )
-  const publishLesson = useMutation(
-    mutate((v: { id: string; published: boolean }) =>
-      api.post<CourseDetail>(`/admin/lessons/${v.id}/publish`, { published: v.published }),
+  const setLessonPublishState = useMutation(
+    mutate((v: { id: string; state: PublishStateValue }) =>
+      api.post<CourseDetail>(`/admin/lessons/${v.id}/publish`, {
+        published: v.state === 'published',
+        publish_state: v.state,
+      }),
     ),
   )
-  const publishCourse = useMutation(
-    mutate((v: { published: boolean }) =>
-      api.post<CourseDetail>(`/admin/courses/${courseId}/publish`, { published: v.published }),
+  const setCoursePublishState = useMutation(
+    mutate((v: { state: PublishStateValue }) =>
+      api.post<CourseDetail>(`/admin/courses/${courseId}/publish`, {
+        published: v.state === 'published',
+        publish_state: v.state,
+      }),
     ),
   )
 
@@ -362,15 +395,18 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
   const blockTextAutosave = useAutosave({
     // Both fields watched — a heading-only edit with no body change still counts as
     // dirty.
-    value: blockTextDraft ? `${blockTextDraft.heading} ${blockTextDraft.text}` : '',
+    value: blockTextDraft ? `${blockTextDraft.heading} ${blockTextDraft.text}` : '',
     onSave: () => saveBlockText.mutateAsync(undefined as never),
     enabled: blockTextDraft !== null,
   })
   const setBlockVideo = useMutation(
-    mutate(() =>
-      api.put<CourseDetail>(`/admin/lesson-blocks/${blockVideoDraft?.blockId}/video`, {
-        mux_asset_id: blockVideoDraft?.assetId,
-        mux_playback_id: blockVideoDraft?.playbackId,
+    // Same stale-closure fix as `setVideo` above — UploadField's onComplete fires this
+    // mutation with explicit variables rather than relying on `blockVideoDraft` state,
+    // which isn't updated in this render's closures yet.
+    mutate((v: { blockId: string; assetId: string; playbackId: string }) =>
+      api.put<CourseDetail>(`/admin/lesson-blocks/${v.blockId}/video`, {
+        mux_asset_id: v.assetId,
+        mux_playback_id: v.playbackId,
       }),
     ),
   )
@@ -393,7 +429,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
 
   if (isLoading || !course) {
     return (
-      <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground">
+      <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading course…
       </p>
     )
@@ -411,13 +447,11 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <PageTitle eyebrow="Course" title={course.title} description={course.subtitle ?? undefined} />
-        <Button
-          variant={course.published ? 'ghost' : 'primary'}
-          loading={publishCourse.isPending}
-          onClick={() => publishCourse.mutate({ published: !course.published })}
-        >
-          {course.published ? 'Unpublish course' : 'Publish course'}
-        </Button>
+        <PublishStateChip
+          value={course.publish_state}
+          disabled={setCoursePublishState.isPending}
+          onChange={(state) => setCoursePublishState.mutate({ state })}
+        />
       </div>
 
       {error && (
@@ -439,7 +473,12 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-medium text-foreground">{lesson.title}</p>
                       <Badge variant="muted">{lesson.lesson_type}</Badge>
-                      {lesson.published ? <Badge variant="success">Live</Badge> : null}
+                      <PublishStateChip
+                        value={lesson.publish_state}
+                        disabled={setLessonPublishState.isPending && setLessonPublishState.variables?.id === lesson.id}
+                        title={!lesson.is_ready ? "Add this lesson's content before publishing it." : undefined}
+                        onChange={(state) => setLessonPublishState.mutate({ id: lesson.id, state })}
+                      />
                     </div>
                     {!lesson.is_ready && (
                       // The check that stops a paid course containing an empty player.
@@ -465,9 +504,10 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() =>
+                        onClick={() => {
+                          videoV.reset()
                           setVideoDraft({ lessonId: lesson.id, assetId: '', playbackId: '' })
-                        }
+                        }}
                       >
                         <Video className="size-4" aria-hidden="true" />
                         {lesson.mux_playback_id ? 'Replace video' : 'Add video'}
@@ -482,14 +522,6 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                         Write
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      variant={lesson.published ? 'ghost' : 'primary'}
-                      loading={publishLesson.isPending && publishLesson.variables?.id === lesson.id}
-                      onClick={() => publishLesson.mutate({ id: lesson.id, published: !lesson.published })}
-                    >
-                      {lesson.published ? <X className="size-4" /> : <Check className="size-4" />}
-                    </Button>
                   </div>
                 </div>
 
@@ -502,13 +534,17 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                     onEditText={(block) =>
                       setBlockTextDraft({ block, heading: block.heading ?? '', text: block.text_body ?? '' })
                     }
-                    onEditVideo={(blockId) => setBlockVideoDraft({ blockId, assetId: '', playbackId: '' })}
-                    onEditFile={(blockId) =>
+                    onEditVideo={(blockId) => {
+                      blockVideoV.reset()
+                      setBlockVideoDraft({ blockId, assetId: '', playbackId: '' })
+                    }}
+                    onEditFile={(blockId) => {
+                      blockFileV.reset()
                       setBlockFileDraft({
                         blockId,
                         templateId: lesson.blocks.find((b) => b.id === blockId)?.template_id ?? '',
                       })
-                    }
+                    }}
                     onMove={(blockId, direction) => moveBlock.mutate({ blockId, direction })}
                     onDelete={(blockId) => deleteBlock.mutate({ blockId })}
                     movePending={moveBlock.isPending ? moveBlock.variables?.blockId : undefined}
@@ -524,6 +560,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                 className="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4"
                 onSubmit={(e: FormEvent) => {
                   e.preventDefault()
+                  if (!lessonV.validateAll({ title: lessonDraft.title })) return
                   addLesson.mutate(undefined as never, { onSuccess: () => setLessonDraft(null) })
                 }}
               >
@@ -535,6 +572,8 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                     className="mt-1"
                     value={lessonDraft.title}
                     onChange={(e) => setLessonDraft({ ...lessonDraft, title: e.target.value })}
+                    onBlur={() => lessonV.onBlur('title', lessonDraft.title)}
+                    error={lessonV.errorFor('title')}
                   />
                 </label>
                 <label>
@@ -554,7 +593,15 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                 <Button type="submit" size="sm" loading={addLesson.isPending}>
                   Add
                 </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setLessonDraft(null)}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setLessonDraft(null)
+                    lessonV.reset()
+                  }}
+                >
                   Cancel
                 </Button>
               </form>
@@ -563,7 +610,10 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                 size="sm"
                 variant="outline"
                 className="mt-4"
-                onClick={() => setLessonDraft({ moduleId: module.id, title: '', type: 'video' })}
+                onClick={() => {
+                  lessonV.reset()
+                  setLessonDraft({ moduleId: module.id, title: '', type: 'video' })
+                }}
               >
                 <Plus className="size-4" aria-hidden="true" /> Add lesson
               </Button>
@@ -576,7 +626,13 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
         className="mt-6 flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
           e.preventDefault()
-          addModule.mutate(undefined as never, { onSuccess: () => setNewModuleTitle('') })
+          if (!moduleV.validateAll({ title: newModuleTitle })) return
+          addModule.mutate(undefined as never, {
+            onSuccess: () => {
+              setNewModuleTitle('')
+              moduleV.reset()
+            },
+          })
         }}
       >
         <label className="min-w-56 flex-1">
@@ -586,6 +642,8 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
             className="mt-1"
             value={newModuleTitle}
             onChange={(e) => setNewModuleTitle(e.target.value)}
+            onBlur={() => moduleV.onBlur('title', newModuleTitle)}
+            error={moduleV.errorFor('title')}
             placeholder="Module 3 — Reporting"
           />
         </label>
@@ -594,8 +652,9 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
         </Button>
       </form>
 
-      {/* Mux ids are pasted rather than uploaded here — see the backend's LessonVideoIn
-          docstring for why proxying video through this API would be worse. */}
+      {/* week3_plan.md Phase 5 step 1 — a real upload replaces pasting two ids copied
+          from the Mux dashboard. UploadField hands back the finished asset directly;
+          this dialog attaches it the moment it's ready, no separate "Attach" click. */}
       {videoDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-5">
           <div
@@ -603,45 +662,29 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
             onClick={() => setVideoDraft(null)}
             aria-hidden="true"
           />
-          <form
-            className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl"
-            onSubmit={(e) => {
-              e.preventDefault()
-              setVideo.mutate(undefined as never, { onSuccess: () => setVideoDraft(null) })
-            }}
-          >
+          <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
             <h3 className="font-sans text-lg font-semibold">Attach a video</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Upload the file in Mux, then paste its two ids here.
+              Upload the file directly — Mux encodes it, and it attaches automatically once ready.
             </p>
-            <label className="mt-4 block">
-              <span className="text-sm font-medium">Mux asset ID</span>
-              <Input
-                required
-                autoFocus
-                className="mt-1.5"
-                value={videoDraft.assetId}
-                onChange={(e) => setVideoDraft({ ...videoDraft, assetId: e.target.value })}
+            <div className="mt-4">
+              <UploadField
+                kind="video"
+                accept="video/*"
+                acceptedTypesText="Any video file Mux accepts (mp4, mov and most others)."
+                onComplete={(result) => {
+                  if (result.kind !== 'video') return
+                  const vars = { lessonId: videoDraft.lessonId, assetId: result.muxAssetId, playbackId: result.muxPlaybackId }
+                  setVideo.mutate(vars, { onSuccess: () => setVideoDraft(null) })
+                }}
               />
-            </label>
-            <label className="mt-4 block">
-              <span className="text-sm font-medium">Mux playback ID</span>
-              <Input
-                required
-                className="mt-1.5"
-                value={videoDraft.playbackId}
-                onChange={(e) => setVideoDraft({ ...videoDraft, playbackId: e.target.value })}
-              />
-            </label>
-            <div className="mt-6 flex gap-2">
-              <Button type="submit" loading={setVideo.isPending}>
-                Attach
-              </Button>
+            </div>
+            <div className="mt-5 flex justify-end">
               <Button type="button" variant="outline" onClick={() => setVideoDraft(null)}>
                 Cancel
               </Button>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
@@ -739,45 +782,29 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
             onClick={() => setBlockVideoDraft(null)}
             aria-hidden="true"
           />
-          <form
-            className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl"
-            onSubmit={(e) => {
-              e.preventDefault()
-              setBlockVideo.mutate(undefined as never, { onSuccess: () => setBlockVideoDraft(null) })
-            }}
-          >
+          <div className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
             <h3 className="font-sans text-lg font-semibold">Attach a video</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Upload the file in Mux, then paste its two ids here.
+              Upload the file directly — Mux encodes it, and it attaches automatically once ready.
             </p>
-            <label className="mt-4 block">
-              <span className="text-sm font-medium">Mux asset ID</span>
-              <Input
-                required
-                autoFocus
-                className="mt-1.5"
-                value={blockVideoDraft.assetId}
-                onChange={(e) => setBlockVideoDraft({ ...blockVideoDraft, assetId: e.target.value })}
+            <div className="mt-4">
+              <UploadField
+                kind="video"
+                accept="video/*"
+                acceptedTypesText="Any video file Mux accepts (mp4, mov and most others)."
+                onComplete={(result) => {
+                  if (result.kind !== 'video') return
+                  const vars = { blockId: blockVideoDraft.blockId, assetId: result.muxAssetId, playbackId: result.muxPlaybackId }
+                  setBlockVideo.mutate(vars, { onSuccess: () => setBlockVideoDraft(null) })
+                }}
               />
-            </label>
-            <label className="mt-4 block">
-              <span className="text-sm font-medium">Mux playback ID</span>
-              <Input
-                required
-                className="mt-1.5"
-                value={blockVideoDraft.playbackId}
-                onChange={(e) => setBlockVideoDraft({ ...blockVideoDraft, playbackId: e.target.value })}
-              />
-            </label>
-            <div className="mt-6 flex gap-2">
-              <Button type="submit" loading={setBlockVideo.isPending}>
-                Attach
-              </Button>
+            </div>
+            <div className="mt-5 flex justify-end">
               <Button type="button" variant="outline" onClick={() => setBlockVideoDraft(null)}>
                 Cancel
               </Button>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
@@ -792,7 +819,13 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
             className="relative w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl"
             onSubmit={(e) => {
               e.preventDefault()
-              setBlockFile.mutate(undefined as never, { onSuccess: () => setBlockFileDraft(null) })
+              if (!blockFileV.validateAll({ templateId: blockFileDraft.templateId })) return
+              setBlockFile.mutate(undefined as never, {
+                onSuccess: () => {
+                  setBlockFileDraft(null)
+                  blockFileV.reset()
+                },
+              })
             }}
           >
             <h3 className="font-sans text-lg font-semibold">Attach a file</h3>
@@ -807,6 +840,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                 className={cn(inputClass, 'mt-1.5')}
                 value={blockFileDraft.templateId}
                 onChange={(e) => setBlockFileDraft({ ...blockFileDraft, templateId: e.target.value })}
+                onBlur={() => blockFileV.onBlur('templateId', blockFileDraft.templateId)}
               >
                 <option value="" disabled>
                   Choose a template…
@@ -817,12 +851,20 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                   </option>
                 ))}
               </select>
+              <FieldError message={blockFileV.errorFor('templateId')} />
             </label>
             <div className="mt-6 flex gap-2">
               <Button type="submit" loading={setBlockFile.isPending}>
                 Attach
               </Button>
-              <Button type="button" variant="outline" onClick={() => setBlockFileDraft(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setBlockFileDraft(null)
+                  blockFileV.reset()
+                }}
+              >
                 Cancel
               </Button>
             </div>
@@ -840,6 +882,10 @@ export function AdminCourses() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const v = useFieldValidation<{ title: string; description: string }>({
+    title: required('Title'),
+    description: required('Description'),
+  })
 
   const { data: courses, isLoading } = useQuery({
     queryKey: queryKeys.admin.courses(),
@@ -853,6 +899,7 @@ export function AdminCourses() {
       setTitle('')
       setDescription('')
       setError(null)
+      v.reset()
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.courses() })
       setOpenCourseId(r.data.id)
     },
@@ -876,7 +923,12 @@ export function AdminCourses() {
           description="Structured, sequential learning paths — modules, then lessons, with video and readings."
         />
         {!isCreating && (
-          <Button onClick={() => setIsCreating(true)}>
+          <Button
+            onClick={() => {
+              v.reset()
+              setIsCreating(true)
+            }}
+          >
             <Plus className="size-4" aria-hidden="true" /> New course
           </Button>
         )}
@@ -893,6 +945,7 @@ export function AdminCourses() {
           className="mt-8 rounded-xl border border-border bg-card p-6 shadow-sm"
           onSubmit={(e) => {
             e.preventDefault()
+            if (!v.validateAll({ title, description })) return
             setError(null)
             createCourse.mutate()
           }}
@@ -900,7 +953,14 @@ export function AdminCourses() {
           <h2 className="font-sans text-lg font-semibold">New course</h2>
           <label className="mt-5 block">
             <span className="text-sm font-medium">Title</span>
-            <Input required className="mt-1.5" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <Input
+              required
+              className="mt-1.5"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={() => v.onBlur('title', title)}
+              error={v.errorFor('title')}
+            />
           </label>
           <label className="mt-4 block">
             <span className="text-sm font-medium">Description</span>
@@ -910,13 +970,22 @@ export function AdminCourses() {
               className={cn(inputClass, 'mt-1.5')}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              onBlur={() => v.onBlur('description', description)}
             />
+            <FieldError message={v.errorFor('description')} />
           </label>
           <div className="mt-6 flex gap-2 border-t border-border pt-5">
             <Button type="submit" loading={createCourse.isPending}>
               Create and add modules
             </Button>
-            <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsCreating(false)
+                v.reset()
+              }}
+            >
               Cancel
             </Button>
           </div>
@@ -926,7 +995,7 @@ export function AdminCourses() {
       {!isCreating && (
         <>
           {isLoading ? (
-            <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground">
+            <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading courses…
             </p>
           ) : (
@@ -936,7 +1005,11 @@ export function AdminCourses() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-sans font-medium text-foreground">{c.title}</p>
-                      {c.published ? <Badge variant="success">Live</Badge> : <Badge variant="muted">Draft</Badge>}
+                      {/* Read-only here — this row has no course-scoped mutation of its
+                          own; "Open" below drops into CourseBuilder, where the same chip
+                          is the live, clickable one. `disabled` keeps the visual language
+                          identical without implying a click does anything on this row. */}
+                      <PublishStateChip value={c.publish_state} disabled onChange={() => {}} />
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {c.module_count} module{c.module_count === 1 ? '' : 's'} · {c.lesson_count} lesson

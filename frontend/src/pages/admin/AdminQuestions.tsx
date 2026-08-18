@@ -1,13 +1,16 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Loader2, Plus, Search, X } from 'lucide-react'
+import { Loader2, Plus, Search } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
+import { FieldError } from '@/components/ui/FieldError'
+import { PublishStateChip, type PublishStateValue } from '@/components/admin/PublishStateChip'
+import { FeaturedSummary, FeaturedToggle } from '@/components/admin/FeaturedToggle'
+import { required, requiredSelect, useFieldValidation } from '@/lib/useFieldValidation'
 
 interface QuestionRow {
   id: string
@@ -16,6 +19,9 @@ interface QuestionRow {
   subtitle?: string | null
   domain: string
   published: boolean
+  publish_state: PublishStateValue
+  featured: boolean
+  featured_sort: number | null
   preview: string
 }
 
@@ -97,8 +103,24 @@ function QuestionEditor({
 }) {
   const traits = options.tag_dimensions['leadership_traits'] ?? []
 
+  // week2_plan.md §20.8 / W2-R9 — validated on blur, not on submit; `validateAll`
+  // still runs at submit time so a field the admin never tabbed into (paste + click
+  // Save) is still caught rather than posted empty.
+  const v = useFieldValidation<{ title: string; domain_id: string; body: string }>({
+    title: required('Title'),
+    domain_id: requiredSelect('a domain'),
+    body: required('Guidance'),
+  })
+
   return (
-    <form onSubmit={onSubmit} className="rounded-xl border border-border bg-card p-6 shadow-sm">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!v.validateAll({ title: draft.title, domain_id: draft.domain_id, body: draft.body })) return
+        onSubmit(e)
+      }}
+      className="rounded-xl border border-border bg-card p-6 shadow-sm"
+    >
       <h2 className="font-sans text-lg font-semibold">{isNew ? 'New question' : 'Edit question'}</h2>
 
       <div className="mt-5 grid gap-5 sm:grid-cols-2">
@@ -108,6 +130,8 @@ function QuestionEditor({
               required
               value={draft.title}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              onBlur={() => v.onBlur('title', draft.title)}
+              error={v.errorFor('title')}
               placeholder="We Have a Risk Register, But No One Uses It"
             />
           </Field>
@@ -129,6 +153,7 @@ function QuestionEditor({
             className={selectClass}
             value={draft.domain_id}
             onChange={(e) => setDraft({ ...draft, domain_id: e.target.value })}
+            onBlur={() => v.onBlur('domain_id', draft.domain_id)}
           >
             <option value="">Choose a domain…</option>
             {options.domains.map((d) => (
@@ -137,6 +162,7 @@ function QuestionEditor({
               </option>
             ))}
           </select>
+          <FieldError message={v.errorFor('domain_id')} />
         </Field>
 
         <Field
@@ -158,9 +184,11 @@ function QuestionEditor({
               rows={12}
               value={draft.body}
               onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+              onBlur={() => v.onBlur('body', draft.body)}
               className={cn(selectClass, 'font-serif leading-relaxed')}
               placeholder="Most risk registers fail because…"
             />
+            <FieldError message={v.errorFor('body')} />
           </Field>
         </div>
       </div>
@@ -285,6 +313,17 @@ export function AdminQuestions() {
         .then((r) => r.data),
   })
 
+  // The live "N featured, in this order" summary (§20.6) — a separate small fetch
+  // rather than derived from `data` above, since the paginated/searched/filtered list
+  // above is frequently a subset and would otherwise under-report or drop the order.
+  const { data: featuredData } = useQuery({
+    queryKey: queryKeys.admin.questions('__featured__', ''),
+    queryFn: () =>
+      api
+        .get<{ items: QuestionRow[]; total: number }>('/admin/questions', { params: { featured: true, limit: 200 } })
+        .then((r) => r.data),
+  })
+
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] })
     // The public catalogue is a different cache entry and would otherwise keep
@@ -332,9 +371,16 @@ export function AdminQuestions() {
     onError: (e) => setError(readError(e)),
   })
 
-  const publishMutation = useMutation({
-    mutationFn: ({ id, published }: { id: string; published: boolean }) =>
-      api.post(`/admin/questions/${id}/publish`, { published }),
+  const setPublishState = useMutation({
+    mutationFn: ({ id, state }: { id: string; state: PublishStateValue }) =>
+      api.post(`/admin/questions/${id}/publish`, { published: state === 'published', publish_state: state }),
+    onSuccess: invalidate,
+    onError: (e) => setError(readError(e)),
+  })
+
+  const setFeatured = useMutation({
+    mutationFn: ({ id, featured, featuredSort }: { id: string; featured: boolean; featuredSort: number | null }) =>
+      api.post(`/admin/questions/${id}/featured`, { featured, featured_sort: featuredSort }),
     onSuccess: invalidate,
     onError: (e) => setError(readError(e)),
   })
@@ -440,8 +486,12 @@ export function AdminQuestions() {
             </Button>
           </form>
 
+          <div className="mt-6">
+            <FeaturedSummary featuredTitles={featuredData?.items.map((q) => q.title) ?? []} />
+          </div>
+
           {isLoading ? (
-            <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground">
+            <p className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading questions…
             </p>
           ) : (
@@ -455,33 +505,23 @@ export function AdminQuestions() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-sans font-medium text-foreground">{q.title}</p>
-                        {q.published ? (
-                          <Badge variant="success">Live</Badge>
-                        ) : (
-                          <Badge variant="muted">Draft</Badge>
-                        )}
+                        <PublishStateChip
+                          value={q.publish_state}
+                          disabled={setPublishState.isPending && setPublishState.variables?.id === q.id}
+                          onChange={(state) => setPublishState.mutate({ id: q.id, state })}
+                        />
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground">{q.domain}</p>
                     </div>
+                    <FeaturedToggle
+                      featured={q.featured}
+                      featuredSort={q.featured_sort}
+                      disabled={setFeatured.isPending && setFeatured.variables?.id === q.id}
+                      onChange={({ featured, featuredSort }) => setFeatured.mutate({ id: q.id, featured, featuredSort })}
+                    />
                     <div className="flex shrink-0 gap-2">
                       <Button size="sm" variant="outline" onClick={() => void startEditing(q.id)}>
                         Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={q.published ? 'ghost' : 'primary'}
-                        loading={publishMutation.isPending && publishMutation.variables?.id === q.id}
-                        onClick={() => publishMutation.mutate({ id: q.id, published: !q.published })}
-                      >
-                        {q.published ? (
-                          <>
-                            <X className="size-4" aria-hidden="true" /> Unpublish
-                          </>
-                        ) : (
-                          <>
-                            <Check className="size-4" aria-hidden="true" /> Publish
-                          </>
-                        )}
                       </Button>
                     </div>
                   </li>

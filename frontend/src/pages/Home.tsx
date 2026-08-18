@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -7,10 +7,13 @@ import {
   ArrowUpRight,
   Banknote,
   Clock,
+  FileDown,
   FileSpreadsheet,
+  Gift,
   GraduationCap,
   Landmark,
   Layers,
+  Library,
   Search,
   TrendingUp,
 } from 'lucide-react'
@@ -50,9 +53,8 @@ const DOMAINS = [
   { name: 'AI (Governance)', label: 'AI', description: 'How do we govern AI without stopping it?' },
 ] as const
 
-/** The seven tag dimensions, in the order the catalogue lists them. Named here only so
- *  the "seven ways to filter" claim on this page is counted from the same list the
- *  filter panel is built from, rather than being a hardcoded numeral that can rot. */
+/** The seven tag dimensions, in catalogue order, so the "seven ways to filter" claim
+ *  is counted from the same list the filter panel is built from. */
 const DIMENSIONS = [
   'effort',
   'duration',
@@ -63,12 +65,8 @@ const DIMENSIONS = [
   'leadership_traits',
 ] as const
 
-/** Placeholder problems, rotated while the field is empty.
- *
- * This replaces the headline typewriter that used to run here. The rotating clause was
- * decoration attached to a claim; the same device attached to the *input* demonstrates
- * what the box is for — which is the one thing the hero has to communicate. Paused as
- * soon as the visitor types, and under prefers-reduced-motion (see the effect below). */
+/** Placeholder problems, rotated while the field is empty — demonstrating what the box
+ * is for. Paused as soon as the visitor types, and under prefers-reduced-motion. */
 const PLACEHOLDER_PROBLEMS = [
   'We have a risk register, but nobody actually uses it…',
   'The board keeps asking about emerging risk. What do we show them?',
@@ -76,20 +74,11 @@ const PLACEHOLDER_PROBLEMS = [
   'Our third parties are a black box…',
 ]
 
-/** Suggested searches.
- *
- * `term` is the substring actually sent to the search, and every one was counted
- * against the live catalogue before it was put here (matches, 2026-08-13): risk
- * register 2, incident 9, board 5, third-part 2, appetite 3, audit 6.
- *
- * Two traps this list is written around. The hyphen: the question is titled
- * "Third-Party Risk Is a Black Box", so `third part` (with a space) matches nothing
- * and `third-part` matches both. And short tokens: `ai` looks like the obvious term
- * for the AI domain and matches 28 questions — almost all of them on "dom*ai*n" and
- * "expl*ai*n". A two-letter substring is not a search.
- *
- * `Hero` additionally drops any term the live list can't answer, so this can degrade
- * but never lie. */
+/** Suggested searches. `term` is the substring actually sent to the search, and every
+ * one was checked against the live catalogue to actually return results — a plausible
+ * short token like `ai` matches on stray substrings ("dom*ai*n") rather than the AI
+ * domain, so it's avoided here. `Hero` additionally drops any term the live list can't
+ * answer, so this can degrade but never lie. */
 const TRY_TERMS = [
   { label: 'Risk register', term: 'risk register' },
   { label: 'Incidents', term: 'incident' },
@@ -100,20 +89,10 @@ const TRY_TERMS = [
 ] as const
 
 /** The finder demo's chips. Every one is a single real `(dimension, value)` row from
- *  the taxonomy (db/seed/001), so the count shown here and the count on /questions after
- *  following the link are the same number by construction.
- *
- *  `[FIXED 2026-08-13]` The chips this replaces tested for `'XS'`, `'$'` and `'M'`.
- *  The seeded values are lowercase codes (`xs`, `low`, `m`), so every chip matched zero
- *  questions — the one interaction that proves the taxonomy works was silently dead,
- *  here and in QuestionsCatalogue's QUICK_FILTERS (fixed there too).
- *
- *  Which values appear here is a data decision, not a copywriting one. Counted against
- *  the live catalogue (2026-08-13): duration s 25 / m 40, cost low 73 / medium 27,
- *  regulator_pressure h 24, roi_horizon quick 59, tier f 34. Deliberately absent:
- *  `duration=xs` and `effort=quick` have ONE question each, so the obvious
- *  "fix it in a fortnight" chip would open this section on a near-empty result and
- *  teach the visitor the filter doesn't work. */
+ *  the taxonomy, so the count shown here matches /questions after following the link.
+ *  Chip values are checked against real result counts, deliberately excluding any
+ *  dimension value with only one or two matching questions — a chip that opens on a
+ *  near-empty result teaches the visitor the filter doesn't work. */
 const FINDER_GROUPS = [
   {
     prompt: 'I have',
@@ -169,6 +148,10 @@ interface QuestionSummary {
   domain: string
   domain_slug: string
   tags: QuestionTag[]
+  // The homepage's curated picks (week3_plan.md §20.6) — carried on every question
+  // summary, not fetched separately, since Home already holds the full list.
+  featured: boolean
+  featured_sort: number | null
 }
 
 interface CourseSummary {
@@ -185,42 +168,80 @@ interface TemplateSummary {
   slug: string
   title: string
   description: string
+  // Used only to derive a short "XLSX"/"PDF" kind badge next to the free template CTA
+  // below — never displayed as a raw filename.
+  file_name: string
   is_free: boolean
   product: { slug: string; price_amount: number; currency: string } | null
 }
 
-// The public landing page.
-//
-// Restructured 2026-08-13 (owner page review). The previous version explained the
-// platform — a headline claim, five category tiles, three title lines, an email box.
-// This one demonstrates it, in the order the review asked for: ask a question → see
-// real questions → filter by what you actually have → the five areas → how it works →
-// what you can buy → proof → ask again. Every count, tag and card below is read from
-// the live API, so nothing on this page can claim something the catalogue doesn't have.
+// A pack is a product, not a content row (see Store.tsx's own note on this) — it
+// carries its price and description directly rather than through a nested `product`.
+interface PackSummary {
+  slug: string
+  name: string
+  description: string
+  question_count: number
+  price_amount: number
+  currency: string
+  owned: boolean
+}
+
+// The public landing page. Demonstrates the product rather than explaining it: ask a
+// question → see real questions → take the free template → filter by what you actually
+// have → the five areas → how it works → what you can buy (packs, courses, templates,
+// evenly) → proof → take the free template again → ask again. Every count, tag and card
+// below is read from the live API, so nothing here can claim something the catalogue
+// doesn't have — including the free template CTA, which renders nothing if the
+// catalogue happens to have none.
 export function Home() {
   const { data: questions } = useQuery({
     queryKey: queryKeys.questions.list(),
     queryFn: () => api.get<QuestionSummary[]>('/questions/index').then((res) => res.data),
+  })
+  // Courses, templates and packs are fetched once here, at the top, rather than inside
+  // GoFurther and the two FreeTemplateCta placements separately — three components
+  // asking for the same `templates` query key just share React Query's cache, but
+  // fetching once and passing down keeps that sharing obvious instead of implicit.
+  const { data: courses } = useQuery({
+    queryKey: queryKeys.courses.list(),
+    queryFn: () => api.get<CourseSummary[]>('/courses').then((res) => res.data),
+  })
+  const { data: templates } = useQuery({
+    queryKey: queryKeys.templates.list(),
+    queryFn: () => api.get<TemplateSummary[]>('/templates').then((res) => res.data),
+  })
+  const { data: packs } = useQuery({
+    queryKey: queryKeys.packs.list(),
+    queryFn: () => api.get<PackSummary[]>('/packs').then((res) => res.data),
   })
 
   return (
     <>
       <Hero questions={questions} />
       <QuestionShowcase questions={questions} />
+      {/* CTA #1 — right after the real questions have made their case, and before the
+          page returns to more question content (the finder, then the domains). Framed
+          as proof-of-substance: "the questions are real, and so is this file." */}
+      <FreeTemplateCta templates={templates} tone="proof" />
       <FinderSection questions={questions} />
       <DomainSection questions={questions} />
       <HowItWorks />
-      <GoFurther />
+      <GoFurther courses={courses} templates={templates} packs={packs} />
       <AboutSection questions={questions} />
+      {/* CTA #2 — the same template, the same destination, framed for a visitor who has
+          seen the whole page and still hasn't taken anything: a low-commitment offer
+          right before the page's last, highest-commitment ask (FinalCta's search + list
+          signup). Two placements toward one goal, not two competing goals — see the
+          component's own note. */}
+      <FreeTemplateCta templates={templates} tone="exit" />
       <FinalCta />
     </>
   )
 }
 
-/** The eyebrow + heading pair every light section opens with. One component so the
- *  §10 type steps below the hero can't drift section to section — the review's point
- *  about too many things being visually similar was a hierarchy problem, and a
- *  hierarchy only holds if it is written down once. */
+/** The eyebrow + heading pair every light section opens with — one component so the
+ *  type steps below the hero can't drift section to section. */
 function SectionOpener({
   eyebrow,
   title,
@@ -250,9 +271,9 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
   const [query, setQuery] = useState('')
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
 
-  // Rotation stops the moment there is anything to read in the field, and never starts
-  // for a visitor who asked for reduced motion. theme.css's global reduced-motion block
-  // can't help here — this is a text swap, not an animation.
+  // Rotation stops the moment there's anything to read in the field, and never starts
+  // under reduced motion — this is a text swap, not an animation, so the global CSS
+  // rule can't help here.
   useEffect(() => {
     if (query) return
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
@@ -285,8 +306,8 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
   const total = questions?.length ?? 0
   const searching = query.trim().length > 0
 
-  // Hands off to the catalogue with the query pre-applied rather than guessing which
-  // single result the visitor meant. The live list below is for picking one directly.
+  // Hands off to the catalogue with the query pre-applied, rather than guessing which
+  // single result the visitor meant.
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
     const q = query.trim()
@@ -294,12 +315,10 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
   }
 
   return (
-    /* Structure still from Watermelon UI's hero-1 — dark full-bleed stage, left-aligned
-       brand and headline, a bottom meta row — but the centre of gravity has moved. The
-       headline is now a question rather than a claim, and the finder is a full-width
-       panel instead of a 36px field, because "type your problem here" is the product
-       and it was previously being staged as a site search. */
-    <section className="relative isolate overflow-hidden bg-stage px-5 pb-14 pt-14 text-stage-foreground sm:px-8 sm:pb-20 sm:pt-20">
+    /* Dark full-bleed stage, left-aligned brand and headline, a bottom meta row. The
+       headline is a question rather than a claim, and the finder is a full-width panel
+       rather than a small field, since "type your problem here" is the product. */
+    <section className="relative isolate overflow-hidden bg-stage px-5 pb-9 pt-14 text-stage-foreground sm:px-8 sm:pb-9 sm:pt-14">
       <motion.div
         aria-hidden="true"
         initial={{ opacity: 0, scale: 1.06 }}
@@ -314,10 +333,9 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
         animate="visible"
         className="relative mx-auto flex w-full max-w-7xl flex-col"
       >
-        {/* Brand hierarchy, settled: Practicable is the registered brand (it holds the
-            header and the footer); "Deciding in the Dark" is the collection inside it.
-            The review read the two as competing products, so the relationship is now
-            stated on the line rather than implied by placement. */}
+        {/* Practicable is the registered brand (header and footer); "Deciding in the
+            Dark" is the collection inside it — the relationship is stated on the line
+            rather than implied by placement. */}
         <motion.p variants={riseItem} className="eyebrow text-stage-foreground/60">
           Deciding in the Dark — the 100-question collection
         </motion.p>
@@ -337,8 +355,7 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
           Practical answers for the problems risk practitioners actually deal with at work.
         </motion.p>
 
-        {/* The finder panel. One object — prompt, field and submit share a frame — at
-            roughly three times the visual weight of the old inline field. */}
+        {/* The finder panel: prompt, field and submit share a single frame. */}
         <motion.form variants={riseItem} onSubmit={handleSubmit} className="mt-9 w-full max-w-3xl">
           <div className="rounded-xl border border-stage-foreground/25 bg-stage-foreground/8 p-2 backdrop-blur-sm transition-colors focus-within:border-gold/70">
             <label
@@ -435,7 +452,7 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
             row where hero-1 puts its description. */}
         <motion.div
           variants={riseItem}
-          className="mt-14 flex flex-col gap-6 border-t border-stage-foreground/15 pt-6 sm:flex-row sm:items-center sm:justify-between"
+          className="mt-9 flex flex-col gap-6 border-t border-stage-foreground/15 pt-6 sm:flex-row sm:items-center sm:justify-between"
         >
           <p className="text-sm text-stage-foreground/60">
             {total > 0 ? `${total} real questions` : 'Real questions'} from risk leaders ·{' '}
@@ -463,31 +480,40 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
 // 02. Real questions, immediately
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Four real questions as cards, directly under the hero.
- *
- * This is the section that used to be three plain title lines two screens down, after
- * the domain grid. It is first now for the reason the review gave: a visitor who reads
- * one real question understands the product, and a visitor who reads five category
- * names does not. */
+/** Four real questions as cards, directly under the hero: a visitor who reads one real
+ * question understands the product faster than one who reads five category names. */
 function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefined }) {
   if (!questions || questions.length === 0) return null
 
-  // One from each of the first four domains where possible, so the sample reads as a
-  // range rather than four variations on whatever sorts first.
-  const featured = (() => {
-    const picked: QuestionSummary[] = []
-    for (const domain of DOMAINS) {
-      const match = questions.find((q) => q.domain === domain.name && !picked.includes(q))
-      if (match) picked.push(match)
-      if (picked.length === 4) break
-    }
-    while (picked.length < 4) {
-      const next = questions.find((q) => !picked.includes(q))
-      if (!next) break
-      picked.push(next)
-    }
-    return picked
-  })()
+  // week3_plan.md §20.6 — the owner's curated picks (`/admin/questions`'s
+  // `FeaturedToggle`), in the order they set, win whenever any exist.
+  const curated = questions
+    .filter((q) => q.featured)
+    .sort((a, b) => (a.featured_sort ?? Number.POSITIVE_INFINITY) - (b.featured_sort ?? Number.POSITIVE_INFINITY))
+    .slice(0, 4)
+
+  // The named fallback `FeaturedSummary` in `/admin/questions` promises the owner:
+  // "the homepage falls back to the first question in each domain." This is that
+  // promise kept, not a second, undocumented heuristic — one from each of the first
+  // four domains where possible, so the sample still reads as a range with zero
+  // curation done.
+  const featured =
+    curated.length > 0
+      ? curated
+      : (() => {
+          const picked: QuestionSummary[] = []
+          for (const domain of DOMAINS) {
+            const match = questions.find((q) => q.domain === domain.name && !picked.includes(q))
+            if (match) picked.push(match)
+            if (picked.length === 4) break
+          }
+          while (picked.length < 4) {
+            const next = questions.find((q) => !picked.includes(q))
+            if (!next) break
+            picked.push(next)
+          }
+          return picked
+        })()
 
   return (
     <motion.section
@@ -495,7 +521,7 @@ function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefi
       initial="hidden"
       whileInView="visible"
       viewport={inViewOnce}
-      className="border-t border-border py-16 sm:py-24"
+      className="border-t border-border py-11 sm:py-11"
     >
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener
@@ -504,7 +530,7 @@ function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefi
           lead="Not topics. Not chapter titles. The thing someone said out loud in a meeting before they went looking for help."
         />
 
-        <div className="mt-10 grid gap-5 sm:grid-cols-2">
+        <div className="mt-6 grid gap-5 sm:grid-cols-2">
           {featured.map((question) => (
             <motion.div key={question.slug} variants={riseItemSm}>
               <QuestionCard question={question} />
@@ -525,9 +551,8 @@ function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefi
   )
 }
 
-/** The shared question card: domain identity, title, the practitioner's framing, and
- *  the three most decision-relevant tags (lib/tags.ts, the same selection the dashboard
- *  and catalogue use). */
+/** The shared question card: domain identity, title, framing, and the three most
+ *  decision-relevant tags — the same selection the dashboard and catalogue use. */
 function QuestionCard({ question }: { question: QuestionSummary }) {
   const color = domainColorVar(question.domain)
   const DomainIcon = domainVisual(question.domain).icon
@@ -535,7 +560,7 @@ function QuestionCard({ question }: { question: QuestionSummary }) {
   return (
     <Link
       to={`/questions/${question.slug}`}
-      className="group flex h-full flex-col rounded-xl border border-border bg-card p-6 transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 hover:border-[var(--card-domain-color)] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="group hover-lift hover-lift-domain flex h-full flex-col rounded-xl border border-border bg-card p-6 transition-[border-color] duration-150 hover:border-[var(--card-domain-color)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       style={{ '--card-domain-color': color } as CSSProperties}
     >
       <p className="eyebrow gap-1.5" style={{ color }}>
@@ -569,24 +594,103 @@ function QuestionCard({ question }: { question: QuestionSummary }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 03. The finder — the differentiator, working, on the page
+// 03. The free template — the second free thing, said twice
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The seven-way taxonomy, demonstrated rather than described.
+/** "risk-register-tracker.xlsx" → "XLSX". Decoration only, next to the free template's
+ *  name — never invented if the filename carries no extension. */
+function fileKind(fileName: string): string | null {
+  const ext = fileName.split('.').pop()
+  return ext && ext !== fileName ? ext.toUpperCase() : null
+}
+
+/** The free template, surfaced twice (`tone="proof"` after the question showcase,
+ *  `tone="exit"` before the closing CTA) — same data, same destination, different
+ *  framing for where the visitor is in the scroll. This is deliberately two placements
+ *  of *one* CTA rather than two different asks: the design research behind this pass
+ *  is consistent that competing CTAs toward different goals split attention and convert
+ *  worse, while the same CTA repeated at points that match the visitor's hesitation
+ *  (proof, then exit) does not carry that penalty.
  *
- * The review's sharpest point: the differentiator is not "100 risk questions", it is
- * "find the one that fits the fortnight and the budget you actually have" — and the
- * page was asserting that in a sentence. So this section is the real filter, running
- * against the real list, showing a real count, and handing off to /questions with the
- * exact same parameters. The number here and the number there cannot disagree.
- *
- * This is also the one champagne band in the middle of the page (the review's
- * dark → light → light → dark rhythm), which is why it carries `bg-secondary/40`. */
+ *  Renders nothing if the catalogue has no free template — the same honest-empty-state
+ *  rule GoFurther and Store.tsx's EmptySection already follow. There is exactly one
+ *  free template today, so both placements currently show the same file; if a second
+ *  ever ships, both still show the first `is_free` row in catalogue order rather than
+ *  disagreeing with each other. */
+function FreeTemplateCta({
+  templates,
+  tone,
+}: {
+  templates: TemplateSummary[] | undefined
+  tone: 'proof' | 'exit'
+}) {
+  const template = templates?.find((t) => t.is_free)
+  if (!template) return null
+  const kind = fileKind(template.file_name)
+
+  return (
+    <motion.section
+      variants={staggerContainer}
+      initial="hidden"
+      whileInView="visible"
+      viewport={inViewOnce}
+      className="border-t border-border py-9"
+    >
+      <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
+        {/* The gold border/wash is the one recurring visual signal for "this is the free
+            thing" — identical chrome at both placements, so the CTA reads as one offer
+            said twice rather than two different promotions. `tone` only ever changes
+            copy, never colour. */}
+        <motion.div
+          variants={riseItem}
+          className="flex flex-col items-start gap-6 rounded-xl border border-gold/40 bg-gold-soft/40 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8"
+        >
+          <div className="flex items-start gap-4">
+            <span
+              className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-gold-soft text-gold-strong"
+              aria-hidden="true"
+            >
+              <Gift className="size-5" />
+            </span>
+            <div>
+              <p className="eyebrow text-gold-strong">
+                {tone === 'proof' ? 'Free — no card, no catch' : 'Before you go'}
+              </p>
+              <h3 className="mt-1.5 text-h3 font-semibold text-foreground">
+                {tone === 'proof'
+                  ? `The questions are real. So is this: ${template.title}.`
+                  : `Not ready to buy anything? Start with ${template.title} — free.`}
+              </h3>
+              <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+                {template.description}
+                {kind && <span className="ml-1.5 text-xs text-muted-foreground/75">({kind})</span>}
+              </p>
+            </div>
+          </div>
+          <Link to={`/templates/${template.id}`} className="w-full shrink-0 sm:w-auto">
+            <Button size="lg" className="w-full sm:w-auto">
+              Get it free
+              <FileDown className="size-4" aria-hidden="true" />
+            </Button>
+          </Link>
+        </motion.div>
+      </div>
+    </motion.section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 04. The finder — the differentiator, working, on the page
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The seven-way taxonomy, demonstrated rather than described: a real filter, running
+ * against the real list, showing a real count, handing off to /questions with the exact
+ * same parameters so the two numbers can't disagree. The one champagne band in the
+ * page's dark → light → light → dark rhythm, hence `bg-secondary/40`. */
 function FinderSection({ questions }: { questions: QuestionSummary[] | undefined }) {
-  // Opens with two filters already applied — an empty finder showing "100 questions
-  // match" demonstrates nothing. This pair lands on 25 of 100 today: narrow enough to
-  // look like a filter did something, wide enough that adding a third chip still
-  // returns results rather than dead-ending the demo on its first click.
+  // Opens with two filters already applied — an empty finder showing "all questions
+  // match" demonstrates nothing. Narrow enough to look like a filter did something,
+  // wide enough that a third chip still returns results.
   const [selection, setSelection] = useState<Record<string, string>>({
     duration: 's',
     cost: 'low',
@@ -621,7 +725,7 @@ function FinderSection({ questions }: { questions: QuestionSummary[] | undefined
       initial="hidden"
       whileInView="visible"
       viewport={inViewOnce}
-      className="border-t border-border bg-secondary/40 py-16 sm:py-24"
+      className="border-t border-border bg-secondary/40 py-11 sm:py-11"
     >
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener
@@ -632,7 +736,7 @@ function FinderSection({ questions }: { questions: QuestionSummary[] | undefined
 
         <motion.div
           variants={riseItem}
-          className="mt-10 grid items-start gap-8 rounded-xl border border-border bg-card p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:gap-12"
+          className="mt-6 grid items-start gap-8 rounded-xl border border-border bg-card p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:gap-12"
         >
           <div className="flex flex-col gap-6">
             {FINDER_GROUPS.map((group) => (
@@ -665,8 +769,7 @@ function FinderSection({ questions }: { questions: QuestionSummary[] | undefined
             ))}
           </div>
 
-          {/* The result. `aria-live` because the number changes without navigation —
-              a sighted visitor sees it tick, and this is how everyone else does. */}
+          {/* `aria-live` because the number changes without navigation. */}
           <div className="flex flex-col items-start gap-3 border-t border-border pt-6 lg:min-w-56 lg:border-l lg:border-t-0 lg:pl-12 lg:pt-0">
             <p aria-live="polite" className="flex items-baseline gap-2">
               <span className="text-h1 font-semibold tabular-nums text-primary">
@@ -696,14 +799,12 @@ function FinderSection({ questions }: { questions: QuestionSummary[] | undefined
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 04. The five areas — as content, not navigation
+// 05. The five areas — as content, not navigation
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Five domains, each carrying its real count and a real question from inside it.
- *
- * Previously five icons and a one-line description, which is a category list; the
- * counts were even hidden until hover. A taxonomy that hides how much is behind it
- * reads as a menu, so the count is now the loudest thing in the row. */
+/** Five domains, each carrying its real count and a real question from inside it. A
+ * taxonomy that hides how much is behind it reads as a menu, so the count is the
+ * loudest thing in the row. */
 function DomainSection({ questions }: { questions: QuestionSummary[] | undefined }) {
   return (
     <motion.section
@@ -711,7 +812,7 @@ function DomainSection({ questions }: { questions: QuestionSummary[] | undefined
       initial="hidden"
       whileInView="visible"
       viewport={inViewOnce}
-      className="border-t border-border py-16 sm:py-24"
+      className="border-t border-border py-11 sm:py-11"
     >
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener
@@ -719,7 +820,7 @@ function DomainSection({ questions }: { questions: QuestionSummary[] | undefined
           title="Five areas of risk, one way of working."
         />
 
-        <ul className="mt-10 flex flex-col divide-y divide-border border-y border-border">
+        <ul className="mt-6 flex flex-col divide-y divide-border border-y border-border">
           {DOMAINS.map((domain) => {
             const inDomain = questions?.filter((q) => q.domain === domain.name) ?? []
             const sample = inDomain[0]
@@ -728,12 +829,10 @@ function DomainSection({ questions }: { questions: QuestionSummary[] | undefined
             return (
               <motion.li key={domain.name} variants={riseItemSm}>
                 <Link
-                  // The catalogue filters by `domain_slug` (the stable identifier —
-                  // QuestionsCatalogue.tsx / scoring.ts), not the display name, so
-                  // this link needs a real question's slug to land correctly. An
-                  // empty domain (no sample yet) has nothing to filter to anyway.
+                  // The catalogue filters by `domain_slug`, the stable identifier, not
+                  // the display name — an empty domain has nothing to filter to anyway.
                   to={sample ? `/questions?domain=${encodeURIComponent(sample.domain_slug)}` : '/questions'}
-                  className="group -mx-4 flex flex-col gap-4 rounded-lg border-l-2 border-l-transparent px-4 py-7 transition-colors duration-150 hover:border-l-[var(--row-domain-color)] hover:bg-secondary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex-row sm:items-center sm:gap-8"
+                  className="group -mx-4 flex flex-col gap-4 rounded-lg border-l-2 border-l-transparent px-4 py-7 transition-[color,background-color,border-color,transform] duration-150 hover:translate-x-1 hover:border-l-[var(--row-domain-color)] hover:bg-secondary/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex-row sm:items-center sm:gap-8"
                   style={{ '--row-domain-color': color } as CSSProperties}
                 >
                   <span
@@ -792,14 +891,12 @@ function DomainSection({ questions }: { questions: QuestionSummary[] | undefined
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 05. How it works — the loop, stated once
+// 06. How it works — the loop, stated once
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Question → Answer → Action → Resource.
- *
- * The commercial model in four steps. The review's point was that a "Courses" section
- * beside a "Templates" section never explains why anyone would buy either; the chain
- * that ends in them does. `GoFurther` below is step four made concrete. */
+/** Question → Answer → Action → Resource: the commercial model in four steps, giving
+ * courses and templates a reason to exist rather than listing them side by side.
+ * `GoFurther` below is step four made concrete. */
 function HowItWorks() {
   return (
     <motion.section
@@ -807,12 +904,12 @@ function HowItWorks() {
       initial="hidden"
       whileInView="visible"
       viewport={inViewOnce}
-      className="border-t border-border py-16 sm:py-24"
+      className="border-t border-border py-11 sm:py-11"
     >
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener eyebrow="How it works" title="From the problem to the thing you hand over." />
 
-        <ol className="mt-10 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+        <ol className="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
           {STEPS.map((item, i) => (
             <motion.li key={item.step} variants={riseItemSm} className="flex flex-col bg-card p-6">
               <span className="font-mono text-xs font-medium tabular-nums text-gold-strong">
@@ -829,27 +926,93 @@ function HowItWorks() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 06. Go further — what the answer leads to
+// 07. Go further — what the answer leads to
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The paid layer, framed as the end of the chain rather than as two catalogues.
- *
- * Both lists are real API reads, and each half renders only if that catalogue has
- * something in it — an empty "Courses" heading on a landing page is a promise the
- * product hasn't kept yet. */
-function GoFurther() {
-  const { data: courses } = useQuery({
-    queryKey: queryKeys.courses.list(),
-    queryFn: () => api.get<CourseSummary[]>('/courses').then((res) => res.data),
-  })
-  const { data: templates } = useQuery({
-    queryKey: queryKeys.templates.list(),
-    queryFn: () => api.get<TemplateSummary[]>('/templates').then((res) => res.data),
-  })
+/** One column shape, shared by all three product types below — same header, same list
+ *  pattern, same "see all" link — so the three read as siblings rather than two built
+ *  features and a bolted-on third. Mirrors Store.tsx's per-type sections (same order:
+ *  packs, courses, templates) rather than inventing a fourth layout for the same data. */
+function GoFurtherColumn({
+  icon: Icon,
+  eyebrow,
+  title,
+  body,
+  seeAllHref,
+  seeAllLabel,
+  children,
+}: {
+  icon: typeof Library
+  eyebrow: string
+  title: string
+  body: string
+  seeAllHref: string
+  seeAllLabel: string
+  children: ReactNode
+}) {
+  return (
+    <motion.div variants={riseItemSm} className="flex flex-col rounded-xl border border-border bg-card p-6">
+      <p className="eyebrow">
+        <Icon className="size-3.5" aria-hidden="true" />
+        {eyebrow}
+      </p>
+      <h3 className="mt-3 text-h4 font-semibold text-foreground">{title}</h3>
+      <p className="mt-1.5 text-sm text-muted-foreground">{body}</p>
+      <ul className="mt-5 flex flex-1 flex-col divide-y divide-border border-t border-border">{children}</ul>
+      <Link
+        to={seeAllHref}
+        className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
+      >
+        {seeAllLabel} <ArrowRight className="size-3.5" aria-hidden="true" />
+      </Link>
+    </motion.div>
+  )
+}
 
+/** One row inside a GoFurtherColumn: a title/subtitle pair on the left, a short fact on
+ *  the right — the shape every one of the three lists below already shares. */
+function GoFurtherRow({
+  href,
+  title,
+  subtitle,
+  meta,
+}: {
+  href: string
+  title: string
+  subtitle?: string | null
+  meta?: string | null
+}) {
+  return (
+    <li>
+      <Link to={href} className="group flex items-baseline justify-between gap-4 py-3.5 transition-colors duration-150">
+        <span>
+          <span className="block font-medium text-foreground group-hover:text-primary">{title}</span>
+          {subtitle && <span className="mt-0.5 block text-sm text-muted-foreground">{subtitle}</span>}
+        </span>
+        {meta && <span className="shrink-0 whitespace-nowrap text-xs font-medium text-muted-foreground">{meta}</span>}
+      </Link>
+    </li>
+  )
+}
+
+/** The paid layer, framed as the end of the chain rather than as a shop. All three
+ * catalogues — packs, courses, templates — get equal billing here (the review this pass
+ * was built from found the previous two-column version quietly dropped reference packs
+ * from the homepage entirely). Each column is a real API read and renders only if that
+ * catalogue actually has content — the honest-empty-state rule Store.tsx already uses. */
+function GoFurther({
+  courses,
+  templates,
+  packs,
+}: {
+  courses: CourseSummary[] | undefined
+  templates: TemplateSummary[] | undefined
+  packs: PackSummary[] | undefined
+}) {
   const hasCourses = (courses?.length ?? 0) > 0
   const hasTemplates = (templates?.length ?? 0) > 0
-  if (!hasCourses && !hasTemplates) return null
+  const hasPacks = (packs?.length ?? 0) > 0
+  if (!hasCourses && !hasTemplates && !hasPacks) return null
 
   return (
     <motion.section
@@ -857,108 +1020,83 @@ function GoFurther() {
       initial="hidden"
       whileInView="visible"
       viewport={inViewOnce}
-      className="border-t border-border bg-secondary/40 py-16 sm:py-24"
+      className="border-t border-border bg-secondary/40 py-11 sm:py-11"
     >
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener
           eyebrow="When the answer isn't enough"
-          title="Go further, or just take the working file."
-          lead="The questions and answers are free. Where a problem needs more than a page — a structured walkthrough, or a document you can put in front of a committee tomorrow — that is what the courses and templates are."
+          title="Go further — learn it, use it, or take the whole domain."
+          lead="The questions and answers are free. Where a problem needs more than a page — a formatted reference for a whole domain, a structured walkthrough, or a document you can put in front of a committee tomorrow — that is what the packs, courses and templates below are."
         />
 
-        <div className="mt-10 grid gap-5 lg:grid-cols-2">
-          {hasCourses && (
-            <motion.div
-              variants={riseItemSm}
-              className="flex flex-col rounded-xl border border-border bg-card p-6"
+        <div className="mt-6 grid gap-5 lg:grid-cols-3">
+          {hasPacks && (
+            <GoFurtherColumn
+              icon={Library}
+              eyebrow="Look it up"
+              title="Reference packs"
+              body="Every question in a domain, formatted as one PDF in a working order — the questions stay free; this is the artefact."
+              seeAllHref="/store"
+              seeAllLabel="All reference packs"
             >
-              <p className="eyebrow">
-                <GraduationCap className="size-3.5" aria-hidden="true" />
-                Learn it
-              </p>
-              <h3 className="mt-3 text-h4 font-semibold text-foreground">Courses</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                Video, reading and downloadable working files in one guided path.
-              </p>
-              <ul className="mt-5 flex flex-1 flex-col divide-y divide-border border-t border-border">
-                {courses!.slice(0, 2).map((course) => (
-                  <li key={course.slug}>
-                    <Link
-                      to={`/courses/${course.slug}`}
-                      className="group flex items-baseline justify-between gap-4 py-3.5 transition-colors duration-150"
-                    >
-                      <span>
-                        <span className="block font-medium text-foreground group-hover:text-primary">
-                          {course.title}
-                        </span>
-                        {course.subtitle && (
-                          <span className="mt-0.5 block text-sm text-muted-foreground">
-                            {course.subtitle}
-                          </span>
-                        )}
-                      </span>
-                      <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                        {course.lesson_count} {course.lesson_count === 1 ? 'lesson' : 'lessons'}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <Link
-                to="/courses"
-                className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
-              >
-                All courses <ArrowRight className="size-3.5" aria-hidden="true" />
-              </Link>
-            </motion.div>
+              {packs!.slice(0, 2).map((pack) => (
+                <GoFurtherRow
+                  key={pack.slug}
+                  href={`/store/packs/${pack.slug}`}
+                  title={pack.name}
+                  subtitle={pack.description}
+                  meta={pack.owned ? 'Owned' : formatCurrency(pack.price_amount, pack.currency)}
+                />
+              ))}
+            </GoFurtherColumn>
+          )}
+
+          {hasCourses && (
+            <GoFurtherColumn
+              icon={GraduationCap}
+              eyebrow="Learn it"
+              title="Courses"
+              body="Video, reading and downloadable working files in one guided path."
+              seeAllHref="/courses"
+              seeAllLabel="All courses"
+            >
+              {courses!.slice(0, 2).map((course) => (
+                <GoFurtherRow
+                  key={course.slug}
+                  href={`/courses/${course.slug}`}
+                  title={course.title}
+                  subtitle={course.subtitle}
+                  meta={`${course.lesson_count} ${course.lesson_count === 1 ? 'lesson' : 'lessons'}`}
+                />
+              ))}
+            </GoFurtherColumn>
           )}
 
           {hasTemplates && (
-            <motion.div
-              variants={riseItemSm}
-              className="flex flex-col rounded-xl border border-border bg-card p-6"
+            <GoFurtherColumn
+              icon={FileSpreadsheet}
+              eyebrow="Use it"
+              title="Templates"
+              body="Ready-to-use working files — the practical companion to the guidance."
+              seeAllHref="/templates"
+              seeAllLabel="All templates"
             >
-              <p className="eyebrow">
-                <FileSpreadsheet className="size-3.5" aria-hidden="true" />
-                Use it
-              </p>
-              <h3 className="mt-3 text-h4 font-semibold text-foreground">Templates</h3>
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                Ready-to-use working files — the practical companion to the guidance.
-              </p>
-              <ul className="mt-5 flex flex-1 flex-col divide-y divide-border border-t border-border">
-                {templates!.slice(0, 2).map((template) => (
-                  <li key={template.id}>
-                    <Link
-                      to={`/templates/${template.id}`}
-                      className="group flex items-baseline justify-between gap-4 py-3.5 transition-colors duration-150"
-                    >
-                      <span>
-                        <span className="block font-medium text-foreground group-hover:text-primary">
-                          {template.title}
-                        </span>
-                        <span className="mt-0.5 block text-sm text-muted-foreground">
-                          {template.description}
-                        </span>
-                      </span>
-                      <span className="shrink-0 whitespace-nowrap text-xs font-medium text-muted-foreground">
-                        {template.is_free
-                          ? 'Free'
-                          : template.product
-                            ? formatCurrency(template.product.price_amount, template.product.currency)
-                            : null}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <Link
-                to="/templates"
-                className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline"
-              >
-                All templates <ArrowRight className="size-3.5" aria-hidden="true" />
-              </Link>
-            </motion.div>
+              {templates!.slice(0, 2).map((template) => (
+                <GoFurtherRow
+                  key={template.id}
+                  href={`/templates/${template.id}`}
+                  title={template.title}
+                  subtitle={template.description}
+                  meta={
+                    template.is_free
+                      ? 'Free'
+                      : template.product
+                        ? formatCurrency(template.product.price_amount, template.product.currency)
+                        : null
+                  }
+                />
+              ))}
+            </GoFurtherColumn>
           )}
         </div>
       </div>
@@ -967,15 +1105,11 @@ function GoFurther() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 07. The claim, with the evidence next to it
+// 08. The claim, with the evidence next to it
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The header's "About" target.
- *
- * "Built from real questions risk practitioners face" was a claim standing in a large
- * empty band — which is exactly where the review said the page looked like content had
- * failed to load. The claim keeps its place; the numbers underneath it are now the
- * evidence, and all but one are counted from the live catalogue. */
+/** The header's "About" target. The claim is backed by numbers underneath it, counted
+ * from the live catalogue except one fixed statement of intent. */
 function AboutSection({ questions }: { questions: QuestionSummary[] | undefined }) {
   const stats = [
     { value: questions?.length ?? null, label: 'real workplace questions' },
@@ -991,7 +1125,7 @@ function AboutSection({ questions }: { questions: QuestionSummary[] | undefined 
       whileInView="visible"
       viewport={inViewOnce}
       id="about"
-      className="scroll-mt-24 border-t border-border py-16 sm:py-24"
+      className="scroll-mt-24 border-t border-border py-11 sm:py-11"
     >
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <motion.div variants={riseItem} className="max-w-2xl">
@@ -1006,7 +1140,7 @@ function AboutSection({ questions }: { questions: QuestionSummary[] | undefined 
           </p>
         </motion.div>
 
-        <dl className="mt-12 grid gap-8 border-t border-border pt-10 sm:grid-cols-2 lg:grid-cols-4">
+        <dl className="mt-8 grid gap-8 border-t border-border pt-10 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
             <motion.div key={stat.label} variants={riseItemSm}>
               <dt className="text-display font-semibold tabular-nums leading-none text-primary">
@@ -1022,21 +1156,14 @@ function AboutSection({ questions }: { questions: QuestionSummary[] | undefined 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 08. Ask again — the closing CTA
+// 09. Ask again — the closing CTA
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The `#free-pack` anchor (the header's and the footer's "Get started" target).
- *
- * It closes on the same gesture the page opened with, because that gesture is the
- * product. The email row underneath it is the old lead capture, kept — same endpoint,
- * same `homepage_free_pack` source, so the existing lead reporting is unbroken — but
- * demoted below the search, since a visitor who came this far should be sent into the
- * catalogue first and onto a list second.
- *
- * Deliberately champagne rather than the dark stage the review suggested: the footer
- * directly below is already a full-bleed dark plane carrying its own newsletter
- * headline, and two dark bands in a row is the same "one big block" problem the review
- * raised about the hero and footer. This gives dark → light → dark instead. */
+/** The `#free-pack` anchor — the header's and footer's "Get started" target. Closes on
+ * the same search gesture the page opened with. The email row underneath is the lead
+ * capture, kept at the same endpoint/source but demoted below the search: a visitor who
+ * came this far should be sent into the catalogue first and onto a list second.
+ * Champagne, not dark, so the page doesn't stack two dark bands against the footer. */
 function FinalCta() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -1061,7 +1188,7 @@ function FinalCta() {
       whileInView="visible"
       viewport={inViewOnce}
       id="free-pack"
-      className="scroll-mt-24 border-t border-border bg-secondary/40 py-16 sm:py-24"
+      className="scroll-mt-24 border-t border-border bg-secondary/40 py-11 sm:py-11"
     >
       <div className="mx-auto w-full max-w-4xl px-5 text-center sm:px-8">
         <motion.h2 variants={riseItem} className="text-balance text-h2 font-semibold text-foreground">
@@ -1073,29 +1200,40 @@ function FinalCta() {
         </motion.p>
 
         <motion.form variants={riseItem} onSubmit={handleSearch} className="mx-auto mt-8 max-w-xl">
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-primary/70"
-              aria-hidden="true"
-            />
-            <label htmlFor="closing-finder" className="sr-only">
-              Search the questions
-            </label>
-            <Input
-              id="closing-finder"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="What are you trying to solve?"
-              className="h-14 rounded-xl border-border-strong/60 bg-card pl-11 pr-32 text-base"
-            />
-            <Button type="submit" className="absolute right-2 top-2 h-10">
+          {/* Stacked below 640px, overlaid above it. "Find an answer" needs ~132px, which
+              left too little room for the placeholder at 375px — it read as "What are you
+              trying t…" with the button sitting on top of it. Found on the real-device
+              walkthrough, 2026-08-14. Stacking matches the newsletter form below, so the
+              two forms in this section read as one pattern rather than two. */}
+          <div className="flex flex-col gap-3 sm:relative sm:gap-0">
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-primary/70"
+                aria-hidden="true"
+              />
+              <label htmlFor="closing-finder" className="sr-only">
+                Search the questions
+              </label>
+              <Input
+                id="closing-finder"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="What are you trying to solve?"
+                className="h-14 rounded-xl border-border-strong/60 bg-card pl-11 pr-4 text-base sm:pr-36"
+              />
+            </div>
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full sm:absolute sm:right-2 sm:top-2 sm:h-10 sm:w-auto sm:px-4 sm:text-sm"
+            >
               Find an answer
             </Button>
           </div>
         </motion.form>
 
         {/* Secondary, and visibly so. */}
-        <motion.div variants={riseItemSm} className="mt-10 border-t border-border pt-8">
+        <motion.div variants={riseItemSm} className="mt-6 border-t border-border pt-8">
           {submitted ? (
             <p className="text-sm text-foreground" role="status">
               You're on the list.

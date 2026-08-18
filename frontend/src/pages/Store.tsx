@@ -6,16 +6,48 @@ import { Library } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
+import { useAuthStore } from '@/stores/useAuthStore'
+import { REFUND_POSITION_TEXT, TAX_STATEMENT_TEXT } from '@/lib/labels'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { Button } from '@/components/ui/Button'
 import { ContentTypeCard } from '@/components/store/ContentTypeCard'
+import { BundleCard } from '@/components/pricing/BundleCard'
 import { riseItemSm, inViewOnce } from '@/lib/motion'
+
+interface ProductOut {
+  id: string
+  slug: string
+  name: string
+  price_amount: number
+  currency: string
+}
+
+// Owner direction 2026-08-16: no standalone /pricing page — one-time prices for every
+// product live here instead. The bundle is the one thing that needs its own real
+// arithmetic (§20.2's "the saving is a real dollar amount, never hard-coded"), so it
+// gets a dedicated card; every other product already shows its own price on its own
+// card in the sections below, which is the whole point of folding this in rather than
+// keeping a second page that just repeated a subset of the same catalogue.
+const FLAGSHIP_SLUG = 'risk-register-fundamentals'
+const BUNDLE_SLUG = 'risk-register-bundle'
+const PACK_SLUG = 'risk-enterprise-op-question-pack'
 
 interface RelatedProduct {
   slug: string
   name: string
   price_amount: number
   currency: string
+}
+
+// A pack is a product, not a content row — it is addressed by product slug, and its
+// price lives on the product rather than on a nested `product` ref like the two below.
+interface PackSummary {
+  slug: string
+  name: string
+  question_count: number
+  price_amount: number
+  currency: string
+  owned: boolean
 }
 
 interface CourseSummary {
@@ -39,10 +71,9 @@ interface TemplateSummary {
   is_free: boolean
 }
 
-// week2_plan.md Phase 4 / §20.1. Order is fixed — Reference packs · Courses ·
-// Templates, the Product Spec's own order — and the three types are never merged
-// into one grid: a store that renders them identically teaches the visitor they're
-// the same thing (§36 — sections are not cards; the products inside them are).
+// week2_plan.md Phase 4 / §20.1. Order is fixed — Reference packs · Courses · Templates, the Product Spec's own order — and the three types are never merged
+// into one grid: a store that renders them identically teaches the visitor they're the same thing (§36 — sections are not cards; the products inside them are).
+
 function StoreSection({ title, explainer, children }: { title: string; explainer: string; children: ReactNode }) {
   return (
     <motion.section
@@ -78,6 +109,12 @@ function EmptySection({ message, sub, linkTo, linkLabel }: { message: string; su
 }
 
 export function Store() {
+  const user = useAuthStore((s) => s.user)
+
+  const { data: packs, isLoading: packsLoading } = useQuery({
+    queryKey: queryKeys.packs.list(),
+    queryFn: () => api.get<PackSummary[]>('/packs').then((res) => res.data),
+  })
   const { data: courses, isLoading: coursesLoading } = useQuery({
     queryKey: queryKeys.courses.list(),
     queryFn: () => api.get<CourseSummary[]>('/courses').then((res) => res.data),
@@ -86,36 +123,92 @@ export function Store() {
     queryKey: queryKeys.templates.list(),
     queryFn: () => api.get<TemplateSummary[]>('/templates').then((res) => res.data),
   })
+  const { data: products } = useQuery({
+    queryKey: queryKeys.products.list(),
+    queryFn: () => api.get<ProductOut[]>('/products').then((res) => res.data),
+  })
+  const { data: entitlements } = useQuery({
+    queryKey: queryKeys.me.entitlements(),
+    queryFn: () => api.get<{ product_ids: string[] }>('/me/entitlements').then((res) => res.data),
+    enabled: !!user,
+  })
+  const ownedIds = new Set(entitlements?.product_ids ?? [])
+  const flagship = products?.find((p) => p.slug === FLAGSHIP_SLUG)
+  const bundle = products?.find((p) => p.slug === BUNDLE_SLUG)
+  const pack = products?.find((p) => p.slug === PACK_SLUG)
 
   return (
-    <div className="relative isolate mx-auto w-full max-w-7xl px-5 py-12 sm:px-8 lg:px-12">
-      {/* §16.2: /store uses .page-wash, not .hero-wash — an index felt rather than
-          noticed, not a landing page. */}
+    <div className="relative isolate mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
+      {/* §16.2: /store uses .page-wash, not .hero-wash — an index felt rather than noticed, not a landing page. */}
       <div aria-hidden="true" className="page-wash absolute left-1/2 top-0 -z-10 h-[30rem] w-screen -translate-x-1/2" />
 
       <PageTitle
         eyebrow="Store"
         title="Everything, in the shape you need it"
-        description="Look something up, learn a domain properly, or take the one file you need today."
+        description="Look something up, learn a domain properly, or take the one file you need today. One-time prices, lifetime access — no subscription."
       />
 
-      <div className="mt-12 flex flex-col gap-16 sm:gap-16">
+      {bundle && flagship && pack && (
+        <div className="mt-8">
+          <BundleCard
+            title="Risk Register, start to finish"
+            description="The course, plus every question in the domain, curated."
+            parts={[
+              { name: flagship.name, price_amount: flagship.price_amount },
+              { name: pack.name, price_amount: pack.price_amount },
+            ]}
+            bundlePriceAmount={bundle.price_amount}
+            currency={bundle.currency}
+            product={{
+              id: bundle.id, slug: bundle.slug, name: bundle.name,
+              price_amount: bundle.price_amount, currency: bundle.currency,
+            }}
+            owned={ownedIds.has(bundle.id)}
+            ownsEveryPart={ownedIds.has(flagship.id) && ownedIds.has(bundle.id)}
+          />
+        </div>
+      )}
+
+      <div className="mt-10 flex flex-col gap-10 sm:gap-10">
         {/* ── Reference packs ─────────────────────────────────────────────────
-            No domain-pack SKU exists yet (week2_plan.md W2-R6 — blocked on
-            owner decision #19, the artefact). The mechanism (product +
-            question_set contents + a template row) is ready to seed the moment
-            a real PDF exists; until then this is the honest empty state, not a
-            "coming soon" tile that looks like a product. */}
+            week2_plan.md W2-R6. Driven by GET /packs, which returns only *published* packs — so this still renders the honest empty state
+            until a pack has both a real PDF in Storage and a real Stripe price (db/seed/014 refuses to publish without one). No "coming soon" tile
+            that looks like a product, in either state. */}
         <StoreSection
           title="Reference packs"
           explainer="Look something up. All 100 questions are free to read; a pack is the formatted artefact and the working order."
         >
-          <EmptySection
-            message="No packs are on sale yet."
-            sub="The 100 questions are free to read in the meantime."
-            linkTo="/questions"
-            linkLabel="Browse the questions"
-          />
+          {packsLoading && (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {[0, 1].map((i) => (
+                <div key={i} className="h-56 animate-pulse rounded-lg border border-border bg-muted/40" />
+              ))}
+            </div>
+          )}
+          {!packsLoading && (!packs || packs.length === 0) && (
+            <EmptySection
+              message="No packs are on sale yet."
+              sub="The 100 questions are free to read in the meantime."
+              linkTo="/questions"
+              linkLabel="Browse the questions"
+            />
+          )}
+          {!packsLoading && packs && packs.length > 0 && (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {packs.map((pack) => (
+                <ContentTypeCard
+                  key={pack.slug}
+                  variant="pack"
+                  href={`/store/packs/${pack.slug}`}
+                  title={pack.name}
+                  subLine={`${pack.question_count} questions · PDF`}
+                  price={formatCurrency(pack.price_amount, pack.currency)}
+                  actionLabel={pack.owned ? 'Download again' : 'See what’s inside'}
+                  ownedBadge={pack.owned ? 'In your library' : undefined}
+                />
+              ))}
+            </div>
+          )}
         </StoreSection>
 
         {/* ── Courses ──────────────────────────────────────────────────────── */}
@@ -216,7 +309,7 @@ export function Store() {
           above and the free template inside Templates; this closing note exists so
           a visitor who skimmed past both still sees the free path stated once,
           plainly, at the point they'd otherwise leave. */}
-      <div className="mt-16 flex items-center gap-4 rounded-lg border border-border bg-muted/30 px-5 py-4">
+      <div className="mt-11 flex items-center gap-4 rounded-lg border border-border bg-muted/30 px-5 py-4">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-accent/12 text-accent" aria-hidden="true">
           <Library className="size-[18px]" />
         </span>
@@ -229,6 +322,19 @@ export function Store() {
             Browse the questions
           </Button>
         </Link>
+      </div>
+
+      {/* Was /pricing's closing block — the same two sentences, word for word, stated
+          once before any checkout rather than repeated per-product. Owner direction
+          2026-08-16: this is now the one place they render on a browsing page. */}
+      <div className="mt-6 flex flex-col gap-2 border-t border-border pt-6 text-sm text-muted-foreground">
+        <p>{TAX_STATEMENT_TEXT}</p>
+        <p>
+          {REFUND_POSITION_TEXT}{' '}
+          <Link to="/legal/refunds" className="text-accent underline underline-offset-2">
+            Read the full policy →
+          </Link>
+        </p>
       </div>
     </div>
   )

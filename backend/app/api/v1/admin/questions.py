@@ -11,7 +11,7 @@ from app.core.deps import require_admin
 from app.db.models import Domain, Question, QuestionLeadershipTrait, TagValue, User
 from app.db.session import get_session
 
-from .common import ensure_unique_slug, get_or_404, record_audit, slugify
+from .common import PublishStateIn, apply_publish_state_or_422, ensure_unique_slug, get_or_404, record_audit, slugify
 
 router = APIRouter()
 
@@ -49,6 +49,9 @@ class QuestionRowOut(BaseModel):
     subtitle: Optional[str]
     domain: str
     published: bool
+    publish_state: str
+    featured: bool
+    featured_sort: Optional[int]
     # In the list so an editor can spot rows still carrying a machine-derived preview.
     preview: str
 
@@ -111,28 +114,40 @@ async def list_questions(
     session: AsyncSession = Depends(get_session),
     search: Optional[str] = None,
     published: Optional[bool] = None,
+    featured: Optional[bool] = None,
     limit: int = Query(default=50, le=200),
     offset: int = 0,
 ):
     """Paginated and searchable, unlike the public catalogue which returns everything.
-    `total` is a separate COUNT so the UI can show "showing 50 of 100" truthfully."""
+    `total` is a separate COUNT so the UI can show "showing 50 of 100" truthfully.
+
+    `?featured=true` sorts by `featured_sort` (nulls last) instead of title — the
+    `FeaturedToggle` summary calls this to show "4 questions featured, in this order"
+    with the actual homepage order, not an alphabetical one."""
     conditions = []
     if search:
         pattern = f"%{search}%"
         conditions.append(or_(Question.title.ilike(pattern), Question.subtitle.ilike(pattern)))
     if published is not None:
         conditions.append(Question.published.is_(published))
+    if featured is not None:
+        conditions.append(Question.featured.is_(featured))
 
     total = (
         await session.execute(select(func.count()).select_from(Question).where(*conditions))
     ).scalar_one()
 
+    order_by = (
+        (Question.featured_sort.is_(None), Question.featured_sort, Question.title)
+        if featured
+        else (Question.title,)
+    )
     rows = (
         await session.execute(
             select(Question, Domain)
             .join(Domain, Domain.id == Question.domain_id)
             .where(*conditions)
-            .order_by(Question.title)
+            .order_by(*order_by)
             .limit(limit)
             .offset(offset)
         )
@@ -143,7 +158,8 @@ async def list_questions(
         items=[
             QuestionRowOut(
                 id=str(q.id), slug=q.slug, title=q.title, subtitle=q.subtitle,
-                domain=d.name, published=q.published, preview=q.preview,
+                domain=d.name, published=q.published, publish_state=q.publish_state.value,
+                featured=q.featured, featured_sort=q.featured_sort, preview=q.preview,
             )
             for q, d in rows
         ],
@@ -176,7 +192,8 @@ async def get_question(question_id: uuid.UUID, session: AsyncSession = Depends(g
         id=str(question.id), slug=question.slug, title=question.title,
         subtitle=question.subtitle, body=question.body, preview=question.preview,
         domain=domain.name if domain else "", domain_id=str(question.domain_id),
-        published=question.published, tags=tags,
+        published=question.published, publish_state=question.publish_state.value,
+        featured=question.featured, featured_sort=question.featured_sort, tags=tags,
         leadership_trait_ids=[str(t) for t in trait_ids],
     )
 
@@ -312,27 +329,54 @@ async def update_question(
     return await get_question(question_id, session)
 
 
-class PublishIn(BaseModel):
-    published: bool
-
-
 @router.post("/admin/questions/{question_id}/publish", response_model=QuestionDetailOut)
 async def set_published(
     question_id: uuid.UUID,
-    payload: PublishIn,
+    payload: PublishStateIn,
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """Publish/unpublish. Separate from update so the audit trail distinguishes a wording
-    edit from taking a question off the site."""
+    """Publish/unpublish, or move through the fuller draft/in_review/published/archived
+    cycle (migration 012). Separate from update so the audit trail distinguishes a
+    wording edit from a state change."""
     question = await get_or_404(session, Question, question_id, "Question")
+    was_state = question.publish_state.value
     was = question.published
-    question.published = payload.published
+    new_state = apply_publish_state_or_422(question, payload)
     await record_audit(
         session, actor=admin,
         action="publish_question" if payload.published else "unpublish_question",
         target_type="question", target_id=question.id,
-        context={"from": was, "to": payload.published},
+        context={"from": was, "to": payload.published, "state_from": was_state, "state_to": new_state.value},
+    )
+    await session.commit()
+    return await get_question(question_id, session)
+
+
+class FeaturedIn(BaseModel):
+    featured: bool
+    # Required when featuring, ignored when unfeaturing — see the handler.
+    featured_sort: Optional[int] = None
+
+
+@router.post("/admin/questions/{question_id}/featured", response_model=QuestionDetailOut)
+async def set_featured(
+    question_id: uuid.UUID,
+    payload: FeaturedIn,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """The homepage's curated picks (week3_plan.md §20.6). Unfeaturing always clears
+    `featured_sort` — a stale sort value on an unfeatured row is a landmine for whoever
+    features it again later and inherits an order they never chose."""
+    question = await get_or_404(session, Question, question_id, "Question")
+    was = {"featured": question.featured, "featured_sort": question.featured_sort}
+    question.featured = payload.featured
+    question.featured_sort = payload.featured_sort if payload.featured else None
+    await record_audit(
+        session, actor=admin, action="feature_question" if payload.featured else "unfeature_question",
+        target_type="question", target_id=question.id,
+        context={"from": was, "to": {"featured": question.featured, "featured_sort": question.featured_sort}},
     )
     await session.commit()
     return await get_question(question_id, session)

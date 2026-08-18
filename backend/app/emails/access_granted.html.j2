@@ -1,0 +1,21 @@
+{% extends "base.html.j2" %}
+{% import "_button.html.j2" as btn %}
+{% block title %}You now have access to {{ product_name }}{% endblock %}
+{% block preheader %}Your access to {{ product_name }} is live — here's the link.{% endblock %}
+{% block content %}
+<h1 style="font-family:Georgia,'Times New Roman',serif; font-size:22px; line-height:1.3; color:#1C1712; margin:0 0 16px;">You now have access</h1>
+<p style="margin:0 0 16px;">Your purchase of <strong>{{ product_name }}</strong> is complete, and everything it includes is available now.</p>
+{% if content_items %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;">
+  {% for item in content_items %}
+  <tr>
+    <td style="padding:4px 0; font-family:Georgia,'Times New Roman',serif; font-size:16px; color:#1C1712;">– {{ item.label }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+  <tr><td>{{ btn.button(primary_link, "Go to your library") }}</td></tr>
+</table>
+<p style="margin:0;">Sign in with the email address you used to buy — {{ to_email }} — and it will already be there.</p>
+{% endblock %}

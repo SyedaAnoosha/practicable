@@ -2,23 +2,13 @@
 in place of real Supabase verification, one AsyncClient per actor, and the minimal
 content graph the gating suite needs.
 
-week2_plan.md Phase 1 step 2: "Seed and tear down inside the test transaction — a suite
-that leaves rows behind will drift and start lying." Every fixture here rolls back, via
-SQLAlchemy 2.0's documented pattern for testing code that itself calls `session.commit()`
-(order_service, audit_service, the lesson-complete route, ...): one real connection, one
-outer transaction that is never committed, and `join_transaction_mode="create_savepoint"`
-so an inner `commit()` becomes a SAVEPOINT release rather than an actual COMMIT.
+Every fixture rolls back via SQLAlchemy 2.0's pattern for testing code that itself calls
+`session.commit()`: one outer transaction that's never committed, with
+`join_transaction_mode="create_savepoint"` so an inner `commit()` becomes a SAVEPOINT
+release. Auth is a synthetic bearer token decoded locally, since Supabase JWTs are ES256
+via JWKS and can't be minted here — the Playwright suite exercises the real token path.
 
-Auth note (same section): Supabase JWTs are ES256 via JWKS and cannot be minted locally.
-This file overrides `verify_jwt_full` / `verify_jwt_optional` with a dependency that
-decodes a synthetic bearer token instead of calling Supabase. The Playwright pass
-(tests/e2e) does the opposite — real sign-in against Supabase — so at least one layer
-exercises the real token path, per the plan's explicit instruction.
-
-Run from `backend/` (pyproject.toml's `pythonpath = ["."]` makes `import main` and
-`import app.*` resolve either way, but `Settings.Config.env_file = ".env"` is resolved
-relative to the process CWD, so pytest must be invoked from `backend/` for a real DB
-connection to be found).
+Run from `backend/`: `Settings.Config.env_file = ".env"` resolves relative to CWD.
 """
 from __future__ import annotations
 
@@ -51,6 +41,7 @@ from app.db.models import (
     Module,
     Product,
     ProductContent,
+    Question,
     Role,
     Section,
     Author,
@@ -60,15 +51,10 @@ from app.db.models import (
 from app.db.session import _asyncpg_url, get_session
 from main import app
 
-# A SEPARATE engine from the app's own module-level `engine` (app/db/session.py), and
-# deliberately NullPool: that global is a pooled engine whose asyncpg connections get
-# bound to whichever event loop first checks them out, and pytest-asyncio hands each test
-# FUNCTION a fresh loop by default (see pyproject.toml's comment on
-# `asyncio_default_fixture_loop_scope`). A pooled connection reused across two different
-# loops fails with "Task ... attached to a different loop" the moment a second test tries
-# to use it. NullPool opens a brand-new asyncpg connection per `engine.connect()` and
-# closes it on release, so it never outlives the loop that created it — the standard fix
-# for testing an asyncpg-backed app under pytest-asyncio's per-test loops.
+# A SEPARATE engine from the app's own, and deliberately NullPool: a pooled connection
+# gets bound to whichever event loop first checks it out, and pytest-asyncio hands each
+# test function a fresh loop, so a reused connection fails with "attached to a different
+# loop". NullPool opens a fresh connection per `engine.connect()` instead.
 _test_engine = create_async_engine(
     _asyncpg_url(settings.database_url),
     poolclass=NullPool,
@@ -76,9 +62,8 @@ _test_engine = create_async_engine(
 )
 
 # ── The fake bearer-token scheme ────────────────────────────────────────────────────
-# Format: "test|<user_id>|<email>|<name>". Stateless and self-describing — no shared
-# lookup table needed across the anon/member/entitled/admin fixtures below, and every
-# test that wants a *fifth* kind of actor can just mint its own token inline.
+# Format: "test|<user_id>|<email>|<name>". Stateless and self-describing, so a fifth
+# kind of actor can mint its own token inline with no shared lookup table.
 _FAKE_PREFIX = "test"
 
 
@@ -117,13 +102,10 @@ async def _fake_verify_jwt_optional(
 
 
 # ── DB: one real connection per test, in a transaction that is always rolled back ──
-# SQLAlchemy 2.0's documented recipe for testing code that itself calls session.commit()
-# ("Joining a Session into an External Transaction"). `join_transaction_mode=
-# "create_savepoint"` alone is not enough: a `commit()` inside a route ENDS that
-# savepoint, and without the `after_transaction_end` listener restarting one immediately,
-# every operation after the first inner commit runs unprotected against the outer
-# transaction — which is what produced "cannot perform operation: another operation is in
-# progress" the first time this fixture was written without the listener.
+# `join_transaction_mode="create_savepoint"` alone isn't enough: a `commit()` inside a
+# route ENDS that savepoint, so the `after_transaction_end` listener below restarts one
+# immediately — without it, every operation after the first inner commit runs
+# unprotected against the outer transaction.
 @pytest_asyncio.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     async with _test_engine.connect() as connection:
@@ -146,10 +128,8 @@ async def db_session() -> AsyncIterator[AsyncSession]:
 @pytest_asyncio.fixture(autouse=True)
 async def _override_session_and_auth(db_session: AsyncSession):
     """Point every `Depends(get_session)` at this test's transactional session, and every
-    `Depends(verify_jwt_full/optional)` at the fake decoder. Autouse: a test that forgot
-    to request this would silently hit the real JWKS endpoint and open a stray connection
-    outside the rollback boundary — the drift Non-negotiable #9 warns a suite that can't
-    fail produces."""
+    `Depends(verify_jwt_full/optional)` at the fake decoder. Autouse, so no test can
+    forget it and silently hit the real JWKS endpoint outside the rollback boundary."""
 
     async def _get_test_session():
         yield db_session
@@ -181,9 +161,8 @@ def _authed_client_factory(user_id: uuid.UUID, email: str, name: str = ""):
 
 
 # ── The four actors ─────────────────────────────────────────────────────────────────
-# Each creates its own `users` row (get_current_user's first-sight insert would do this
-# on the first request anyway; doing it here means fixtures can reference `.id` before
-# any request is made) and its own client bound to that identity.
+# Each creates its own `users` row up front (rather than on request) so fixtures can
+# reference `.id` before any request is made, plus its own client bound to that identity.
 
 
 @pytest_asyncio.fixture
@@ -197,9 +176,8 @@ async def member_user(db_session: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 async def entitled_user(db_session: AsyncSession) -> User:
-    """Signed in, will hold the course product — see `entitled_client`'s companion
-    `granted_entitlement` fixture in test_gating.py for the actual grant, kept out of
-    this file because *which* product is entitled varies per test."""
+    """Signed in, will hold the course product — the actual grant lives in
+    test_gating.py, since which product is entitled varies per test."""
     user = User(id=uuid.uuid4(), email=f"buyer-{uuid.uuid4().hex[:8]}@example.test", role=Role.MEMBER)
     db_session.add(user)
     await db_session.flush()
@@ -234,9 +212,8 @@ async def admin_client(admin_user: User) -> AsyncIterator[AsyncClient]:
 
 # ── Minimal content graph ───────────────────────────────────────────────────────────
 # One section/author/domain, one course with one module and one gated video lesson, one
-# standalone paid template, one free template, one draft (unpublished) lesson. Every slug
-# carries a random suffix so it can never collide with real seeded rows the transaction
-# can already see (Postgres READ COMMITTED sees other sessions' committed data).
+# standalone paid template, one free template, one draft lesson. Every slug carries a
+# random suffix so it can't collide with real seeded rows visible under READ COMMITTED.
 
 
 def _slug(prefix: str) -> str:
@@ -246,7 +223,7 @@ def _slug(prefix: str) -> str:
 @pytest_asyncio.fixture
 async def content_graph(db_session: AsyncSession):
     """Returns a namespace of the rows most gating cases need. Built once per test, not
-    shared across tests, so no case can leak state into another (Non-negotiable #9)."""
+    shared across tests, so no case can leak state into another."""
 
     section = Section(name="Test Section", slug=_slug("section"))
     author = Author(name="Test Author", slug=_slug("author"))
@@ -322,15 +299,11 @@ async def content_graph(db_session: AsyncSession):
     ])
     await db_session.flush()
 
-    # A mixed-content lesson (added below, `mixed_lesson`) is granted by the SAME
-    # `lesson_product` as a second ProductContent row — a real course product grants
-    # every lesson in it via one row each, not one product per lesson.
+    # A mixed-content lesson (below) is granted by the SAME `lesson_product` as a second
+    # ProductContent row — a course product grants every lesson via one row each.
 
-    # A mixed-content lesson (week2_plan.md Phase 2 / gating case 11): one text block,
-    # one video block with its own media row, one paid file block, one FREE file block —
-    # in the same course/module so it's covered by `lesson_product`'s entitlement, same
-    # as `lesson` above. The free block exists to prove per-block gating, not all-or-
-    # nothing: an unentitled viewer sees the free file block and nothing else.
+    # A mixed-content lesson: one text block, one video block, one paid file block, one
+    # FREE file block — the free block proves per-block gating, not all-or-nothing.
     mixed_lesson = Lesson(
         slug=_slug("mixed-lesson"), title="Mixed Content Lesson", description="d",
         lesson_type=LessonType.MIXED,
@@ -366,6 +339,38 @@ async def content_graph(db_session: AsyncSession):
     db_session.add(ProductContent(product_id=lesson_product.id, content_type="lesson", content_id=mixed_lesson.id))
     await db_session.flush()
 
+    # A domain pack: one product carrying one template row (the PDF) plus N question_set
+    # rows — same Product/ProductContent shape as any other product, just two
+    # content_types on one. `pack_question` proves its questions stay independently free.
+    pack_pdf = Template(
+        slug=_slug("pack-pdf"), title="Test Domain — question pack (PDF)", description="d",
+        section_id=section.id, author_id=author.id,
+        storage_key=f"test/{uuid.uuid4().hex}.pdf", file_name="pack.pdf",
+        file_size_bytes=4096, mime_type="application/pdf",
+        published=True, is_free=False,
+    )
+    db_session.add(pack_pdf)
+    await db_session.flush()
+
+    pack_question = Question(
+        slug=_slug("pack-question"), title="A pack question", subtitle="d",
+        body="THE-FREE-QUESTION-BODY", preview="preview", domain_id=domain.id, published=True,
+    )
+    db_session.add(pack_question)
+    await db_session.flush()
+
+    pack_product = Product(
+        slug=_slug("pack-product"), name="Test Domain Pack", description="d",
+        stripe_price_id=f"price_test_{uuid.uuid4().hex[:12]}", price_amount=4900, currency="AUD", published=True,
+    )
+    db_session.add(pack_product)
+    await db_session.flush()
+    db_session.add_all([
+        ProductContent(product_id=pack_product.id, content_type="template", content_id=pack_pdf.id),
+        ProductContent(product_id=pack_product.id, content_type="question_set", content_id=pack_question.id),
+    ])
+    await db_session.flush()
+
     class Graph:
         pass
 
@@ -378,14 +383,14 @@ async def content_graph(db_session: AsyncSession):
     g.mixed_lesson, g.mixed_media = mixed_lesson, mixed_media
     g.text_block, g.video_block = text_block, video_block
     g.paid_file_block, g.free_file_block = paid_file_block, free_file_block
+    g.pack_pdf, g.pack_question, g.pack_product = pack_pdf, pack_question, pack_product
     return g
 
 
 @pytest_asyncio.fixture
 async def grant(db_session: AsyncSession):
     """`await grant(user, product)` — an active entitlement, immediately visible to the
-    same transaction. Returns the row so a test can delete it to exercise case 7
-    (revoked mid-session)."""
+    same transaction. Returns the row so a test can delete it to exercise revocation."""
 
     async def _grant(user: User, product: Product) -> Entitlement:
         ent = Entitlement(user_id=user.id, product_id=product.id, granted_via=GrantedVia.MANUAL)

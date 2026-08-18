@@ -11,9 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import require_admin
 from app.db.models import Author, Section, Template, User
 from app.db.session import get_session
-from app.integrations.storage_client import delete_file, upload_file
+from app.integrations.storage_client import delete_file, generate_presigned_upload_url, head_object, upload_file
 
-from .common import ensure_unique_slug, get_or_404, record_audit, slugify
+from .common import PublishStateIn, apply_publish_state_or_422, ensure_unique_slug, get_or_404, record_audit, slugify
 
 router = APIRouter()
 
@@ -28,6 +28,7 @@ ALLOWED_MIME_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
     "application/msword",  # .doc
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",  # .pptx
+    "application/vnd.ms-powerpoint",  # .ppt
     "application/pdf",
     "text/csv",
     "application/zip",
@@ -50,6 +51,7 @@ class TemplateOut(BaseModel):
     file_size_bytes: int
     mime_type: str
     published: bool
+    publish_state: str
     is_free: bool
     # False until a file has been uploaded; the editor uses it to block publishing, which
     # would otherwise put a buyable product on the site whose download 404s after payment.
@@ -60,7 +62,7 @@ def _to_out(t: Template) -> TemplateOut:
     return TemplateOut(
         id=str(t.id), slug=t.slug, title=t.title, description=t.description,
         file_name=t.file_name, file_size_bytes=t.file_size_bytes,
-        mime_type=t.mime_type, published=t.published, is_free=t.is_free,
+        mime_type=t.mime_type, published=t.published, publish_state=t.publish_state.value, is_free=t.is_free,
         has_file=bool(t.storage_key),
     )
 
@@ -212,14 +214,109 @@ async def upload_template_file(
     return _to_out(template)
 
 
-class PublishIn(BaseModel):
-    published: bool
+class UploadUrlIn(BaseModel):
+    file_name: str = Field(min_length=1, max_length=255)
+    content_type: str
+    file_size_bytes: int = Field(gt=0)
+
+
+class UploadUrlOut(BaseModel):
+    upload_url: str
+    storage_key: str
+    expires_in: int
+
+
+@router.post("/admin/templates/{template_id}/upload-url", response_model=UploadUrlOut)
+async def create_template_upload_url(
+    template_id: uuid.UUID,
+    payload: UploadUrlIn,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """week3_plan.md Phase 5 step 2 — a presigned Storage PUT url the browser writes
+    directly to, so a large template pack no longer has to be buffered in memory and
+    proxied through this API. Type and size are validated here, BEFORE a URL is even
+    issued — stated to the editor before a file is chosen, not discovered after a
+    failed upload (§20.4). `upload_template_file` above still exists for anything that
+    calls it directly; this is the path `UploadField` uses.
+    """
+    await get_or_404(session, Template, template_id, "Template")  # 404s a bad id early
+
+    if payload.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail={"error": {"code": "unsupported_type", "message": f"{payload.content_type} isn't an accepted template format."}},
+        )
+    if payload.file_size_bytes > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={"error": {"code": "file_too_large", "message": f"That file is {payload.file_size_bytes / (1024 * 1024):.0f}MB. The ceiling is {MAX_UPLOAD_BYTES // (1024 * 1024)}MB."}},
+        )
+
+    safe_name = slugify(payload.file_name) or "template"
+    storage_key = f"templates/{template_id}/{uuid.uuid4().hex}-{safe_name}"
+    expiry_seconds = 300
+    upload_url = generate_presigned_upload_url(key=storage_key, content_type=payload.content_type, expiry_seconds=expiry_seconds)
+    return UploadUrlOut(upload_url=upload_url, storage_key=storage_key, expires_in=expiry_seconds)
+
+
+class UploadConfirmIn(BaseModel):
+    storage_key: str
+    file_name: str = Field(min_length=1, max_length=255)
+
+
+@router.post("/admin/templates/{template_id}/upload-url/confirm", response_model=TemplateOut)
+async def confirm_template_upload(
+    template_id: uuid.UUID,
+    payload: UploadConfirmIn,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Called once the browser's direct PUT to `storage_key` has completed. Verifies
+    the object actually landed via a real `HEAD` against Storage — server-verified
+    size/type, never the client's own say-so — then updates the row exactly as
+    `upload_template_file` does, including deleting the superseded object."""
+    template = await get_or_404(session, Template, template_id, "Template")
+
+    meta = await asyncio.to_thread(head_object, payload.storage_key)
+    if meta is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "upload_not_found", "message": "That upload hasn't landed in storage yet — try again in a moment."}},
+        )
+    content_length = meta.get("content_length") or 0
+    if content_length > MAX_UPLOAD_BYTES:
+        await asyncio.to_thread(delete_file, payload.storage_key)
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={"error": {"code": "file_too_large", "message": f"That file is {content_length / (1024 * 1024):.0f}MB. The ceiling is {MAX_UPLOAD_BYTES // (1024 * 1024)}MB."}},
+        )
+
+    previous_key = template.storage_key
+    template.storage_key = payload.storage_key
+    template.file_name = payload.file_name
+    template.file_size_bytes = content_length
+    template.mime_type = meta.get("content_type") or template.mime_type or "application/octet-stream"
+    await record_audit(
+        session, actor=admin, action="upload_template_file", target_type="template",
+        target_id=template.id,
+        context={"file_name": template.file_name, "bytes": content_length, "replaced": bool(previous_key), "via": "presigned"},
+    )
+    await session.commit()
+
+    if previous_key and previous_key != payload.storage_key:
+        try:
+            await asyncio.to_thread(delete_file, previous_key)
+        except Exception:  # noqa: BLE001 — best-effort, row is already committed
+            pass
+
+    return _to_out(template)
 
 
 @router.post("/admin/templates/{template_id}/publish", response_model=TemplateOut)
 async def set_published(
     template_id: uuid.UUID,
-    payload: PublishIn,
+    payload: PublishStateIn,
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
@@ -234,13 +331,14 @@ async def set_published(
                 }
             },
         )
+    was_state = template.publish_state.value
     was = template.published
-    template.published = payload.published
+    new_state = apply_publish_state_or_422(template, payload)
     await record_audit(
         session, actor=admin,
         action="publish_template" if payload.published else "unpublish_template",
         target_type="template", target_id=template.id,
-        context={"from": was, "to": payload.published},
+        context={"from": was, "to": payload.published, "state_from": was_state, "state_to": new_state.value},
     )
     await session.commit()
     return _to_out(template)

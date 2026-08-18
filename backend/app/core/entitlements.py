@@ -31,12 +31,20 @@ class ResourceType(str, enum.Enum):
 
 
 async def resolve_product_ids(*, user_id: UUID, session: AsyncSession) -> set[UUID]:
-    """Every product_id this user currently holds a non-expired entitlement for."""
+    """Every product_id this user currently holds a live entitlement for — not expired,
+    and not revoked.
+
+    week3_plan.md W3-R5 / non-negotiable #3: revocation is enforced HERE, in the query
+    every gated request already runs, not in a second check bolted on beside it —
+    `Entitlement.revoked_at.is_(None)` is the entire diff a refund makes to the gate.
+    Migration 011's `ix_entitlements_user_live` is a partial index over exactly this
+    predicate, so this added filter costs nothing extra at the database level."""
     now = datetime.now(timezone.utc)
     result = await session.execute(
         select(Entitlement.product_id).where(
             Entitlement.user_id == user_id,
             (Entitlement.expires_at.is_(None)) | (Entitlement.expires_at > now),
+            Entitlement.revoked_at.is_(None),
         )
     )
     return set(result.scalars().all())
@@ -58,6 +66,33 @@ async def has_access_to(
         )
     )
     return result.first() is not None
+
+
+async def resolve_granted_content_ids(
+    *, product_ids: set[UUID], resource_type: ResourceType, session: AsyncSession
+) -> set[UUID]:
+    """Every content_id of `resource_type` granted by any of `product_ids`, in ONE query.
+
+    The bulk twin of `has_access_to`. A route that needs to check ownership across many
+    resources (every lesson in a course catalogue, every related lesson on a question,
+    every template on the templates page) used to call `has_access_to` once per
+    resource — each call re-running `resolve_product_ids` and issuing its own
+    `product_contents` query, an N+1 round trip pattern that dominates latency once a
+    request crosses a network boundary to Postgres (each round trip here costs on the
+    order of hundreds of ms; see the perf notes in courses.py/templates.py/questions.py).
+
+    Callers resolve `product_ids` ONCE via `resolve_product_ids`, then call this once
+    per resource type; membership after that is a Python set lookup, not a query.
+    """
+    if not product_ids:
+        return set()
+    result = await session.execute(
+        select(ProductContent.content_id).where(
+            ProductContent.product_id.in_(product_ids),
+            ProductContent.content_type == resource_type.value,
+        )
+    )
+    return set(result.scalars().all())
 
 
 async def has_access_to_or_admin(

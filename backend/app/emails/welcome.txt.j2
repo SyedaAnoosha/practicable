@@ -1,0 +1,16 @@
+Welcome to Practicable
+
+Thanks for buying {{ product_name }}. You now have full access — no separate sign-up,
+no additional step.
+{% if content_items %}
+What you have access to:
+{% for item in content_items %}
+- {{ item.label }}
+{% endfor %}
+{% endif %}
+Go to your library: {{ primary_link }}
+
+Practicable is written and maintained by Effective Risk Management — real risk
+questions, answered plainly, not templated advice.
+
+If you have a question about your purchase, reply to this email.

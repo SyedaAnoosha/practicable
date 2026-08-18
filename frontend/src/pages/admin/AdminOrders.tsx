@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ManualGrantDialog, type ManualGrantTarget } from '@/components/admin/ManualGrantDialog'
+import { RefundDialog, type RefundTarget } from '@/components/admin/RefundDialog'
 
 interface AdminOrderRow {
   order_id: string
@@ -21,6 +22,8 @@ interface AdminOrderRow {
   stripe_reference: string
   entitlement_status: 'granted' | 'missing'
   user_id: string
+  order_status: 'pending' | 'completed' | 'failed' | 'refunded'
+  order_total_amount_cents: number
 }
 
 /** The Stripe reference column, copyable on click with a `Copied` confirmation
@@ -55,6 +58,7 @@ function StripeRefCell({ value }: { value: string }) {
 export function AdminOrders() {
   const queryClient = useQueryClient()
   const [grantTarget, setGrantTarget] = useState<ManualGrantTarget | null>(null)
+  const [refundTarget, setRefundTarget] = useState<RefundTarget | null>(null)
   const [exporting, setExporting] = useState(false)
 
   const { data: orders, isLoading } = useQuery({
@@ -76,6 +80,45 @@ export function AdminOrders() {
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.orders() })
     },
   })
+
+  // week3_plan.md W3-R5 — the refund itself is idempotent server-side (order_status
+  // already `refunded` 409s before touching Stripe again), so this mutation only
+  // needs to handle the happy path plus a declined-refund error the dialog renders
+  // inline; it deliberately does NOT close the dialog on error (§20.3: the failure
+  // state stays in the dialog with a [Try again], never a toast).
+  const refundMutation = useMutation({
+    mutationFn: (reason: string) => {
+      if (!refundTarget) throw new Error('No refund target selected')
+      return api.post(`/admin/orders/${refundTarget.orderId}/refund`, { reason })
+    },
+    onSuccess: () => {
+      if (refundTarget) {
+        setJustRefundedOrderId(refundTarget.orderId)
+        setTimeout(() => setJustRefundedOrderId(null), 2000)
+      }
+      setRefundTarget(null)
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.orders() })
+    },
+  })
+
+  // §20.8's "row's one-off background tint on transition" — set on a successful
+  // refund, cleared after the tint has had time to play, so it fires once and never
+  // loops (§39.2 — motion here marks a state becoming known, not ambient decoration).
+  const [justRefundedOrderId, setJustRefundedOrderId] = useState<string | null>(null)
+
+  const openRefundDialog = (orderId: string) => {
+    // Real product names for this order — aggregated from the rows already on the
+    // page, not a fresh request, and never a generic sentence (§20.3).
+    const rowsForOrder = orders?.filter((r) => r.order_id === orderId) ?? []
+    if (rowsForOrder.length === 0) return
+    setRefundTarget({
+      orderId,
+      customerEmail: rowsForOrder[0].customer_email,
+      amount: rowsForOrder[0].order_total_amount_cents,
+      currency: rowsForOrder[0].currency,
+      productNames: rowsForOrder.map((r) => r.product_name),
+    })
+  }
 
   const handleExport = async () => {
     setExporting(true)
@@ -140,48 +183,74 @@ export function AdminOrders() {
                 <th scope="col" className="px-4 py-2.5 text-right">Amount</th>
                 <th scope="col" className="px-4 py-2.5 text-left">Stripe ref</th>
                 <th scope="col" className="px-4 py-2.5 text-left">Entitlement</th>
+                <th scope="col" className="px-4 py-2.5 text-left">Refund</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map((row) => (
-                <tr key={`${row.order_id}-${row.product_id}`} className="border-t border-border">
-                  {/* Row height 44px minimum — §20.8's touch-target floor for a table row. */}
-                  <td className="h-11 whitespace-nowrap px-4 font-mono text-sm text-foreground">{row.date}</td>
-                  <td className="max-w-[220px] truncate px-4 text-foreground" title={row.customer_email}>
-                    {row.customer_email}
-                  </td>
-                  <td className="px-4 text-foreground">{row.product_name}</td>
-                  <td className="whitespace-nowrap px-4 text-right font-medium tabular-nums text-foreground">
-                    {formatCurrency(row.amount, row.currency)}
-                  </td>
-                  <td className="px-4">
-                    <StripeRefCell value={row.stripe_reference} />
-                  </td>
-                  <td className="px-4">
-                    {row.entitlement_status === 'granted' ? (
-                      <Badge variant="success">Granted</Badge>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="warning">Missing</Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setGrantTarget({
-                              userId: row.user_id,
-                              customerEmail: row.customer_email,
-                              productId: row.product_id,
-                              productName: row.product_name,
-                            })
-                          }
-                        >
-                          Grant
+              {orders.map((row, i) => {
+                // The refund action applies to the whole ORDER, not one line item —
+                // shown once per order (its first row), not once per item, so a
+                // multi-product cart order doesn't get N confusing refund buttons.
+                const isFirstRowForOrder = orders.findIndex((r) => r.order_id === row.order_id) === i
+                const isRefunded = row.order_status === 'refunded'
+                return (
+                  <tr
+                    key={`${row.order_id}-${row.product_id}`}
+                    className={`border-t border-border transition-colors duration-1000 ${
+                      justRefundedOrderId === row.order_id ? 'bg-destructive/5' : ''
+                    }`}
+                  >
+                    {/* Row height 44px minimum — §20.8's touch-target floor for a table row. */}
+                    <td className="h-11 whitespace-nowrap px-4 font-mono text-sm text-foreground">{row.date}</td>
+                    <td className="max-w-[220px] truncate px-4 text-foreground" title={row.customer_email}>
+                      {row.customer_email}
+                    </td>
+                    <td className="px-4 text-foreground">{row.product_name}</td>
+                    <td className="whitespace-nowrap px-4 text-right font-medium tabular-nums text-foreground">
+                      {formatCurrency(row.amount, row.currency)}
+                    </td>
+                    <td className="px-4">
+                      <StripeRefCell value={row.stripe_reference} />
+                    </td>
+                    <td className="px-4">
+                      {row.entitlement_status === 'granted' ? (
+                        <Badge variant="success">Granted</Badge>
+                      ) : isRefunded ? (
+                        <Badge variant="muted">Refunded</Badge>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="warning">Missing</Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setGrantTarget({
+                                userId: row.user_id,
+                                customerEmail: row.customer_email,
+                                productId: row.product_id,
+                                productName: row.product_name,
+                              })
+                            }
+                          >
+                            Grant
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4">
+                      {!isFirstRowForOrder ? null : isRefunded ? (
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          −{formatCurrency(row.order_total_amount_cents, row.currency)}
+                        </span>
+                      ) : (
+                        <Button size="sm" variant="ghost" onClick={() => openRefundDialog(row.order_id)}>
+                          Refund
                         </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -194,6 +263,18 @@ export function AdminOrders() {
           onSubmit={(reason) => grantMutation.mutate(reason)}
           isPending={grantMutation.isPending}
           isError={grantMutation.isError}
+        />
+      )}
+
+      {refundTarget && (
+        <RefundDialog
+          target={refundTarget}
+          onClose={() => {
+            if (!refundMutation.isPending) setRefundTarget(null)
+          }}
+          onSubmit={(reason) => refundMutation.mutate(reason)}
+          isPending={refundMutation.isPending}
+          isError={refundMutation.isError}
         />
       )}
     </div>

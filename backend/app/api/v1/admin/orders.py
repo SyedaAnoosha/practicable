@@ -1,6 +1,4 @@
-"""week2_plan.md Phase 6 / W2-R9 — order reconciliation and the manual-entitlement
-escape hatch. `DESIGN.md §31.8` names order reconciliation as raw SQL today and
-autosave-losing-work as "the highest-value gap"; this file closes the first.
+"""Order reconciliation and the manual-entitlement escape hatch.
 
 Every route here sits behind `router.py`'s router-level `require_admin` — no route in
 this file re-declares the dependency for gating, only for the acting admin's identity
@@ -11,15 +9,21 @@ import io
 import uuid
 from typing import Optional
 
+import stripe as stripe_sdk
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.commerce.products import _resolve_contents_bulk
 from app.core.deps import require_admin
-from app.db.models import Entitlement, Order, OrderItem, Product, User
+from app.db.models import Entitlement, Order, OrderStatus, OrderItem, Product, User
 from app.db.session import get_session
+from app.integrations.posthog_client import capture_refund_issued
+from app.integrations.stripe_client import create_refund
 from app.services.audit_service import record_audit
+from app.services.email_service import send_refund_confirmation_email
+from app.services.refund_service import apply_refund
 
 router = APIRouter()
 
@@ -35,13 +39,16 @@ class AdminOrderRowOut(BaseModel):
     stripe_reference: str
     entitlement_status: str  # "granted" | "missing"
     user_id: str
+    # week3_plan.md W3-R5 — needed so the table can show a `Refunded` chip and the
+    # refund action can know the order's real total (not one item's price) without a
+    # second request.
+    order_status: str  # "pending" | "completed" | "failed" | "refunded"
+    order_total_amount_cents: int
 
 
 async def _order_rows(session: AsyncSession) -> list[AdminOrderRowOut]:
-    """One row per (order, order_item) — almost always one item per order in this
-    catalogue today, but the schema (and Stripe, in principle) allows more, and a
-    reconciliation table that silently dropped a second line item would be exactly
-    the kind of quiet gap this table exists to catch.
+    """One row per (order, order_item) — almost always one item per order today, but
+    the schema allows more, and this table must never silently drop a second line item.
     """
     result = await session.execute(
         select(Order, OrderItem, User, Product)
@@ -54,14 +61,15 @@ async def _order_rows(session: AsyncSession) -> list[AdminOrderRowOut]:
     if not rows:
         return []
 
-    # One query for every (user_id, product_id) pair on the page, not one query per
-    # row — an admin with a real order history should not turn this page into an
-    # N+1 query storm.
+    # One query for every (user_id, product_id) pair on the page, not one per row.
+    # `revoked_at IS NULL` — same predicate the gate itself uses (core/entitlements.py)
+    # — a refunded order's rows must show as `missing`/`Refunded`, never `Granted`.
     pairs = {(order.user_id, item.product_id) for order, item, _user, _product in rows}
     ent_result = await session.execute(
         select(Entitlement.user_id, Entitlement.product_id).where(
             Entitlement.user_id.in_({p[0] for p in pairs}),
             Entitlement.product_id.in_({p[1] for p in pairs}),
+            Entitlement.revoked_at.is_(None),
         )
     )
     granted_pairs = {(row.user_id, row.product_id) for row in ent_result.all()}
@@ -81,6 +89,8 @@ async def _order_rows(session: AsyncSession) -> list[AdminOrderRowOut]:
                 stripe_reference=order.stripe_session_id,
                 entitlement_status="granted" if entitled else "missing",
                 user_id=str(order.user_id),
+                order_status=order.status.value,
+                order_total_amount_cents=order.total_amount_cents,
             )
         )
     return out
@@ -88,17 +98,16 @@ async def _order_rows(session: AsyncSession) -> list[AdminOrderRowOut]:
 
 @router.get("/admin/orders", response_model=list[AdminOrderRowOut])
 async def list_orders(session: AsyncSession = Depends(get_session)):
-    """§20.8's reconciliation table: date, customer email, product, amount + currency,
+    """The reconciliation table: date, customer email, product, amount, currency,
     Stripe reference, entitlement status. `missing` is the payment-succeeded-webhook-
-    failed case the manual grant below exists for — visible here rather than only
-    discoverable by querying Supabase directly."""
+    failed case the manual grant below exists for."""
     return await _order_rows(session)
 
 
 @router.get("/admin/orders/export")
 async def export_orders_csv(session: AsyncSession = Depends(get_session)):
-    """The CSV export button on `/admin/orders` — same rows, same query, no format
-    beyond a flat file: this is for pasting into a spreadsheet, not a second API."""
+    """The CSV export button: same rows, same query, a flat file for pasting into a
+    spreadsheet, not a second API."""
     rows = await _order_rows(session)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -115,9 +124,8 @@ async def export_orders_csv(session: AsyncSession = Depends(get_session)):
 class ManualGrantIn(BaseModel):
     user_id: str
     product_id: str
-    # Required, not Optional — §20.8: "the reason field is required and is not a
-    # formality." Pydantic alone enforces non-empty-string-required; the strip/length
-    # check below is what stops a lone space from satisfying that.
+    # Required, not a formality: the strip/length check below stops a lone space
+    # from satisfying Pydantic's bare non-empty-string requirement.
     reason: str
 
 
@@ -131,11 +139,8 @@ async def grant_entitlement_manually(
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    """§20.8's `ManualGrantDialog` — the escape hatch for "the payment succeeded but
-    the webhook failed," a risk BACKEND.md §1.5 names with no mitigation until this
-    route existed. Writes the entitlement AND an audited `audit_log` row with actor,
-    target and the reason — the difference between "we think we fixed it" and knowing
-    who granted what, and why.
+    """The escape hatch for "the payment succeeded but the webhook failed." Writes the
+    entitlement AND an audited `audit_log` row with actor, target and reason.
     """
     reason = body.reason.strip()
     if not reason:
@@ -175,3 +180,88 @@ async def grant_entitlement_manually(
     await session.commit()
 
     return ManualGrantOut(entitlement_id=str(entitlement.id))
+
+
+class RefundIn(BaseModel):
+    # Required, not a formality — same non-empty-after-strip contract as the manual
+    # grant above, and RefundDialog's spec (week3_plan.md §20.3) makes it a required
+    # field in the UI too.
+    reason: str
+
+
+class RefundOut(BaseModel):
+    order_id: str
+    revoked_product_names: list[str]
+
+
+@router.post("/admin/orders/{order_id}/refund", response_model=RefundOut)
+async def refund_order(
+    order_id: str,
+    body: RefundIn,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Issue a real Stripe refund and revoke every entitlement it granted, in one
+    audited operation (week3_plan.md W3-R5). The Stripe call happens BEFORE any local
+    state changes — if Stripe declines it, nothing here has changed yet, matching
+    RefundDialog's §20.3 failure contract ("Nothing has changed.").
+
+    The actual revocation/audit logic lives in `refund_service.apply_refund`, shared
+    with the `charge.refunded` webhook handler, so a refund issued from the Stripe
+    dashboard instead of here reaches the identical end state.
+    """
+    reason = body.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=422, detail={"error": {"code": "reason_required", "message": "A reason is required."}})
+
+    try:
+        order_uuid = uuid.UUID(order_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid order id.")
+
+    order = (await session.execute(select(Order).where(Order.id == order_uuid))).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found.")
+    if order.status == OrderStatus.REFUNDED:
+        raise HTTPException(status_code=409, detail="This order has already been refunded.")
+    if not order.stripe_payment_intent_id:
+        raise HTTPException(status_code=422, detail="This order has no payment to refund.")
+
+    try:
+        create_refund(payment_intent_id=order.stripe_payment_intent_id)
+    except stripe_sdk.error.StripeError as e:
+        # §20.3: inline, never a toast — a toast for a money operation disappears
+        # before it's read. The frontend renders this message directly in the dialog.
+        raise HTTPException(status_code=502, detail=f"Stripe declined the refund: {e.user_message or str(e)}")
+
+    result = await apply_refund(session, order=order, reason=reason, actor=admin)
+    await session.commit()
+
+    # After commit, never inside the transaction — same ordering rule as the purchase
+    # path (webhooks.py): a failed send must not undo a refund that already happened.
+    capture_refund_issued(user_id=str(order.user_id), order_id=str(order.id))
+
+    user = (await session.execute(select(User).where(User.id == order.user_id))).scalar_one_or_none()
+    if user:
+        contents_by_product = await _resolve_contents_bulk(result.revoked_products, session)
+        removed_items = [
+            c.label
+            for product in result.revoked_products
+            for c in contents_by_product.get(str(product.id), [])
+        ]
+        if not removed_items:
+            # Never a blank list in the email — a refund with nothing named removed
+            # reads as "did this actually do anything?" to the person receiving it.
+            removed_items = [p.name for p in result.revoked_products]
+        await send_refund_confirmation_email(
+            to_email=user.email,
+            order_id=str(order.id),
+            amount_cents=order.total_amount_cents,
+            currency=order.currency,
+            removed_items=removed_items,
+        )
+
+    return RefundOut(
+        order_id=str(order.id),
+        revoked_product_names=[p.name for p in result.revoked_products],
+    )

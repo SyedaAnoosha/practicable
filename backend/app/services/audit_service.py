@@ -21,7 +21,7 @@ from app.db.models import AuditLog, User
 async def record_audit(
     session: AsyncSession,
     *,
-    actor: User,
+    actor: Optional[User],
     action: str,
     target_type: str,
     target_id: uuid.UUID,
@@ -33,13 +33,19 @@ async def record_audit(
     mutation that rolled back. `context` is JSON, truncated to the column's 2000 chars,
     and holds the shape of the change, never full body text: this is a trail, not a
     version history.
+
+    `actor` is `None` for the one case this product has no admin identity to record: a
+    refund issued from the Stripe dashboard rather than `/admin/orders` (week3_plan.md
+    W3-R5's `charge.refunded` webhook path) — Stripe is the actor, not a user in this
+    system, and `audit_log.actor_user_id` is nullable for exactly this case. Every other
+    call site keeps passing a real `User`.
     """
     payload = None
     if context is not None:
         payload = json.dumps(context, default=str)[:2000]
     session.add(
         AuditLog(
-            actor_user_id=actor.id,
+            actor_user_id=actor.id if actor else None,
             action=action,
             target_type=target_type,
             target_id=target_id,

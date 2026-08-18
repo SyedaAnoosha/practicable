@@ -1,9 +1,9 @@
 from sqlalchemy import String, Text, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base, IdMixin, TimestampMixin
+from app.db.base import Base, IdMixin, PublishStateMixin, TimestampMixin
 import uuid
 
-class Question(Base, IdMixin, TimestampMixin):
+class Question(Base, IdMixin, TimestampMixin, PublishStateMixin):
     __tablename__ = "questions"
     
     slug: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
@@ -23,8 +23,17 @@ class Question(Base, IdMixin, TimestampMixin):
     regulator_pressure_tag_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tag_values.id"), nullable=True)
     
     # Leadership traits is multi-select, so we need a join table
+    # `publish_state` (migration 012) comes from PublishStateMixin, kept in sync with
+    # this column automatically — see that mixin's docstring.
     published: Mapped[bool] = mapped_column(default=False)
-    
+
+    # The homepage's curated picks (week3_plan.md §20.6). `featured_sort` is nullable —
+    # NULL reads as "featured, order unset" rather than a false zero that would force
+    # every newly-featured question to the front of the row ahead of ones an editor
+    # deliberately placed earlier.
+    featured: Mapped[bool] = mapped_column(default=False, nullable=False)
+    featured_sort: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Relationships
     domain: Mapped["Domain"] = relationship("Domain")
     effort_tag: Mapped["TagValue"] = relationship(foreign_keys=[effort_tag_id])

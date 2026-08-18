@@ -49,26 +49,33 @@ services:
         sync: false
       - key: SUPABASE_STORAGE_BUCKET_NAME
         sync: false
-      # ── Email — Resend only [OWNER-DECIDED 2026-08-12] ───────────────────────
-      # GMAIL_*, MAILJET_* and BREVO_* were removed from this blueprint along with
-      # their transports. DELETE them by hand in Render -> Environment too: removing a
-      # key here does not remove it from an already-provisioned service, and a stale
+      # ── Email — Mailjet only [OWNER-DECIDED 2026-08-15, week3_plan.md W3-R1] ──
+      # GMAIL_*, BREVO_* and RESEND_* are gone from this blueprint. DELETE any of them
+      # by hand in Render -> Environment too if left over from before: removing a key
+      # here does not remove it from an already-provisioned service, and a stale
       # GMAIL_USER makes every send open a doomed TCP connection to smtp.gmail.com
       # first — Render blocks outbound port 587 ([Errno 101], docs/gmail.md §8) — which
-      # costs a 15s timeout inside a Stripe webhook that has to answer fast.
+      # costs a 15s timeout inside a Stripe webhook that has to answer fast. Mailjet is
+      # a REST call over 443, unaffected by that block.
       #
       # Adding a key here only creates the slot on a fresh Blueprint deploy; an
       # already-existing service needs each added by hand (see RUNNING.md §6.3).
-      #
-      # WARNING: Resend's sandbox sender only delivers to the Resend account's own
-      # address, so no real buyer is emailed while this is the only transport. Receipts
-      # are redirected to OWNER_NOTIFICATION_EMAIL, labelled undelivered. Verify a
-      # domain at resend.com/domains before taking real money.
-      - key: RESEND_API_KEY
+      - key: MAILJET_API_KEY
         sync: false
-      # Must equal the Resend account's own address, or every send returns 403. Also
-      # the destination for redirected buyer receipts — never a customer address.
+      - key: MAILJET_SECRET_KEY
+        sync: false
+      # Must be verified as a sender in the Mailjet dashboard (Senders, Domains &
+      # Dedicated IPs -> Senders) or every send is rejected regardless of correct keys.
+      - key: MAILJET_SENDER_EMAIL
+        sync: false
+      - key: MAILJET_SENDER_NAME
+        value: Practicable
+      # The destination for sale-alert notifications — never a customer address.
       - key: OWNER_NOTIFICATION_EMAIL
+        sync: false
+      # For absolute links inside emails. Set to the real Vercel URL, same value as
+      # ALLOWED_ORIGIN below once the frontend is deployed.
+      - key: FRONTEND_URL
         sync: false
       - key: ALLOWED_ORIGIN
         sync: false # set to the real Vercel URL once the frontend is deployed

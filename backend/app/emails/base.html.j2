@@ -1,0 +1,80 @@
+<!--
+  base.html.j2 — DESIGN.md §20.7's sanctioned hex palette, the one place in the codebase
+  a component is allowed to hold a literal colour instead of a token. Mail clients strip
+  CSS custom properties, so these are the light-theme values copied by hand:
+
+    page background   #F1ECE1  (--muted)        ink            #1C1712  (--foreground)
+    card background   #FFFFFF  (--card)         muted ink      #6E675A  (--muted-foreground)
+    header plane      #10213E  (--stage)        on header      #F7F2E9  (--stage-foreground)
+    hairline           #E6DFD0  (--border)       amount/total   #7C5C14  (--gold-strong, NEVER --gold)
+
+  600px single column, table-based layout, every rule inline — a mail client does not
+  read a <style> block reliably, so nothing in `content` may depend on one existing.
+  Every child template extends this and fills the "content" block below. (Described in
+  prose, deliberately not literal tag syntax — Jinja still parses its own delimiters
+  even inside an HTML comment, which is exactly the bug this sentence used to be.)
+-->
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{% block title %}Practicable{% endblock %}</title>
+<!--[if mso]>
+<noscript>
+<xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
+</noscript>
+<![endif]-->
+</head>
+<body style="margin:0; padding:0; background-color:#F1ECE1; -webkit-text-size-adjust:100%; text-size-adjust:100%;">
+<!-- Preheader: shown in the inbox list, hidden in the body. Every child sets this so the
+     inbox preview is a real sentence, not the first line of the header. -->
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F1ECE1;">
+  {% block preheader %}{% endblock %}
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F1ECE1;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px;">
+        <!-- Header plane -->
+        <tr>
+          <td style="background-color:#10213E; padding:24px 32px; border-radius:8px 8px 0 0;">
+            <span style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:18px; font-weight:700; color:#F7F2E9; letter-spacing:0.02em;">Practicable</span>
+          </td>
+        </tr>
+        <!-- Card -->
+        <tr>
+          <td style="background-color:#FFFFFF; padding:32px; border-left:1px solid #E6DFD0; border-right:1px solid #E6DFD0;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="font-family:Georgia,'Times New Roman',serif; font-size:16px; line-height:1.6; color:#1C1712;">
+                  {% block content %}{% endblock %}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background-color:#FFFFFF; padding:24px 32px 32px; border:1px solid #E6DFD0; border-top:1px solid #E6DFD0; border-radius:0 0 8px 8px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="font-family:-apple-system,'Segoe UI',Arial,sans-serif; font-size:12px; line-height:1.6; color:#6E675A; border-top:1px solid #E6DFD0; padding-top:16px;">
+                  {% block footer %}
+                  Practicable is operated by Effective Risk Management.<br>
+                  This is a transactional email about your account or purchase.
+                  {% endblock %}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

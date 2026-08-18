@@ -27,17 +27,30 @@ class Settings(BaseSettings):
     supabase_storage_secret_access_key: str
     supabase_storage_bucket_name: str
     # ── Email ────────────────────────────────────────────────────────────────────
-    # Resend is the only transport. Any leftover GMAIL_*/MAILJET_*/BREVO_* variables in
-    # a .env or hosting dashboard are inert (see `extra = "ignore"` below).
-    resend_api_key: str = ""
-    # The owner/admin inbox, load-bearing for ALL email: Resend's sandbox sender can only
-    # deliver to its own account address, so buyer receipts are redirected here too. Must
-    # equal the Resend account address or every send returns 403.
+    # Mailjet is the only transport (week3_plan.md W3-R1) — restored 2026-08-15 after
+    # being removed by choice, not because it failed (docs/email.md, docs/gmail.md §9).
+    # It reaches an arbitrary real recipient over REST (port 443), which survives
+    # Render's outbound-587 block that kills Gmail/Brevo SMTP outright. Any leftover
+    # GMAIL_*/BREVO_*/RESEND_* variables in a .env or hosting dashboard are inert (see
+    # `extra = "ignore"` below) and should be deleted, not just ignored.
+    mailjet_api_key: str = ""
+    mailjet_secret_key: str = ""
+    # The address verified as a sender in the Mailjet dashboard (Senders, Domains &
+    # Dedicated IPs → Senders). Sending from an unverified address is rejected by the
+    # API regardless of correct key/secret.
+    mailjet_sender_email: str = ""
+    mailjet_sender_name: str = "Practicable"
+    # The owner/admin inbox — sale alerts, and where any send whose intended recipient
+    # cannot be reached is logged against. Never a customer address.
     #
     # Deliberately empty — this file is committed, and a hardcoded default would silently
     # send sale notifications (which quote buyer address and amount) to a stale recipient.
-    # Empty means email_service.py logs and sends nothing rather than guessing.
     owner_notification_email: str = ""
+    # The deployed frontend origin, for building absolute links inside emails (a mail
+    # client has no notion of a relative URL). Defaults to the local Vite dev server;
+    # must be set to the real Vercel URL in Render's environment, same treatment as
+    # ALLOWED_ORIGIN below.
+    frontend_url: str = "http://localhost:5173"
     # ── Analytics ────────────────────────────────────────────────────────────────
     # week2_plan.md Phase 5 / W2-R8. Empty by default so the app boots without it —
     # posthog_client.py no-ops rather than erroring when this isn't set, same pattern

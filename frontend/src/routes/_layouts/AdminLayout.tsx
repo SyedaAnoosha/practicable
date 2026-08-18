@@ -48,7 +48,7 @@ export default function AdminLayout() {
 
   if (profile && !profile.is_admin) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-5 py-24 sm:px-8">
+      <div className="mx-auto w-full max-w-2xl px-5 py-11 sm:px-8">
         <EmptyState
           title="This area is for content editors."
           description="Your account doesn't have admin access. If you think that's wrong, whoever runs this site can change your role."
