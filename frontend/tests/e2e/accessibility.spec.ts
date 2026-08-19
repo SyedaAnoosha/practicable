@@ -23,6 +23,7 @@ const PUBLIC_ROUTES = [
   '/legal/terms',
   '/legal/privacy',
   '/legal/refunds',
+  '/checkout/success',
 ] as const
 
 for (const route of PUBLIC_ROUTES) {
@@ -82,6 +83,20 @@ test('axe: a real question detail page has no violations', async ({ page }) => {
   // branch renders a spinner with no `<h1>` at all) — analysing the DOM before that
   // resolves catches the LOADING state, not the page, and axe correctly flags a
   // transient "no level-one heading" that was never real. Wait for the actual heading.
+  await expect(page.locator('h1')).toBeVisible()
+  const results = await new AxeBuilder({ page }).analyze()
+  expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
+})
+
+test('axe: a real template detail page has no violations', async ({ page }) => {
+  // Dynamic template ID resolution, avoids hardcoded ID drift.
+  await page.goto('/templates')
+  const firstTemplateLink = page.locator('a[href^="/templates/"]').first()
+  await expect(firstTemplateLink).toBeVisible()
+  const href = await firstTemplateLink.getAttribute('href')
+  expect(href).toBeTruthy()
+
+  await page.goto(href!)
   await expect(page.locator('h1')).toBeVisible()
   const results = await new AxeBuilder({ page }).analyze()
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
