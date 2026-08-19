@@ -11,7 +11,7 @@ import { SUPPORT_MAILTO } from '@/lib/support'
 
 export function CheckoutCancel() {
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-12 sm:px-8">
+    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-8">
       <Card>
         <CardHeader>
           {/* Same status-tile language as CheckoutSuccess — muted here, since nothing

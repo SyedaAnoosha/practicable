@@ -167,7 +167,7 @@ export function Template() {
   )
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-5 py-12 sm:px-8">
+    <div className="mx-auto w-full max-w-2xl px-5 py-8 sm:px-8">
       <Card>
         <CardHeader>
           <div className="flex items-start justify-between gap-3">

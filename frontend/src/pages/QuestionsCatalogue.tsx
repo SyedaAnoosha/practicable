@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import { motion } from 'motion/react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Banknote,
@@ -72,21 +73,14 @@ const DIMENSION_LABELS: Record<string, string> = {
   regulator_pressure: 'Regulator pressure',
   leadership_traits: 'Leadership traits',
 }
-// §19.5's practitioner-reasoning order: where do I work, how long, what can I
-// spend, how much of my own time, does anyone external care, how fast does it pay
-// off, how foundational vs transformational.
+// Practitioner-reasoning order: where do I work, how long, what can I spend, how
+// much of my own time, does anyone external care, how fast does it pay off, how
+// foundational vs transformational.
 const DIMENSION_ORDER = [...ORDINAL_DIMENSIONS, 'tier', 'leadership_traits']
 
 // Real taxonomy values, not fuzzy text — a chip only ever matches a real tag row.
-// Counts against the live catalogue (2026-08-13): duration s 25, cost low 73,
-// regulator_pressure h 24, roi_horizon quick 59.
-//
-// §19.7 lists a fifth chip, "Build leadership support" (`tier: strategic` +
-// `leadership_traits: any`), deliberately deferred: it sets a SINGLE-dimension
-// value on one dimension plus an open-ended "any value present" match on a second,
-// multi-select one — `toggleQuickFilter` below only handles one dimension at a
-// time. Worth adding once there's a real second multi-dimension chip to justify
-// generalising the helper, not for one chip alone.
+// `toggleQuickFilter` below only handles one dimension at a time, so a chip mixing
+// a single-select and a multi-select dimension isn't supported yet.
 const QUICK_FILTERS: { label: string; dimension: string; values: readonly string[] }[] = [
   { label: 'Do it in a fortnight', dimension: 'duration', values: ['s'] },
   { label: 'Do it cheaply', dimension: 'cost', values: ['low'] },
@@ -101,10 +95,8 @@ const SINGLE_FILTER_PARAMS: readonly ('domain' | OrdinalDimension)[] = ['domain'
 const ALL_FILTER_PARAMS: readonly string[] = [...SINGLE_FILTER_PARAMS, ...MULTI_DIMENSIONS]
 
 function filtersFromSearchParams(searchParams: URLSearchParams): QuestionFilters {
-  // Built via a narrowly-typed intermediate object (single index type, single value
-  // type) rather than indexing QuestionFilters directly — QuestionFilters mixes
-  // string and string[] fields, which TS can't safely index-assign through a loop
-  // variable without a cast.
+  // A narrowly-typed intermediate object, since QuestionFilters mixes string and
+  // string[] fields and can't be safely index-assigned through a loop variable.
   const single: Partial<Record<'domain' | OrdinalDimension, string>> = {}
   for (const dim of SINGLE_FILTER_PARAMS) {
     const value = searchParams.get(dim)
@@ -117,10 +109,8 @@ function filtersFromSearchParams(searchParams: URLSearchParams): QuestionFilters
   }
 }
 
-/** `12 exact · +9 close` — tabular-nums so digits don't jitter, aria-live so a
- * screen reader announces the recount on every tap without the user needing to
- * refocus anything. Updates with no round trip: both numbers come from a
- * `partitionQuestions` call already computed against the cached index. */
+/** `12 exact · +9 close` — tabular-nums so digits don't jitter, aria-live so a screen
+ * reader announces the recount on every tap. */
 function ResultCount({
   exactCount,
   closeCount,
@@ -169,9 +159,9 @@ function MatchBadge({ dimension, actual, tagLookup }: { dimension: string; actua
   )
 }
 
-/** §19.4/§57.5 — the suggested relaxations are computed from the cached index, not
- * hard-coded: rank the active filters by how few questions each admits alone, and
- * offer the two most restrictive as one-tap recoveries. */
+/** Suggested relaxations, computed from the cached index: rank active filters by how
+ * few questions each admits alone, and offer the two most restrictive as one-tap
+ * recoveries. */
 function ZeroResults({
   candidates,
   filters,
@@ -191,10 +181,8 @@ function ZeroResults({
       const values = filters[dim]
       return values.map((v) => tagLookup.get(`${dim}:${v}`)?.display_label ?? v).join(', ')
     }
-    // `dim` is a plain string here (it came off `rankRelaxationCandidates`'s
-    // return, not a narrowed literal), so it's resolved through a switch rather
-    // than an index-signature cast — see filtersFromSearchParams's comment above
-    // for why QuestionFilters can't be indexed directly by an arbitrary string.
+    // `dim` is a plain string here, not a narrowed literal, so it's resolved through
+    // a switch rather than an index-signature cast (see filtersFromSearchParams).
     const value: string | undefined =
       dim === 'effort'
         ? filters.effort
@@ -269,16 +257,14 @@ function FilterPanel({
       next.delete(param)
     } else {
       next.set(param, value)
-      // week2_plan.md Phase 5 — fired on APPLY, not on clear: "is the seven-tag
-      // system actually used" asks which filters get reached for, not every tap.
+      // Fired on APPLY, not on clear — tracking which filters get reached for.
       track('filter_applied', { dimension: param, value })
     }
     setSearchParams(next)
   }
 
-  // Multi-select (tier, leadership_traits — DESIGN.md §19.5 point 7): repeated
-  // query params, toggled independently, "any of these" semantics at the scoring
-  // layer.
+  // Multi-select (tier, leadership_traits): repeated query params, toggled
+  // independently, "any of these" semantics at the scoring layer.
   const toggleMulti = (param: string, value: string) => {
     const next = new URLSearchParams(searchParams)
     const current = next.getAll(param)
@@ -300,9 +286,8 @@ function FilterPanel({
             </span>
             Domain
           </p>
-          {/* Each domain gets its own signature colour + icon (theme.css's
-              --domain-* tokens, domainVisuals.ts) — the one deliberate exception
-              to "no per-dimension rainbow" (DESIGN.md §7.6/§37, still true for
+          {/* Each domain gets its own signature colour and icon — the one exception
+              to "no per-dimension rainbow" (still true for
               the seven tag dimensions below). Five named domains is a different,
               smaller problem than seven badges per row. */}
           <div className="mt-2.5 flex flex-col gap-0.5">
@@ -418,9 +403,9 @@ function QuestionRow({
       <Link
         to={`/questions/${question.slug}`}
         className={cn(
-          'group -mx-4 block rounded-lg border-l-2 px-4 py-6 transition-colors duration-150 hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none',
-          // §19.3: close rows carry a lighter left rule than exact rows — the ONLY
-          // structural difference besides the badge. Text opacity is never touched.
+          'group -mx-4 block rounded-lg border-l-2 px-4 py-6 transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--card))] focus-visible:bg-[color-mix(in_srgb,var(--accent)_6%,var(--card))] focus-visible:outline-none',
+          // Close rows carry a lighter left rule than exact rows — the only
+          // structural difference besides the badge.
           showBadges
             ? 'border-l-border'
             : 'border-l-transparent hover:border-l-[var(--row-domain-color)] focus-visible:border-l-[var(--row-domain-color)]',
@@ -442,8 +427,8 @@ function QuestionRow({
           </div>
         )}
 
-        {/* Match explanation for exact rows — restating filters this (necessarily
-            fully-matching) result satisfies, never a fabricated relevance score. */}
+        {/* Match explanation for exact rows — restating filters this result satisfies,
+            never a fabricated relevance score. */}
         {showMatchList && activeFilterLabels.length > 0 && (
           <ul className="mt-3 flex flex-col gap-1">
             {activeFilterLabels.map((f) => (
@@ -460,21 +445,24 @@ function QuestionRow({
   )
 }
 
-// The /questions catalogue: an honest filter system where every option offered is
-// derived from what's actually published, results are a RANKING (exact + close, a
-// divider between them) rather than a strict gate that can return nothing, and the
-// live count updates on every tap with zero round trips — the whole index is
-// fetched once and scored client-side (DESIGN.md §57.1; see questions.py's module
-// docstring for the matching backend note).
+// The /questions catalogue: every filter option offered is derived from what's
+// actually published, results are a RANKING (exact + close, with a divider between
+// them) rather than a strict gate that can return nothing, and the live count updates
+// on every tap with zero round trips — the whole index is fetched once and scored
+// client-side.
 export function QuestionsCatalogue() {
   const [searchParams, setSearchParams] = useSearchParams()
   // Seeded from `?q=` so a search started elsewhere arrives here already applied.
-  // Debounced back into the URL below (§19.6: debounce SEARCH only, never a filter
-  // tap) rather than on every keystroke, so typing doesn't spam browser history.
+  // Debounced back into the URL below (search only, never a filter tap) rather than
+  // on every keystroke, so typing doesn't spam browser history.
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
   const [debouncedQuery, setDebouncedQuery] = useState(query)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
-  const [showAllClose, setShowAllClose] = useState(false)
+  // Which settled query the "show all close matches" expansion was opened against,
+  // derived rather than reset by an effect: when `debouncedQuery` moves, the equality
+  // below stops holding and the list collapses on its own.
+  const [expandedFor, setExpandedFor] = useState<string | null>(null)
+  const showAllClose = expandedFor === debouncedQuery
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 250)
@@ -491,9 +479,6 @@ export function QuestionsCatalogue() {
       },
       { replace: true },
     )
-    // Reset the "show all close matches" expansion whenever the query settles —
-    // a fresh search is a fresh result list, not a continuation of the last one.
-    setShowAllClose(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery])
 
@@ -578,18 +563,20 @@ export function QuestionsCatalogue() {
   const isZeroResults = hasFilters && exact.length === 0 && close.length === 0
 
   return (
-    <div className="relative isolate mx-auto w-full max-w-6xl px-5 py-12 sm:px-8">
-      {/* Catalogue header atmosphere (theme.css .page-wash). Full-bleed to the viewport
-          edge via `left-1/2 … w-screen`, since this sits inside a max-w container where
-          `inset-x-0` would stop at the container edge. `-z-10` inside the parent's
-          `isolate` keeps it behind the content without wrapping every child in a
-          positioned div. Decorative, so out of the a11y tree. */}
+    <div className="relative isolate mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
+      {/* Catalogue header atmosphere, full-bleed via `left-1/2 … w-screen`. Decorative,
+          so kept out of the a11y tree. */}
       <div aria-hidden="true" className="page-wash absolute left-1/2 top-0 -z-10 h-[30rem] w-screen -translate-x-1/2" />
       <PageTitle
         eyebrow="Find"
         title="What are you trying to solve?"
         description="Real questions from risk leaders, each tagged by effort, cost, duration and more."
       />
+
+      {/* week3_plan.md Phase 6 step 7 / DESIGN.md §42's "headings in order, no skipped
+          levels" — see CoursesCatalogue.tsx for the full rationale; same fix, same
+          reason (each QuestionRow's title below is h3). */}
+      <h2 className="sr-only">Question results</h2>
 
       <div className="mx-auto mt-8 max-w-7xl">
         <div className="relative">
@@ -615,9 +602,13 @@ export function QuestionsCatalogue() {
           {QUICK_FILTERS.map((chip) => {
             const active = activeFilterLabels.some((f) => f.param === chip.dimension && chip.values.includes(f.value))
             return (
-              <button
+              // A one-shot press state on tap, not a hover scale — this app has no
+              // scale-on-hover anywhere.
+              <motion.button
                 key={chip.label}
                 type="button"
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.15 }}
                 onClick={() => toggleQuickFilter(chip.dimension, chip.values)}
                 aria-pressed={active}
                 className={cn(
@@ -628,15 +619,14 @@ export function QuestionsCatalogue() {
                 )}
               >
                 {chip.label}
-              </button>
+              </motion.button>
             )
           })}
         </div>
       </div>
 
-      <div className="mt-10 grid gap-8 lg:grid-cols-[220px_1fr]">
-        {/* Desktop filter panel — stays visible, not collapsed behind a click
-            (design_again.md §14). */}
+      <div className="mt-6 grid gap-8 lg:grid-cols-[220px_1fr]">
+        {/* Desktop filter panel — stays visible, never collapsed behind a click. */}
         <aside className="hidden lg:block">
           {questions && <FilterPanel questions={questions} searchParams={searchParams} setSearchParams={setSearchParams} />}
         </aside>
@@ -772,7 +762,7 @@ export function QuestionsCatalogue() {
                     ))}
                   </ul>
                   {!showAllClose && close.length > CLOSE_PREVIEW_COUNT && (
-                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setShowAllClose(true)}>
+                    <Button variant="outline" size="sm" className="mt-4" onClick={() => setExpandedFor(debouncedQuery)}>
                       Show all {close.length} close matches
                     </Button>
                   )}
@@ -783,10 +773,8 @@ export function QuestionsCatalogue() {
         </div>
       </div>
 
-      {/* Mobile filter sheet — never a squeezed sidebar (§24.2's rule applied here
-          too), same slide-over pattern used across the app. Changes apply live, per
-          tap (§19.9) — the sheet reuses the exact same toggle handlers as the
-          desktop rail rather than a second batched-apply state. */}
+      {/* Mobile filter sheet, never a squeezed sidebar. Changes apply live, per tap —
+          it reuses the same toggle handlers as the desktop rail. */}
       {mobileFiltersOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileFiltersOpen(false)} aria-hidden="true" />

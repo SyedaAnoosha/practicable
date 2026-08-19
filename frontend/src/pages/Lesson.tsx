@@ -40,7 +40,7 @@ export function Lesson() {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-5 py-16 sm:px-8">
+      <div className="mx-auto w-full max-w-2xl px-5 py-11 sm:px-8">
         <EmptyState
           title="This lesson is part of a course you don't have yet."
           description="The standalone lesson player only serves lessons tied to a product you own."
@@ -56,14 +56,14 @@ export function Lesson() {
 
   if (isLoading || !playbackToken || !MuxPlayer) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8">
+      <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8">
         <div className="aspect-video animate-pulse rounded-xl bg-muted" />
       </div>
     )
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8">
+    <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8">
       <div className="aspect-video overflow-hidden rounded-xl bg-black shadow-sm">
         <MuxPlayer
           playbackId={playbackToken.playback_id}

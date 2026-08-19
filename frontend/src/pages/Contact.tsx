@@ -18,34 +18,15 @@ const ENQUIRY_OPTIONS = [
   { value: 'other', label: 'Something else' },
 ] as const
 
-/** The contact page, from Watermelon UI's contact-7.
+/** The contact page: a centred dot-and-label pill over a large heading, one rounded
+ * card holding the form, two blurred polygon blobs behind the section.
  *
- * The reference's shape is kept: a centred dot-and-label pill over a large heading, then
- * one rounded card holding the form, with two blurred polygon blobs behind the section.
- *
- * Four changes, each for a reason:
- *  1. contact-7's blobs are a `clip-path` polygon repeated twice at 30% opacity. Kept —
- *     it is the block's signature — but drawn from `--accent`/`--gold` rather than
- *     `--primary`, so the two shapes differ from each other instead of being one colour
- *     twice, and so they stay visible in both themes.
- *  2. The phone field is dropped. There is no phone number to call and no one staffing
- *     one; asking for a number the business will never dial is a field that costs the
- *     visitor something and buys nothing.
- *  3. The reference's agreement Checkbox is replaced with a plain sentence. It is a
- *     one-line privacy statement, not a decision — a checkbox implies there is a choice,
- *     and an unchecked-by-default one just adds a step before a message can be sent.
- *  4. `<form>` posts to the real `/contact` endpoint, which persists the message and
- *     emails the owner. contact-7 ships with no submit handler at all.
- *  5. `[FIXED 2026-08-13]` The card was `bg-card/70 backdrop-blur-xl` and the fields
- *     `bg-background/60` — glassmorphism, which §5.2's anti-pattern list still bans even
- *     after the liveliness pass un-banned gradients. It also wasn't just a style
- *     violation: axe measured the translucent card compositing with the blurred blobs
- *     behind it down to 1.65:1 on placeholder text and 3.04:1 on the intro paragraph,
- *     both well under AA's 4.5:1 — a live instance of the "measure gradients from
- *     rendered pixels, not tokens" trap (DESIGN.md §7.5.3). Card and fields are solid
- *     now; the blobs dropped from 25% to 12% opacity to match the domain-tile convention
- *     elsewhere (§16.6) of keeping decorative colour non-load-bearing for text sitting
- *     over it, rather than removing the block's signature device entirely.
+ * No phone field — there's no number to call and no one staffing one. The agreement
+ * checkbox is a plain sentence instead: a one-line privacy statement, not a decision.
+ * `<form>` posts to the real `/contact` endpoint, which persists the message and emails
+ * the owner. Card and fields are solid colour, not translucent — axe measured a
+ * translucent card compositing with the blurred blobs behind it down to 1.65:1 on
+ * placeholder text, well under AA's 4.5:1.
  */
 export function Contact() {
   const [name, setName] = useState('')
@@ -58,9 +39,8 @@ export function Contact() {
       api.post('/contact', {
         name: name.trim(),
         email: email.trim(),
-        // The select starts unchosen rather than defaulting to the first option, so an
-        // untouched field records "they didn't say" instead of silently asserting
-        // "a question about the content".
+        // Starts unchosen rather than defaulting to the first option, so an untouched
+        // field records "they didn't say" instead of a silent guess.
         enquiry_type: enquiryType || null,
         message: message.trim(),
       }),
@@ -77,10 +57,9 @@ export function Contact() {
     'focus-visible:outline-offset-2 focus-visible:outline-ring'
 
   return (
-    <section className="relative isolate w-full overflow-hidden py-20 sm:py-28">
-      {/* contact-7's two blurred polygons. `overflow-hidden` on the section is what
-          keeps them from widening the page — a blurred element pushed off-canvas still
-          counts toward scroll width otherwise. */}
+    <section className="relative isolate w-full overflow-hidden py-9 sm:py-28">
+      {/* `overflow-hidden` on the section keeps these from widening the page — a
+          blurred element pushed off-canvas still counts toward scroll width. */}
       <Blob position="left-[max(-9rem,calc(50%-52rem))]" gradient="from-accent to-accent/50" />
       <Blob position="left-[max(45rem,calc(50%+8rem))]" gradient="from-gold to-gold/40" />
 
@@ -88,7 +67,7 @@ export function Contact() {
         variants={staggerContainer}
         initial="hidden"
         animate="visible"
-        className="mx-auto w-full max-w-6xl px-5 sm:px-8"
+        className="mx-auto w-full max-w-7xl px-5 sm:px-8"
       >
         <motion.div variants={riseItem} className="mx-auto flex max-w-3xl flex-col items-center text-center">
           <StatusDot label="Usually answered within two working days" />
@@ -99,7 +78,7 @@ export function Contact() {
           </p>
         </motion.div>
 
-        <motion.div variants={riseItem} className="mx-auto mt-14 max-w-2xl">
+        <motion.div variants={riseItem} className="mx-auto mt-9 max-w-2xl">
           <div className="rounded-xl border border-border bg-card p-6 shadow-sm sm:p-10">
             {isSuccess ? (
               /* Replaces the form rather than sitting above it. Leaving a filled-in form
@@ -223,8 +202,7 @@ export function Contact() {
   )
 }
 
-/** contact-7's blurred polygon. The clip-path is the reference's verbatim — it is what
- *  gives the blob its particular torn-paper silhouette rather than a plain ellipse. */
+/** A blurred polygon with a torn-paper silhouette, rather than a plain ellipse. */
 function Blob({ position, gradient }: { position: string; gradient: string }) {
   return (
     <div aria-hidden="true" className={cn('absolute top-1/2 -z-10 -translate-y-1/2 transform-gpu blur-2xl', position)}>

@@ -38,7 +38,7 @@ export function TemplatesCatalogue() {
   })
 
   return (
-    <div className="relative isolate mx-auto w-full max-w-6xl px-5 py-12 sm:px-8">
+    <div className="relative isolate mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
       {/* Catalogue header atmosphere (theme.css .page-wash). Full-bleed to the viewport
           edge via `left-1/2 … w-screen`, since this sits inside a max-w container where
           `inset-x-0` would stop at the container edge. `-z-10` inside the parent's
@@ -51,8 +51,13 @@ export function TemplatesCatalogue() {
         description="Ready-to-use working files — the practical companion to the guidance and courses."
       />
 
+      {/* week3_plan.md Phase 6 step 7 / DESIGN.md §42's "headings in order, no skipped
+          levels" — see CoursesCatalogue.tsx for the full rationale; same fix, same
+          reason (the card grid's titles are h3). */}
+      <h2 className="sr-only">Template list</h2>
+
       {isLoading && (
-        <div className="mt-10 grid gap-6 sm:grid-cols-2">
+        <div className="mt-6 grid gap-6 sm:grid-cols-2">
           {[0, 1].map((i) => (
             <div key={i} className="h-44 animate-pulse rounded-xl border border-border bg-muted/40" />
           ))}
@@ -61,16 +66,16 @@ export function TemplatesCatalogue() {
 
       {!isLoading && templates?.length === 0 && (
         <EmptyState
-          className="mt-10"
+          className="mt-6"
           icon={FileSpreadsheet}
           title="No templates yet"
           description="The first template is on its way — check back soon."
         />
       )}
 
-      <div className="mt-10 grid gap-6 sm:grid-cols-2">
+      <div className="mt-6 grid gap-6 sm:grid-cols-2">
         {templates?.map((template) => (
-          <Card key={template.slug} className="flex flex-col transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5 hover:shadow-md">
+          <Card key={template.slug} className="hover-lift flex flex-col">
             <CardHeader>
               <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                 <FileSpreadsheet className="size-4" aria-hidden="true" />

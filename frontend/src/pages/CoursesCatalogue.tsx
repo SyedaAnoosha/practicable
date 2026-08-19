@@ -31,7 +31,7 @@ export function CoursesCatalogue() {
   })
 
   return (
-    <div className="relative isolate mx-auto w-full max-w-6xl px-5 py-12 sm:px-8">
+    <div className="relative isolate mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
       {/* Catalogue header atmosphere (theme.css .page-wash). Full-bleed to the viewport
           edge via `left-1/2 … w-screen`, since this sits inside a max-w container where
           `inset-x-0` would stop at the container edge. `-z-10` inside the parent's
@@ -44,8 +44,15 @@ export function CoursesCatalogue() {
         description="Structured, multi-lesson courses — video, reading and downloadable templates, in one guided path."
       />
 
+      {/* week3_plan.md Phase 6 step 7 / DESIGN.md §42's "headings in order, no skipped
+          levels" — the card grid's titles are h3 (Card.tsx's CardTitle, §10's "cards
+          inside need h3, that is the whole hierarchy"), so the section between the h1
+          and those h3s needs an h2 to not skip a level. Visually nothing changes; this
+          is purely the missing rung for screen-reader heading navigation. */}
+      <h2 className="sr-only">Course list</h2>
+
       {isLoading && (
-        <div className="mt-10 grid gap-6 sm:grid-cols-2">
+        <div className="mt-6 grid gap-6 sm:grid-cols-2">
           {[0, 1].map((i) => (
             <div key={i} className="h-52 animate-pulse rounded-xl border border-border bg-muted/40" />
           ))}
@@ -54,14 +61,14 @@ export function CoursesCatalogue() {
 
       {!isLoading && courses?.length === 0 && (
         <EmptyState
-          className="mt-10"
+          className="mt-6"
           icon={GraduationCap}
           title="No courses yet"
           description="The first course is on its way — check back soon."
         />
       )}
 
-      <div className="mt-10 grid gap-6 sm:grid-cols-2">
+      <div className="mt-6 grid gap-6 sm:grid-cols-2">
         {courses?.map((course) => (
           <Link key={course.slug} to={`/courses/${course.slug}`} className="group">
             <Card className="flex h-full flex-col transition-[transform,box-shadow] duration-150 group-hover:-translate-y-0.5 group-hover:shadow-md">

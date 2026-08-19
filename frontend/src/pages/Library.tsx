@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, BookOpen, CheckCircle2, Download, FileText, GraduationCap, Tags } from 'lucide-react'
@@ -44,23 +45,21 @@ interface LibraryData {
   is_empty: boolean
 }
 
-/** The "continue where you left off" rail (product spec §2 step 6: it sits at the TOP,
- * above the full library). Only courses can be partway through — a template has no
- * progress, and reference content has no fixed order by design (spec §4.1) — so this
- * is deliberately courses-only rather than a mixed feed that would have to invent a
- * notion of progress for two content types that don't have one. */
+/** The "continue where you left off" rail, at the top above the full library. Courses-
+ * only: a template has no progress, and reference content has no fixed order, so a
+ * mixed feed would have to invent progress for content types that don't have one. */
 function ContinueRail({ courses }: { courses: LibraryCourse[] }) {
   const inProgress = courses.filter((c) => c.resume_lesson_slug && c.completed_lessons > 0)
   if (inProgress.length === 0) return null
 
   return (
-    <section className="mt-10">
+    <section className="mt-6">
       <SectionHeading>Continue where you left off</SectionHeading>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {inProgress.map((course) => (
           <div
             key={course.slug}
-            className="rounded-xl border border-border bg-card p-5 shadow-sm transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5 hover:shadow-md"
+            className="hover-lift rounded-xl border border-border bg-card p-5 shadow-sm"
           >
             <p className="eyebrow">{course.title}</p>
             <p className="mt-2 font-sans font-semibold text-foreground">{course.resume_lesson_title}</p>
@@ -78,6 +77,15 @@ function ContinueRail({ courses }: { courses: LibraryCourse[] }) {
 }
 
 function ProgressBar({ course }: { course: LibraryCourse }) {
+  // Fills from 0 on mount rather than snapping straight to its value: unknown progress
+  // becoming known progress. Plays once per mount and collapses under
+  // prefers-reduced-motion via theme.css's global rule.
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setWidth(course.percentage_complete))
+    return () => cancelAnimationFrame(frame)
+  }, [course.percentage_complete])
+
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -97,8 +105,8 @@ function ProgressBar({ course }: { course: LibraryCourse }) {
         aria-label={`${course.title} progress`}
       >
         <div
-          className="h-full rounded-full bg-gradient-brand transition-[width] duration-300"
-          style={{ width: `${course.percentage_complete}%` }}
+          className="h-full rounded-full bg-gradient-brand transition-[width] duration-[400ms] ease-[var(--ease-entrance)]"
+          style={{ width: `${width}%` }}
         />
       </div>
     </div>
@@ -106,15 +114,12 @@ function ProgressBar({ course }: { course: LibraryCourse }) {
 }
 
 /**
- * My Library — product spec §9's "purchased items across all types, clearly labeled,
- * with progress and resume where relevant", and §2 steps 6 and 9.
- *
- * The organising idea from the spec is that this page holds things of DIFFERENT
- * shapes and must not flatten them into one: a course has progress and a resume
- * point, a template has neither and just needs to download, reference content is a
- * lookup tool with no order at all. So each type keeps its own row treatment and its
- * own verb ("Continue" / "Download" / "Read"), rather than every purchase being
- * rendered as a card with a generic "Open" button.
+ * My Library — purchased items across all types, clearly labeled, with progress and
+ * resume where relevant. This page holds things of DIFFERENT shapes and must not
+ * flatten them: a course has progress and a resume point, a template just needs to
+ * download, reference content is a lookup with no order at all. Each type keeps its
+ * own row treatment and verb ("Continue" / "Download" / "Read") rather than a generic
+ * "Open" button.
  */
 export function Library() {
   const { data, isLoading, error, refetch } = useQuery({
@@ -133,7 +138,7 @@ export function Library() {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-5 py-16 sm:px-8">
+      <div className="mx-auto w-full max-w-2xl px-5 py-11 sm:px-8">
         <EmptyState
           title="We couldn't load your library."
           description="Check your connection and try again."
@@ -154,10 +159,9 @@ export function Library() {
       />
 
       {data.is_empty ? (
-        // Distinguished from the error state above on purpose: nothing is broken here,
-        // there is simply nothing bought yet, so this offers the way forward rather
-        // than a retry button that would do nothing.
-        <div className="mt-12">
+        // Distinguished from the error state above: nothing is broken, there's just
+        // nothing bought yet, so this offers the way forward instead of a dead retry.
+        <div className="mt-8">
           <EmptyState
             title="Your library is empty."
             description="Anything you buy — a course, a template, a reference pack — appears here permanently, with your progress saved."
@@ -175,7 +179,7 @@ export function Library() {
           <ContinueRail courses={data.courses} />
 
           {data.courses.length > 0 && (
-            <section className="mt-12 border-t border-border pt-8">
+            <section className="mt-8 border-t border-border pt-8">
               <SectionHeading>Courses</SectionHeading>
               <ul className="mt-4 flex flex-col divide-y divide-border">
                 {data.courses.map((course) => {
@@ -223,11 +227,10 @@ export function Library() {
           )}
 
           {data.templates.length > 0 && (
-            <section className="mt-12 border-t border-border pt-8">
+            <section className="mt-8 border-t border-border pt-8">
               <SectionHeading>Templates</SectionHeading>
-              {/* No progress bar, no resume, no lesson wrapper — spec §2 step 8's
-                  "different content type, different, simpler experience". The only
-                  verb a template needs is download. */}
+              {/* No progress bar, no resume, no lesson wrapper — the only verb a
+                  template needs is download. */}
               <ul className="mt-4 flex flex-col divide-y divide-border">
                 {data.templates.map((t) => (
                   <li key={t.id} className="flex flex-col gap-4 py-5 first:pt-0 sm:flex-row sm:items-center">
@@ -255,12 +258,10 @@ export function Library() {
           )}
 
           {data.reference.length > 0 && (
-            <section className="mt-12 border-t border-border pt-8">
+            <section className="mt-8 border-t border-border pt-8">
               <SectionHeading>Reference</SectionHeading>
-              {/* Worth being straight about: question guidance is free for everyone
-                  (DESIGN.md §21.3), so this section is a record of what a purchase
-                  included rather than an access list. The copy says so instead of
-                  implying these are unlocked by the purchase. */}
+              {/* Question guidance is free for everyone, so this section is a record of
+                  what a purchase included, not an access list. */}
               <p className="mt-2 text-sm text-muted-foreground">
                 Included with your purchases. These are free to read for everyone — they're listed here so
                 you can see exactly what each purchase covered.

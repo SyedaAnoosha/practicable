@@ -80,6 +80,13 @@ export function SignIn() {
           autoComplete="current-password"
         />
 
+        <Link
+          to="/forgot-password"
+          className="-mt-2 self-end text-sm font-medium text-accent underline-offset-4 hover:underline"
+        >
+          Forgot your password?
+        </Link>
+
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}

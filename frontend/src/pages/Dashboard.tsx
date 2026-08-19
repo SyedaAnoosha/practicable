@@ -13,19 +13,11 @@ import { Input } from '@/components/ui/Input'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { TAG_VARIANT, cardTags } from '@/lib/tags'
 
-// This page names no content. It previously hardcoded two slugs as a Week 1 scope
-// guardrail — one question, one product — and the product one (`risk-register-template`)
-// later stopped being published: the request 404'd and the card's CTA led nowhere, with
-// nothing on screen to say the product had gone away. A slug written into a component
-// cannot notice that the catalogue changed underneath it.
-//
-// Both now come from the published lists (`/questions`, `/products`), so this page shows
-// what is actually live and renders nothing at all when something isn't — which is the
-// honest state, not a broken card.
-// Each chip carries the real catalogue filter it stands for, so all three no longer
-// land on the same place. The params match QuestionsCatalogue's FILTER_PARAMS and the
-// tag values match the seeded vocabulary (duration XS/S/M/L/XL, cost $/$$/$$$,
-// regulator pressure N/L/M/H).
+// This page names no content: featured items come from the published lists
+// (`/questions`, `/products`), so it shows what is actually live and renders nothing
+// when something isn't, rather than a stale slug pointing at a 404'd or unpublished item.
+// Each chip carries the real catalogue filter it stands for, matching
+// QuestionsCatalogue's FILTER_PARAMS and the seeded tag vocabulary.
 const FINDER_CHIPS = [
   { label: 'Do it in a fortnight', param: 'duration', value: 'S' },
   { label: 'Do it cheaply', param: 'cost', value: '$' },
@@ -54,10 +46,8 @@ interface ProductContent {
   href: string | null
 }
 
-// The actual bug this fixes: content items had no href at all, so "watch the video"
-// and "download the template" were unreachable regardless of ownership — the product
-// API only ever returned a label. app/api/v1/commerce/products.py now computes the
-// right route per content_type; this just picks the icon that matches.
+// The product API computes the right route per content_type; this just picks the
+// icon that matches.
 const CONTENT_ICON: Record<string, typeof PlayCircle> = {
   lesson: PlayCircle,
   template: Download,
@@ -74,11 +64,10 @@ interface ProductData {
   contents: ProductContent[]
 }
 
-// §20.2's card rules live in lib/tags.ts (TAG_VARIANT + cardTags) so Home's featured
-// question and this one render identical tags — one source of truth, no drift.
+// Card rules live in lib/tags.ts (TAG_VARIANT + cardTags), so Home's featured question
+// and this one render identical tags — one source of truth.
 
-// The signed-in home page (/dashboard) — this is where "templates, courses,
-// questions" actually live, split out from the public landing page (Home.tsx), which
+// The signed-in home page, split out from the public landing page (Home.tsx), which
 // exists only to get someone to create an account or log in.
 export function Dashboard() {
   const navigate = useNavigate()
@@ -86,10 +75,8 @@ export function Dashboard() {
   const user = useAuthStore((s) => s.user)
   const firstName = (user?.user_metadata?.name as string | undefined)?.split(' ')[0]
 
-  // The list endpoints, not a detail fetch by slug. `/questions` already returns
-  // everything this card needs (title, subtitle, preview, domain, tags), so the
-  // featured question costs no extra request — the finder below reuses the same
-  // cached list.
+  // The list endpoint, not a detail fetch: `/questions` already returns everything
+  // this card needs, and the finder below reuses the same cached list.
   const { data: questions } = useQuery({
     queryKey: queryKeys.questions.list(),
     queryFn: () => api.get<QuestionSummary[]>('/questions/index').then((res) => res.data),
@@ -100,23 +87,18 @@ export function Dashboard() {
     queryKey: queryKeys.products.list(),
     queryFn: () => api.get<ProductData[]>('/products').then((res) => res.data),
   })
-  // Newest published product. "Featured" is not yet a real editorial concept — there is
-  // no flag for it on `products` — so this is recency, and it is worth saying plainly
-  // rather than dressing a default up as a curation decision.
+  // Newest published product — "featured" is recency, not a real editorial flag.
   const product = products?.[0]
 
-  // Without this, the product card here still showed "See what's included" / price
-  // even for someone who already bought it — ProductBuy.tsx got this same fix, but
-  // this card is a separate render path and needed it too.
+  // ProductBuy.tsx got this same fix; this card is a separate render path.
   const { data: entitlements } = useQuery({
     queryKey: queryKeys.me.entitlements(),
     queryFn: () => api.get<{ product_ids: string[] }>('/me/entitlements').then((res) => res.data),
   })
   const alreadyOwnsProduct = !!product && !!entitlements?.product_ids.includes(product.id)
 
-  // Real navigation, not a decorative input. A typed query goes to the catalogue with
-  // the search applied so the visitor lands on results rather than on whichever single
-  // question this page happened to feature; an empty submit just opens the catalogue.
+  // Real navigation: a typed query goes to the catalogue with the search applied;
+  // an empty submit just opens the catalogue.
   const goToQuestion = (e?: FormEvent) => {
     e?.preventDefault()
     const q = query.trim()
@@ -131,11 +113,11 @@ export function Dashboard() {
         description="Find the question you're trying to answer, then learn and apply it."
       />
 
-      {/* §19.1's finder, contained so it reads as the page's centrepiece rather than a
+      {/* The finder, contained so it reads as the page's centrepiece rather than a
           bare input: visible label, the question-as-placeholder, and the preset chips
           with the spec's "Try:" prefix. All of it is honest navigation — it goes to the
           one question that actually exists. */}
-      <form onSubmit={goToQuestion} className="mx-auto mt-10 max-w-2xl">
+      <form onSubmit={goToQuestion} className="mx-auto mt-6 max-w-2xl">
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
           <label htmlFor="dashboard-finder" className="text-sm font-medium text-foreground">
             What are you trying to solve?
@@ -170,15 +152,15 @@ export function Dashboard() {
         </div>
       </form>
 
-      {/* Questions — §20.2's card: three decision-relevant tags with the semantic
+      {/* Questions — the card shows three decision-relevant tags with the semantic
           variants, serif preview, §19.3's left-rule treatment, and the spec's 2px
           hover lift (§39.2). The eyebrow doubles as the h2 so the CardTitle h3 below
           it lands in sequence (§42.1). */}
       {question && (
-        <section className="mt-14">
+        <section className="mt-9">
           <h2 className="eyebrow">Live now · {question.domain}</h2>
           <Card
-            className="mt-4 border-l-4 transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5 hover:shadow-md"
+            className="hover-lift mt-4 border-l-4"
             style={{ borderLeftColor: 'var(--accent)' }}
           >
             <CardHeader>
@@ -204,13 +186,13 @@ export function Dashboard() {
         </section>
       )}
 
-      {/* Templates & courses — §23.2's access states: owned shows the library state and
+      {/* Templates & courses — access states: owned shows the library state and
           never a price; not owned shows the price and the buy path. The content list
           links (with per-type icons) are real routes computed by the products API. */}
       {product && (
-        <section className="mt-14">
+        <section className="mt-9">
           <h2 className="eyebrow">Templates & tools</h2>
-          <Card className="mt-4 transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5 hover:shadow-md">
+          <Card className="hover-lift mt-4">
             <CardHeader>
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle>{product.name}</CardTitle>
@@ -224,10 +206,8 @@ export function Dashboard() {
               <ul className="flex flex-col gap-2 text-sm">
                 {product.contents.map((content) => {
                   const Icon = CONTENT_ICON[content.content_type] ?? FileQuestion
-                  // Lesson/template links 403 gracefully with a clear "not entitled
-                  // yet" message (Lesson.tsx/Template.tsx already handle that state),
-                  // so it's safe to always link — not just once alreadyOwnsProduct is
-                  // confirmed — rather than leave content unreachable in between.
+                  // Lesson/template links 403 gracefully with a clear message, so it's
+                  // safe to always link rather than leave content unreachable.
                   if (content.href) {
                     return (
                       <li key={content.label}>
@@ -256,7 +236,7 @@ export function Dashboard() {
                 </p>
               ) : (
                 <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
-                  {/* Accent-blue like the question-page buy card — large marketing price,
+                  {/* Accent-blue like the question-page buy card: large marketing price,
                       the one figure allowed to be the accent (24px, large-text-safe). */}
                   <p className="text-2xl font-semibold tabular-nums text-accent">
                     {formatCurrency(product.price_amount, product.currency)}
@@ -279,7 +259,7 @@ export function Dashboard() {
           stale silently, on the page where a paying member is deciding whether to trust
           what else it says. */}
       {questions && questions.length > 0 && (
-        <p className="mt-14 text-center text-sm text-muted-foreground">
+        <p className="mt-9 text-center text-sm text-muted-foreground">
           {questions.length === 1 ? '1 question is' : `All ${questions.length} questions are`} live
           today
           {products && products.length > 0 && (

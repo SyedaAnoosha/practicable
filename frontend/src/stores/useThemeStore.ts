@@ -26,10 +26,8 @@ function systemPrefersDark(): boolean {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-// DESIGN.md §55: we toggle .dark on <html> and do not follow the OS blindly — the
-// OS preference is only the *initial* default for a first-time visitor; the moment
-// the user toggles, their choice is persisted and wins from then on (the app never
-// re-reacts to OS changes while open).
+// The OS preference is only the initial default for a first-time visitor; once the
+// user toggles, their choice is persisted and the app never re-reacts to OS changes.
 function initialTheme(): Theme {
   return readStoredTheme() ?? (systemPrefersDark() ? 'dark' : 'light')
 }
@@ -66,7 +64,5 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   toggleTheme: () => get().setTheme(get().theme === 'dark' ? 'light' : 'dark'),
 }))
 
-// Safety net if the index.html inline script is ever removed: applying at module
-// load (main.tsx imports this before the first render) still happens before any
-// app paint. Idempotent — the inline script may already have run.
+// Safety net if the index.html inline script is ever removed. Idempotent.
 applyTheme(initial)

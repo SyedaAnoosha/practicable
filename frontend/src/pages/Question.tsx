@@ -136,7 +136,7 @@ export function Question() {
   // Generic error state — no detail leaked, one action that retries.
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-5 py-16 sm:px-8">
+      <div className="mx-auto w-full max-w-2xl px-5 py-11 sm:px-8">
         <EmptyState
           title="We couldn't load this question."
           description="Check your connection and try again."
@@ -154,7 +154,7 @@ export function Question() {
 
   return (
     // Editorial mode: everything stays in one scroll — no tabs, no accordion.
-    <div className="relative mx-auto w-full max-w-7xl px-5 py-12 sm:px-8">
+    <div className="relative mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
       {/* A quiet domain-tinted wash behind the header block only, full-bleed to the
           viewport edge via the `left-1/2 … w-screen` technique (this sits inside a
           max-w-7xl container, so `inset-x-0` would stop at the container edge).
@@ -270,7 +270,7 @@ export function Question() {
           })}
         </div>
 
-      <section className="mt-10 max-w-7xl">
+      <section className="mt-6 max-w-7xl">
         <SectionHeading>Guidance</SectionHeading>
 
         {/* Free to read, no gate at all — not even a soft email prompt. `gated`
@@ -336,7 +336,7 @@ export function Question() {
           listed product (the gate passes through a granting product, so a one-item list
           is necessarily owned); with several, stay neutral — no badge, no price. */}
       {!question.gated && question.related_content.length > 0 && (
-        <section className="mt-12 border-t border-border pt-8">
+        <section className="mt-8 border-t border-border pt-8">
           <SectionHeading>Related templates</SectionHeading>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {question.related_content.map((p) => (
@@ -361,7 +361,7 @@ export function Question() {
       {/* A signpost to the course this question leads into, not a second player. Locked
           rows stay visible with a lock icon rather than being hidden. */}
       {question.related_lessons.length > 0 && (
-        <section className="mt-12 border-t border-border pt-8">
+        <section className="mt-8 border-t border-border pt-8">
           <SectionHeading>From the related course</SectionHeading>
           <ul className="mt-4 flex flex-col divide-y divide-border">
             {question.related_lessons.map((lesson) => {
@@ -408,7 +408,7 @@ export function Question() {
 
       {/* Omitted entirely when empty rather than padded with anything invented. */}
       {question.related_questions.length > 0 && (
-        <section className="mt-12 border-t border-border pt-8">
+        <section className="mt-8 border-t border-border pt-8">
           <SectionHeading>Related questions</SectionHeading>
           <ul className="mt-4 flex flex-col divide-y divide-border">
             {question.related_questions.map((rq) => (

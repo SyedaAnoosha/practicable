@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AutosaveStatus } from '@/components/admin/AutosaveIndicator'
 
-/** week2_plan.md §20.8 — "Cadence: every 20 seconds, and on blur of any field."
- * A genuine fixed interval, not a debounce that resets on every keystroke: the
- * interval is set up once and reads the latest `value`/`onSave` through refs, so
- * typing continuously doesn't push the save further and further away.
+/** A genuine fixed interval, not a debounce that resets on every keystroke: it's set
+ * up once and reads the latest `value`/`onSave` through refs, so typing continuously
+ * doesn't push the save further away.
  *
- * `value` is whatever string the caller wants watched for "has this actually
- * changed since the last save" — pass a JSON-stringified draft for a multi-field
- * form, or the raw text for a single textarea.
+ * `value` is whatever string the caller wants watched for "has this changed since the
+ * last save" — a JSON-stringified draft for a multi-field form, or raw text for one.
  *
- * Never throws into the caller and never clears `value` itself on failure — the
- * draft stays exactly as the admin left it; only `status` flips to `'error'`, per
- * §20.8's "a valid field is never cleared because another failed."
+ * Never throws into the caller and never clears `value` on failure — the draft stays
+ * as the admin left it; only `status` flips to `'error'`.
  */
 export function useAutosave({
   value,
@@ -33,9 +30,8 @@ export function useAutosave({
   const onSaveRef = useRef(onSave)
   const savingRef = useRef(false)
 
-  // React Compiler forbids writing a ref during render (react-hooks/refs) — these
-  // syncs move to an effect, which still runs after every render before the next
-  // interval tick can read them.
+  // React Compiler forbids writing a ref during render, so these syncs move to an
+  // effect, which still runs before the next interval tick can read them.
   useEffect(() => {
     valueRef.current = value
     onSaveRef.current = onSave

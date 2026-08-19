@@ -1,23 +1,10 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils/cn'
 
-/** Four L-shaped brackets at the corners of a block — the signature device from
- * `docs/comps.md`'s BudgetCard.
- *
- * It is the one ornament in this design language that is purely structural: it frames
- * without drawing a full box, which suits a surface that already has its own border and
- * would look boxed-in with a second one. Used for "this is an instrument panel" moments
- * rather than ordinary cards.
- *
- * Two departures from the source, both deliberate:
- *  - The original hardcodes `border-black/20 dark:border-white/20`. This uses
- *    `--border-strong`, the token already carrying 3.2:1 on card for state-bearing
- *    borders, so the brackets survive the light/dark swap without a second rule.
- *  - The original nails the brackets to the viewport corners of an `absolute`-positioned
- *    parent. Here they are children of a `relative` wrapper so the component can be
- *    dropped around arbitrary content instead of the caller having to arrange it.
- *
- * `aria-hidden` throughout: this is decoration and has no place in the a11y tree.
+/** Four L-shaped brackets at the corners of a block — a purely structural ornament: it
+ * frames without drawing a full box, for "this is an instrument panel" moments rather
+ * than ordinary cards. Uses `--border-strong` so it survives the light/dark swap.
+ * `aria-hidden` throughout, since this is decoration.
  */
 export function CornerFrame({
   children,

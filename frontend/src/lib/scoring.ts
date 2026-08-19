@@ -1,27 +1,15 @@
-// Discovery scoring — week2_plan.md Phase 3 / DESIGN.md §57.
+// Discovery scoring.
 //
-// A strict AND across three filters returns nothing at exactly the moment the
-// product is meant to prove itself (DESIGN.md §19.2), so filtering is a RANKING,
-// not a gate: each active constraint contributes graded credit — 2 points for an
-// exact match, 1 for the adjacent value on that dimension's ordinal scale, 0 beyond
-// that — and a question is "exact" only when EVERY active constraint scored the
-// full 2 points.
+// A strict AND across filters can return nothing, so filtering is a RANKING, not a
+// gate: each active constraint contributes graded credit — 2 points for an exact
+// match, 1 for the adjacent value on that dimension's ordinal scale, 0 beyond that —
+// and a question is "exact" only when every active constraint scored the full 2 points.
 //
-// v1's bug (§57.2): `isExact: close === 0 && exact > 0` — a question that missed
-// one constraint entirely (not merely landed adjacent) could still be called exact,
-// as long as no OTHER constraint landed in the "adjacent" bucket. The fix here is
-// `isExact = activeConstraints > 0 && exactCount === activeConstraints`: every
-// active constraint must itself be an exact match.
-//
-// Deliberate deviation from §57.3's illustrative snippet: that version hard-codes
-// each dimension's scale as a literal object. This version reads `sort_order` off
-// the tag data already present on every question and filter option in the API
-// response instead — the same "the scale lives in the database, not a client
-// literal" principle week2_plan.md's Phase 3 step 3 states for the backend, applied
-// symmetrically here so the two implementations can never drift out of sync with
-// the owner's tag_values table. `backend/app/services/question_service.py` is the
-// Python mirror of this file; `tests/fixtures/scoring_cases.json` is read by both
-// suites so they cannot silently diverge (Non-negotiable #10).
+// Reads `sort_order` off the tag data already present in the API response, rather
+// than hard-coding each dimension's scale as a literal, so the scale lives in the
+// database. `backend/app/services/question_service.py` is the Python mirror of this
+// file; a shared fixture (`tests/fixtures/scoring_cases.json`) keeps the two from
+// silently diverging.
 
 export const EXACT_POINTS = 2
 export const CLOSE_POINTS = 1
@@ -32,9 +20,8 @@ export const ORDINAL_DIMENSIONS = ['effort', 'duration', 'cost', 'roi_horizon', 
 export type OrdinalDimension = (typeof ORDINAL_DIMENSIONS)[number]
 
 // Multi-valued, categorical (overlap, not distance) dimensions. `tier` is single-
-// valued per question but the FILTER can name several acceptable values (a
-// checkbox group, not radio buttons — DESIGN.md §19.5 point 7), so it is scored
-// the same way as `leadership_traits`, which is genuinely multi-valued per question.
+// valued per question but the filter can name several acceptable values (a checkbox
+// group), so it's scored the same way as `leadership_traits`.
 export const MULTI_DIMENSIONS = ['tier', 'leadership_traits'] as const
 export type MultiDimension = (typeof MULTI_DIMENSIONS)[number]
 
@@ -172,8 +159,8 @@ export function scoreQuestion<Q extends ScorableQuestion>(
     score,
     activeConstraints,
     exactCount,
-    // THE FIX (§57.2): exact means every active constraint was satisfied exactly,
-    // not merely that nothing landed in the adjacent bucket.
+    // Exact means every active constraint was satisfied exactly, not merely that
+    // nothing landed in the adjacent bucket.
     isExact: activeConstraints > 0 && exactCount === activeConstraints,
     misses,
   }
@@ -228,11 +215,9 @@ export function buildTagLookup(tags: TagRef[]): Map<string, TagRef> {
   return map
 }
 
-/** §57.5's zero-result recovery: rank the ACTIVE filter dimensions by how few
- * questions each admits on its own (against the full index, ignoring every other
- * filter), most restrictive first. The caller offers the top two as one-tap
- * relaxations. Computed, not hard-coded, so it reflects how the taxonomy actually
- * behaves today rather than a guess that goes stale as content is added. */
+/** Zero-result recovery: rank the active filter dimensions by how few questions each
+ * admits on its own, most restrictive first. Computed, not hard-coded, so it reflects
+ * how the taxonomy actually behaves rather than a guess that goes stale. */
 export function rankRelaxationCandidates<Q extends ScorableQuestion>(questions: Q[], filters: QuestionFilters): string[] {
   const activeDims: string[] = []
   if (filters.domain) activeDims.push('domain')

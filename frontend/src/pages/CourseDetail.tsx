@@ -111,7 +111,7 @@ export function CourseDetail() {
 
   if (error) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-5 py-16 sm:px-8">
+      <div className="mx-auto w-full max-w-2xl px-5 py-11 sm:px-8">
         <EmptyState
           title="We couldn't load this course."
           description="Check your connection and try again."
@@ -131,7 +131,7 @@ export function CourseDetail() {
   // into content once it's actually owned. Not-owned visitors get the price/buy card
   // below instead of a button that would just land on a locked lesson.
   return (
-    <div className="mx-auto w-full max-w-4xl px-5 py-12 sm:px-8">
+    <div className="mx-auto w-full max-w-4xl px-5 py-8 sm:px-8">
       <PageTitle
         eyebrow={course.section}
         title={course.title}
@@ -183,7 +183,7 @@ export function CourseDetail() {
         </Card>
       )}
 
-      <section className="mt-10">
+      <section className="mt-6">
         <SectionHeading>Full syllabus</SectionHeading>
         <div className="mt-4 flex flex-col gap-6">
           {course.modules.map((module) => (

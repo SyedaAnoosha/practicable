@@ -55,12 +55,10 @@ interface LessonNav {
   title: string
 }
 
-// One ordered piece of the lesson's content (week2_plan.md Phase 2 / Product Spec
-// §7.2's mixed-content lessons). `body`/`download`/`has_video` below stay populated
-// too — every pre-Phase-2 lesson was backfilled into exactly one block matching them —
-// but a NEW mixed lesson only exists here, as a sequence. The backend has already
-// applied entitlement/free-template filtering to this list (case 11): whatever
-// appears here is exactly what this viewer is allowed to see, in render order.
+// One ordered piece of the lesson's content. `body`/`download`/`has_video` below stay
+// populated too, for backfilled single-block lessons, but a new mixed lesson exists
+// only here, as a sequence. The backend has already applied entitlement/free-template
+// filtering to this list — whatever appears here is what this viewer is allowed to see.
 interface LessonBlockData {
   id: string
   block_type: 'text' | 'video' | 'file' | 'callout'
@@ -125,8 +123,8 @@ function VideoBlock({ tokenUrl, queryKey }: { tokenUrl: string; queryKey: readon
     queryFn: () => api.get<PlaybackToken>(tokenUrl).then((res) => res.data),
   })
 
-  // Dynamically imported — a large dependency most sessions never need
-  // (DESIGN.md §43.1), never at the app root.
+  // Dynamically imported — a large dependency most sessions never need, never at the
+  // app root.
   useEffect(() => {
     import('@mux/mux-player-react').then((mod) => {
       setMuxPlayer(() => mod.default as ComponentType<MuxPlayerProps>)
@@ -163,8 +161,8 @@ function DownloadBlock({ downloadUrl, fileName }: { downloadUrl: string; fileNam
     setStatus('preparing')
     try {
       const { data } = await api.get<{ download_url: string; file_name: string }>(downloadUrl)
-      // DESIGN.md §26.4/§26.5: fetch the presigned URL on click, use it immediately,
-      // discard it — never render it as a visible href.
+      // Fetch the presigned URL on click, use it immediately, discard it — never
+      // render it as a visible href.
       const fileResponse = await fetch(data.download_url)
       if (!fileResponse.ok) throw new Error('Download failed')
       const blob = await fileResponse.blob()
@@ -198,12 +196,9 @@ function DownloadBlock({ downloadUrl, fileName }: { downloadUrl: string; fileNam
   )
 }
 
-/** The free lead-magnet artefact shown inside a course the visitor has not bought.
- *
- * Same soft gate as /templates and the free question: one email, once, shared across
- * every entry point — and satisfied outright by being signed in. Once cleared it hands
- * off to the ordinary DownloadBlock, so there is exactly one download implementation.
- */
+/** The free lead-magnet artefact shown inside a course the visitor hasn't bought. Same
+ * soft gate as /templates and the free question, satisfied outright by being signed
+ * in. Once cleared it hands off to the ordinary DownloadBlock. */
 function FreeDownloadBlock({ downloadUrl, fileName }: { downloadUrl: string; fileName: string }) {
   const gate = useEmailGate('course_lesson_free_template')
 
@@ -233,9 +228,8 @@ function FreeDownloadBlock({ downloadUrl, fileName }: { downloadUrl: string; fil
 }
 
 /** Renders `lesson.blocks` in order — the backend has already decided what belongs in
- * this list for the current viewer (case 11: an unentitled viewer's list already
- * contains only free file blocks, nothing more), so this component never re-checks
- * entitlement itself, only chooses how each block TYPE renders.
+ * this list for the current viewer, so this component never re-checks entitlement
+ * itself, only chooses how each block type renders.
  */
 function LessonBlocks({ blocks }: { blocks: LessonBlockData[] }) {
   return (
@@ -254,8 +248,7 @@ function LessonBlocks({ blocks }: { blocks: LessonBlockData[] }) {
               </div>
             )
           case 'callout':
-            // Visually distinct from a plain text block — an aside, not the main
-            // reading flow, so it earns a border and tint rather than blending in.
+            // An aside, not the main reading flow — earns a border and tint.
             return (
               <div
                 key={block.id}
@@ -366,11 +359,10 @@ function OutlineList({ lesson, onNavigate }: { lesson: LessonDetail; onNavigate?
   )
 }
 
-// DESIGN.md §24.1: the member learning interface. A sticky, independently scrollable
-// outline beside the active lesson's content — video, reading and downloadable-
-// artefact lesson types all render from the same page, since which pieces exist is a
-// property of the lesson's data (has_video/body/download), not of a hard switch on
-// lesson_type alone (a "mixed" lesson can legitimately carry more than one).
+// The member learning interface. A sticky, independently scrollable outline beside the
+// active lesson's content — video, reading and downloadable-artefact lesson types all
+// render from the same page, since which pieces exist is a property of the lesson's
+// data, not a hard switch on lesson_type alone.
 export function Learn() {
   const { courseSlug, lessonSlug } = useParams<{ courseSlug: string; lessonSlug: string }>()
   const queryClient = useQueryClient()
@@ -411,7 +403,7 @@ export function Learn() {
   if (error) {
     const notFound = isAxiosError(error) && error.response?.status === 404
     return (
-      <div className="mx-auto w-full max-w-2xl px-5 py-16 sm:px-8">
+      <div className="mx-auto w-full max-w-2xl px-5 py-11 sm:px-8">
         <EmptyState
           title={notFound ? "We couldn't find this lesson." : "We couldn't load this lesson."}
           description={notFound ? 'It may have moved or been unpublished.' : 'Check your connection and try again.'}
@@ -497,13 +489,11 @@ export function Learn() {
 
         {!lesson.entitled ? (
           <div className="mt-8 flex flex-col gap-8">
-            {/* The free template is free here too. This lesson's artefact IS the
-                standalone lead magnet, so paywalling it inside the course would mean
-                the same file was free on /templates and locked here — an inconsistency
-                a buyer spots immediately. The lesson's writing stays locked; only the
-                download is exempt, and it still asks for an email first. `blocks` is
-                already filtered server-side to free-only content for an unentitled
-                viewer (case 11), so rendering it here needs no extra check. */}
+            {/* The free template is free here too — the same file can't be free on
+                /templates and locked here. The lesson's writing stays locked; only the
+                download is exempt, and still asks for an email first. `blocks` is
+                already filtered server-side to free-only content, so no extra check
+                is needed here. */}
             {lesson.blocks.length > 0 ? (
               <LessonBlocks blocks={lesson.blocks} />
             ) : (
@@ -523,10 +513,9 @@ export function Learn() {
           </div>
         ) : (
           <div className="mt-8 flex flex-col gap-8">
-            {/* `blocks` covers every current lesson (every pre-Phase-2 lesson was
-                backfilled into exactly one block) — the has_video/body/download trio
+            {/* `blocks` covers every current lesson — the has_video/body/download trio
                 below is a fallback for the zero-block edge case only, never rendered
-                alongside `blocks` (that would show the same content twice). */}
+                alongside `blocks`, which would show the same content twice. */}
             {lesson.blocks.length > 0 ? (
               <LessonBlocks blocks={lesson.blocks} />
             ) : (
@@ -538,9 +527,7 @@ export function Learn() {
                   />
                 )}
                 {lesson.body && (
-                  /* text-read carries the §10 serif rhythm (1.7 line-height); the old
-                     leading-relaxed override silently flattened it. text-pretty for
-                     even paragraph shaping. */
+                  /* text-read carries the serif rhythm (1.7 line-height). */
                   <p className="whitespace-pre-line font-serif text-read text-pretty text-foreground">{lesson.body}</p>
                 )}
                 {lesson.download && (

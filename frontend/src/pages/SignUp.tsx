@@ -21,18 +21,11 @@ export function SignUp() {
     setLoading(true)
     setError('')
 
-    // `options.data` lands in the JWT's user_metadata claim — app/core/security.py
-    // reads it back out so app/core/deps.py's get_current_user can set users.name on
-    // the row it creates the first time this person calls the API, instead of that
-    // column staying permanently NULL for every real signup.
-    // Without emailRedirectTo, Supabase falls back to the project's dashboard-configured
-    // "Site URL" — which for this project is still the Supabase default of
-    // http://localhost:3000, never updated. That's what was sending real signups on the
-    // deployed site to a dead localhost link after they clicked the confirmation email.
-    // Passing it explicitly here makes the redirect correct regardless of that setting —
-    // but Supabase still only allows redirecting to a URL present in its Redirect URLs
-    // allow-list (Authentication -> URL Configuration), so that dashboard entry still
-    // has to include this app's real origin(s) or this will be rejected outright.
+    // `options.data` lands in the JWT's user_metadata claim, which get_current_user
+    // reads back out to set users.name on first sight.
+    // emailRedirectTo overrides Supabase's dashboard-configured "Site URL" fallback,
+    // which must otherwise be kept in sync manually. The target still has to be in
+    // Supabase's Redirect URLs allow-list or it's rejected outright.
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -45,11 +38,8 @@ export function SignUp() {
       return
     }
 
-    // With "Confirm email" on (Supabase project default), signUp() succeeds without
-    // error but returns no session until the confirmation link is clicked — was
-    // navigating to /dashboard regardless, which MemberLayout's guard then correctly
-    // bounced straight back out of (no session = no user), reading as "sign up is
-    // broken" when it had actually worked, just not logged anyone in yet.
+    // With "Confirm email" on, signUp() succeeds without error but returns no session
+    // until the link is clicked, so this must not navigate to /dashboard yet.
     if (!data.session) {
       setAwaitingConfirmation(true)
       return

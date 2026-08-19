@@ -12,14 +12,14 @@ import { DraftBanner } from './DraftBanner'
 // sitting on flat, undecorated `--background`.
 export function LegalLayout({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
-    <div className="relative isolate mx-auto w-full max-w-3xl px-5 py-12 sm:px-8">
+    <div className="relative isolate mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
       <div aria-hidden="true" className="page-wash absolute left-1/2 top-0 -z-10 h-[26rem] w-screen -translate-x-1/2" />
       <article>
         <PageTitle eyebrow="Legal" title={title} description={description} />
         <div className="mt-6">
           <DraftBanner />
         </div>
-        <div className="mt-10 flex flex-col gap-8 font-serif text-read text-pretty text-foreground">{children}</div>
+        <div className="mt-6 flex flex-col gap-8 font-serif text-read text-pretty text-foreground">{children}</div>
       </article>
     </div>
   )

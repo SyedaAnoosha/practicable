@@ -21,7 +21,7 @@ export interface EmptyStateProps {
 export const EmptyState = ({ title, description, icon: Icon, action, className }: EmptyStateProps) => (
   <div
     className={cn(
-      'flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-16 text-center',
+      'flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-11 text-center',
       className,
     )}
   >

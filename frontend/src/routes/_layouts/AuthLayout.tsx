@@ -49,7 +49,7 @@ export default function AuthLayout() {
           variants={authStagger}
           initial="hidden"
           animate="visible"
-          className="relative z-10 mt-10 max-w-lg"
+          className="relative z-10 mt-6 max-w-lg"
         >
           <motion.div variants={springItem}>
             <StatusDot label="Free to browse — no card, no trial" tone="gold" on="stage" />

@@ -2,23 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { cn } from '@/lib/utils/cn'
 
-/** Typewriter headline, adapted from `docs/comps.md`.
+/** Typewriter headline.
  *
- * Four changes from the source, each for a reason:
- *  1. `"use client"` removed — that is a Next.js App Router directive and this app is
- *     Vite + react-router, where it is meaningless.
- *  2. `NodeJS.Timeout` → `ReturnType<typeof setTimeout>`. The DOM's setTimeout returns a
- *     number, not a Node handle; the original type only compiles because @types/node
- *     happens to be installed, and it is wrong about what the value actually is.
- *  3. Reduced motion is handled explicitly. `<MotionConfig reducedMotion="user">` only
- *     neutralises *transform* animations — it cannot stop a setTimeout loop retyping
- *     text, which for anyone with vestibular sensitivity or a screen reader is the
- *     worst kind of motion on a page. Here the full text renders immediately instead.
- *  4. Colours come from tokens rather than `text-black dark:text-white`.
+ * Reduced motion is handled explicitly: `<MotionConfig reducedMotion="user">` only
+ * neutralises transform animations, not a setTimeout loop retyping text, so under
+ * reduced motion the full text renders immediately instead.
  *
  * Accessibility: the animated text is `aria-hidden` and the complete phrase is exposed
- * to assistive tech in a visually-hidden span. A screen reader announcing a headline one
- * character at a time is not a headline.
+ * to assistive tech in a visually-hidden span — a screen reader announcing a headline
+ * one character at a time is not a headline.
  */
 
 export type TypewriterSequence = {
