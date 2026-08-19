@@ -1901,7 +1901,7 @@ That is the whole model. Four lines, and every access decision in the product fo
 
 **The asymmetry to keep straight:** a course purchase *includes* the templates its lessons use; a template purchase never unlocks a course. That direction was a real bug — one product once bundled both — and is now enforced by the catalogue shape rather than by convention (`docs/pricing.md` §2, `db/seed/012`).
 
-### 28.1 Structure `[SUPERSEDED by §28.0 — retained for the layout pattern only]`
+### 28.1 Structure `[SUPERSEDED by §28.0 — retained for the layout pattern only]` `[the page itself was later built to week3_plan.md §20.1 then removed entirely 2026-08-16, owner direction — week3_plan.md Phase 6 step 0b]`
 
 The three-column layout below is still the right *shape* for a pricing page. The contents are stale: the prices are illustrative US$ figures that were never adopted (the ladder is AUD, `docs/pricing.md` §1), and the "Free" column describes one free domain of 20 questions, which is not the model — all 100 are free (§27.1).
 

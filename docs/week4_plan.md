@@ -1,0 +1,2181 @@
+# Week 4 — PRD, Design Specification and Implementation Plan
+
+**"Deciding in the Dark" Platform · v1.0 · 2026-08-17 · opens on the GO recorded in [`week3_report.md`](week3_report.md)**
+
+*Sourced from `Deciding_in_the_Dark_Platform_Intern_Brief.md` (Week 4 — design, hardening and handover), `DESIGN.md` (§16, §40, §41, §42, §43, §60, §62), `BACKEND.md`, `Deciding_in_the_Dark_Research_Specification.md` (Parts Four, Seven, Eleven), `docs/new_additions.md` (the commercial strategy — triaged for feasibility in §2.2 below), `docs/pricing.md`, `docs/handover.md`, `docs/db_index_evidence.md`, `frontend/src/styles/theme.css`, and a direct read of the repository on 2026-08-17. Every requirement below traces to at least one of those; where they disagree, §0.3's precedence rule decides.*
+
+---
+
+## 0. How to read this document
+
+### 0.1 What each part is for
+
+| Part | Contains | Read it when |
+|---|---|---|
+| **I — PRD** | What Week 4 must produce, and how each item is judged. Includes the feasibility triage of `new_additions.md` (§2.2) | Before you start; before you cut anything |
+| **II — Design specification** | Every colour, typeface, size, line height, tracking, space, radius, shadow, gradient, easing, duration and string used this week | Before you write a component; while you write a component |
+| **III — Implementation plan** | Phase by phase, step by step, with file paths, migrations and code | While you build |
+| **IV — Database: optimisation, integrity and the new columns** | Migration `013`, the second index pass, keyset pagination, and the method for proving each entry | Phase 1, and before any query is called "fast" |
+| **V — Ledger, risks, reference** | The task ledger, the risk watchlist, the commands that matter | Daily |
+
+### 0.2 Status markers
+
+`[BUILT]` verified present in the repository on 2026-08-17 · `[GAP]` verified absent on 2026-08-17 · `[OWNER]` blocked on a decision only the owner can make · `[NEW]` first specified in this document · `[DEFECT]` a live bug found while writing this plan, with its fix scoped here · `[CARRIED]` named in `week3_report.md` §6 or `handover.md` §4 and still open · `[UNVERIFIABLE]` cannot be checked from an automated session
+
+### 0.3 Precedence
+
+Unchanged from `week3_plan.md` §0.3, restated so this document can be read alone:
+
+1. **The intern brief** — non-negotiables and the four-week sequence. Nothing overrides it. Week 4's own line: *"Apply the design system across every screen. Hunt the small things… Try to break your own gating and fix what gives. Write the handover pack. Ship something a stranger can find, buy from and learn on."*
+2. **`DESIGN.md`** — everything the user sees.
+3. **`BACKEND.md`** — the service, the gate, the API contract.
+4. **The Research Specification** — the reasoning, the entity model, the legal and security positions.
+5. **`frontend/src/styles/theme.css`** — the single source of truth for every design *value*. Where `DESIGN.md` and `theme.css` state different numbers, **`theme.css` is right and `DESIGN.md` is stale.** §13.1 below records exactly where that is currently true.
+6. **`docs/pricing.md`** — the price authority. `new_additions.md` §0.2 defers to it by its own words.
+7. **`docs/new_additions.md`** — the commercial strategy. Advisory: it proposes, this plan disposes. §2.2 records what was taken and what was not, with the reason in both directions.
+8. **This document** — sequencing and detail. Where it contradicts one of the above, the above wins and this file is wrong.
+
+### 0.4 Verified state of the build entering Week 4
+
+Every row checked against the repository on 2026-08-17 by direct read — not carried forward from `week3_plan.md`, and not inferred from `week3_report.md`.
+
+| Area | State | Evidence |
+|---|---|---|
+| Gate, single choke point | `[BUILT]` | `app/core/entitlements.py` — `resolve_product_ids()` filters `revoked_at IS NULL` in the one query every gated request already runs |
+| Gating suite | `[BUILT]` | `backend/tests/gating/test_gating.py` — 34 cases in that file, 62 backend tests total, each seen red ([`gating_seen_red.md`](gating_seen_red.md)) |
+| Index layer | `[BUILT]`, first pass | Migration `010` — 17 indexes + 4 UNIQUE constraints, each `EXPLAIN`-proven ([`db_index_evidence.md`](db_index_evidence.md)); migration `011` adds `ix_entitlements_user_live` (partial, `WHERE revoked_at IS NULL`) |
+| Refunds and revocation | `[BUILT]` | `services/refund_service.py`, `POST /admin/orders/{id}/refund`, `charge.refunded` webhook, `RefundDialog.tsx` |
+| Cart / multi-item checkout | `[BUILT]` | `useCartStore`, `CartDrawer`, `POST /checkout/session` takes `product_ids: list[str]` |
+| Email spine | `[BUILT]` | Mailjet over REST; 8 Jinja2 template pairs in `app/emails/` (plus `base.html.j2` and `_button.html.j2`); delivery confirmed per-send via Mailjet's REST Message resource |
+| Publish states | `[BUILT]` | Migration `012` — `draft \| in_review \| published \| archived` on 5 tables; `PublishStateMixin` keeps `published`/`publish_state` in sync on every write path |
+| Editorial control of the front page | `[BUILT]` | `questions.featured` / `featured_sort`, `FeaturedToggle`, `FeaturedSummary` |
+| Catalogue | `[BUILT]` | 8 published products across templates, a course, a domain pack and one bundle (`docs/pricing.md` §2) |
+| Accessibility primitives | `[BUILT]` | `RootLayout.tsx` has `RouteAnnouncer` (`role="status" aria-live="polite"`) and the skip link; `PageTitle.tsx` renders `tabIndex={-1}` on its `h1` |
+| Responsive + axe suites | `[BUILT]` | `responsive-widths.spec.ts` (7 widths × 8 routes, 56/56), `accessibility.spec.ts` (both themes, 9/9), `stress-fixtures.spec.ts` |
+| **Product/template evidence fields** | **`[GAP]`** | `db/models/product.py` and `db/models/template.py` read in full: **no `licence`, no `version`, no `last_reviewed_at`, no `preview_image_keys`, no page/sheet count, no editability flag.** `DESIGN.md` §16 requires "two previews minimum per paid template"; `new_additions.md` §2 names six of eight pre-purchase checks as unmet |
+| **Tax-invoice-quality receipt** | **`[GAP]`** | `integrations/stripe_client.py` builds the session with `line_items` + `customer_email` only — **no `invoice_creation`, no business name, no address collection, no ABN anywhere.** `new_additions.md` §4 makes this a hard prerequisite above ~A$150 |
+| **Overlap publish guard** | **`[GAP]`** | Nothing checks whether two published products' `product_contents` intersect. `new_additions.md` §11: this is the guard that would have caught the `db/seed/012` bug before a customer did |
+| **Question → product routing** | **`[GAP]`** | Both halves exist (`question_relations`, `product_contents`), the join and the UI do not. `new_additions.md` §22 names this as the thing that finally makes the seven tags visible to a buyer |
+| **Admin product editor** | **`[GAP]`** `[CARRIED]` | No `/admin/products` route in `App.tsx`; `admin/router.py` has questions, courses, templates, orders, media only. A price cannot be set without a direct database write (`handover.md` §4 item 16) |
+| **Contact inbox** | **`[GAP]`** | `contact_messages` rows are read by hand-written SQL (`handover.md` §2). Nothing in the app reads that table |
+| **Checkout / webhook fixture tests** | **`[GAP]`** | `backend/tests/` covers gating, lesson blocks, packs and question scoring. **The code that moves money has no fixture test** — `handover.md` §4 item 5 names this as the highest-consequence remaining gap |
+| **Taxonomy parity test** | **`[GAP]`** `[CARRIED]` | No assertion that a taxonomy value hard-coded in the frontend exists in `tag_values`. This is the exact bug that left every quick-filter chip matching zero questions for three days (`handover.md` §1, 2026-08-14) |
+| **Frontend unit tests** | **`[GAP]`** | `vitest` is configured (`package.json` `"test": "vitest run"`, `src/test/setup.ts` present) and there is **one** test file in `src`: `lib/scoring.test.ts` |
+| **Performance budgets** | **`[GAP]`** | `DESIGN.md` §43 states LCP < 2.0s, CLS < 0.05, initial JS < 180KB and says they "fail CI." Nothing in `.github/workflows/` measures any of them |
+| **Admin orders pagination** | **`[GAP]`** | `admin/orders.py` has `ORDER BY created_at DESC` and no `LIMIT`. Migration `010` already built `ix_orders_created` as named prerequisite infrastructure for the keyset pagination that was never written |
+| **`CheckoutSuccess.tsx` / `Template.tsx` heading level** | **`[GAP]`** `[CARRIED]` | Both title with `CardTitle` (`h3`), not `PageTitle` (`h1`); neither route is in `accessibility.spec.ts`'s `PUBLIC_ROUTES` (`week3_report.md` §5) |
+| **CI environment is stale** | **`[DEFECT]`** | `.github/workflows/ci.yml` still exports `RESEND_API_KEY` and sets **no** `MAILJET_*` variable. Resend was removed from the send path on 2026-08-15; the transport CI runs against is not the transport the app uses |
+| **Render production env** | **`[GAP]`** `[CARRIED]` | `handover.md` §4 item 15 — Resend-era vars still set, Mailjet vars not set. Deploying today produces a `logger.error` on every send and no email |
+| Watched non-developer usability test | **`[GAP]`** `[CARRIED]` | Deferred from Week 3 by the owner's own words ("I will do the non-dev test later"). Human, not engineering |
+| Hostile-client email render check | **`[GAP]`** `[CARRIED]` | Eight template pairs built for it since Phase 1 on a 600px table-based base; never opened in a real mail client |
+| Supabase Auth Site URL / Redirect URLs | **`[UNVERIFIABLE]`** `[CARRIED]` | Dashboard-only setting. No API surface exists for this in any automated session |
+| The two analytics reads (W3-R10) | **`[GAP]`, data not wiring** | Nine events confirmed wired, four fired live. No `phx_` query key configured, and the site is pre-launch with no real traffic to read |
+| Stripe mode | **`[CLOSED]`, deliberately** | `rk_test_` restricted key. Decision #21 closed 2026-08-15: stay in test mode until told otherwise |
+| Vercel / Render tier | **`[CLOSED]`, deliberately** | Vercel Hobby, Render current tier. Coherent with test mode — no live payments means the commercial-use restriction is not currently being violated |
+| **Chart tokens** | **`[DEFECT]`, dormant** | `theme.css` comments them "Dormant: nothing renders a chart yet." `--chart-1`/`--chart-2` are **navy/steel in light and gold in dark** — the same token meaning two different things, the exact class of bug `handover.md` §1 documents eight times over for `--primary`. `--chart-4` is byte-identical in both themes (`#5C6B4F`). See §12.6 |
+
+---
+
+# PART I — PRODUCT REQUIREMENTS
+
+## 1. Objective
+
+> **Make the platform survive a stranger. Not "does the happy path work" — Week 3 answered that — but: does every wrong turn have a designed answer, can a buyer see enough before paying to not want a refund afterwards, can the owner run the shop without a developer, and is the whole thing written down well enough that someone else can pick it up on Monday.**
+
+Week 1 proved one path works once. Week 2 proved it keeps working and widened one product into a catalogue. Week 3 made it a shop that can take money and give it back. **Week 4 is the week the platform stops needing its author in the room.**
+
+The brief's own words: *"Apply the design system across every screen. Hunt the small things: empty states, failed payments, expired sessions, broken links, a video that will not load, the checkout on a phone. Try to break your own gating and fix what gives. Write the handover pack. Ship something a stranger can find, buy from and learn on."*
+
+## 2. Why this scope
+
+### 2.1 The three things the brief's Week 4 does not say, and why they are here anyway
+
+The brief's Week 4 is hardening plus handover, and that is the spine of this plan (W4-R6 through W4-R9, W4-R12). Three additions come from elsewhere, each with a reason that is not "it seemed good":
+
+**1. The pre-purchase evidence layer (W4-R1).** `new_additions.md` §2 runs the professional buyer's unconscious checklist and finds **six of eight items unmet**: what is it literally (page/file/format counts), can I edit it, will it open at work, is it current, can I expense it, can I use it with a client. Its verdict — *"Six of the eight are content or configuration, not engineering. That is the cheapest conversion work available and none of it is in any product plan. It is worth more than the next three products"* — is correct, and it is also **hardening**, not a feature: the research spec names *"unclear what they will receive before payment"* as the #1 abandonment cause, and `new_additions.md` §5 names expectation failure as the #1 refund cause. A refund the platform now honours correctly (Week 3) is still a refund. This is the cheapest way to not need one.
+
+**2. Question → product routing (W4-R4).** `new_additions.md` §22 makes the strongest structural argument in that document: both halves already exist in this database, only the join and the UI are missing, and it is the feature that finally makes the seven-dimension taxonomy — the platform's single differentiator — visible to someone deciding whether to pay. It is also the honest answer to the softer gap `handover.md` §4 item 9 left behind: a question page that leads somewhere is a question page that sells.
+
+**3. The tests that guard money (W4-R9).** `handover.md` §4 item 5 states it plainly: *"checkout and webhook handling specifically are still untested by fixture — the highest-consequence remaining gap, since that's the code a silent regression would actually cost money on."* Week 4 is the last scheduled week. If this does not happen now it does not happen.
+
+### 2.2 Feasibility triage of `docs/new_additions.md`
+
+`new_additions.md` is a 1,153-line commercial strategy, not a build plan, and it says so (§0.2). This section is the explicit read-through the plan was asked for: every proposal in it, sorted by whether Week 4 can actually take it. **The test applied is not "is it a good idea" — most of them are — but "is the engineering bounded, does it need content that does not exist, and does it need an owner decision that is still open."**
+
+#### Taken into Week 4 — bounded engineering, no missing content, no blocking decision
+
+| `new_additions.md` § | Proposal | Where it lands | Why it is feasible now |
+|---|---|---|---|
+| §34 item 1 · §4 | **Tax-invoice-quality receipts** (business name, ABN, itemised, GST line) | **W4-R2** | Stripe Checkout supports `invoice_creation` natively; the receipt template already itemises per cart item since Week 3. The entity is already decided (#27 closed 2026-08-15: "Effective RM, as currently drafted"). The **ABN digits** are the one `[OWNER]` input, and the mechanism ships with a config slot that renders honestly when unset — see W4-R2's acceptance |
+| §34 item 2 · §20 | **Licence field + terms on the product page** | **W4-R1** | One column, one enum, one paragraph. `new_additions.md` calls it *"the best unbuilt revenue"* — but note the split: the **field and the Standard-licence display** are feasible now; the **client-delivery tier and its multiple** are decision #25, still open, so the enum leaves room and the page states only what is decided |
+| §34 item 3 · §33 | **Version + last-reviewed on every sold artefact** | **W4-R1** | Two columns, displayed pre-purchase and stamped into the receipt. Directly answers the "is it current" check |
+| §34 item 4 · §11 | **The overlap publish guard** — no two published products may grant intersecting content unless one is a bundle | **W4-R3** | Checkable in one SQL statement against `product_contents`; the admin publish-guard pattern already exists (a template cannot publish without a file; a lesson cannot publish without content). Half a day, and it is the guard that would have caught the `012` bug |
+| §34 item 5 · §22 | **Question → product routing** | **W4-R4** | *"Both halves exist; join + UI missing."* Verified true: `product_contents` links products to questions via `content_type = 'question_set'`, and `question_relations` (300 rows) links questions to questions. Migration `013` adds the one index the join needs |
+| §34 item 6 · §2.1 · §16 | **Real preview assets on product pages** — one real page, not a blurred thumbnail | **W4-R1** | The presigned-upload path built in Week 3 Phase 5 (`POST /admin/templates/{id}/upload-url`) is reused unchanged. Closes `week3_report.md` ledger #18 |
+| §3 (all five rules) | **The corporate-laptop constraints** — no macros, `.xlsx`/`.docx` not `.xlsm`, minimum Office version, ship both editable + PDF where visual, library-not-email delivery | **W4-R1** | Four of the five are a *display* obligation the product page has never met, plus one policy line. *"It didn't open" is the single most likely refund cause for a digital artefact sold into corporate environments, and it is entirely preventable* |
+| §35 (all five) | **The five metrics that matter** — second-purchase rate, free→paid conversion, tag-filter usage, refund rate by product, signup→first-purchase time | **W4-R10** | Four of the five are computable **in SQL against tables that already exist** (`orders`, `order_items`, `entitlements`, `users`, `leads`). This is the honest answer to W3-R10's two unanswerable reads: PostHog needs traffic the site does not have; Postgres already holds the record of every transaction that ever happened |
+| §11 (mechanism) | Make the no-overlap rule *mechanical, not aspirational* | **W4-R3** | Its own words: *"This is checkable in SQL, and belongs as an admin publish guard"* |
+
+#### Taken in principle, scoped down — the engineering fits, the content does not
+
+| §  | Proposal | What Week 4 actually does | Why not the whole thing |
+|---|---|---|---|
+| §7 | **Outcome name + literal search title, in fixed positions** | The `search_title` column ships in migration `013` and renders as the `<title>`/`og:title`; the copy for existing products is left to the owner, with a fallback to `name` so an unset value degrades rather than blanks | Writing eight search-optimised titles is editorial work, not engineering. The *slot* is what unblocks it |
+| §20 | **Consultant licence tiers** | The `licence` enum ships with `standard` populated and `client_delivery` / `multi_client` defined-but-unused; the product page renders only the tier actually set | Decision #25 (may buyers use artefacts with their clients, at what multiple) is open. `new_additions.md`'s own warning applies: *"Never casually write 'commercial use allowed'"* |
+| §31 | **Question of the Week** | Not built. The `featured`/`featured_sort` columns shipped in Week 3 are the mechanism it would use, and W4-R10's metrics page surfaces which questions are actually read | *"52 of these a year is a real editorial commitment"* — that is decision #30 (editorial capacity), unanswered. Shipping the send loop before the commitment exists builds a broken promise |
+
+#### Deferred, with the gate named
+
+| § | Proposal | Gate |
+|---|---|---|
+| §13–14 | **Decision Pack as a workspace** (`decision_workspace` content type, framing → answers → evidence → options → decide → generated outputs → review) | The architecture genuinely supports it (`product_contents` is polymorphic; `entitlements.py` does not change at all) — and it is still *"a schema, an editor, autosave, a generator, and a review scheduler. Weeks, not days."* `new_additions.md`'s own §14.3 says **do not launch the flagship at the flagship price**: ship v0 as files at A$79 first, as a demand test. That is author-days, not engineer-days. **Nothing in Week 4 blocks it, and Week 4 removes two of its prerequisites** — the overlap guard (W4-R3) and the evidence layer (W4-R1) both apply to it unchanged |
+| §28 product 3 | **The free Risk Function Diagnostic** | *"The only one of the three requiring engineering."* A real feature — scoring model, result page, recommendation output — landing in the same week as an accessibility audit and a handover pack. W4-R4's routing model is its output layer, built first and deliberately: the diagnostic becomes "a different way to reach the same routing," not a second recommendation engine |
+| §23–25 | **"Challenge My Thinking" AI** | Two hard gates, both stated in `new_additions.md` itself: 100 questions × real editorial guardrails (expected reasoning, weak answers, follow-ups, red flags), and **the confidentiality position** (§24.2) — decision #29, unanswered. *"For a meaningful share of the target market it determines whether the flagship is usable at all."* Not engineering-blocked; blocked on an author and a published privacy commitment |
+| §15 | **Scenario Packs** | Content. And its own correction applies: ship **one**, not five |
+| §30 (all) | Framework crosswalks · clause banks · expert review · tabletops · industry variants · team licensing · benchmark reports · annual update subscriptions | Each already carries its own gate in that document. None is contested here |
+| §60.1 | Semantic search | First in `DESIGN.md`'s own cut order |
+
+#### Rejected for Week 4, on this plan's reading rather than `new_additions.md`'s
+
+| Proposal | Why not |
+|---|---|
+| §18's *"treat A$99 as the ceiling until the tax-invoice path, refund policy and licence terms are live"* — read as a **pricing change** | Agreed as a *constraint*, refused as an *action*. `pricing.md` is the price authority (§0.3 rule 6) and its ladder is owner-adopted. W4-R2 and W4-R1 exist precisely to **remove** that ceiling; changing prices is the owner's call afterwards, not a side effect of a hardening week |
+| §33 point 2 — narrowing the lifetime-update promise | `pricing.md` already made that promise in a live document. Narrowing a live commercial promise is decision #26, and it is not an engineering decision. **What Week 4 does instead** is make the promise cheap to keep: `version` + `last_reviewed_at` + "old versions remain downloadable" is the machinery that turns an open-ended obligation into a bounded one |
+
+**The honest summary of the triage:** `new_additions.md`'s §34 table claims *"items 1–4 total roughly one engineering day and unblock the entire upper price range."* That is optimistic by roughly a factor of three once the migration, the admin write path, the display components, both themes, seven widths and the tests are counted — but the *shape* of the claim survives. These are small, bounded, high-leverage changes that sit naturally inside a hardening week, and they are the reason W4-R1 through W4-R4 exist.
+
+## 3. Who this week serves
+
+| User | What Week 4 gives them | Requirement |
+|---|---|---|
+| **The stranger, ninety seconds before paying** | Page count, file count, formats, editability, version, last-reviewed date, licence, two real preview pages, a refund position and a tax statement — all above the buy button | W4-R1 |
+| **The buyer whose finance team asks** | An itemised tax invoice with a business name and an ABN, not a card receipt | W4-R2 |
+| **The buyer who took a wrong turn** | A designed answer to every failure: payment declined, session expired, download URL expired, playback token expired, webhook late, video won't load, filters return nothing | W4-R6 |
+| **The buyer who cannot use a mouse** | A purchase and a lesson completion, both keyboard-only, both proven | W4-R7 |
+| **The visitor who filtered** | "Here's what would help with these" — derived from their own constraints, and it says why | W4-R4 |
+| **The owner** | A price they can change, a publish state they can set, an inbox they can read, and five numbers that answer whether any of this is working | W4-R5, W4-R10 |
+| **The owner's catalogue, six months out** | A guard that refuses to publish two products that overlap, so the `012` bug cannot recur | W4-R3 |
+| **The next developer** | A handover pack that is current, a CI that runs against the real transport, and a fixture test on the code that moves money | W4-R9, W4-R12 |
+
+## 4. Scope
+
+### 4.1 In scope
+
+W4-R1 The pre-purchase evidence layer · W4-R2 Tax-invoice-quality receipts · W4-R3 The overlap publish guard · W4-R4 Question → product routing · W4-R5 Admin closes its remaining holes · W4-R6 The hardening sweep · W4-R7 Accessibility, the full audit · W4-R8 Performance budgets, enforced · W4-R9 The tests that guard money · W4-R10 Metrics from the database · W4-R11 Database optimisation, second pass · W4-R12 The handover pack, closed · **W4-R13 The admin panel manages the whole system** `[added 2026-08-17, owner instruction — scheduled into Week 5 as Phase 6C, not squeezed into Week 4]`
+
+### 4.2 Out of scope, deliberately
+
+| Not this week | Why | Source |
+|---|---|---|
+| `decision_workspace` / Decision Pack v1–v2 | Weeks, not days. Its prerequisites ship this week; the thing itself does not | `new_additions.md` §14.3 |
+| The free diagnostic | A real feature landing in an audit week. W4-R4 builds its output layer first, on purpose | `new_additions.md` §28 |
+| "Challenge My Thinking" AI | Blocked on an editorial backlog and decision #29 (confidentiality position) | `new_additions.md` §24 |
+| Question of the Week | Blocked on decision #30 (editorial capacity). A retention loop you abandon by March is worse than none | `new_additions.md` §31 |
+| Client-delivery / multi-client licence **tiers** | Decision #25 open. The field ships; the tiers do not | `new_additions.md` §20 |
+| Semantic search | First in the cut order | `DESIGN.md` §60.1 |
+| Subscriptions, team seats, certificates, author portal | Named non-goals for v1 | `DESIGN.md` §61 |
+| Going live on Stripe | Decision #21 closed as "stay in test." **And it is bundled** — see §8.3 | `week3_report.md` §7 |
+| Read replicas, caching layers, sharding | The answer at this scale is indexes and query shape. Part IV | `week3_plan.md` §27.4 |
+| New colour tokens, new type rungs, new radius values | Week 4 *applies* the system. `theme.css` gains no new palette family this week — one narrowly-scoped chart-token repair excepted (§12.6) | Brief; `DESIGN.md` §60 |
+
+## 5. Requirements
+
+Each carries its source, a testable statement, and the acceptance criteria used at the go/no-go.
+
+---
+
+### W4-R1 — The pre-purchase evidence layer `[MUST]` `[NEW]`
+
+**Source:** `new_additions.md` §2, §2.1, §3, §33 · `DESIGN.md` §16 (*"Two previews minimum per paid template"*) · RS Part Two §2.2 (abandonment) · `week3_report.md` ledger #18 `[CARRIED]`
+
+**Statement:** A stranger looking at any paid product can answer, without scrolling past the fold on a phone and without asking anyone: *what will I actually receive, will it open on my work laptop, is it current, what am I allowed to do with it, and what happens if it's wrong.*
+
+**What ships:**
+
+1. **Migration `013`** adds to `templates`: `page_count`, `sheet_count`, `is_editable`, `has_macros`, `min_office_version`, `preview_image_keys` (a JSONB array of Storage keys), `version`, `last_reviewed_at`. Adds to `products`: `licence`, `search_title`, `version`, `last_reviewed_at`. Full column spec, types, defaults and backfill in §25.
+2. **`EvidencePanel`** (§20.1) — the component that renders those facts, on `/buy/:slug`, `/templates/:templateId` and `/store/packs/:slug`.
+3. **`PreviewGallery`** (§20.2) — two real preview images minimum for every paid template, uploaded through the existing presigned path, lightboxable, `alt` text describing what the page shows.
+4. **`LicenceLine`** (§20.3) — the licence, in one sentence, linking to the terms.
+5. **`VersionStamp`** (§20.4) — `v1.2 · reviewed 17 Aug 2026`, in mono, above the buy button and stamped into the receipt.
+6. **The format guarantee**, as a real product-page line, not a marketing claim: *"`.xlsx`, no macros, opens in Excel 2016 and later."* Rendered from the columns, never typed per product.
+7. **Admin write path** — every one of those fields is editable in the new product editor (W4-R5) and the existing template editor.
+
+**Acceptance:**
+- [ ] Every **published, paid** template has `page_count` or `sheet_count` set, `is_editable` set, `has_macros` set, and **at least two** `preview_image_keys`. A SQL query proves it, and the query is in the ledger — not a spot check.
+- [ ] The overlap guard's sibling check: **no published paid product may publish with fewer than two previews.** Fails closed, with a message naming what is missing (same pattern as the existing "upload a file before publishing" guard).
+- [ ] `has_macros = true` on any published artefact is a **publish refusal**, not a warning. `new_additions.md` §3 rule 1: *"No macros in any sold artefact. Ever."*
+- [ ] The panel renders correctly at 375px with a 140-character product name and a 42-character author name (the `stress-fixtures.spec.ts` extremes) — no overflow, no clipped preview.
+- [ ] Both themes. The preview image is a document page, usually white — §16.3's rule applies: a light plate (`bg-muted p-3 rounded-md`) behind it in dark mode, **not** a filter.
+- [ ] Nothing on the panel is a claim the database cannot support. An unset `version` renders nothing, not `v—` and not "1.0".
+
+---
+
+### W4-R2 — Tax-invoice-quality receipts `[MUST]` `[NEW]`
+
+**Source:** `new_additions.md` §4, §34 item 1 · RS §11.5 · `pricing.md`
+
+**Statement:** A buyer whose organisation reimburses them can get a document their finance team accepts, without emailing anyone.
+
+`new_additions.md` §4's finding is the whole argument: *"Every price increase moves the purchase from a personal card to a finance approval"* — and above ~A$150 that approval needs a proper tax invoice with an ABN and a business name. The catalogue's ceiling today is A$99. **This is not about the products that exist; it is about the ones the ladder already names** (A$149, A$199, A$279, A$399), all of which are currently unbuyable by anyone who needs to expense them. *"A buyer who cannot expense your product does not haggle — they silently leave."*
+
+**What ships:**
+
+1. `create_checkout_session` gains `invoice_creation={'enabled': True}`, `billing_address_collection='required'`, and the business name set on the Stripe account rather than per-session.
+2. The receipt email gains an **invoice block** (§20.9): invoice number, date, seller legal name, ABN, buyer name and address, itemised lines with unit price, the GST line, and the total. Rendered in the Jinja2 templates that already exist — *the one place hex is allowed* (`week3_plan.md` §20.7), and the only place it stays allowed.
+3. `SELLER_LEGAL_NAME` and `SELLER_ABN` become config values in `backend/.env.example` and `app/core/config.py`.
+4. `TAX_STATEMENT_TEXT` (already in `lib/labels.ts` and its Python twin) is joined by `SELLER_ENTITY_TEXT` in the same paired-file pattern, so the entity reads identically on `/store`, `/legal/terms` and the receipt.
+
+**Acceptance:**
+- [ ] A real test-mode purchase produces a Stripe invoice object, and the emailed receipt carries the same invoice number as that object — verified by fetching it back from the Stripe API, not read from the email.
+- [ ] With `SELLER_ABN` unset, the invoice block renders **without an ABN line at all** and the receipt is still a valid receipt. It never prints `ABN: None`, and it never prints a placeholder that looks like a real number. This is the honest-degradation rule the whole codebase already follows for domain counts (`handover.md` §1) and unset `version` (W4-R1).
+- [ ] The GST line states GST as *included*, matching `TAX_STATEMENT_TEXT`'s existing wording — one fact, one source.
+- [ ] `[OWNER]` The ABN digits themselves. Named in §8.1, not assumed. **This does not block the requirement** — it blocks one line of one template.
+
+---
+
+### W4-R3 — The overlap publish guard `[MUST]` `[NEW]`
+
+**Source:** `new_additions.md` §11, §34 item 4
+
+**Statement:** Publishing a product whose granted content intersects an already-published product's fails closed, naming the conflict — unless the new product is explicitly a bundle and is sold at a visible discount.
+
+`new_additions.md` §11's diagnosis is precise and worth repeating because it is about *this* schema: *"`product_contents` is polymorphic, so spinning up a new product over existing content rows takes seconds and no new content at all. A convenience becomes a trap."* And the closing argument: *"This rule would have caught the A$29-template-grants-the-whole-course bug before a customer did."* That bug is real, it is in this repository's history (`db/seed/012_split_template_and_course_products.sql`), and nothing currently prevents its recurrence.
+
+**What ships:**
+
+1. `app/core/publish_guard.py` `[NEW]` — `check_content_overlap(product_id, session)` returns the intersecting `(product, content_type, content_id)` rows, or empty.
+2. Wired into the product publish path (W4-R5's editor) *before* the state change, alongside the existing template-file and lesson-content guards.
+3. A `is_bundle` boolean on `products` (migration `013`) — the explicit escape hatch. A bundle is *permitted* to overlap; it is **required** to price below the sum of its parts, and the guard checks that too, in the same call.
+4. A standalone SQL audit in `scripts/check_overlaps.sql` `[NEW]`, so the rule can be run against production without deploying anything.
+
+**Acceptance:**
+- [ ] A test constructs two products sharing one `product_contents` row, attempts to publish the second, and asserts a 409 whose message names the other product and the shared content. **Seen red first** — the test is confirmed failing with the guard removed, per non-negotiable #9.
+- [ ] A test constructs a bundle (`is_bundle = true`) over two published products, publishes it successfully, and asserts the guard *did* run and *did* find overlap — i.e. the escape hatch is a deliberate branch, not an unreached code path.
+- [ ] A test asserts a bundle priced **at or above** the sum of its parts is refused. The existing A$79 bundle over A$98 of parts passes it; a hypothetical A$98 bundle does not.
+- [ ] `scripts/check_overlaps.sql` run against the live database returns exactly the rows expected for the existing bundle and **nothing else**. If it returns something else, that is a real finding and it is fixed, not suppressed.
+
+---
+
+### W4-R4 — Question → product routing `[MUST]` `[NEW]`
+
+**Source:** `new_additions.md` §8, §19, §22, §34 item 5 · `handover.md` §4 item 9
+
+**Statement:** A question page names what would help with it, and a filtered catalogue names what would help with the situation the filters describe — and both say *why*, in terms of the reader's own constraints.
+
+**Why this and not product tags.** `new_additions.md` §21 is the correction that makes this buildable: the seven tag dimensions describe **the risk work the question implies**, not the product. `cost: low` means *fixing this issue is cheap*, not *this product is cheap*. Reading them as product attributes produces actively wrong recommendations. So the routing goes *through* the questions:
+
+```text
+the reader's situation (their active filters, or the question they are on)
+        ↓
+  questions matching it                        ← built, indexed, live
+        ↓
+  products whose product_contents include those questions   ← built, live
+        ↓
+  "Here's what would help with these, and here's why"       ← the gap
+```
+
+**What ships:**
+
+1. `GET /questions/{slug}/related-products` `[NEW]` — products granting this question, or granting any of its `question_relations` neighbours, ranked (direct grant first, then neighbour count, then price ascending). Fixed query count regardless of catalogue size, per the bulk-primitive pattern `entitlements.py` already establishes.
+2. `GET /products/for-questions?ids=…` `[NEW]` — the catalogue-side twin, taking the current result set.
+3. **`RoutedProducts`** (§20.5) on the question detail page, below the guidance body, above related questions.
+4. **`SituationProducts`** (§20.6) on `/questions`, rendered **only when at least one filter is active** — an unfiltered catalogue has no situation to route from, and offering one anyway is the "fabricated relevance score" the existing match-explanation code was written to avoid.
+5. **The explanation is real or it is absent.** *"We're suggesting this because it addresses questions 14, 31 and 62 — which match your constraints"* — with the question titles as live links. If the join produces nothing, the component renders nothing. It never falls back to "popular products."
+6. `recommendation_clicked` analytics event (`new_additions.md` §34.1) — source question → product, so §22's own claim is measurable rather than asserted.
+
+**Acceptance:**
+- [ ] On a question granted by a published product, the panel names that product and links it. On a question granted by nothing and neighbouring nothing granted, the panel is **absent** — not an empty card, not "no recommendations yet."
+- [ ] Every recommendation states at least one real question it routes through, by title, as a link.
+- [ ] The endpoint issues a fixed number of queries regardless of how many products or questions exist — asserted by a query-count test, the same discipline the four N+1 fixes of 2026-08-14 established.
+- [ ] Migration `013`'s `ix_product_contents_type_content` is `EXPLAIN`-proven against this exact query, before and after, and the evidence lands in `db_index_evidence.md` alongside migration `010`'s.
+- [ ] Both themes, seven widths, `stress-fixtures` extremes.
+
+---
+
+### W4-R5 — Admin closes its remaining holes `[MUST]`
+
+**Source:** `handover.md` §4 items 2 and 16 `[CARRIED]` · `week3_report.md` §6 · `DESIGN.md` §31
+
+**Statement:** The owner can set a price, publish a product, read what came in through the contact form, and page through orders — without a developer and without SQL.
+
+**What ships:**
+
+1. **`/admin/products`** `[NEW]` — the gap `handover.md` §4 item 16 names as *"the one piece of 'no admin UI' with a direct revenue impact."* Create/edit: name, `search_title`, description, `price_amount`, `stripe_price_id`, `licence`, `version`, `last_reviewed_at`, `is_bundle`, `publish_state`. Reuses `useAutosave`, `useFieldValidation`, `PublishStateChip` and `UploadField` — nothing new is invented for it (§20.0's reuse rule).
+2. **`/admin/contact`** `[NEW]` — the `contact_messages` inbox. Read-only list, `notified` state visible, newest first, `enquiry_type` filter. `handover.md` §2 currently instructs the reader to run SQL; this replaces that instruction.
+3. **Keyset pagination on `/admin/orders`** — migration `010` built `ix_orders_created` explicitly as prerequisite infrastructure for this and recorded that it showed no plan change *against today's unpaginated query*. The query is what changes. See §26.3.
+4. **The watched non-developer usability test** `[CARRIED]` — 30 minutes, a real non-developer, watched, unaided, adding a lesson and setting a price. Deferred from Week 3 by the owner's own words. It is in this week's Definition of Done.
+
+**Acceptance:**
+- [ ] A product's price can be changed and republished entirely through `/admin/products`, with the change visible on `/store` on the next load. Proven by doing it, not by reading the code.
+- [ ] Changing `price_amount` **without** changing `stripe_price_id` surfaces an inline warning naming the mismatch — the price shown and the price charged are two different systems, and the admin says so rather than letting them drift silently. This is the same class of trap as `--primary` on a `--stage` plane: two sources of one fact.
+- [ ] `/admin/orders` returns a bounded page and a cursor. The query is `EXPLAIN`-proven to use `ix_orders_created` and to **not** re-scan (§26.3).
+- [ ] The contact inbox shows every row in `contact_messages`, including `notified = false` ones, which are the set that matters after any email outage.
+- [ ] `[HUMAN]` The usability test runs, and **every place the tester stopped is written down** — whether or not it was fixed. `DESIGN.md` §63 item 4 asks for exactly that, and a test with no recorded friction is a test that was not really watched.
+
+---
+
+### W4-R6 — The hardening sweep `[MUST — the week's non-negotiable]`
+
+**Source:** The brief, verbatim · `DESIGN.md` §40, §60 Week 4, §62
+
+**Statement:** Every failure mode named in `DESIGN.md` §40 and §60 has a designed, tested answer, and a deliberate attempt to break the gate found nothing that gives.
+
+**The four states, on every surface** (§40): empty, loading, error, locked. The sweep is a route-by-route table (§21.3), not a vibe — `App.tsx` currently declares **30 paths** (verified by count, including the `/pricing` → `/store` redirect and the `/admin` → `/admin/questions` alias), and this week adds three more.
+
+**The failure modes, each with a designed answer:**
+
+| Failure | Designed answer | State today |
+|---|---|---|
+| Payment declined | Stripe's own page handles the decline; `/checkout/cancel` handles the return | `[BUILT]`, verify copy |
+| Webhook late (entitlement delay) | `CheckoutSuccess` polls `/me/entitlements` until every product in the set is entitled | `[BUILT]`, verify the *timeout* branch |
+| Webhook never arrives | A bounded poll that ends in a real message with a real next step, not an infinite spinner | **`[GAP]` — verify and fix** |
+| Session expired mid-flow | 401 → re-auth → return to where they were, cart intact | **Verify.** `useCartStore` persists to `localStorage`, so the cart should survive; the *return path* is what to check |
+| Download URL expired | A re-request, not an error page. The presigned URL is short-lived by design | **Verify** |
+| Playback token expired mid-video | Silent re-mint, or a designed re-auth. A video that dies at minute 12 of a lesson is the worst failure on this list | **Verify** |
+| Video will not load (Mux down, asset errored) | `media.status` already models `error`; the player must render it | **Verify** |
+| Broken link | No route 404s into a blank page; a real 404 with a route back into the catalogue | **Verify** |
+| Filters return nothing | §40.1's exact pattern: name the tightest constraint, offer to relax *that one* | `[BUILT]` on `/questions`, verify elsewhere |
+
+**Break your own gating** — a deliberate adversarial pass, results written down whether or not anything gives:
+signed-out direct hits on every gated endpoint · another user's JWT · a tampered JWT · an expired JWT · a *revoked* entitlement's resource · a raw Storage URL · a raw Mux playback ID with no token · a garbage token · an `in_review` and an `archived` resource · a cart containing a product the buyer already owns · a replayed webhook · a webhook with a bad signature.
+
+**Also in this requirement, because they are one-line fixes that have been carried twice:**
+- `CheckoutSuccess.tsx` and `Template.tsx` get a real `PageTitle` (`h1`), and **both routes are added to `accessibility.spec.ts`'s `PUBLIC_ROUTES`** — the fix and the thing that would have caught it, together. `[CARRIED]`
+- `.github/workflows/ci.yml` drops `RESEND_API_KEY` and gains the five `MAILJET_*` / sender variables. `[DEFECT]`
+
+**Acceptance:**
+- [ ] The route × state matrix (§21.3) is complete, with a cell either ticked or carrying a named reason it does not apply.
+- [ ] Every failure row above is **exercised**, not reasoned about. Where a failure cannot be triggered naturally, it is forced (revoke the entitlement, expire the token, point Mux at a bad id) — the same discipline that re-delivered a real signed webhook rather than faking one in Week 3.
+- [ ] The gating attack list runs in full and its results are recorded in `gating_seen_red.md`'s successor section — **including the ones that found nothing.** A list of twelve attacks with twelve passes is evidence; a sentence saying "gating holds" is not.
+- [ ] CI is green against the transport the application actually uses.
+
+---
+
+### W4-R7 — Accessibility, the full audit `[MUST]`
+
+**Source:** `DESIGN.md` §42.9 (*"In Week 4 also do, by hand"*) · §62 · `week3_plan.md` §4.2 (deferred here explicitly)
+
+**Statement:** The six manual checks `DESIGN.md` §42.9 names are performed, by hand, and what they find is fixed or written down.
+
+| Check | What "done" looks like |
+|---|---|
+| Complete a purchase using only the keyboard | Landing → catalogue → product → evidence panel → cart → checkout redirect → success → download. No mouse. Every step reachable, every focus visible |
+| Complete a lesson using only the keyboard | Including the Mux player's own controls and the "mark complete" action |
+| Screen reader on the discovery page | NVDA or VoiceOver; the result count **is announced** on filter change (the `aria-live` region exists — confirm it actually fires) |
+| Zoom to 200% | Nothing clipped, no horizontal scroll on the page body. The seven-width suite does not catch this — zoom reflows differently from a narrow viewport |
+| `prefers-reduced-motion` forced | Nothing becomes unusable. `theme.css`'s global backstop collapses transitions to 0.01ms rather than removing them, deliberately — verify the *state change* is still visible |
+| Dark mode, every state | Especially focus and error. `--ring` is `#1B4E8C` light / `#8FC1EA` dark; `--destructive` `#B3402E` / `#E11D48` |
+
+**Plus, in code:**
+- `accessibility.spec.ts`'s `PUBLIC_ROUTES` grows to cover every public route in `App.tsx`, including the two that were missing (W4-R6).
+- The new components (§20) each carry their own axe assertion.
+- WCAG 2.2 §2.5.8 target size (24×24 CSS px, 44×44 touch) is checked on the new filter-adjacent controls and the preview gallery's thumbnails — `DESIGN.md` §42.6 names chips and close buttons as where this fails in practice.
+
+**Acceptance:**
+- [ ] All six manual checks performed and their findings recorded — **including "no findings," which is a result.**
+- [ ] axe clean on every public route, in both themes.
+- [ ] Any finding that is not fixed is in the ledger with a reason, not dropped.
+
+---
+
+### W4-R8 — Performance budgets, enforced `[MUST]`
+
+**Source:** `DESIGN.md` §43 — *"'Avoid large bundles' is not a budget. These are, and they fail CI."*
+
+**Statement:** The three budgets `DESIGN.md` §43 states are measured on every push and block a red build.
+
+| Metric | Budget | How |
+|---|---|---|
+| LCP | < 2.0s | Lighthouse CI against the built preview, mobile profile |
+| CLS | < 0.05 | Same run |
+| Initial JS | < 180KB | `vite build` output, gzipped, entry chunk — asserted in CI, not eyeballed in the build log |
+
+**Acceptance:**
+- [ ] A CI job fails when a budget is exceeded. Proven by **temporarily** breaking one (import something heavy, confirm red, revert) — the "seen red first" rule applied to a CI gate rather than a test.
+- [ ] The current numbers are recorded in the ledger. If the app is already over a budget today, that is the finding, and it is fixed or the budget is renegotiated **in writing** — never silently raised to match reality.
+- [ ] Font loading is confirmed not to cause the FOUT-driven layout jump `DESIGN.md` §9 warns about, at throttled network speed. Three variable faces (Schibsted Grotesk, Newsreader, Azeret Mono) is the largest single lever on LCP here.
+
+---
+
+### W4-R9 — The tests that guard money `[MUST]`
+
+**Source:** `handover.md` §4 item 5 `[CARRIED]` · §1 (the dead-chips incident)
+
+**Statement:** The three untested things that have already cost, or nearly cost, real money each gain a test.
+
+1. **Checkout and webhook, by fixture.** `handover.md`: *"the highest-consequence remaining gap, since that's the code a silent regression would actually cost money on."* Cases: single-product session · N-item cart session · a session for a product already fully owned (409 before Stripe) · webhook creates order + N order_items + N entitlements in one transaction · webhook replay is idempotent · webhook with a bad signature is rejected · `charge.refunded` revokes · a webhook for an unknown product fails loudly rather than granting nothing silently.
+2. **Taxonomy parity.** Every taxonomy value hard-coded anywhere in `frontend/src` exists in `tag_values`. `handover.md` §1: *"A single assertion that every hardcoded taxonomy value in the frontend exists in `tag_values` would have caught it on the day it was written, and is worth more than any other test in this codebase apart from the payment path."* Every quick-filter chip matched **zero** questions for three days because nobody had this.
+3. **The first real frontend unit tests.** `vitest` is configured and has one test file. Start with the pure functions that carry real logic and no DOM: `lib/scoring.ts` (has tests), `lib/utils/formatCurrency.ts`, `lib/tags.ts`, `stores/useCartStore.ts`.
+
+**Acceptance:**
+- [ ] Each new backend test is **seen red before green** — non-negotiable #9, applied to the payment path specifically.
+- [ ] The taxonomy parity test fails if a chip's value is changed to something not in `tag_values`. Proven by changing one.
+- [ ] `npm test` runs in CI as a blocking job (it is already declared in `package.json`; confirm the workflow actually invokes it).
+- [ ] Backend suite total is stated as a number in the ledger, not as "all green."
+
+---
+
+### W4-R10 — Metrics from the database `[SHOULD]` `[NEW]`
+
+**Source:** `new_additions.md` §35 · `week3_report.md` §4 (the two unanswerable reads)
+
+**Statement:** The five metrics that matter are computed from Postgres and shown on one admin page — so the questions W3-R10 could not answer become answerable the day traffic arrives, without waiting on a PostHog query key.
+
+| # | Metric | Source |
+|---|---|---|
+| 1 | **Second-purchase rate** — *"the single most informative number"* | `orders` grouped by `user_id` |
+| 2 | **Free → paid conversion** | `leads` ∪ `users` vs `orders` |
+| 3 | **Tag-filter usage** — is the differentiator being used | PostHog `filter_applied`, **or** a lightweight server-side counter. See acceptance |
+| 4 | **Refund rate by product** | `orders.status = 'refunded'` joined to `order_items` |
+| 5 | **Time from signup to first purchase** | `users.created_at` → `min(orders.created_at)` |
+
+Four of five are pure SQL against tables that already exist. Metric 3 is the honest exception: nothing server-side currently records a filter application, because `filter_applied` is a client event. Either accept the PostHog dependency for that one row and label it as such, or add a fire-and-forget server counter. **Pick one and say which** — a metrics page with one silently-empty tile is worse than a metrics page with four tiles and a stated gap.
+
+> **`[AMENDED 2026-08-17 — owner instruction]` Metric 3 is decided, and the form decision below is partly reversed.**
+>
+> The owner's instruction was *"instead of using PostHog, design the analytics page ourselves"* and *"[use a premade UI kit] for charts."* Two consequences, both recorded here rather than by rewriting the paragraphs above — a later fact wins by addition:
+>
+> 1. **Metric 3 resolves to the server-side counter.** The page depends on nothing external. Every one of the five metrics is answerable from Postgres alone, and `/admin/metrics` renders correctly with no PostHog project key, no `phx_` query key, and no network egress. This is the stronger of the two options W4-R10 offered and the owner picked it.
+> 2. **One chart is admitted; four tiles are not.** The form argument below is still correct for metrics 1, 2, 4 and 5 — they are single numbers and a plot around them adds ink without information. It was never correct for a *series*, and the owner is right that the page wants one. **Revenue and orders over time** is the series this page has always implied and never had. See §20.7a for the amended spec and Phase 6B for the build.
+>
+> **What the amendment does not license.** It is one chart, not a charting page. A second plot needs a second argument, made in writing, against the same test §20.7 applies: *is this a series or a part-to-whole comparison, or is it a number wearing a costume?*
+
+#### W4-R10 second amendment `[2026-08-17, owner instruction]` — the sales metrics
+
+The owner asked for **enrollment counts, total revenue, popular courses and template downloads**. Checked against the schema on 2026-08-17 rather than assumed. Three are answerable from tables that exist; one is not, and the difference is the important part of this section.
+
+| # | Metric | Source | Status |
+|---|---|---|---|
+| 6 | **Total revenue** — gross, refunded and **net**, as three figures | `orders.total_amount_cents` by `status` | `[READY]` pure SQL |
+| 7 | **Enrollment counts** — per course, and total | `entitlements` → `product_contents` (`content_type='course'`, `revoked_at IS NULL`) | `[READY]` pure SQL |
+| 8 | **Popular courses** — ranked | Enrollments · started · completed. **Not views** | `[READY]`, with a stated limit — see below |
+| 9 | **Template downloads** — per template, and total | **Nothing records one.** Needs `download_events` | `[GAP]` new table + 3 call sites |
+| 10 | **Top-selling products** — units and revenue | `order_items` → `products`, refunds excluded | `[READY]` pure SQL |
+
+**Four things this table is deliberately careful about:**
+
+1. **Revenue is three numbers, never one.** Gross, refunded, net. A single "total revenue" figure that silently includes refunded orders overstates the business, and one that silently excludes them hides that refunds are happening at all. W3-R5 made refunds real; the metric has to have noticed. The tile shows net as the value and gross/refunded as its denominator line — the same "state your denominator" rule §20.7 already applies.
+
+2. **"Enrollment" is not a concept this schema has**, and inventing a word for an existing row is how two sources of one fact get created. What exists is an **entitlement granting a product that contains a course**, live when `revoked_at IS NULL`. The metric counts exactly that and the page says so in as many words. It also splits by `granted_via` — `purchase` vs `manual` vs `free` — because 40 enrollments reads very differently when 38 of them were free grants.
+
+3. **"Popular" is measured by enrollment, starting and completion — not by views**, and the page states which. `content_viewed` is a client-side PostHog event; **no view count exists in Postgres**, and this amendment's whole premise is that the page depends on nothing external. Ranking by "popular" while quietly meaning "purchased" is precisely the fabricated-relevance failure §20.6 was written to avoid. If view-ranked popularity is wanted later it needs its own counter, the same shape as `filter_events`, and that is a deliberate future decision rather than a silent gap here.
+
+4. **Template downloads genuinely do not exist yet.** A presigned URL is minted at three call sites — `content/templates.py:187`, `content/templates.py:217`, `content/lessons.py:458` — and none of them records that it happened. Only *failures* are captured, and only to PostHog (`capture_download_failed`). So downloads need `download_events`, and **a mint is not a download**: the URL may never be fetched. The metric is named *"download links issued"* on the page, because that is what the number is. Calling it "downloads" would be a claim the database cannot back — non-negotiable #13, applied to our own admin page rather than to a product page.
+
+**Acceptance for the second amendment:**
+- [ ] Revenue shows gross, refunded and net — never one undifferentiated total
+- [ ] Enrollment splits `purchase` / `manual` / `free`, and the page uses the word "entitlement" where that is what it means
+- [ ] "Popular courses" names its own measure in the UI; no tile or column implies view counts exist
+- [ ] The downloads metric is labelled "links issued", with one sentence saying why that is not the same as downloads
+- [ ] Every new query `EXPLAIN`ed, same rule as the first five
+
+**Design:** stat tiles, no charting library, no new dependency. Five metrics is a case where the right form is *not a chart* — a tile carries a single number better than any plot, and adding a charting library to a hardening week is exactly the kind of scope drift this document exists to refuse. Full spec at §20.7. *(Amended above: five tiles **plus one time-series chart**. The "no new dependency" clause is the part that gives — see decision #33.)*
+
+**Acceptance:**
+- [ ] Every tile states its own denominator. "Second-purchase rate: 50%" over 2 buyers is a true number and a useless one; "1 of 2 buyers" is honest at this scale and stays honest at 2,000.
+- [ ] With zero data, every tile renders an empty state naming what would populate it — never `0%`, never `NaN`, never a dash with no explanation. This is `handover.md` §1's own generalised rule: *"any count derived from a fetch should distinguish 'zero' from 'don't know yet.'"*
+- [ ] Each query is `EXPLAIN`ed. A metrics page that table-scans `orders` on every admin page load is a self-inflicted version of the problem Part IV exists to prevent.
+- [ ] `[AMENDED]` The page renders every tile and the chart correctly with `POSTHOG_API_KEY` unset and `VITE_POSTHOG_KEY` unset. Proven by test, not by reasoning — this is the whole point of the amendment.
+- [ ] `[AMENDED]` The chart renders a **fewer-than-two-points** state rather than a line. One order is not a trend, and a two-pixel line implying one is the same class of dishonesty as `0%` over two buyers.
+
+---
+
+### W4-R11 — Database optimisation, second pass `[MUST]`
+
+**Source:** `week3_plan.md` Part IV's method · `db_index_evidence.md` · non-negotiable #14 (*no index without a plan, no plan without a measurement*)
+
+**Statement:** Every query shape introduced this week is indexed, proven, and documented — and the two structural gaps migration `010` deliberately left are closed.
+
+Full detail in **Part IV**. In summary: migration `013`'s index layer (§26.1), keyset pagination on `/admin/orders` (§26.3), the FK coverage `010` did not reach (§26.2), and one partial index for the new routing join.
+
+**Acceptance:**
+- [ ] Every index in `013` has an `EXPLAIN (ANALYZE, BUFFERS)` before/after in `db_index_evidence.md`, against a synthetic dataset built and rolled back in one transaction — the exact method `010` used and proved leaves the real database untouched.
+- [ ] **Any index that measures as not helping is not created.** Migration `010` dropped `ix_qlt_question` for exactly this reason and said so; that precedent holds.
+- [ ] Every `CREATE INDEX CONCURRENTLY` is verified against `pg_index.indisvalid` after the fact, in the migration, per §27.2's trap.
+- [ ] The migration is applied to dev and independently re-verified, and the full backend suite passes with everything from this week together.
+
+---
+
+### W4-R12 — The handover pack, closed `[MUST]`
+
+**Source:** The brief (*"Write the handover pack"*) · `DESIGN.md` §63
+
+**Statement:** `handover.md` is current as of the last commit of Week 4, `week4_report.md` exists with a go/no-go, and the environment the code expects matches the environment that is deployed.
+
+**What ships:**
+
+1. **`handover.md` updated** — a Week 4 section in the same register as its Weeks 1–3 sections (why, not just what), and every closed item in §4 struck through with the date rather than deleted. Its own rule: nothing quietly disappears.
+2. **`week4_report.md`** — the standalone report and go/no-go, matching `week1_go_no_go.md` / `week2_report.md` / `week3_report.md` in shape.
+3. **`DESIGN.md` reconciled with `theme.css`** — §13.1 below lists exactly where it is stale. `DESIGN.md` is precedence #2 and it currently states a type scale the product does not use; that is the same "two sources of one fact" defect this project has now found four times.
+4. **Environment sync** — `.env.example`, the CI workflow, and a written checklist of what must be set on Render. `handover.md` §4 item 15 has carried this since 2026-08-13.
+5. **`docs/new_additions.md` gets a status footer** — which of its proposals shipped, which are gated and on what. Not a rewrite: an addition, per the project's own "a later fact wins by addition, not silent rewrite" convention.
+6. **A commit hygiene pass.** `handover.md` §4's last item names the real hazard: *"the last commit, `ae03593` 'edited', is a single mixed commit containing several sessions' unrelated work — so it cannot be read as a unit or reverted selectively."* Week 3's entire output is still uncommitted in the working tree (verified: 60+ staged and unstaged paths). Week 4 lands in **topic-scoped commits**, not one more `edited`.
+
+**Acceptance:**
+- [ ] Every open item in `week3_report.md` §6 appears in `week4_report.md` as closed, carried with a reason, or explicitly re-scoped. **None disappears.**
+- [ ] A `grep` claim written into any document is verified at the moment it is written. `handover.md` §4 records this exact failure happening once already.
+- [ ] The go/no-go is written against the repository, not against this plan's intentions.
+
+---
+
+### W4-R13 — The admin panel manages the whole system `[SHOULD]` `[NEW 2026-08-17, owner instruction]`
+
+**Source:** Owner instruction, 2026-08-17 — *"admin panel should also allow to manage everything it does, with users and system settings."*
+
+**Statement:** Every operational thing the owner needs to do is doable from `/admin`, without SQL, without a Render shell, and without a developer — **except the things that must not be**, which are named rather than quietly omitted.
+
+**Where the admin stands after W4-R5.** Questions · courses · templates · products · orders · media · contact inbox. What is missing, and what this requirement adds:
+
+| Surface | State | This requirement |
+|---|---|---|
+| **Users** | **`[GAP]`** — no `/admin/users` exists. `users.role` is editable only by SQL | Full list, search, detail, role change, entitlement view |
+| **Leads** | **`[GAP]`** — `leads` rows are written and never read back | Read-only list + CSV export |
+| **Audit log** | **`[GAP]`** — `audit_log` is written by four call sites and has **no reader at all** | Read-only, filterable |
+| **System settings** | **`[GAP]`**, and mostly stays one — see the split below | A narrow, non-secret settings table |
+
+#### The settings split — the load-bearing decision
+
+**Secrets never become editable from a web form.** `config.py` is env-backed `BaseSettings`, and Stripe, Mailjet, Supabase and Mux keys **stay there**. This is not conservatism: an admin panel that can rewrite `STRIPE_SECRET_KEY` turns one compromised admin session into full control of the payment account, and a settings table that holds live keys puts them in every database backup in plaintext. Non-negotiable #1 says never handle card data; this is the same instinct one layer out.
+
+So settings split in three, and the page says which is which rather than presenting a uniform wall of fields:
+
+| Class | Examples | Where it lives | Editable in admin |
+|---|---|---|---|
+| **Secrets** | Stripe, Mailjet, Supabase, Mux keys | Env / Render | **No.** The page *displays* which are set and which are missing — never a value, not even masked |
+| **Deployment** | `FRONTEND_URL`, `ALLOWED_ORIGINS`, database URL | Env / Render | **No.** Changing these at runtime breaks the running app in ways a form cannot safely offer |
+| **Operational** | `SELLER_LEGAL_NAME`, `SELLER_ABN` (#31), `OWNER_NOTIFICATION_EMAIL`, refund-window wording (#17), free-entry-point copy | **New `settings` table** | **Yes**, audited |
+
+The **"is it set?"** panel is the quiet win here: `handover.md` has carried an environment-checklist item since 2026-08-13, and a page showing `MAILJET_API_KEY ✓ set · SELLER_ABN ✗ unset` answers *"is this deployment configured correctly"* in one glance, without ever rendering a secret. That is the item the checklist was standing in for.
+
+#### User management, and its three guardrails
+
+A role change is **privilege escalation**, and it is the only write in this project that can create another actor. It gets treated accordingly:
+
+1. **Every role change writes an `audit_log` row** with actor, target, old role, new role, and a **required reason** — the same contract `grant_entitlement_manually` already uses. This is why the audit-log *reader* is in the same requirement: writing a trail nobody can read is theatre.
+2. **An admin cannot change their own role.** Not a permission subtlety — it removes the single most common way to lock yourself out, and self-demotion has no legitimate use the owner has.
+3. **The last admin cannot be demoted.** Checked server-side, in the same transaction, `SELECT count(*) … WHERE role = 'admin'` — an application-level guard here, because unlike uniqueness (#12) this is not expressible as a constraint.
+
+**Deleting a user is not offered.** A user with orders carries financial records that Australian record-keeping expects to survive, and `orders.user_id` is a non-nullable FK — a hard delete either fails or cascades away purchase history. If an account must go, that is a **deactivation** (a `disabled_at` column, gate checks it) plus a data-deletion request handled through the route the privacy policy already names. Offering a Delete button that silently means one of those two things is worse than offering neither.
+
+**Acceptance:**
+- [ ] `/admin/users` lists, searches and pages users; a detail view shows their entitlements and orders
+- [ ] A role change requires a reason, writes an audit row, and is refused for self-demotion and for the last admin — **all three proven by test, seen red first**
+- [ ] `/admin/audit` reads `audit_log` newest-first, filterable by actor and action
+- [ ] `/admin/settings` edits only operational values; **no secret is rendered, masked or otherwise**, and a test asserts the response body contains no key material
+- [ ] The "configuration status" panel shows set/unset for every required env var, sourced from `config.py`, not a hand-maintained list that will drift
+- [ ] No Delete User button exists; deactivation is what ships, or nothing does
+
+---
+
+## 6. Non-negotiables
+
+Carried from Weeks 1–3, plus three this week adds. These are not aspirations; a breach is a bug.
+
+1. **The gate changes in one place.** `resolve_product_ids()` is the only place entitlement is decided. No second check anywhere.
+2. **No component holds a hex.** Every colour resolves through a token. The Jinja2 email templates are the single sanctioned exception, and W4-R2's invoice block does not widen it.
+3. **No inverting token on the dark plane.** Before adding anything to a `bg-stage` surface, grep it for `primary` and `accent`. This has shipped as a bug **nine** times (`handover.md` §1's eight, plus `CartButton`'s badge in Week 3).
+4. **No hard-coded currency symbol on a formatted amount.** `formatCurrency` exists.
+5. **No hover distance drifted past 2px.** `.hover-lift` exists so it cannot.
+6. **Nothing loops.** No ambient motion, no reveal-on-scroll for body content.
+7. **Real content, always.** Stress extremes live in `page.route()` fixtures, never in the database.
+8. **A chip is offered only if it is counted.** Every suggested term, filter or route is checked against live data before being shown.
+9. **Seen red first.** A test is not trusted green until it has been observed failing without the thing it tests.
+10. **Confirm via the provider API, never infer from log silence.** Established twice by the Resend arc.
+11. **No index without a plan, no plan without a measurement.**
+12. **Uniqueness is a database constraint, not careful coding.**
+13. `[NEW]` **A claim on a product page is backed by a column.** Page count, format, editability, version, licence — each renders from data or does not render. No product page states something the database cannot prove. This is the mechanical version of `new_additions.md` §2's whole argument.
+14. `[NEW]` **Two published products may not grant overlapping content unless one is a declared bundle priced below the sum of its parts.** Enforced by W4-R3, checkable in SQL.
+15. `[NEW]` **Zero and unknown are different, everywhere.** A count that has not loaded renders an em dash; a count that is genuinely zero renders `0` with its empty state. Already true on the homepage's domain counts; now a rule.
+
+## 7. Definition of Done — Week 4
+
+Week 4 is done when all of the following are true. Items marked `[HUMAN]` cannot be closed by an engineering session and are named so they are scheduled, not silently dropped.
+
+**Product and commerce**
+- [ ] Every published paid product carries page/file facts, format guarantees, version, last-reviewed date, licence, and ≥2 real preview images — proven by SQL, not spot-checked (W4-R1)
+- [ ] A test-mode purchase produces a real Stripe invoice and an itemised receipt carrying the same invoice number (W4-R2)
+- [ ] The overlap guard refuses a conflicting publish and permits a declared bundle, both proven by test (W4-R3)
+- [ ] A question page and a filtered catalogue both route to products, with real explanations (W4-R4)
+
+**Admin**
+- [ ] A price is set and republished entirely through `/admin/products` (W4-R5)
+- [ ] The contact inbox reads `contact_messages`, `notified = false` rows included (W4-R5)
+- [ ] `/admin/orders` pages with a keyset cursor, `EXPLAIN`-proven (W4-R5, §26.3)
+- [ ] `[HUMAN]` The watched non-developer usability test has happened, and every place the tester stopped is written down (W4-R5)
+
+**Hardening**
+- [ ] The route × state matrix is complete (W4-R6, §21.3)
+- [ ] Every named failure mode is exercised, not reasoned about (W4-R6)
+- [ ] The twelve-item gating attack list runs in full, results recorded including the passes (W4-R6)
+- [ ] `CheckoutSuccess.tsx` and `Template.tsx` have real `h1`s **and** are in the axe route list (W4-R6)
+
+**Quality gates**
+- [ ] All six manual accessibility checks performed, findings recorded (W4-R7)
+- [ ] axe clean on every public route, both themes (W4-R7)
+- [ ] LCP, CLS and initial-JS budgets measured in CI and blocking; proven by breaking one (W4-R8)
+- [ ] Checkout and webhook fixture tests exist and were seen red first (W4-R9)
+- [ ] The taxonomy parity test exists and fails when a value is wrong (W4-R9)
+- [ ] `npm test` blocks CI (W4-R9)
+- [ ] CI runs against Mailjet, not Resend (W4-R6)
+
+**Database**
+- [ ] Migration `013` applied, every index `EXPLAIN`-proven, every `CONCURRENTLY` build verified valid (W4-R11)
+- [ ] No index created that measured as not helping (W4-R11)
+
+**Handover**
+- [ ] `handover.md` current; `week4_report.md` written with a go/no-go (W4-R12)
+- [ ] `DESIGN.md` reconciled with `theme.css` (W4-R12, §13.1)
+- [ ] Environment checklist written; CI and `.env.example` agree with the code (W4-R12)
+- [ ] Week 3's and Week 4's work committed in topic-scoped commits (W4-R12)
+- [ ] `[HUMAN]` One of the nine email templates opened in a real mail client `[CARRIED]`
+- [ ] `[HUMAN]` `[UNVERIFIABLE]` Supabase Auth Site URL / Redirect URLs confirmed by an owner dashboard login `[CARRIED]`
+
+## 8. Open decisions `[OWNER]`
+
+### 8.1 Blocking a specific line, not a requirement
+
+| # | Decision | Blocks | Degrades to |
+|---|---|---|---|
+| **31** `[NEW]` | **The ABN digits** (and confirmation the entity on receipts stays "Effective RM") | One line of the invoice block (W4-R2) | The invoice renders without an ABN line rather than with a placeholder |
+| **32** `[NEW]` | **The file facts for each published artefact** — page/sheet counts, minimum Office version. Owner or a five-minute file open | The evidence panel's completeness (W4-R1) | Any unset fact simply does not render |
+| ~~**33**~~ `[RESOLVED 2026-08-17]` | ~~The chart library~~ — **the shadcn/ui chart block, Recharts underneath.** Owner instruction: *"search for existing UI libraries and build using them."* Reasoning and costs at §20.7a; the deciding fact is that `--chart-1…5` are shadcn's own convention and are already in `theme.css`, unused | — | — |
+| **34** `[NEW 2026-08-17]` | **Whether PostHog is removed entirely**, or kept as instrumentation while `/admin/metrics` stops depending on it. Phase 6B delivers the independence either way | Nothing. Named so it is decided rather than drifted into | Instrumentation stays wired and unused, which costs nothing and is reversible. **Removal is not reversible**, which is why it is a decision and not a default |
+
+**#33 resolved, and the criteria it was judged against** — kept because the next component decision should be judged the same way, not because the answer is still open. Any library had to: resolve colour through `--chart-1`/`--chart-2` rather than its own palette (non-negotiable #2, no component holds a hex) · render both a tooltip and a focusable point (§22 — hover-only fails the keyboard check) · respect `prefers-reduced-motion` · add less to the entry chunk than W4-R8's budget allows, **measured after the fact, not promised**. The shadcn chart block meets all four, and `--chart-1…5` turned out to be its own convention already sitting unused in `theme.css`. Tremor was the runner-up and is recorded with its rejection reason at §20.7a rather than forgotten.
+
+**On #34, the recommendation.** Keep the events, drop the dependency. The nine events cost nothing while unused, the privacy policy already names PostHog, and W2-R8 shipped that policy *before* the instrumentation deliberately — unpicking it is a legal-page edit plus ten call sites to buy back a dependency that Phase 6B has already made non-load-bearing.
+
+### 8.2 Worth a short answer this week
+
+| # | Decision | Why now |
+|---|---|---|
+| **25** | **Client-delivery licence** — permitted at all, and at what multiple? | `new_additions.md` §20 calls it *"the best unbuilt revenue."* The field ships regardless; the answer turns it from a label into a price |
+| **26** | **The update promise** — `pricing.md` commits to lifetime updates including future revisions. Confirm deliberately with a maintenance budget, or narrow it before more products inherit it | W4-R1's `version`/`last_reviewed_at` make it *cheap to keep*, which is the right moment to decide whether to keep it |
+| **30** | **Editorial capacity** — author-days per month, realistically | Gates Question of the Week, the Decision Pack, the diagnostic, and the AI feature. `new_additions.md`: *"Every plan in this document is a guess without it"* |
+
+### 8.3 Closed, deliberately, and bundled
+
+Restated from `week3_report.md` §7 because the bundling is the part that gets forgotten:
+
+1. Stripe stays in test mode (#21).
+2. Hosting stays on Vercel Hobby / Render current tier.
+3. The refund window stays undecided (#17); the mechanism ships against ACL-safe wording.
+
+> **These three are one decision, not three.** The moment Stripe's key becomes `sk_live_`/`rk_live_`, Vercel Hobby's commercial-use restriction is being violated again and Render's tier becomes a live-checkout risk — **on the same day**. Do not flip one without reopening the other two in the same conversation.
+
+### 8.4 Deferred by owner instruction, not open
+
+- The watched usability test — scheduled, not cancelled. In this week's DoD.
+- Domain purchase — Mailjet delivers without it; still worth doing for sender reputation.
+
+## 9. Success measures
+
+| Measure | Target | Read from |
+|---|---|---|
+| Published paid products with complete evidence | 100% | The W4-R1 SQL query |
+| Failure modes with a designed, exercised answer | 9 of 9 | §21.3's matrix |
+| Gating attacks that found something | 0 — **or every finding fixed** | The recorded attack list |
+| Manual accessibility checks performed | 6 of 6 | W4-R7 |
+| Backend tests | > 62, with checkout/webhook covered | `pytest` |
+| Frontend unit test files | > 1 | `vitest` |
+| CI jobs that block | backend · frontend unit · Playwright+axe · typecheck/build · **performance** | `ci.yml` |
+| Open items carried into "next" without a written reason | 0 | `week4_report.md` |
+
+## 10. Cut order if the week runs long
+
+Protect hardening and handover; they are what the brief asked for. Cut in this order:
+
+0. **`TrendChart` alone** `[NEW 2026-08-17]` — the five tiles ship, the chart does not. Cut this before cutting the page: it is the only item here that is blocked on an unanswered decision (#33), and with fewer than two data points it would render its "not enough history" sentence anyway. Cutting it costs the week nothing today
+1. **W4-R10** metrics page — the numbers are all still in the database; the page is a convenience. *Amended: Phase 6B is most of a day, not a quarter of one. If it has not started by the end of Day 4, it slips to Week 5 rather than compressing Phase 5 — see Phase 6B's header*
+2. **W4-R4's** `SituationProducts` on `/questions` — keep `RoutedProducts` on the question page, which is where the argument is strongest
+3. **W4-R5's** contact inbox — the SQL in `handover.md` §2 still works
+4. **W4-R9's** frontend unit tests — keep the taxonomy parity test, which is the one with a real incident behind it
+5. **W4-R1's** `search_title` — the slot without the copy is nearly free anyway
+6. **W4-R8's** LCP/CLS jobs — keep the JS bundle assertion, which is the cheapest of the three
+
+**Never cut:** the gating attack pass · the four states matrix · the checkout/webhook tests · the overlap guard · the handover pack · the two carried `h1` fixes · the CI transport fix.
+
+---
+
+# PART II — DESIGN SPECIFICATION
+
+*Every value here is quoted from `frontend/src/styles/theme.css` as it stands on 2026-08-17. Where `DESIGN.md` states a different number, §13.1 records it and `theme.css` wins (§0.3 rule 5).*
+
+## 11. Principles in force this week
+
+Week 4 **applies** the design system; it does not extend it. Three consequences:
+
+1. **No new colour family.** The palette is ivory + navy + champagne, with status colours exempt and charts exempt. One narrowly-scoped repair to the dormant chart tokens (§12.6) is the only token change this week.
+2. **No new type rung.** Ten rungs exist. If a new surface seems to need an eleventh, it needs a different rung, not a new one.
+3. **Reuse before you build.** Every new component in §20 names the existing primitives it composes. `Card`, `Badge`, `Button`, `EmptyState`, `PageTitle`, `SectionHeading`, `StatusDot`, `UploadField`, `PublishStateChip`, `AutosaveIndicator`, `FieldError` all exist and all have contracts.
+
+## 12. Colour
+
+### 12.1 The system, restated
+
+Two colour families, not three:
+
+```text
+ivory            the ground              --background
+midnight navy    PRIMARY   — brand, action, links, focus, the five domains
+champagne gold   SECONDARY — warmth, rules, washes, quiet emphasis
+```
+
+Shades within those families are open. **A third hue family is not.** Status colours (red = error, green = success, amber = warning) are the one exception, because they are conventions worth keeping. Charts are the second exception, stated in `theme.css` itself.
+
+### 12.2 Light theme — the complete token set
+
+| Token | Value | Role |
+|---|---|---|
+| `--background` | `#FBF9F4` | Warm ivory. The paper this brand is printed on |
+| `--foreground` | `#1C1712` | Espresso ink, not near-black |
+| `--card` | `#FFFFFF` | |
+| `--card-foreground` | `#1C1712` | |
+| `--popover` / `--popover-foreground` | `#FFFFFF` / `#1C1712` | |
+| `--primary` | `#10213E` | Midnight navy |
+| `--primary-foreground` | `#F7F2E9` | Warm cream, never pure white |
+| `--stage` | `#10213E` | **The dark plane. Does not invert.** Hero, footer, auth panel, member rail |
+| `--stage-foreground` | `#F7F2E9` | 14.39:1 on stage |
+| `--stage-deep` | `#050B18` | Aurora: the near-black it opens on |
+| `--stage-glow-1` | `#10305F` | Aurora: widest, quietest bloom |
+| `--stage-glow-2` | `#1F6FC4` | Aurora: the body of the ramp |
+| `--stage-glow-3` | `#8ED2FB` | Aurora: corner core only. **1.48:1 — never under text** |
+| `--secondary` | `#F0E7D2` | Champagne surface |
+| `--secondary-foreground` | `#4A3D22` | |
+| `--secondary-strong` | `#E5D7B6` | |
+| `--accent` | `#1D5FA8` | The one interactive accent. 6.13:1 on ivory |
+| `--accent-foreground` | `#FFFFFF` | |
+| `--gold` | `#C6A961` | **Decorative only. 2.16:1 — never text** |
+| `--gold-strong` | `#7C5C14` | The text-safe gold. Clears 4.5:1 on ivory, card, `--secondary` and `--gold-soft` |
+| `--gold-soft` | `#F3E9D2` | Champagne wash for tinted surfaces |
+| `--muted` / `--muted-foreground` | `#F1ECE1` / `#6E675A` | |
+| `--border` / `--input` | `#E6DFD0` | Warm hairline |
+| `--border-strong` | `#998E78` | 3.2:1 on card — state-bearing borders |
+| `--ring` | `#1B4E8C` | Focus. ~5.7:1 on ivory |
+| `--destructive` / `-foreground` | `#B3402E` / `#FFFFFF` | |
+| `--success` / `-foreground` | `#067647` / `#FFFFFF` | |
+| `--warning` / `-foreground` | `#8A5300` / `#FFFFFF` | |
+| `--primary-edge` | `color-mix(in srgb, var(--primary-foreground) 16%, transparent)` | |
+| `--domain-risk` | `#142E5C` | Deep navy-blue |
+| `--domain-cyber` | `#1B5FA8` | Azure |
+| `--domain-compliance` | `#1D6FA5` | Steel blue, leaning cyan |
+| `--domain-resilience` | `#3D5A99` | Indigo-blue |
+| `--domain-ai` | `#46618C` | Slate blue-grey |
+| `--sidebar` | `#E0E8F3` | |
+| `--sidebar-foreground` | `#1A2E4A` | 11.09:1; at 70% (nav labels) 4.75:1 |
+| `--sidebar-primary` / `-foreground` | `#10213E` / `#F7F2E9` | |
+| `--sidebar-accent` / `-foreground` | `#CBD9EC` / `#10213E` | |
+| `--sidebar-border` / `--sidebar-ring` | `#BDCEE5` / `#1B4E8C` | |
+| `--shadow-tint` | `52 42 26` | Warm espresso, not black |
+
+### 12.3 Dark theme — the complete token set
+
+Mirrors the light theme's *shape* rather than inverting its values. Same token names, same rules, inverted values.
+
+| Token | Value | Note |
+|---|---|---|
+| `--background` | `#141008` | Warm espresso near-black, not blue-black |
+| `--foreground` | `#F2EBDE` | |
+| `--card` / `--popover` | `#1B1710` / `#1E1911` | Elevation reads from a lighter surface here, not a darker shadow |
+| `--primary` / `-foreground` | `#6FA8DC` / `#0B1A2E` | **Inverts. Never on `--stage`** |
+| `--stage` / `-foreground` | `#080D18` / `#EAF1FA` | 17.08:1. Separation from `--background` is carried by hue plus a hairline, not luminance (they sit at 1.02:1) |
+| `--stage-deep` · `-glow-1` · `-glow-2` · `-glow-3` | `#02060E` · `#0A2147` · `#14538F` · `#4794D8` | Two steps lower than light — a sky-bright core on a night page reads as a light leak |
+| `--secondary` / `-foreground` | `#2A2318` / `#EDE2CB` | |
+| `--secondary-strong` | `#2E271B` | |
+| `--accent` / `-foreground` | `#b6deff` / `#0B1A2E` | **Inverts** |
+| `--gold` | `#C9AC6A` | Decorative only, as in light |
+| `--gold-strong` | `#E3CB92` | Text-safe on espresso, 12.0:1 |
+| `--gold-soft` | `#2E2517` | |
+| `--muted` / `-foreground` | `#201B12` / `#A79D89` | |
+| `--border` / `--input` | `#332B1E` | |
+| `--border-strong` | `#7C6F56` | |
+| `--ring` | `#8FC1EA` | |
+| `--destructive` / `--success` / `--warning` | `#E11D48` / `#2CC08A` / `#E9A13B` | |
+| `--domain-*` | `#5B7FBD` · `#6FB0E8` · `#5FB8D9` · `#8090D8` · `#93A7C9` | Same five leans, one step brighter |
+| `--sidebar` | `#0C1524` | 8.53:1; at 70% 4.79:1 |
+| `--shadow-tint` | `0 0 0` | Near-black, so what little shadow remains stays neutral |
+
+### 12.4 The gold rule — the one way to misuse this palette
+
+```text
+--gold          decorative ONLY — rules, gradient stops, tile fills, icon marks on a dark plane
+--gold-strong   the text-safe shade — labels, prices, small type, icons beside text
+--gold-soft     a surface wash — tinting a card or a tile background
+```
+
+`--gold` is **2.16:1 in light**. It fails text contrast *by design* — it is a light metal. Putting it on a text node is the single way to break this palette, and it has happened. Every price in the product uses `--gold-strong` at `text-h3` or larger, and `theme.css` carries a comment on that line specifically so a future size reduction is caught.
+
+**This week's application:** `EvidencePanel`'s section rules use `--gold`; its labels use `--gold-strong`; its surface uses `--gold-soft`. `VersionStamp` uses `--gold-strong` (it is small mono text — decorative gold would fail it outright).
+
+### 12.5 Contrast floors, measured not eyeballed
+
+| Context | Floor |
+|---|---|
+| Body text, and anything a decision depends on | 4.5:1 |
+| Text ≥ 18.66px bold or ≥ 24px | 3:1 |
+| UI component boundaries, focus rings, graphical objects | 3:1 |
+| Decorative fills carrying no information | none — but they may never sit under text |
+
+**And the rule that has bitten this project once already** (`DESIGN.md` §7.5.3, `handover.md` §1): **a gradient's contrast is only real where the text actually lands.** The token-level maths said the auth panel was safe; sampling the rendered pixels under the actual paragraph said 4.36:1. Any new surface this week that sits on `.stage-aurora`, `.hero-wash` or `.page-wash` is measured **from a screenshot**, not from the swatches.
+
+Flat fills on flat surfaces — which is everything in §20 except the metrics tiles' optional wash — can be computed at token level. Say which method was used.
+
+### 12.6 The chart tokens `[DEFECT]`, and the narrow repair
+
+`theme.css` marks `--chart-1` … `--chart-5` *"Dormant: nothing renders a chart yet."* That is still true, and W4-R10 deliberately keeps it true by using stat tiles rather than plots. But the tokens are latent bugs and this is the design-hardening week:
+
+| Token | Light | Dark | Problem |
+|---|---|---|---|
+| `--chart-1` | `#10213E` navy | `#C7AC6D` gold | **Different hue family per theme.** The same token meaning two different things — the exact defect `handover.md` §1 documents for `--primary` and `StatusDot`, nine occurrences deep |
+| `--chart-2` | `#1D6FA5` steel | `#A17D2E` dark gold | Same |
+| `--chart-3` | `#B3402E` | `#E55252` | Consistent (red both) |
+| `--chart-4` | `#5C6B4F` | `#5C6B4F` | **Byte-identical across themes** — a strong signal the set was never audited as a set. Computed at token level: 5.37:1 on ivory, **3.36:1** on espresso. Above the 3:1 graphical-object floor, but only just, and by accident rather than by choice |
+| `--chart-5` | `#7A8699` | `#B7AC96` | Grey both, but the dark value leans warm and the light value leans cool |
+
+**What Week 4 does:** re-derive all five in both themes from the existing families so that chart-*n* means the same *thing* in both, validate the set as a categorical palette (lightness band, chroma floor, CVD separation between adjacent pairs, contrast against each surface), and record the result. **What Week 4 does not do:** render a chart. This is a token repair on a dormant surface, sized in minutes, done now because the first person to build a chart will otherwise inherit a five-token version of the bug this project has already shipped nine times.
+
+If the repair cannot be validated cleanly inside its time box, the honest alternative is to **delete the five tokens** rather than leave a broken set standing — an absent token forces a deliberate decision at the moment a chart is first built; a broken one gets used.
+
+> **`[AMENDED 2026-08-17]` The delete option is closed, and where these tokens came from is now known.** W4-R10's amendment admits one chart (§20.7a), so *"nothing renders a chart yet"* stops being true this week and the moment this paragraph anticipated — *"the moment a chart is first built"* — has arrived.
+>
+> **The origin explains the defect.** `--chart-1` … `--chart-5` are **shadcn/ui's own convention**, installed with the Week 1 scaffold (`week1_plan.md`: shadcn, New York, CSS variables) and never rendered against. That is why they read as unaudited: nobody chose these five values for this palette — they arrived as defaults and were then half-edited toward the brand. `--chart-4` being byte-identical across themes is not a mystery, it is a default nobody got to.
+>
+> **Consequences.** Deleting them is now the *wrong* repair: shadcn's `ChartConfig` resolves `var(--chart-N)` directly, so deleting the tokens would break the chart block's contract and push the same decision into `TrendChart`, which is precisely where §12.6 exists to stop it happening. `--chart-1` and `--chart-2` are load-bearing and must be **repaired** — one hue family per token across both themes, ≥ 3:1 on both `--card` planes, ratios recorded. `--chart-3`/`--chart-4`/`--chart-5` stay unused; leave them (a fourth series is not coming this week) but do not "fix" them by guessing. The repair is Phase 6B step 1, ahead of the component, so the chart is never built against values that are about to change.
+
+## 13. Typography
+
+### 13.1 The scale — every rung, with its line height and tracking
+
+Quoted from `theme.css`. **`DESIGN.md` §10 states the pre-2026-08-15 scale and is stale** — it shows `--text-display: clamp(2.75rem, 1.6rem + 4.6vw, 4.5rem)` where the product uses `clamp(2.0rem, 1.3rem + 3.2vw, 2.75rem)`. Every rung shrank 25–30% in Week 3's typography pass on owner direction (*"reduce heading sizes considerably"*). Reconciling `DESIGN.md` is a W4-R12 task.
+
+| Token | Value | Line height | Tracking | Use |
+|---|---|---|---|---|
+| `--text-display` | `clamp(2.0rem, 1.3rem + 3.2vw, 2.75rem)` — 32→44px | 1.05 | -0.03em | Homepage hero only. Once per site |
+| `--text-h1` | `clamp(1.625rem, 1.3rem + 1.6vw, 2.125rem)` — 26→34px | 1.15 | -0.02em | Page title; the question on a question page |
+| `--text-h2` | `clamp(1.375rem, 1.2rem + 0.8vw, 1.75rem)` — 22→28px | 1.2 | -0.015em | Section heading |
+| `--text-h3` | `clamp(1.125rem, 1.02rem + 0.4vw, 1.3125rem)` — 18→21px | 1.3 | -0.01em | Card title, lesson title, **the price** |
+| `--text-h4` | `1.0625rem` — 17px | 1.4 | -0.01em | Subsection, form group heading |
+| `--text-lead` | `1.0625rem` — 17px | 1.5 | 0 | Lead paragraph, short answer |
+| `--text-read` | `1.125rem` — 18px | **1.7** | 0 | Serif reading body. 18px not 17px: Newsreader's smaller x-height made 17px read *smaller* than the 16px sans beside it |
+| `--text-body` | `1rem` — 16px | 1.55 | 0 | Sans body, UI text |
+| `--text-sm` | `0.875rem` — 14px | 1.5 | 0 | Metadata, form labels, helper text |
+| `--text-xs` | `0.75rem` — 12px | 1.4 | +0.16em on uppercase eyebrows only | **The floor. Nothing smaller ships** |
+
+### 13.2 The three faces
+
+| Family | Stack | Job |
+|---|---|---|
+| `--font-sans` | `'Schibsted Grotesk', ui-sans-serif, system-ui, sans-serif` | Variable 400–900. Drawn for a news publisher. The interface layer |
+| `--font-serif` | `'Newsreader', ui-serif, serif` | Variable, real optical-size axis 6–72. Sustained on-screen reading |
+| `--font-mono` | `'Azeret Mono', ui-monospace, SFMono-Regular, monospace` | Variable 100–900, squared-off. Reads as data because it was chosen |
+
+Georgia and Times New Roman are **struck by name** from the fallback stacks and must not reappear. `--letter-spacing: -0.01em` is set on `body`.
+
+**This week's typographic assignments, in full:**
+
+| Surface | Face | Rung | Weight |
+|---|---|---|---|
+| `EvidencePanel` section label | mono | `text-xs`, uppercase, `+0.16em` | 500 |
+| `EvidencePanel` fact label | sans | `text-sm` | 500 |
+| `EvidencePanel` fact value | sans, **`tabular-nums` on counts** | `text-sm` | 400 |
+| `VersionStamp` | **mono** | `text-xs` | 500 |
+| `LicenceLine` | sans | `text-sm` | 400 |
+| `PreviewGallery` caption | sans | `text-xs` | 400 |
+| `RoutedProducts` heading | sans | `text-h3` | 600 |
+| `RoutedProducts` explanation | sans | `text-sm` | 400 |
+| Price, everywhere | sans, `tabular-nums` | `text-h3` minimum | 600, `--gold-strong` |
+| Metric tile label | sans | `text-sm` | 500, `--muted-foreground` |
+| Metric tile value | sans, **proportional figures** | `text-h1` | 600 |
+| Metric tile denominator | sans | `text-xs` | 400, `--muted-foreground` |
+| Invoice block (email) | table-safe sans stack | 14px / 12px | — |
+
+**One refinement to `DESIGN.md` §10's tabular-figures rule, stated so it is not read as a contradiction.** §10 says *"tabular figures on anything countable — prices, progress percentages, durations, order totals."* Every case it names appears in a column or inline in a row of text, and tabular is right for all of them; that rule is unchanged and still governs. The case §10 does not name is a **large standalone value** — the metric tile's number at `text-h1`. `tabular-nums` gives every digit the width of a `0`, so `121` at 26–34px reads visibly loose. Metric tile values therefore use the font's default proportional figures; the denominator line beneath, and every table column on the same page, stay tabular. If the owner prefers §10 read absolutely, §10 wins and this paragraph is deleted.
+
+### 13.3 The eyebrow device
+
+Unchanged, and used by three of this week's new surfaces:
+
+```css
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;  line-height: 1.4;  font-weight: 500;
+  text-transform: uppercase;  letter-spacing: 0.16em;   /* not 0.2em — Azeret sets wider than JetBrains did */
+  color: var(--muted-foreground);
+  display: inline-flex;  align-items: center;  gap: 0.625rem;
+}
+.eyebrow::before { content: ""; width: 1.5rem; height: 1px; background: var(--eyebrow-rule-color, var(--accent)); }
+```
+
+`PageTitle`'s `eyebrowColor` prop overrides the rule colour per instance via `--eyebrow-rule-color` — used this week to tint a routed-product panel's eyebrow with the source question's domain colour.
+
+## 14. Spacing
+
+4px base, Tailwind's default scale. `--spacing: 0.25rem`.
+
+```text
+4  8  12  16  20  24  32  40  48  64  80  96  128
+```
+
+| Context | Value |
+|---|---|
+| Inside a compact control (button, chip) | 8–12px vertical, 12–16px horizontal |
+| Card padding | 20px mobile, 24px tablet+, 28px feature cards |
+| Gap between cards in a grid | 16px mobile, 24px desktop |
+| Between a heading and its content | 12–16px |
+| Between content blocks within a section | 32–40px |
+| Between page sections (marketing) | 64px mobile, 96px desktop |
+| Between page sections (product/dashboard) | 32px mobile, 48px desktop |
+| Page horizontal padding | 20px mobile, 32px tablet, 48px desktop |
+
+**Week 3's whitespace pass tightened page-container padding and inter-section margins by one Tailwind step, applied by exact-token regex substitution across every page and component.** New surfaces this week match what is on disk, not the table above where the two differ — check a neighbouring section before choosing a margin.
+
+**Editorial vertical rhythm** (`.prose-guidance`): paragraph spacing 1em of the reading size (~18px), heading-above 2em, heading-below 0.5em. Set once, never per-component.
+
+Arbitrary values (`mt-[13px]`) need a comment naming the optical reason. Optical corrections are legitimate; guesses are not.
+
+**This week's specific spacing:**
+
+| Surface | Spec |
+|---|---|
+| `EvidencePanel` outer | `p-5 sm:p-6`, `rounded-lg`, `border border-border`, `bg-gold-soft` |
+| `EvidencePanel` fact rows | `py-2.5`, separated by `border-b border-border` — last row has no border |
+| `EvidencePanel` → buy button | `mt-6` |
+| `PreviewGallery` grid | `grid-cols-2 gap-3 sm:gap-4` |
+| `RoutedProducts` | `mt-10 sm:mt-12` from the guidance body; internal `space-y-4` |
+| Metric tile | `p-5`, grid `gap-4 sm:gap-5` |
+| Admin product form | matches `AdminTemplates.tsx` exactly — same field spacing, same section rhythm |
+
+## 15. Radius, borders and elevation
+
+### 15.1 Radius — a hard 12px ceiling
+
+`--radius: 0.75rem` (12px). Tightened **twice** (20 → 16 → 12) because 16px on the largest surfaces still read as modern-SaaS-template rather than the tailored editorial register this product wants.
+
+| Utility | Value | Use |
+|---|---|---|
+| `rounded-sm` | 4px | Chips, badges, small buttons, table cells |
+| `rounded-md` | 6px | Inputs, selects, buttons |
+| `rounded-lg` | 8px | **Cards — the default** |
+| `rounded-xl` | 12px | Feature blocks, video frame, hero panels |
+| `rounded-2xl` / `rounded-3xl` | **12px** | Pinned to the same ceiling at token level. Reaching for these gets you nothing rounder |
+| `rounded-full` | — | Avatars, pills, circular icon buttons only |
+
+Preview thumbnails are `rounded-md`; the lightbox image is `rounded-lg`; the evidence panel is `rounded-lg`; metric tiles are `rounded-lg`. **Nothing this week is `rounded-xl`** — none of these are hero surfaces.
+
+### 15.2 Borders
+
+The default surface treatment is **a 1px border, not a shadow**. Cheaper, crisper, theme-safe, and it holds up in dark mode where shadows disappear.
+
+| Situation | Treatment |
+|---|---|
+| Grouping / card edge | `border border-border` |
+| Selected, active, current | `border-border-strong`, or a 2px `ring-ring` |
+| Focus | `:focus-visible` outline — 2px `--ring`, 2px offset, 4px radius. Never a custom per-component focus style |
+| Error | `border-destructive` **plus** an icon and a message. Never colour alone |
+| Locked | `border-dashed border-border` + `Lock` icon |
+| **Preview image plate (dark)** | `bg-muted p-3 rounded-md` behind a white document page — a plate, **never** a filter (§16.3) |
+
+### 15.3 Elevation — four levels
+
+| Level | Utility | Value | Use |
+|---|---|---|---|
+| 0 | none | — | The default. Most cards |
+| 1 | `shadow-sm` | `0 1px 2px 0 rgb(var(--shadow-tint)/0.05), 0 2px 6px -1px rgb(var(--shadow-tint)/0.06)` | Cards that lift on hover; sticky headers when scrolled |
+| 2 | `shadow-md` | `0 4px 10px -2px rgb(…/0.08), 0 2px 5px -2px rgb(…/0.05)` | Popovers, dropdowns |
+| 3 | `shadow-lg` | `0 10px 24px -6px rgb(…/0.13), 0 4px 10px -4px rgb(…/0.07)` | Dialogs, the preview lightbox, mobile bottom sheets |
+
+`--shadow-tint` is `52 42 26` (warm espresso) in light and `0 0 0` in dark. `--shadow-xl` and `--shadow-2xl` exist in the token set and **nothing this week uses them.**
+
+## 16. Gradients and washes
+
+Four devices exist. **Week 4 adds none** and consumes two.
+
+### 16.1 `.page-wash` — used on `/admin/products` and `/admin/metrics`? No.
+
+Not used. `.page-wash` is the catalogue header wash (Courses, Questions, Templates) at `opacity: 0.14`, deliberately one notch quieter than `.hero-wash`'s 0.18 because *a catalogue is a working index the reader scans, not a landing page*. **Admin surfaces get no wash at all** — an admin table with atmosphere behind it reads as a toy, and `DESIGN.md` §31's admin direction is functional-only.
+
+```css
+.page-wash {
+  opacity: 0.14;
+  background-image:
+    linear-gradient(180deg, var(--accent) 0%, transparent 60%),
+    linear-gradient(115deg, transparent 30%, color-mix(in srgb, var(--gold) 55%, transparent) 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 42%, transparent 92%);
+}
+```
+
+Both layers are linear on purpose: a radial ellipse in a fixed-height box always exposes its own curved edge somewhere, and the blue alone desaturates to grey over ivory — the champagne pass from the right is what keeps it a deliberate warm tint rather than a dirty smudge.
+
+### 16.2 `.stage-aurora` — unchanged, and not extended
+
+Six layers on the dark plane, consumed by exactly four surfaces (hero, auth panel, footer via `--quiet`, member rail via `--rail`). **Week 4 adds no fifth consumer.** Its two knobs (`--aurora-opacity`, `--aurora-core`) exist for the footer and rail; a new surface that wants atmosphere gets `.page-wash` or nothing.
+
+One item carried from `theme.css`'s own comment: `.stage-aurora--rail`'s contrast figures are marked `[UNVERIFIED — needs a rendered-pixel check]` and have been since 2026-08-13. **W4-R7's dark-mode pass closes it** — sample the rail's nav labels (80% opacity) and account row (70%) at 1440×900 in both themes, from the composited page, and either confirm the numbers or fix the variant.
+
+### 16.3 `.hero-wash` — untouched
+
+`opacity: 0.18`, three linear stops (accent from the top, primary from 115°, gold from 250°), masked to fade in at 12% and out by 94%. Homepage only.
+
+### 16.4 `.text-gradient-brand` — not on a price, not on a metric
+
+`linear-gradient(100deg, var(--primary) 0%, var(--accent) 50%, var(--gold-strong) 100%)` with `background-clip: text`. The gold stop is `--gold-strong`, not `--gold`, because the tail of the gradient is still legible text.
+
+**Not used this week.** A gradient on a price or a metric value makes a number harder to read to make it prettier, which is the wrong trade on the two things a buyer and an owner actually read.
+
+### 16.5 What must not be built
+
+- **No glassmorphism.** `DESIGN.md` §5.2 bans it by name and it is not theoretical — `Contact.tsx`'s own docstring records a `bg-card/70 backdrop-blur-xl` card being built and ripped out. `implementation_plan.md` proposes it; that file is not a source of pending work.
+- **No looping or ambient motion.** Both washes are static paint by design.
+- **No new radial gradient** in a fixed-height box.
+- **No hue-drift animation** outside the one `.bg-gradient-animated` that already exists and is currently unconsumed.
+
+## 17. Motion
+
+### 17.1 Tokens
+
+```css
+--ease-standard: cubic-bezier(0.2, 0, 0, 1);   /* most things */
+--ease-entrance: cubic-bezier(0, 0, 0, 1);     /* things arriving */
+--ease-exit:     cubic-bezier(0.3, 0, 1, 1);   /* things leaving */
+```
+
+| Band | Duration | Use |
+|---|---|---|
+| Micro | 100–150ms | hover, focus, press |
+| Small | 150–220ms | chips, badges, tooltips, inline reveals |
+| Medium | 220–350ms | cards, sheets, dialogs, the filter panel |
+| Large | 350–500ms | page-level transitions (rare) |
+
+**Nothing loops. Nothing exceeds 500ms.**
+
+### 17.2 The complete motion catalogue for this week's surfaces
+
+| Surface | Motion | Spec |
+|---|---|---|
+| `EvidencePanel` | None on mount. It is reference content the buyer is reading, not an arrival | — |
+| `EvidencePanel` fact rows | None | — |
+| `PreviewGallery` thumbnail hover | `.hover-lift` — `translateY(-2px)` + `shadow-md`, 150ms `--ease-standard` | Existing utility, not a new one |
+| `PreviewGallery` lightbox open | `motion/react` presence: `opacity 0→1`, `scale 0.98→1`, 220ms `--ease-entrance` | Medium band |
+| `PreviewGallery` lightbox close | `opacity 1→0`, 150ms `--ease-exit` | Exit is faster than entrance |
+| `RoutedProducts` list entrance | Stagger the **first 6 only**: `opacity 0→1`, `y 8→0`, 220ms, `delay: min(i, 6) * 0.03` | `DESIGN.md` §39.3's exact pattern |
+| `RoutedProducts` card hover | `.hover-lift` — 2px, **no scale** | A card that grows 4% pushes its neighbours and reads as a consumer app |
+| Metric tile | None on mount. **Except** a value that is a proportion, which may animate its number once from 0 on first paint — the same "a state becoming known" argument `Library.tsx`'s progress bars already won | One shot, never loops |
+| Admin product form save | `AutosaveIndicator` — existing component, existing timing | Reuse |
+| Publish-guard refusal | Inline error, no motion. A money-adjacent refusal should not be animated | — |
+| `RefundDialog`-class dialogs | Existing pattern; Cancel takes default focus | Reuse |
+
+### 17.3 Prohibited
+
+No parallax. No scroll-jacking. No reveal-on-scroll for **body content** — content that only appears when scrolled to does not exist for a screen reader user who jumped there. No animated page-load sequence. No hover-scale on cards. No looping anything.
+
+### 17.4 Reduced motion
+
+`<MotionConfig reducedMotion="user">` wraps the router, plus `theme.css`'s global CSS backstop for anything outside Motion's tree:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+```
+
+Transitions become **instant state changes**, never removed — the state change itself still needs to be visible. W4-R7 verifies this on every new surface, specifically the lightbox (does it still open?) and the metric tile's count-up (does it still show the number?).
+
+## 18. Iconography additions
+
+Lucide React only, stroke width 1.75. Icons carry meaning or they do not appear.
+
+| Concept | Icon | Size |
+|---|---|---|
+| File facts / page count | `FileText` | 16px |
+| Spreadsheet / sheet count | `Table2` | 16px |
+| Editable | `PenLine` | 16px |
+| Opens at work / compatibility | `Laptop` | 16px |
+| No macros (a guarantee, not a warning) | `ShieldCheck` | 16px |
+| Version / last reviewed | `History` | 14px, inline with `text-xs` |
+| Licence | `Scale` | 16px |
+| Preview / sample page | `Image` | 16px |
+| Routed recommendation | `Route` | 18px |
+| Overlap conflict (admin) | `GitMerge` | 16px |
+| Contact inbox | `Inbox` | 20px |
+| Metric tile (per metric, fixed) | `Repeat2` · `ArrowRightLeft` · `SlidersHorizontal` · `Undo2` · `Timer` | 18px |
+| Invoice | `ReceiptText` | 16px |
+
+Every one of these is fixed for its concept product-wide. An icon-only control gets an `aria-label` and a tooltip. `SlidersHorizontal` is already the filter icon and is reused for the tag-filter metric deliberately — same concept, same mark.
+
+## 19. Layout, containers and breakpoints
+
+### 19.1 Containers
+
+```tsx
+// Marketing — homepage, catalogues, store
+<div className="mx-auto w-full max-w-7xl px-5 sm:px-8 lg:px-12" />
+
+// Reading — question guidance, reading lessons, legal
+<article className="mx-auto w-full max-w-[68ch] px-5 sm:px-8" />
+
+// Product — dashboard, learning, downloads, account, the buy page
+<main className="mx-auto w-full max-w-[1400px] px-5 sm:px-8" />
+
+// Admin — tables need width
+<main className="mx-auto w-full max-w-[1600px] px-4 sm:px-6" />
+
+// Focused — auth, checkout handoff
+<div className="mx-auto w-full max-w-md px-5" />
+```
+
+`max-w-[68ch]` is character-based deliberately, so it stays correct if the reading size changes. Do not replace it with a px value.
+
+**One inconsistency to resolve this week** (`handover.md` §1): header, footer and `Home.tsx` agree at `max-w-7xl`; `QuestionsCatalogue.tsx` is still `max-w-6xl` and is the odd one out. W4-R4 touches that page — reconcile it there rather than in a separate pass.
+
+### 19.2 Grid
+
+| Content | Columns |
+|---|---|
+| Question results | 1 always — these are rows to scan, not tiles to browse |
+| Course / template cards | 1 / 2 / 3 |
+| **`PreviewGallery`** | **2 always** — two previews is the minimum and the typical case; a 1-column phone layout would push the buy button below three screens |
+| **`RoutedProducts`** | 1 mobile / 2 from `md` |
+| **Metric tiles** | 1 / 2 / 3 — five tiles on a 3-column grid leaves a 2-wide last row, which is correct and needs no filler |
+| Discovery page | `lg:grid-cols-[280px_1fr]` |
+| Learning | `lg:grid-cols-[320px_1fr]` |
+| **Buy page with evidence** | 1 mobile / `lg:grid-cols-[1fr_380px]` — content left, evidence + buy right, sticky from `lg` |
+
+### 19.3 Breakpoints and test widths
+
+Tailwind defaults; no custom breakpoints without a real layout failure to point at.
+
+```text
+base < 640   sm 640+   md 768+   lg 1024+ (sidebars appear)   xl 1280+   2xl 1536+
+```
+
+Required test widths: **375 · 390 · 430 · 768 · 1024 · 1280 · 1440**. 375 is the floor and is not optional. `responsive-widths.spec.ts` already enforces these against eight routes; every new route this week is added to its list.
+
+### 19.4 Sticky behaviour
+
+| Element | Behaviour |
+|---|---|
+| Public header | Sticky, `shadow-sm` after 8px of scroll |
+| **Buy button + evidence panel (desktop)** | `sticky top-20`, `max-h-[calc(100vh-6rem)]`, independently scrollable |
+| **Buy button (mobile, < 640px)** | Sticky bottom bar, respecting `env(safe-area-inset-bottom)`. The evidence panel scrolls normally above it |
+| Filter rail, course outline | `sticky top-20`, unchanged |
+
+## 20. Component specifications
+
+### 20.0 Reuse before you build
+
+Every component below names what it composes. Nothing here introduces a new primitive, a new dependency, or a new focus/hover/error treatment.
+
+Existing primitives available: `Button` · `Card` (+ `CardHeader`/`CardTitle`/`CardDescription`/`CardContent`) · `Badge` · `Input` · `AuthField` · `FieldError` · `EmptyState` (with `icon` prop) · `PageTitle` (with `editorial` variant + `eyebrowColor`) · `SectionHeading` · `StatusDot` (with `on="stage"`) · `ThemeToggle` · `CornerFrame` · `TypewriterTitle` · `UploadField` · `PublishStateChip` · `FeaturedToggle` · `AutosaveIndicator` · `RefundDialog` · `ManualGrantDialog` · `CartButton` / `CartDrawer` · `ContentTypeCard` · `BundleCard` · `useAutosave` · `useFieldValidation`.
+
+---
+
+### 20.1 `EvidencePanel` `[NEW]` — the ninety seconds before payment
+
+**Where:** `/buy/:slug`, `/templates/:templateId`, `/store/packs/:slug`. Right column from `lg`, below the description on mobile.
+
+**Composes:** a bare `<section>` (not a `Card` — `DESIGN.md` §36: a card is for a real, distinct item, and this is metadata about the item you are already on), `SectionHeading`, `PreviewGallery`, `LicenceLine`, `VersionStamp`.
+
+**Structure:**
+
+```text
+┌─ bg-gold-soft, border-border, rounded-lg, p-5 sm:p-6 ────────┐
+│  ── WHAT YOU GET            ← .eyebrow, mono xs, gold rule   │
+│                                                              │
+│  [FileText]  Format          .xlsx · 1 file                  │
+│  [Table2]    Size            4 sheets, 62 rows               │
+│  [PenLine]   Editable        Yes — formulas, no macros       │
+│  [Laptop]    Opens in        Excel 2016 and later            │
+│  [History]   Version         v1.2 · reviewed 17 Aug 2026     │
+│  [Scale]     Licence         Use inside your organisation    │
+│                                                              │
+│  ── SAMPLE PAGES            ← .eyebrow                       │
+│  ┌──────────┐ ┌──────────┐                                   │
+│  │ preview1 │ │ preview2 │   ← PreviewGallery, 2-col         │
+│  └──────────┘ └──────────┘                                   │
+│                                                              │
+│  A$39.00                     ← text-h3, 600, --gold-strong,  │
+│                                 tabular-nums                 │
+│  [ Add to cart ]  [ Buy now ]                                │
+│                                                              │
+│  one-time · lifetime access                    ← text-xs     │
+│  Prices are in AUD. GST is included…           ← text-xs     │
+│  You're covered by your consumer-guarantee…    ← text-xs     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Design values:**
+
+| Property | Value |
+|---|---|
+| Surface | `bg-gold-soft` (`#F3E9D2` light / `#2E2517` dark) |
+| Border | `1px solid var(--border)`, `rounded-lg` (8px) |
+| Padding | `p-5` base, `p-6` from `sm` |
+| Section label | `.eyebrow` — mono, 12px, uppercase, `+0.16em`, `--muted-foreground`, 24px `--gold` rule before |
+| Fact label | sans, `text-sm`, 500, `--muted-foreground` |
+| Fact value | sans, `text-sm`, 400, `--foreground`; `tabular-nums` on any numeral |
+| Fact row | `py-2.5`, `border-b border-border`; **last row has no border** |
+| Icon | 16px Lucide, stroke 1.75, `--gold-strong` |
+| Price | `text-h3` minimum, 600, `--gold-strong`, `tabular-nums` |
+| Legal lines | `text-xs`, `--muted-foreground`, `space-y-1`, `mt-4` |
+| Elevation | **0**. The border does the work |
+
+**The absence rule, which is the whole component:** a fact whose column is `NULL` **does not render its row at all.** No `—`, no "Not specified", no greyed-out placeholder. A panel with four rows is honest; a panel with six rows two of which say "unknown" tells the buyer the seller does not know what they are selling.
+
+**States:**
+- *Loading* — a skeleton with the same row count as the last known shape, or three rows if unknown. Never a spinner in a reference panel.
+- *Empty* — if **no** evidence fields are set at all, the panel is absent and the buy button sits where it always did. The page does not degrade; it just does not gain anything.
+- *Owned* — the price and buttons are replaced by the existing owned state; **the facts stay.** A buyer who already owns it still wants to know the version.
+
+**Accessibility:** the fact list is a `<dl>` with `<dt>`/`<dd>` pairs, not a table and not divs. Icons are `aria-hidden` — the `<dt>` already names the concept.
+
+---
+
+### 20.2 `PreviewGallery` `[NEW]`
+
+**Contract:** `{ keys: string[]; alts: string[]; title: string }`. Renders nothing if `keys.length === 0`.
+
+| Property | Value |
+|---|---|
+| Grid | `grid-cols-2 gap-3 sm:gap-4` — always 2 |
+| Thumbnail | `aspect-[3/4]`, `object-cover object-top`, `rounded-md` (6px), `border border-border` |
+| **Dark-mode plate** | `bg-muted p-3 rounded-md` **behind** a light document page. Never a CSS filter (§16.3) |
+| Hover | `.hover-lift` — 2px, `shadow-md`, 150ms `--ease-standard` |
+| Lightbox | `rounded-lg`, `shadow-lg`, backdrop `--stage` at 80%, max 90vh |
+| Lightbox in | `opacity 0→1`, `scale 0.98→1`, 220ms `--ease-entrance` |
+| Lightbox out | `opacity 1→0`, 150ms `--ease-exit` |
+| Caption | `text-xs`, `--muted-foreground`, `mt-2` |
+| Touch target | Thumbnail is the target and exceeds 44×44 at every width |
+
+**Alt text is a requirement, not a nicety.** *"Page 3 of the scorecard: the weighted-criteria table"* — never `alt="preview"`, never `alt=""`. These images carry the information the buyer is deciding on, so they are informative images by WCAG's own definition.
+
+**Lightbox behaviour:** traps focus, closes on Escape, returns focus to the thumbnail that opened it, arrow keys move between images. Hand-rolled to match `RefundDialog`'s existing pattern — there is no Radix dependency in this project and this is not the week to add one.
+
+---
+
+### 20.3 `LicenceLine` `[NEW]`
+
+**Contract:** `{ licence: 'standard' | 'client_delivery' | 'multi_client' }`.
+
+One sentence, `text-sm`, with `Scale` at 16px in `--gold-strong`, linking "the full terms" to `/legal/terms`.
+
+| Tier | Sentence |
+|---|---|
+| `standard` | "Use and adapt this inside your own organisation." |
+| `client_delivery` | `[OWNER #25]` — **not rendered until the decision closes.** |
+| `multi_client` | `[OWNER #25]` — same. |
+
+**The refusal is the design.** `new_additions.md` §20's own warning: licence terms must be precise about modification, client distribution, white-label, resale, client count, attribution and redistribution, and *"never casually write 'commercial use allowed.'"* An unset tier renders the `standard` sentence; a tier the owner has not defined renders **nothing**, and the panel is one row shorter.
+
+---
+
+### 20.4 `VersionStamp` `[NEW]`
+
+`v1.2 · reviewed 17 Aug 2026` — mono, `text-xs`, `--gold-strong`, `History` icon at 14px, `tabular-nums` on the date.
+
+Rendered in three places, from one source: the evidence panel, the receipt email, and inside the downloaded artefact's own filename (`vendor-risk-scorecard-v1.2.xlsx`). `new_additions.md` §33 point 1: *visible before purchase and inside the file.*
+
+Unset `version` renders nothing. Unset `last_reviewed_at` with a set `version` renders `v1.2` alone.
+
+---
+
+### 20.5 `RoutedProducts` `[NEW]` — "what would help with this"
+
+**Where:** question detail page, below the guidance body, above related questions.
+
+**Composes:** `SectionHeading`, `Card`, `Badge`, `.hover-lift`.
+
+```text
+── WHAT WOULD HELP HERE                      ← .eyebrow, rule tinted
+                                               with the domain colour
+┌─────────────────────────────┐ ┌─────────────────────────────┐
+│ TPRM Due Diligence Checklist│ │ Complete TPRM Template Pack │
+│ A$49.00                     │ │ A$99.00                     │
+│                             │ │                             │
+│ Because it addresses        │ │ Because it addresses        │
+│ "Third-Party Risk Is a      │ │ "Third-Party Risk Is a      │
+│ Black Box" and 2 related    │ │ Black Box" and 4 related    │
+│ questions ↗                 │ │ questions ↗                 │
+└─────────────────────────────┘ └─────────────────────────────┘
+```
+
+| Property | Value |
+|---|---|
+| Grid | 1 mobile / `md:grid-cols-2`; **max 2 shown**, with "See all N" if more |
+| Card | existing `Card`, `rounded-lg`, `border-border`, elevation 0 |
+| Left rule | 3px `--gold`, full height — the existing buy-surface family marker |
+| Title | `text-h3`, 600 |
+| Price | `text-h3`, 600, `--gold-strong`, `tabular-nums` |
+| Explanation | `text-sm`, `--muted-foreground`; question titles are inline links in `--accent` with underline on hover |
+| Eyebrow rule | tinted with the source question's `--domain-*` colour via `--eyebrow-rule-color` |
+| Entrance | stagger first 6, `opacity 0→1` + `y 8→0`, 220ms, `delay min(i,6)*0.03` |
+| Hover | `.hover-lift` — 2px, no scale |
+| Empty | **The whole section is absent.** Not an empty card, not "no recommendations yet" |
+
+**The explanation is generated from the join and is never decorative.** If the routing produced this product because it grants *this* question, the sentence says so. If it came via neighbours, it names how many and links them. Two products routed through the same one question show the same sentence — which is correct, and is the point.
+
+---
+
+### 20.6 `SituationProducts` `[NEW]`
+
+The catalogue twin. Rendered on `/questions` **only when ≥1 filter is active**, below the result list, never above it — the reader came to read questions.
+
+Same card treatment as `RoutedProducts`. The explanation differs: *"These 3 products address 8 of the 12 questions matching your filters."* Numbers are `tabular-nums` and are computed, never rounded to sound better.
+
+**Absent when:** no filters active · filters active but no result questions are granted by any published product · the routing endpoint errors. All three render nothing, silently. A catalogue that suggests products when it has nothing to suggest is the "fabricated relevance" failure the existing match-explanation code was written to avoid.
+
+---
+
+### 20.7 `MetricTile` `[NEW]` — and why there is no chart
+
+**The form decision first.** Five independent numbers, each answering a different question, none of them a series over time and none of them a part-to-whole comparison. That is a stat-tile job, not a chart job — the number *is* the answer, and a plot around it would add ink without adding information. A charting library in a hardening week is scope drift with a nice render.
+
+```text
+┌─ p-5, rounded-lg, border-border, bg-card ──────┐
+│  [Repeat2]  Second-purchase rate               │  ← text-sm, 500, muted
+│                                                │
+│  50%                                           │  ← text-h1, 600, foreground,
+│                                                │     PROPORTIONAL figures (§13.2)
+│  1 of 2 buyers · since 11 Aug 2026             │  ← text-xs, muted, tabular-nums
+└────────────────────────────────────────────────┘
+```
+
+| Property | Value |
+|---|---|
+| Surface | `bg-card`, `border border-border`, `rounded-lg`, `p-5` |
+| Grid | `grid gap-4 sm:gap-5 sm:grid-cols-2 lg:grid-cols-3` |
+| Label | `text-sm`, 500, `--muted-foreground`, with an 18px fixed icon in `--gold-strong` |
+| Value | `text-h1`, 600, `--foreground`, **proportional figures** |
+| Denominator | `text-xs`, `--muted-foreground`, `tabular-nums` |
+| Elevation | 0 |
+| Motion | none, except an optional one-shot count-up on a proportion |
+| Delta | **Not shipped.** A delta needs a previous period, and there is no traffic history to compare against. Adding one now would show a fabricated trend |
+
+**Two states that matter more than the populated one:**
+
+- *No data* — the value slot renders the label's own empty sentence, in `text-sm` `--muted-foreground`: "No second purchases yet — 2 buyers so far." Never `0%`, never `—`, never `NaN`.
+- *Not loaded* — an em dash, per non-negotiable #15. Zero and unknown are different.
+
+**Text wears text tokens.** The value is `--foreground`; the icon carries the identity in `--gold-strong`. A metric value is never coloured by what it measures.
+
+---
+
+### 20.7a `TrendChart` `[NEW, AMENDED 2026-08-17]` — the one chart, and its conditions
+
+§20.7 argued there is no chart on this page. That argument holds for five single numbers and is **withdrawn only for a series**: revenue and order count over time is a genuine part-to-whole-over-time shape, it is the question the owner actually asks of a shop, and no tile can carry it.
+
+**What it plots.** Two series, one axis pair, on `orders` alone:
+
+| Series | Value | Mark |
+|---|---|---|
+| Revenue | `sum(total_amount_cents)` per bucket, `status = 'completed'` | Area, `--chart-1` at 12% fill, 2px stroke |
+| Orders | `count(*)` per bucket, `status = 'completed'` | Line, `--chart-2`, 2px, right axis |
+
+**Bucketing is chosen by span, never by the reader.** `date_trunc` by day when the range is ≤ 60 days, by week to 12 months, by month beyond. A picker that lets the reader choose "hourly" over a dataset of four orders is a way of producing noise on request.
+
+| Property | Value |
+|---|---|
+| Surface | `bg-card`, `border border-border`, `rounded-lg`, `p-5`, spanning the full tile grid width |
+| Height | `h-64` fixed. Never viewport-relative — a chart that reflows on scroll is a chart nobody can read a value off |
+| Axes | Y left revenue via `formatCurrency`, Y right orders as integers, X as short dates. `tabular-nums` on every tick |
+| Grid | Horizontal rules only, `--border` at 50%. No vertical grid, no chart junk |
+| Legend | Two inline swatch+label pairs above the plot, not a floating box |
+| Motion | One-shot draw on mount, ≤ 240ms, `prefers-reduced-motion` disables it. **Nothing loops** (non-negotiable #6) |
+| Tooltip | On hover **and** on focus. Keyboard-reachable points, `role="img"` with a text summary — §22's rule, and the reason a hover-only charting default is not acceptable here |
+
+**The four states, and why the third is the important one:**
+
+- *Populated* — ≥ 2 buckets with data.
+- *Not loaded* — skeleton at the same `h-64`, so the page does not jump.
+- **Fewer than two points** — renders the sentence, not the plot: *"Not enough history to chart yet — 1 order since 11 Aug 2026."* A line drawn through one point is an invented trend, and this is the same rule §20.7 applies to `0%` over two buyers. **This is the state the page will actually be in on the day it ships**, so it is the one to build first and screenshot for the report.
+- *Error* — em dash and an inline retry, matching `MetricTile`.
+
+**Colour.** `--chart-1` and `--chart-2` only — and both are **broken today** (§12.6: different hue families per theme). Repairing them stops being optional decoration the moment this chart exists: task 37 moves from `[DEFECT]`-cleanup to a **prerequisite** of this component, and "delete the five tokens" ceases to be an acceptable outcome of its time box. Sequencing is in Phase 6B step 1.
+
+**The library — `[RESOLVED 2026-08-17]`: the shadcn/ui chart block (Recharts underneath).** Not hand-rolled, per owner instruction *"search for existing UI libraries and build using them."* Researched rather than recalled; four reasons, one of which is decisive:
+
+1. **`--chart-1` … `--chart-5` are shadcn's own convention, not ours.** This is the finding that settles it. Those five tokens are in `theme.css` *because* `week1_plan.md` scaffolded shadcn with CSS variables — they arrived with the install and nothing ever rendered against them, which is exactly why §12.6 found them unaudited and why one is byte-identical across themes. shadcn's `ChartConfig` reads `var(--chart-N)` directly. **We are not adopting a library's palette; we are finally using the tokens we already have.**
+2. **It is already this project's component source.** `DESIGN.md` §33.1: *"Use shadcn/ui wherever a suitable primitive exists. Components are copied into the repo, so they are ours to edit."* A chart is a suitable primitive and this is that rule applying, not an exception to it.
+3. **Copy-in, not a dependency on the UI layer.** `ChartContainer`/`ChartTooltip` land in `components/ui/chart.tsx` as our code, subject to the same nine-point Definition of Done as `Button` and `Badge`. Only Recharts itself is an npm dependency.
+4. **`accessibilityLayer` is a real answer to §22.** Recharts' `accessibilityLayer` prop gives keyboard navigation and screen-reader support on the plot — the requirement in the table above that a hover-only charting default would have failed.
+
+**What it costs, stated honestly rather than discovered later:**
+
+| Cost | Detail |
+|---|---|
+| **Bundle** | Recharts is ~150kB min. **This lands in the same week W4-R8 makes the JS budget blocking.** Measure it, and import per-chart rather than barrel-importing Recharts. If it breaches the budget, the chart is cut (§10.0) — the budget is not raised to admit it |
+| **React 19 override** | Recharts needs a `react-is` override to install against React 19. This project is on React `^19.2.8`, so `package.json` gains `"overrides": { "react-is": "^19.2.8" }` — matched to the React version actually installed, not copied from the docs' example pin |
+| **Peer install** | `npm install --legacy-peer-deps` may be required. Note it in the handover env checklist if so |
+
+**The alternative considered and rejected: Tremor.** Tailwind-native, dashboard-shaped, more batteries included, and its blocks are free and open source. Rejected because it is a **second component system** beside shadcn — `DESIGN.md` §33's whole argument is one primitive source — it bundles its own Recharts (~200kB vs ~150kB) in the week the budget starts blocking, and it brings its own colour conventions rather than reading the tokens already in `theme.css`. Worth revisiting only if the admin surface ever grows into a genuine dashboard product.
+
+**`MetricTile` composes, it does not invent.** §20.7's tile is `Card` + `Badge` + existing type rungs — all present in `components/ui/`. Nothing new is authored for it beyond layout. That is the same instruction applied one level down: use what exists.
+
+---
+
+### 20.8 Admin: `ProductEditor` and `ContactInbox` `[NEW]`
+
+`DESIGN.md` §31's admin direction is **functional-only**: dense, plain, fast. No wash, no aurora, no atmosphere, `max-w-[1600px]`, `rounded-sm` on table cells, `text-sm` throughout.
+
+**`ProductEditor`** mirrors `AdminTemplates.tsx` field-for-field in spacing and rhythm, and reuses `useAutosave`, `useFieldValidation`, `PublishStateChip` and `UploadField` unchanged. Two things are specific to it:
+
+1. **The price/Stripe mismatch warning.** `price_amount` and `stripe_price_id` are two systems holding one fact. Changing one without the other renders an inline `--warning` message naming both values. Not a blocker — sometimes the Stripe price genuinely was updated first — but never silent.
+2. **The overlap refusal.** On publish, W4-R3's guard runs. A conflict renders inline, in `--destructive`, with a `GitMerge` icon, naming the other product and the shared content, and linking to it. The existing "upload a file before publishing" guard already establishes this shape: an inline error that explains, never a disabled control that cannot.
+
+**`ContactInbox`** — a table, newest first, columns: date · name · email · enquiry type · notified · message (truncated, expandable in place). `notified = false` rows carry a `StatusDot` in `--warning` and the row is the set that matters after any outage. Below `md` the table becomes stacked cards, per §41.3.
+
+---
+
+### 20.9 The invoice block `[NEW]` — email templates, the one place hex is allowed
+
+Extends `receipt.html.j2` / `receipt.txt.j2`. Table-based, 600px, inline styles, no web fonts, no CSS variables — a mail client resolves none of them.
+
+```text
+TAX INVOICE                                    Invoice  INV-000142
+                                               Date     17 Aug 2026
+
+Effective RM
+ABN 00 000 000 000                    ← omitted entirely when unset
+
+Bill to
+  Jane Practitioner
+  jane@example.com
+
+  Description                          Qty    Amount
+  ─────────────────────────────────────────────────
+  Vendor Risk Assessment Scorecard      1     A$39.00
+  v1.2 · reviewed 17 Aug 2026
+  ─────────────────────────────────────────────────
+  Subtotal                                    A$39.00
+  GST (included)                              A$3.55
+  Total                                       A$39.00
+
+Prices are in AUD. GST is included for Australian customers.
+You're covered by your consumer-guarantee rights, regardless
+of anything else stated here.
+```
+
+**Hex values, sanctioned and fixed:** ink `#1C1712` · muted `#6E675A` · rule `#E6DFD0` · accent `#1D5FA8` · gold `#7C5C14`. These are the light-theme token values transcribed once, in one file, with a comment naming their source token — so a token change has one place to follow rather than nine.
+
+`version` renders under the line item, per §20.4. The ABN line is omitted when unset — **never** rendered as a placeholder.
+
+### 20.10 The four states, per new surface
+
+| Surface | Empty | Loading | Error | Locked |
+|---|---|---|---|---|
+| `EvidencePanel` | Absent entirely | Row-count skeleton | Facts absent, buy button intact | n/a — evidence is never gated |
+| `PreviewGallery` | Absent entirely | 2 aspect-locked skeletons | Absent; panel keeps its facts | n/a |
+| `RoutedProducts` | Absent entirely | 2 card skeletons | Absent | n/a |
+| `SituationProducts` | Absent entirely | Absent (never blocks the results) | Absent | n/a |
+| `MetricTile` | Named empty sentence | Em dash | Em dash + inline retry | n/a |
+| `ProductEditor` | "No products yet" + create action | Skeleton rows | Inline `FieldError` | Publish guard refusal, inline |
+| `ContactInbox` | "No messages yet" + `EmptyState` `Inbox` icon | Skeleton rows | Inline retry | n/a |
+
+**"Absent entirely" is a designed state, not a missing one**, and it is the right one for four of these seven. A recommendation panel that says "no recommendations" teaches the reader the feature is broken; a page that simply does not have one teaches them nothing, which is correct.
+
+## 21. Responsive specification
+
+### 21.1 Per-surface behaviour
+
+| Surface | < 640 | 640–1023 | ≥ 1024 |
+|---|---|---|---|
+| Buy page + evidence | Stacked: description → evidence → sticky bottom buy bar | Stacked, inline buy button | `grid-cols-[1fr_380px]`, evidence sticky `top-20` |
+| `PreviewGallery` | 2 columns, `gap-3` | 2 columns, `gap-4` | 2 columns, `gap-4` |
+| `RoutedProducts` | 1 column | 1 column | 2 columns |
+| Metric tiles | 1 column | 2 columns | 3 columns |
+| `ProductEditor` | Stacked fields, full-width | Stacked | 2-column field grid |
+| `ContactInbox` | **Stacked cards** | Stacked cards | Table |
+
+### 21.2 Mobile rules in force
+
+Mobile is a designed layout, not a narrowed desktop. Priority order on a small screen: **content → primary action → search → progress → navigation.**
+
+- Full-width primary buttons.
+- Bottom sheets for filters, not squeezed sidebars.
+- Tables become stacked cards below `md`. Horizontal scroll is a last resort and needs a visible affordance.
+- **No hover-only interaction anywhere.** The preview lightbox opens on tap; the routed-product explanation is always visible, never a tooltip.
+- `env(safe-area-inset-bottom)` on the sticky buy bar.
+- Test the checkout and the video player on a real phone, not a resized window.
+
+### 21.3 The route × state matrix (W4-R6)
+
+The hardening sweep's actual deliverable. One row per route in `App.tsx`, one column per state, each cell either ✅ or a named reason it does not apply. Built as a table in `week4_report.md` and filled by walking, not by reading.
+
+```text
+Route                          Empty   Loading   Error   Locked   375px   Dark   axe
+/                                ·        ·        ·      n/a       ·      ·      ·
+/questions                       ·        ·        ·      n/a       ·      ·      ·
+/questions/:slug                 ·        ·        ·      n/a       ·      ·      ·
+/courses  /courses/:slug         ·        ·        ·       ·        ·      ·      ·
+/templates  /templates/:id       ·        ·        ·       ·        ·      ·      ·
+/store  /store/packs/:slug       ·        ·        ·      n/a       ·      ·      ·
+/buy/:slug                       ·        ·        ·       ·        ·      ·      ·
+/checkout/success  /cancel       ·        ·        ·      n/a       ·      ·      ·
+/dashboard  /library             ·        ·        ·       ·        ·      ·      ·
+/learn/:course/:lesson           ·        ·        ·       ·        ·      ·      ·
+/lessons/:id                     ·        ·        ·       ·        ·      ·      ·
+/contact  /legal/*               ·        ·        ·      n/a       ·      ·      ·
+/sign-in  /sign-up  /forgot  /reset  ·    ·        ·      n/a       ·      ·      ·
+/admin/{questions,courses,templates,orders,products,contact}       ·      ·     n/a
+```
+
+**33 paths × 7 columns** — the 30 `App.tsx` declares today plus this week's three admin routes. A cell that cannot be reached is marked with the reason, not left blank.
+
+## 22. Accessibility specification
+
+The floor is **WCAG 2.2 AA**, and several of these are invisible to a component-level audit.
+
+| Rule | This week's application |
+|---|---|
+| One `h1` per page, headings in order, no skipped levels | `CheckoutSuccess.tsx` and `Template.tsx` fixed **and added to the axe route list** (W4-R6). `EvidencePanel`'s section labels are `h2`, its fact list is a `<dl>` |
+| Route changes announced | `RouteAnnouncer` exists in `RootLayout`; verify it fires on the new admin routes |
+| Focus moves to the new page's `h1` | `PageTitle` renders `tabIndex={-1}`; verify on `/admin/products` and `/admin/contact` |
+| Skip link first focusable | Exists; verify on the new routes |
+| Focus trapped in overlays, Escape closes, focus returns | `PreviewGallery`'s lightbox, hand-rolled to `RefundDialog`'s pattern |
+| Target size ≥ 24×24, ≥ 44×44 touch | Preview thumbnails, the metric tiles' retry, the inbox's expand control |
+| `aria-describedby` on helper text and errors; `aria-invalid` on failure | `ProductEditor`'s fields via the existing `useFieldValidation` + `FieldError` pair |
+| Live regions | Result count `polite` (exists) · autosave `polite` (exists) · **publish-guard refusal `assertive`** — it stops a money-adjacent action and genuinely interrupts |
+| No colour-only meaning | The `notified = false` inbox row carries a `StatusDot` **and** a text label. The price/Stripe mismatch carries an icon **and** a sentence |
+| Informative images have real alt text | Every preview image (§20.2) |
+| Both themes checked for every state | Especially focus (`--ring` `#1B4E8C` / `#8FC1EA`) and error (`--destructive` `#B3402E` / `#E11D48`) |
+
+**The six manual checks** (W4-R7) are the part automation cannot do, and they are the part `DESIGN.md` §42.9 explicitly assigns to Week 4.
+
+## 23. Copy deck
+
+Every user-visible string introduced this week. Voice: **plain, specific, never salesy.** Numbers over adjectives.
+
+**Evidence panel**
+- Eyebrow: `WHAT YOU GET`
+- Labels: `Format` · `Size` · `Editable` · `Opens in` · `Version` · `Licence`
+- Values (patterns): `.xlsx · 1 file` · `4 sheets, 62 rows` · `18 pages` · `Yes — formulas, no macros` · `Excel 2016 and later` · `v1.2 · reviewed 17 Aug 2026`
+- Eyebrow: `SAMPLE PAGES`
+- Licence, standard: `Use and adapt this inside your own organisation.` + `See the full terms`
+
+**Routed products**
+- Eyebrow: `WHAT WOULD HELP HERE`
+- One question: `Because it addresses "{title}".`
+- With neighbours: `Because it addresses "{title}" and {n} related questions.`
+- Catalogue: `These {p} products address {q} of the {total} questions matching your filters.`
+- Overflow: `See all {n}`
+
+**Admin**
+- Overlap refusal: `Can't publish — "{other}" already grants {content}. Two published products can't include the same thing unless one is a bundle.`
+- Bundle price refusal: `A bundle has to cost less than its parts. This one is {bundle}; its parts come to {sum}.`
+- Preview refusal: `Add at least two sample pages before publishing. Buyers who can't see what they're getting don't buy it.`
+- Macro refusal: `This file contains macros. Macros are blocked on most corporate machines — replace it with a macro-free version before publishing.`
+- Price mismatch: `The price shown ({local}) and the Stripe price ({stripe}) don't match. Update the Stripe price too, or buyers will be charged the old amount.`
+- Inbox empty: `No messages yet. Anything sent through /contact lands here.`
+
+**Metrics**
+- `Second-purchase rate` / `{n} of {m} buyers · since {date}` / empty: `No second purchases yet — {m} buyers so far.`
+- `Free to paid` / `{n} of {m} people who gave an email` / empty: `No purchases from the email list yet.`
+- `Tag filters used` / `{n} filter applications` / empty: `No filter use recorded yet.`
+- `Refund rate` / `{n} of {m} orders` / empty: `No refunds. {m} orders so far.`
+- `Signup to first purchase` / `median across {n} buyers` / empty: `Not enough buyers to say yet.`
+
+**Receipt / invoice**
+- `TAX INVOICE` · `Invoice` · `Date` · `Bill to` · `Description` · `Qty` · `Amount` · `Subtotal` · `GST (included)` · `Total`
+- Existing shared strings unchanged: `TAX_STATEMENT_TEXT`, `REFUND_POSITION_TEXT`, `BILLING_TYPE_TEXT`.
+
+---
+
+# PART III — IMPLEMENTATION PLAN
+
+Five days, seven phases. Each phase has steps with file paths and a Definition of Done that is checkable rather than felt.
+
+**A standing instruction, carried from Week 3 and reinforced by `handover.md` §4's last item:** commit in **topic-scoped commits**. Week 3's entire output is uncommitted in the working tree and the last commit on `main` is a single mixed `edited`. Do not add a second one.
+
+---
+
+## Phase 0 — Day 0 (half day): Ground truth and the three carried one-liners
+
+Nothing in this phase is new work. It is the cheapest possible start and it removes three items that have now been carried across two reports.
+
+### Steps
+
+1. **Commit Week 3's working tree**, in topic-scoped commits — email spine · migrations 010–012 · refunds · admin uploads/publish states · cart · Phase 6 content/QA. Six or seven commits, each readable alone. Nothing new is written in this step.
+2. **Fix `.github/workflows/ci.yml`** `[DEFECT]` — remove `RESEND_API_KEY`, add `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_SENDER_EMAIL`, `MAILJET_SENDER_NAME`, `OWNER_NOTIFICATION_EMAIL`, `FRONTEND_URL`. Confirm against `backend/.env.example` and `app/core/config.py`, not from memory.
+3. **`CheckoutSuccess.tsx` and `Template.tsx`** `[CARRIED]` — swap `CardTitle` for `PageTitle`, and add both routes to `accessibility.spec.ts`'s `PUBLIC_ROUTES`. `Template.tsx` needs an owned product to reach, so the spec needs a fixture or a skip with a reason — **write the reason, do not silently omit the route.**
+4. **Reconcile `QuestionsCatalogue.tsx` to `max-w-7xl`** (`handover.md` §1's named odd-one-out). One class.
+5. **Run everything**: `pytest` (expect 62), `npm test`, `npx playwright test`, `tsc --noEmit`, `vite build`. **Record the actual numbers** — this is the baseline every later claim is measured against.
+6. **Write the environment checklist** for Render into `handover.md` §4 item 15, converting it from a note into a list someone can execute.
+
+### Definition of Done — Phase 0
+- [ ] `git log` shows topic-scoped commits, no new `edited`
+- [ ] CI env matches `config.py`'s required settings exactly
+- [ ] Both carried `h1` fixes landed, both routes in the axe list (or one skipped with a written reason)
+- [ ] Baseline test numbers recorded in the ledger
+
+---
+
+## Phase 1 — Day 1: Migration `013`, the index pass, and the guards
+
+Database first, for the reason Week 3's Part IV gave: adding columns and indexes after the surfaces that read them exist means changing both at once.
+
+### Steps
+
+1. **Write migration `013_product_evidence_and_routing`** — full column spec in §25. Columns on `templates` and `products`; the `licence` enum via `str_enum()` (**`name=` is required — that argument exists specifically so this bug cannot reappear**); `is_bundle`; backfill `version = '1.0'` and `last_reviewed_at = created_at` for existing published rows, and **say in the migration docstring that this backfill is an assertion the owner must confirm**, not a fact.
+2. **Prove every index before creating it** — §27. Build a synthetic dataset inside one transaction (`INSERT…SELECT…FROM generate_series()`), `ANALYZE`, `EXPLAIN (ANALYZE, BUFFERS)` before and after each candidate, `ROLLBACK`. Confirm the real database is untouched by checking a row count before and after. **Any index that does not change the plan is not created**, and that fact is recorded — `010` dropped `ix_qlt_question` for exactly this reason.
+3. **`CREATE INDEX CONCURRENTLY` inside `op.get_context().autocommit_block()`**, then verify `pg_index.indisvalid` for every new index in the same migration. A concurrent build can fail silently and leave an INVALID index; `010` and `011` both check, and so does this.
+4. **`app/core/publish_guard.py`** `[NEW]` — `check_content_overlap()` and `check_bundle_pricing()`. Pure functions taking a session; no HTTP concerns.
+5. **`scripts/check_overlaps.sql`** `[NEW]` — the same rule, runnable against production without a deploy.
+6. **Tests, seen red first**: overlap refused · bundle permitted · bundle-priced-too-high refused · macro publish refused · fewer-than-two-previews publish refused.
+7. **Apply to dev, re-verify independently** — index validity, constraint presence, and the full backend suite green with everything from Phases 0 and 1 together.
+
+### Definition of Done — Phase 1
+- [ ] `013` applied; 0 INVALID indexes; every new column present with the expected type
+- [ ] `db_index_evidence.md` has a before/after `EXPLAIN` for every index in `013`
+- [ ] At least one candidate index measured as unhelpful and **not created**, or a statement that all candidates measured as helpful
+- [ ] Five guard tests, each seen red before green
+- [ ] Backend suite green, total recorded
+
+---
+
+## Phase 2 — Day 2 (first half): The evidence layer, backend and admin
+
+### Steps
+
+1. **Extend `admin/templates.py`** with the new evidence fields; extend the existing presigned-upload path to accept `kind='preview'` and write into `preview_image_keys`. Server-side validation of content type and size **before the URL is issued**, matching the existing pattern.
+2. **`admin/products.py`** `[NEW]` — full CRUD, publish through `apply_publish_state`, guards from Phase 1 wired in before the state change. Registered in `admin/router.py`.
+3. **Extend `GET /products/{slug}`, `GET /templates`, `GET /templates/{id}`, `GET /packs/{slug}`** to return the evidence fields. **Bulk-resolve, do not loop** — the four N+1 fixes of 2026-08-14 established the pattern and `resolve_granted_content_ids` is the primitive.
+4. **Extend the receipt email** — invoice block and `VersionStamp` line (§20.9). Both `.html.j2` and `.txt.j2`; the plain-text sibling is not optional.
+5. **`create_checkout_session`** gains `invoice_creation`, `billing_address_collection`. `SELLER_LEGAL_NAME` / `SELLER_ABN` into `config.py` and `.env.example`.
+6. **Test**: a session with invoice creation produces an invoice; the receipt carries its number; an unset ABN omits the line entirely.
+
+### Definition of Done — Phase 2
+- [ ] Every evidence field readable through the public API and writable through admin
+- [ ] Preview upload works end to end, verified with a real `head_object` HEAD — not the browser's own "done" event
+- [ ] A real test-mode purchase produces a Stripe invoice, confirmed by fetching it back from the Stripe API
+- [ ] Unset-ABN receipt renders without an ABN line and is still valid
+
+---
+
+## Phase 3 — Day 2 (second half) + Day 3 (first half): The evidence layer, frontend
+
+### Steps
+
+1. `EvidencePanel` (§20.1) — `<dl>` semantics, absence rule, both themes.
+2. `PreviewGallery` (§20.2) — lightbox hand-rolled to `RefundDialog`'s focus pattern, dark-mode plate.
+3. `LicenceLine` (§20.3), `VersionStamp` (§20.4).
+4. Wire into `/buy/:slug`, `/templates/:templateId`, `/store/packs/:slug`. Buy-page layout to `lg:grid-cols-[1fr_380px]` with a sticky right column and a mobile sticky buy bar respecting `env(safe-area-inset-bottom)`.
+5. `AdminProducts.tsx` (§20.8) — reuses `useAutosave`, `useFieldValidation`, `PublishStateChip`, `UploadField`. Route into `App.tsx` and `AdminLayout`'s nav.
+6. **Content pass** `[OWNER #32]` — fill the evidence fields for all 8 published products, and produce **two real preview images each** for every paid template. Open the files; do not guess page counts.
+7. Add the new routes to `responsive-widths.spec.ts` and `accessibility.spec.ts`.
+
+### Definition of Done — Phase 3
+- [ ] The W4-R1 SQL query returns **zero** published paid products with incomplete evidence
+- [ ] Every paid template has ≥2 previews with real alt text
+- [ ] Both themes, seven widths, stress fixtures — all clean
+- [ ] A price is set and republished entirely through `/admin/products`
+
+---
+
+## Phase 4 — Day 3 (second half): Question → product routing
+
+### Steps
+
+1. `GET /questions/{slug}/related-products` — one bulk query set, fixed count. Rank: direct grant → neighbour count → price ascending.
+2. `GET /products/for-questions?ids=…` — the catalogue twin, capped at a sane id count with a documented limit.
+3. `RoutedProducts` (§20.5) on the question page; `SituationProducts` (§20.6) on `/questions`, filters-active only.
+4. `recommendation_clicked` in `lib/analytics.ts`, typed like its five siblings.
+5. **A query-count test** asserting a fixed number of queries regardless of catalogue size. This is the discipline the four N+1 fixes established; it is worth one test rather than another handover paragraph.
+6. Add both surfaces to the axe and responsive suites.
+
+### Definition of Done — Phase 4
+- [ ] A question granted by a published product routes to it, with a real explanation naming a real question
+- [ ] A question granted by nothing renders **no panel at all**
+- [ ] Query count is fixed, asserted by test
+- [ ] `EXPLAIN` evidence for the routing index lands in `db_index_evidence.md`
+
+---
+
+## Phase 5 — Day 4: The hardening sweep, accessibility, performance
+
+The largest phase and the one the brief actually named. **Do not compress it to make room for a feature.**
+
+### Steps
+
+1. **Build the route × state matrix** (§21.3) and walk it. 28 routes × 7 columns.
+2. **Exercise every failure mode** in W4-R6's table. Force the ones that will not occur naturally: revoke an entitlement mid-session, expire a presigned URL, expire a playback token, point a `media` row at a bad Mux id, take the backend down and reload a catalogue page.
+3. **Run the gating attack list** — all twelve. Record results **including passes**, into `gating_seen_red.md`'s successor section.
+4. **The six manual accessibility checks** (W4-R7). Keyboard-only purchase and keyboard-only lesson completion are the two that take real time; budget for them.
+5. **Close `.stage-aurora--rail`'s `[UNVERIFIED]` marker** — sample the rail's nav labels (80%) and account row (70%) at 1440×900 from the composited page, in both themes. Confirm or fix.
+6. **Performance budgets into CI** (W4-R8) — Lighthouse CI for LCP/CLS, a bundle-size assertion on the entry chunk. Prove the gate works by breaking it and reverting.
+7. **Repair or delete the chart tokens** (§12.6), inside a time box.
+8. `/admin/contact` (§20.8) and keyset pagination on `/admin/orders` (§26.3).
+
+### Definition of Done — Phase 5
+- [ ] Matrix complete; every cell ticked or reasoned
+- [ ] Nine failure modes exercised, not reasoned about
+- [ ] Twelve gating attacks run, results recorded including passes
+- [ ] Six manual a11y checks done, findings recorded including "none"
+- [ ] Performance CI job blocking, proven by breaking it
+- [ ] `.stage-aurora--rail` no longer `[UNVERIFIED]`
+- [ ] Chart tokens repaired or deleted — not left broken
+
+---
+
+## Phase 6 — Day 5 (first half): The tests that guard money
+
+### Steps
+
+1. **Checkout and webhook fixture tests** (W4-R9) — the eight cases named there, each seen red first.
+2. **The taxonomy parity test** — enumerate every hard-coded taxonomy value in `frontend/src`, assert each exists in `tag_values`. Prove it by breaking one.
+3. **First real frontend unit tests** — `formatCurrency`, `tags`, `useCartStore`. `npm test` blocking in CI.
+
+*The metrics moved out of this phase on 2026-08-17. They were step 4 here, sized as a quarter-day, on the assumption of four SQL queries behind five static tiles. The owner's amendment (W4-R10) adds a counter table, a migration, a chart and a dependency decision — that is no longer a step, it is a phase. See Phase 6B, and read §10 before starting it.*
+
+### Definition of Done — Phase 6
+- [ ] Checkout and webhook covered by fixture; every new test seen red first
+- [ ] Taxonomy parity test exists and fails when a value is wrong
+- [ ] `npm test` blocks CI
+
+---
+
+## Phase 6B — Day 5 (overflow) / first day of Week 5: The analytics page, ours
+
+**Read this before starting.** This phase does not fit in Week 4. Phase 6 already fills Day 5's first half and Phase 7 fills its second; there is no quarter-day left, and the honest sizing below is **most of a day**. Two of the three ways out are acceptable and one is not:
+
+- **Acceptable** — Phase 6B slips to Week 5 Day 1. The five numbers are all still in the database and reachable by SQL in the meantime, which is exactly why §10 ranks W4-R10 first to cut.
+- **Acceptable** — something in §10's list above position 1 is cut *in writing* to make room.
+- **Not acceptable** — compressing Phase 5. It is the hardening sweep, it is what the brief actually asked for, and Phase 5's own header already says do not compress it to make room for a feature. A metrics page is a feature.
+
+**The through-line:** this page must answer its five questions from **our own database**, with no external service in the read path. That is the owner's instruction and it is also the more robust design — `week3_report.md` records the two reads being unanswerable for want of a query key, and a page that cannot be blocked that way is the fix.
+
+### Steps
+
+1. **Repair the chart tokens first** (§12.6, task 37). `--chart-1`/`--chart-2` are navy/steel in light and gold in dark — one token meaning two things, the defect `handover.md` §1 documents nine times over. `--chart-4` is byte-identical across themes. Pick one hue family per token, hold ≥ 3:1 against both `--card` planes, and record the contrast ratios. **The "or delete them" escape in §12.6 is closed** the moment §20.7a exists — a chart cannot render on deleted tokens. Do this before the component, not after, or the component gets built against values that are about to change.
+
+2. **Migration `014_filter_events`** — the server-side counter that resolves metric 3. One narrow table, deliberately not a general event store:
+
+   ```
+   filter_events
+     id           uuid pk
+     dimension    varchar(50)  not null   -- 'effort', 'tier', 'leadership_traits', …
+     value        varchar(100) not null
+     created_at   timestamptz  not null default now()
+   ```
+
+   **No `user_id`, no session id, no IP, no user agent.** This is a deliberate design constraint, not an oversight: an aggregate counter answers *"is the seven-tag filter used"* completely, and anything identifying would newly expose PII that the privacy policy does not currently name. W2-R8's ordering rule — *policy written first, instrumentation second* — applies unchanged, and this table is designed so the policy needs no edit at all. Index: `(dimension, created_at DESC)`, `EXPLAIN`-proven per non-negotiable #11, or **not created** if it measures as unhelpful at this row count.
+
+3. **`POST /filter-events`** — public, unauthenticated, fire-and-forget, returns `202` with an empty body. Validates `dimension` against the seven known dimensions and rejects anything else with a `422` (an open string column is a free-text sink, and free text is how PII arrives by accident). Rate-limited per IP **without storing the IP** — a counter in memory, not a row.
+
+4. **`lib/filterEvents.ts`** on the client, called from `QuestionsCatalogue.tsx` where `filter_applied` already fires. Failure is silent and never blocks a filter tap; the call is debounced so dragging through five values records the one the reader settled on, not five.
+
+4b. **`download_events`**, in the same migration `014` — resolves metric 9. Identical shape and identical privacy constraint to `filter_events`:
+
+   ```
+   download_events
+     id            uuid pk
+     resource_type varchar(20) not null   -- 'template' | 'lesson_file'
+     resource_id   uuid        not null
+     created_at    timestamptz not null default now()
+   ```
+
+   Recorded at the **three** call sites that mint a presigned URL — `content/templates.py:187`, `content/templates.py:217`, `content/lessons.py:458` — and nowhere else. Grep for `generate_presigned_url` before writing this; if a fourth call site has appeared, it is recorded too, and a missed one is a silently-low number rather than a visible error. **No `user_id`**, same reasoning as `filter_events`: the aggregate answers the question and anything identifying is new PII the privacy policy does not name. Writes must not fail the download — wrap and swallow, the `posthog_client.py` contract.
+
+5. **The ten metric queries** (W4-R10's original five plus the second amendment's 6–10), written as SQL first and `EXPLAIN (ANALYZE, BUFFERS)`ed against a synthetic dataset built and rolled back in one transaction — §27's method, exactly as `010` and `013` used it. Each query names the index it relies on. **Any that table-scans `orders` is fixed before it ships**, per W4-R10's own third acceptance line. Metrics 7, 8 and 10 join `entitlements`/`order_items` to `product_contents`; check whether `013`'s reverse-direction index already serves them before adding anything new.
+
+6. **`GET /admin/metrics`** — one endpoint, one response, every scalar metric plus the ranked lists. Behind `admin/router.py`'s router-level `require_admin` like everything else; **no route re-declares the gate** (that file's whole argument). Every metric returns an explicit **numerator and denominator**, never a pre-computed percentage — §20.7 requires the tile to state "1 of 2 buyers", and a backend that returns `50.0` has already destroyed the information the tile needs. Revenue returns `gross_cents`, `refunded_cents`, `net_cents` as three fields, never one. Unknown is `null`, zero is `0`, and the two are different (non-negotiable #15).
+
+7. **`GET /admin/metrics/revenue-series?days=…`** — the chart's data, bucketed server-side per §20.7a's span rule. Returns `[]` for no data and a one-element array for one order; the **client does not infer** which state it is in from an empty array alone.
+
+8. **Install the chart block, do not author one** (§20.7a, decision #33 resolved). In order: add `"overrides": { "react-is": "^19.2.8" }` to `frontend/package.json` matched to the installed React version · install `recharts` · bring `chart.tsx` into `components/ui/` via the shadcn registry JSON, **not the `npx` CLI** — that is the sourcing route `handover.md` §121 records the owner choosing for the Watermelon UI blocks, and it stays consistent · point `ChartConfig` at `var(--chart-1)`/`var(--chart-2)` · set `accessibilityLayer` · **measure the entry chunk before and after** and record both numbers. W4-R8's budget is blocking this week; if Recharts breaches it, the chart is cut per §10.0 and the budget is not raised to admit it.
+
+9. **`MetricTile`** (§20.7) and **`TrendChart`** (§20.7a), both **composed from existing primitives** — `Card`, `Badge`, `EmptyState`, and the installed `ChartContainer`. Nothing is authored from scratch that already exists. Build the *empty* and *fewer-than-two-points* states first and screenshot them — they are the states this page will genuinely be in on the day it ships, and building the populated state first is how the empty one ends up as `NaN`.
+
+10. **`AdminMetrics.tsx` + `/admin/metrics`** — routed in `App.tsx`, added to `ADMIN_NAV` in `AdminLayout.tsx` with a `BarChart3` icon. **This nav entry is the actual fix for "I can't see admin analytics"**: there has never been an Analytics tab, which is why the page could not be found. Layout: revenue's three figures and the tile grid first, chart below, the two ranked lists (popular courses, top products) last as plain tables — a ranked list of four items is a table, not a bar chart, and §20.7's form test applies to them exactly as it applies to the tiles.
+
+11. **The PostHog question, answered narrowly.** This phase makes `/admin/metrics` independent of PostHog. It does **not** remove the nine-event instrumentation — that is decision #34 and a separate blast radius (`lib/analytics.ts`, `posthog_client.py`, ten call sites, `posthog-js`, `posthog`, and a privacy-policy edit). What ships here is the *independence*; the *removal* is a decision, and an unmade decision is not a licence to delete. **Fix `VITE_POSTHOG_HOST` regardless** — `frontend/.env.local` sets `POSTHOG_HOST` without the `VITE_` prefix, so Vite never exposes it and the client has been silently posting an EU project key at the US ingestion host. That is a live defect whichever way #34 goes.
+
+12. **Tests, seen red first** (non-negotiable #9): the second-purchase query against a seeded two-buyer fixture · the zero-data case returning `null` and not `0` · the chart endpoint's one-point case · **net revenue after a refund, which is the one most likely to be wrong** · a free `granted_via` grant counted separately from a purchase · `/admin/metrics` returning `403` for a member · **the whole page rendering with both PostHog keys unset**.
+
+13. **Both themes, seven widths, axe** — the chart is a graphical object with a 3:1 contrast floor and a keyboard-reachable tooltip. Add `/admin/metrics` to `accessibility.spec.ts` and `responsive-widths.spec.ts`.
+
+### Definition of Done — Phase 6B
+- [ ] Chart tokens repaired, one hue family per token, contrast ratios recorded — **not** deleted
+- [ ] Migration `014` applied (`filter_events` + `download_events`); each index `EXPLAIN`-proven or documented as measured-unhelpful and not created
+- [ ] Neither new table carries a user id, session id or IP — verified by reading the table definitions, and the privacy policy needed no edit
+- [ ] Every tile states its own denominator and its own empty sentence; every query `EXPLAIN`ed
+- [ ] Revenue shows **gross, refunded and net**, and a test proves net is correct after a refund
+- [ ] Enrollment splits `purchase` / `manual` / `free`
+- [ ] "Popular courses" names its measure in the UI; nothing on the page implies view counts exist
+- [ ] The downloads metric is labelled **"links issued"**, with its one-sentence caveat
+- [ ] Recharts installed via the registry JSON with the `react-is` override; **entry-chunk size recorded before and after**, and within W4-R8's budget — or the chart is cut and that is written down
+- [ ] `TrendChart` renders its fewer-than-two-points sentence rather than a line, and that state is screenshotted in `week4_report.md`
+- [ ] The page renders completely with `POSTHOG_API_KEY` and `VITE_POSTHOG_KEY` both unset — **proven by a test**
+- [ ] `Analytics` appears in `ADMIN_NAV`, and a member hitting `/admin/metrics` gets a `403` from the API
+- [ ] `VITE_POSTHOG_HOST` prefix defect fixed in `.env.local`, `.env.local.example`, and on Vercel
+- [ ] Every new test seen red first
+
+---
+
+## Phase 6C — Week 5: The admin panel closes its remaining gaps (W4-R13)
+
+**This is Week 5 work and is written here so it is planned rather than improvised.** It does not fit Week 4 on any honest reading — Phase 6B has already overflowed. Sequenced after 6B because the audit-log reader and the users table share the table-and-filter shape 6B's ranked lists establish.
+
+### Steps
+
+1. **Migration `015_settings_and_deactivation`** — a `settings` table (`key` pk, `value` text, `updated_at`, `updated_by`) seeded **only** with the operational keys named in W4-R13's third row, plus `users.disabled_at`. **No secret is ever inserted**, and the migration docstring says so, so a later reader does not "helpfully" add one.
+2. **`config.py` gains a settings resolver** — DB value if present, env fallback, in that order, for operational keys **only**. Secrets read from env with no DB path at all, so there is no code route by which a database row could ever supply a key.
+3. **`GET /admin/config-status`** — returns `{name, required, is_set}` per setting, derived from `Settings.model_fields`, **never a value**. A test asserts no response field matches a key-shaped pattern (`sk_`, `rk_`, `phc_`, `SG.`, a JWT prefix).
+4. **`/admin/users`** — list, search by email, keyset-paginated like `/admin/orders` (§26.3). Detail view joins entitlements and orders, both bulk-resolved.
+5. **`POST /admin/users/{id}/role`** — the three guardrails, each a separate refusal with its own message: self-demotion, last-admin, and reason-required. Audited.
+6. **`POST /admin/users/{id}/deactivate`** — sets `disabled_at`, audited, reason required. **Wire it into the gate** (`core/entitlements.py`) rather than beside it — non-negotiable #1: the gate changes in one place.
+7. **`/admin/audit`** and **`/admin/leads`** — read-only tables, newest first. Leads gets CSV export, reusing `admin/orders.py`'s existing export shape rather than a second implementation.
+8. **`/admin/settings`** — operational fields with `useAutosave` and `useFieldValidation`, plus the read-only configuration-status panel visually separated from the editable fields, so nobody mistakes one for the other.
+9. **`ADMIN_NAV` grows to nine entries** — at that count it needs grouping (Content · Commerce · System), not nine flat tabs.
+10. **Tests, seen red first**: all three role guardrails · a deactivated user's entitlements failing the gate · `config-status` leaking nothing · a member `403`ing on every new route.
+
+### Definition of Done — Phase 6C
+- [ ] Migration `015` applied; `settings` contains no secret, and the docstring says why
+- [ ] There is **no code path** by which a database row supplies a secret to `config.py`
+- [ ] All three role guardrails proven by test, each seen red first
+- [ ] A deactivated user is refused by `resolve_product_ids`, not by a second check bolted beside it
+- [ ] `config-status` returns no value, proven by a pattern-matching test
+- [ ] No Delete User button exists anywhere in the UI
+- [ ] `ADMIN_NAV` grouped, not nine flat tabs
+
+---
+
+## Phase 7 — Day 5 (second half): Handover and the go/no-go
+
+### Steps
+
+1. **`handover.md`** — the Week 4 section, in the same register (why, not what). Strike through what closed, with dates. Add the Render env checklist. Update §5 ("what I'd build next") against what is now true.
+2. **`DESIGN.md` reconciled with `theme.css`** — §10's type scale minimum; note any other drift found while writing.
+3. **`new_additions.md` status footer** — what shipped, what is gated, on what. An addition, not a rewrite.
+4. **`week4_report.md`** — the standalone report and go/no-go, matching its three predecessors' shape. Every open item from `week3_report.md` §6 accounted for.
+5. **Final commit pass**, topic-scoped.
+6. `[HUMAN]` The watched usability test, if it has not already happened this week. `[HUMAN]` One email template opened in a real mail client.
+
+### Definition of Done — Phase 7
+- [ ] All four documents current and consistent with each other
+- [ ] Every `week3_report.md` §6 item closed, carried with a reason, or re-scoped in writing
+- [ ] Go/no-go written against the repository, not against this plan
+- [ ] Nothing quietly disappeared
+
+---
+
+# PART IV — DATABASE: OPTIMISATION, INTEGRITY AND THE NEW COLUMNS
+
+## 24. Where the database stands
+
+Migration `010` did the hard structural work: 17 indexes each named to a query and `EXPLAIN`-proven, plus 4 UNIQUE constraints turning entitlement/order/progress uniqueness from "guaranteed by careful coding" into "guaranteed by the database." Migration `011` added the partial `ix_entitlements_user_live` over `WHERE revoked_at IS NULL` — the exact predicate the gate now runs — superseding `010`'s plain `ix_entitlements_user`.
+
+**What `010` deliberately left, and this week closes:**
+
+1. **Coverage, not completeness.** `010` indexed the six hot-path query shapes it measured. It did not index every FK, on purpose — an unmeasured index is overhead with a plausible story attached. New query shapes arrive this week and get the same treatment.
+2. **`ix_orders_created` is prerequisite infrastructure with no consumer.** `010`'s own comment: *"Measured: no plan change against today's unpaginated query, kept as prerequisite infrastructure for the keyset pagination §27.3 explicitly calls for."* The pagination was never written. §26.3 writes it.
+3. **No index on the polymorphic content lookup by content.** `product_contents` is indexed for `product_id` lookups (the gate's direction). W4-R4's routing runs it **backwards** — given content ids, which products grant them — and that direction is unindexed.
+
+## 25. Migration `013` — the columns
+
+```python
+# backend/alembic/versions/013_product_evidence_and_routing.py
+
+# ── templates: the pre-purchase facts (W4-R1, new_additions.md §2/§3/§33)
+op.add_column('templates', sa.Column('page_count',        sa.Integer(),  nullable=True))
+op.add_column('templates', sa.Column('sheet_count',       sa.Integer(),  nullable=True))
+op.add_column('templates', sa.Column('is_editable',       sa.Boolean(),  nullable=True))
+op.add_column('templates', sa.Column('has_macros',        sa.Boolean(),  nullable=False, server_default=sa.false()))
+op.add_column('templates', sa.Column('min_office_version',sa.String(50), nullable=True))
+op.add_column('templates', sa.Column('preview_image_keys',postgresql.JSONB(), nullable=False, server_default='[]'))
+op.add_column('templates', sa.Column('version',           sa.String(20), nullable=True))
+op.add_column('templates', sa.Column('last_reviewed_at',  sa.DateTime(timezone=True), nullable=True))
+
+# ── products: licence, search title, version, bundle declaration
+op.add_column('products',  sa.Column('licence',           str_enum(Licence, name='licence'), nullable=False,
+                                     server_default='standard'))
+op.add_column('products',  sa.Column('search_title',      sa.String(500), nullable=True))
+op.add_column('products',  sa.Column('version',           sa.String(20),  nullable=True))
+op.add_column('products',  sa.Column('last_reviewed_at',  sa.DateTime(timezone=True), nullable=True))
+op.add_column('products',  sa.Column('is_bundle',         sa.Boolean(),   nullable=False, server_default=sa.false()))
+```
+
+**Five deliberate choices, each with a reason:**
+
+| Choice | Reason |
+|---|---|
+| `page_count` **and** `sheet_count`, not one `size_metric` | A PDF has pages, a spreadsheet has sheets, and a product page that says "18 sheets" about a PDF is worse than one that says nothing. Two nullable columns beat one column plus a discriminator |
+| `is_editable` nullable, `has_macros` `NOT NULL DEFAULT false` | Editability is unknown until someone opens the file. Macros are a **safety property** — the default must be the safe assertion, and a `true` must be a deliberate act (which the publish guard then refuses) |
+| `preview_image_keys` as JSONB, not a join table | Ordered, small, always read whole, never queried by element. A join table buys nothing and costs a query. Reversible if it ever needs querying |
+| `licence` as an enum via `str_enum(..., name='licence')` | `name=` is **required** by this codebase's helper specifically because SQLAlchemy's plain `Enum()` sends `.name` (uppercase) not `.value` and auto-derives the type name from the class — both wrong here, both silent |
+| `is_bundle` on `products`, not inferred from row counts | "Has more than N contents" is a heuristic; a bundle is a declaration. The guard needs the declaration, and `pricing.md` treats bundles as a named tier |
+
+**Backfill:** existing published rows get `version = '1.0'`, `last_reviewed_at = created_at`. The migration docstring states plainly that this is **an assertion the owner must confirm, not a fact** — nobody reviewed those files on their creation date. If the owner does not confirm, the honest state is `NULL`, which §20.1's absence rule already renders correctly.
+
+## 26. The index layer
+
+### 26.1 Candidates for `013` — each with the query it serves
+
+Nothing here is created until §27's method proves it changes the plan.
+
+| Index | Table / columns | The query |
+|---|---|---|
+| `ix_product_contents_type_content` | `product_contents (content_type, content_id)` | **W4-R4's routing, backwards.** "Which products grant these question ids" — the reverse of the gate's own direction. `INCLUDE (product_id)` for an index-only scan |
+| `ix_question_relations_related` | `question_relations (related_question_id)` | The reverse edge. `010` indexed `question_id` only, so neighbour-of lookups scan |
+| `ix_products_published_bundle` | `products (published, is_bundle)` partial `WHERE published = true` | The overlap guard's candidate set. Small table today; the partial keeps it small forever |
+| `ix_orders_user_status` | `orders (user_id, status)` | W4-R10 metrics 1 and 4 |
+| `ix_order_items_product_order` | `order_items (product_id, order_id)` | W4-R10 metric 4, refund rate by product |
+| `ix_leads_email` | `leads (email)` | W4-R10 metric 2, free→paid — the join key |
+| `ix_contact_messages_notified` | `contact_messages (notified, created_at DESC)` partial `WHERE notified = false` | `/admin/contact`'s "what didn't send" view. Partial because that is the only interesting subset |
+
+**Expected outcome, stated in advance so the measurement can contradict it:** `ix_product_contents_type_content` and `ix_question_relations_related` should both show clear plan changes — they serve joins on tables that grow with the catalogue. The three metrics indexes may well show **no** change against today's tiny `orders` table, in which case they are **not created**, exactly as `010` did not create `ix_qlt_question`. Predicting the result and then recording that the prediction was wrong is worth more than only recording the ones that worked.
+
+### 26.2 What `013` does *not* add, and why
+
+- **No index on `templates.storage_key`.** Never queried by key; it is a payload.
+- **No index on `products.slug` / `templates.slug`.** `UNIQUE(slug)` already creates one.
+- **No full-text index.** Search is `ILIKE` over title/preview at 100 rows. A GIN index here is a maintenance obligation buying nothing measurable, and semantic search is first in the cut order anyway.
+- **No index on `preview_image_keys`.** Read whole, never queried by element.
+
+### 26.3 Keyset pagination on `/admin/orders`
+
+Today: `ORDER BY created_at DESC` with **no `LIMIT`.** The whole table, every load. Invisible at 2 orders; a real problem at 2,000, and this is the endpoint whose growth is *the point of the business.*
+
+**Offset pagination is the wrong fix** — `OFFSET 10000` makes Postgres walk 10,000 rows to discard them, so page 100 costs 100× page 1. Keyset:
+
+```sql
+SELECT ... FROM orders
+WHERE (created_at, id) < (:cursor_created_at, :cursor_id)   -- row-value comparison
+ORDER BY created_at DESC, id DESC
+LIMIT 50;
+```
+
+`(created_at, id)` rather than `created_at` alone, because two orders can share a timestamp and a tie makes a keyset cursor skip or repeat rows. `id` is the tiebreak; it is unique, so the ordering is total.
+
+`010` built `ix_orders_created` on `created_at DESC` for this. **Measure whether it needs to become `(created_at DESC, id DESC)`** to serve the row-value comparison as an index scan — if it does, `013` replaces it; if the planner handles it, `013` leaves it alone and records that it checked.
+
+### 26.4 Query shape rules for everything written this week
+
+1. **No query inside a loop.** If a list needs per-item data, resolve it in one bulk query and use a Python `set`/`dict`. `resolve_granted_content_ids` is the primitive.
+2. **`SELECT` the columns you need.** A `select(Model)` that pulls a `Text` body column to read one integer is a real cost at 100 rows.
+3. **Every `ORDER BY` on a paginated endpoint must be total** — see §26.3.
+4. **Every new endpoint states its query count** in its docstring, as the four fixed endpoints already do.
+5. **A metrics query never runs on a page other than the metrics page.** Aggregates are cheap once and expensive on every load.
+
+## 27. Method, and the traps
+
+### 27.1 How an index is proven
+
+Exactly `010`'s method, because it worked and was verified to leave the real database untouched:
+
+```sql
+BEGIN;
+INSERT INTO ... SELECT ... FROM generate_series(1, 20000);   -- synthetic scale
+ANALYZE;
+EXPLAIN (ANALYZE, BUFFERS) <the real query>;                  -- before
+CREATE INDEX ...;
+ANALYZE;
+EXPLAIN (ANALYZE, BUFFERS) <the real query>;                  -- after
+ROLLBACK;                                                     -- nothing persists
+```
+
+Then confirm a known row count is unchanged after the rollback — `010` checked `users` stayed at 1 throughout, and that check is the reason the method can be trusted rather than believed.
+
+**Record both outcomes.** `db_index_evidence.md` already documents two indexes that measured as *not* helping; that is the most useful part of the file, because it is the part that proves the rest was measured.
+
+### 27.2 `CREATE INDEX CONCURRENTLY` inside Alembic — two traps
+
+1. **It cannot run inside a transaction**, and Alembic wraps every migration in one. Use `op.get_context().autocommit_block()`.
+2. **A concurrent build can fail without raising**, leaving an `INVALID` index that Postgres will never use and nothing will report. `010` and `011` both query `pg_index.indisvalid` afterwards and raise if any new index is invalid. `013` does the same. **An index that silently does nothing is worse than no index** — it comes with a false belief attached.
+
+### 27.3 The uniqueness gap `013` should consider
+
+`010` constrained the four money/access pairs. One more is worth measuring: `product_contents (product_id, content_type, content_id)`. A duplicate row there is harmless to the gate (it is a set membership test) but it corrupts the overlap guard's counting and any "what's included" display.
+
+**Check for duplicates before constraining** — a `UNIQUE` build fails at the end of a full scan if the data already violates it, and finding that out during a production migration is the worst time. If duplicates exist, they are a real finding about the seed scripts, investigated rather than deleted.
+
+### 27.4 Deliberately not done
+
+- **No read replica, no caching layer, no sharding.** At 100 questions, 8 products and a low-thousands order ceiling, the answer is indexes and query shape. Infrastructure would add operational surface with nothing to show for it.
+- **No materialised view for the metrics.** Five aggregates on tables this size are milliseconds. A materialised view adds a refresh schedule, a staleness question and a failure mode, to solve a problem that does not exist yet. Revisit at 100k orders.
+- **No partitioning on `audit_log`.** It only grows, and `010` indexed `created_at DESC`. Partitioning is a real answer to a real problem this table does not yet have.
+
+---
+
+# PART V — LEDGER, RISKS AND REFERENCE
+
+## 28. Task ledger
+
+| # | Task | Req | Phase | Status |
+|---|---|---|---|---|
+| 1 | Commit Week 3's working tree, topic-scoped | R12 | 0 | |
+| 2 | CI env: drop Resend, add Mailjet | R6 | 0 | |
+| 3 | `CheckoutSuccess`/`Template` `h1` + axe routes | R6 | 0 | `[CARRIED]` |
+| 4 | `QuestionsCatalogue` container reconcile | — | 0 | |
+| 5 | Baseline test numbers recorded | R9 | 0 | |
+| 6 | Render env checklist written | R12 | 0 | `[CARRIED]` |
+| 7 | Migration `013` — evidence columns | R1 | 1 | |
+| 8 | Migration `013` — index layer, each `EXPLAIN`-proven | R11 | 1 | |
+| 9 | `pg_index.indisvalid` verification in the migration | R11 | 1 | |
+| 10 | `publish_guard.py` — overlap + bundle pricing | R3 | 1 | |
+| 11 | `scripts/check_overlaps.sql` | R3 | 1 | |
+| 12 | Five guard tests, seen red first | R3 | 1 | |
+| 13 | `admin/templates.py` evidence fields + preview upload | R1 | 2 | |
+| 14 | `admin/products.py` CRUD + guards | R5 | 2 | |
+| 15 | Public API returns evidence fields, bulk-resolved | R1 | 2 | |
+| 16 | Receipt invoice block + version stamp | R2 | 2 | |
+| 17 | Stripe `invoice_creation` + config | R2 | 2 | |
+| 18 | `EvidencePanel` | R1 | 3 | |
+| 19 | `PreviewGallery` + lightbox | R1 | 3 | |
+| 20 | `LicenceLine`, `VersionStamp` | R1 | 3 | |
+| 21 | Buy-page layout + mobile sticky bar | R1 | 3 | |
+| 22 | `AdminProducts.tsx` | R5 | 3 | |
+| 23 | Evidence content pass, all 8 products | R1 | 3 | `[OWNER #32]` |
+| 24 | Two preview images per paid template | R1 | 3 | `[CARRIED]` |
+| 25 | `GET /questions/{slug}/related-products` | R4 | 4 | |
+| 26 | `GET /products/for-questions` | R4 | 4 | |
+| 27 | `RoutedProducts` | R4 | 4 | |
+| 28 | `SituationProducts` | R4 | 4 | |
+| 29 | `recommendation_clicked` event | R4 | 4 | |
+| 30 | Query-count test on the routing endpoints | R4/R11 | 4 | |
+| 31 | Route × state matrix, walked | R6 | 5 | |
+| 32 | Nine failure modes exercised | R6 | 5 | |
+| 33 | Twelve gating attacks, results recorded | R6 | 5 | |
+| 34 | Six manual accessibility checks | R7 | 5 | `[HUMAN]` |
+| 35 | `.stage-aurora--rail` pixel check | R7 | 5 | `[CARRIED]` |
+| 36 | Performance budgets in CI, proven by breaking | R8 | 5 | |
+| 37 | Chart tokens repaired — **no longer "or deleted"** (§20.7a) | — | 5 → **6B** | `[DEFECT]` prerequisite of task 44b |
+| 38 | `/admin/contact` | R5 | 5 | |
+| 39 | Keyset pagination on `/admin/orders` | R5/R11 | 5 | |
+| 40 | Checkout + webhook fixture tests, seen red | R9 | 6 | `[CARRIED]` |
+| 41 | Taxonomy parity test | R9 | 6 | `[CARRIED]` |
+| 42 | First frontend unit tests; `npm test` blocking | R9 | 6 | |
+| 43 | Five metrics, SQL `EXPLAIN`ed | R10 | **6B** | |
+| 44 | `MetricTile` + `/admin/metrics` | R10 | **6B** | |
+| 44b | `TrendChart` (§20.7a) | R10 | 6B | `[OWNER #33]` — first to cut (§10.0) |
+| 44c | Migration `014_filter_events` + index measured | R10/R11 | 6B | resolves metric 3 |
+| 44d | `POST /filter-events` + `lib/filterEvents.ts` | R10 | 6B | no user id, no IP, no session |
+| 44e | `GET /admin/metrics` + `/admin/metrics/revenue-series` | R10 | 6B | numerator + denominator, never a percentage |
+| 44f | `Analytics` added to `ADMIN_NAV` | R10 | 6B | **the actual "I can't see admin analytics" fix** |
+| 44g | Page renders with both PostHog keys unset, proven by test | R10 | 6B | the amendment's whole point |
+| 44h | `VITE_POSTHOG_HOST` prefix defect fixed (local, example, Vercel) | — | 6B | `[DEFECT]` live today — wrong region, silent |
+| 44i | `download_events` table + 3 call sites | R10 | 6B | metric 9; "links issued", not "downloads" |
+| 44j | Revenue gross/refunded/net + top products | R10 | 6B | net-after-refund test is the one to see red |
+| 44k | Enrollments + popular courses, by measure named | R10 | 6B | **not** by views — no view count exists |
+| 44l | shadcn chart block + `react-is` override; chunk measured | R10/R8 | 6B | registry JSON, not `npx` |
+| 52 | Migration `015` — `settings` + `users.disabled_at` | R13 | 6C | no secret, ever |
+| 53 | `config.py` settings resolver, operational keys only | R13 | 6C | no DB path to a secret |
+| 54 | `GET /admin/config-status` — set/unset, never a value | R13 | 6C | closes the env-checklist item |
+| 55 | `/admin/users` list + detail | R13 | 6C | keyset-paginated |
+| 56 | Role change + three guardrails, audited | R13 | 6C | privilege escalation — seen red first |
+| 57 | Deactivation wired **into** the gate | R13 | 6C | non-negotiable #1 |
+| 58 | `/admin/audit` + `/admin/leads` readers | R13 | 6C | `audit_log` has had no reader at all |
+| 59 | `/admin/settings` + config-status panel | R13 | 6C | |
+| 60 | `ADMIN_NAV` grouped (Content · Commerce · System) | R13 | 6C | nine flat tabs is not navigation |
+| 45 | `handover.md` Week 4 section | R12 | 7 | |
+| 46 | `DESIGN.md` reconciled with `theme.css` | R12 | 7 | |
+| 47 | `new_additions.md` status footer | R12 | 7 | |
+| 48 | `week4_report.md` + go/no-go | R12 | 7 | |
+| 49 | Watched non-developer usability test | R5 | any | `[HUMAN]` `[CARRIED]` |
+| 50 | One email template opened in a real mail client | — | any | `[HUMAN]` `[CARRIED]` |
+| 51 | Supabase Auth Site URL confirmed | — | any | `[HUMAN]` `[UNVERIFIABLE]` `[CARRIED]` |
+
+## 29. Risk watchlist
+
+| Risk | Signal | Response |
+|---|---|---|
+| **The evidence content pass stalls on the files themselves** | Page counts unknown because nobody opened the artefacts | The mechanism ships regardless; unset fields render nothing. **The panel is honest at four rows.** Do not invent a page count |
+| **The hardening sweep gets compressed to make room for W4-R1/R4** | Phase 5 starts late | Phase 5 is the brief's own Week 4. Cut per §10 — the metrics page and `SituationProducts` go first, the sweep never does |
+| **A performance budget is already breached today** | Lighthouse red on the first run | That is a finding, not a failure. Fix it, or renegotiate the budget **in writing**. Never raise a budget silently to match reality |
+| **The overlap guard finds real overlaps in the live catalogue** | `check_overlaps.sql` returns rows beyond the known bundle | Genuinely possible — 8 products were seeded across four sessions. Investigate each; do not suppress the check to make it pass |
+| **Keyset pagination breaks the admin order list at 2 rows** | Cursor logic untested at tiny N | Test at 0, 1, 2 and 200 rows. Off-by-one at the boundary is the classic keyset bug |
+| **Two agents edit the working tree again** | Unexpected diffs mid-phase | `handover.md` §4 records this happening once. Topic-scoped commits and a `git status` check at each phase boundary |
+| **A `grep`-based claim is written before it is true** | A doc says "gone" while the string is still there | This has already happened once in `handover.md` §2. Verify at the moment of writing |
+| **`[OWNER #31]` ABN never arrives** | Phase 7 with the line still unset | Ships without it, by design. It blocks one line, not the requirement |
+| **The usability test slips a second week** | Day 5 with no test booked | It has now been deferred once. If it slips again, `week4_report.md` records it as **deferred a second time**, not as an open item — the difference matters |
+
+## 30. Quick reference
+
+**New migrations:** `013_product_evidence_and_routing`
+
+**New backend files:** `app/core/publish_guard.py` · `app/api/v1/admin/products.py` · `app/api/v1/admin/contact.py` · `app/api/v1/admin/metrics.py` · `scripts/check_overlaps.sql`
+
+**New frontend files:** `components/product/EvidencePanel.tsx` · `PreviewGallery.tsx` · `LicenceLine.tsx` · `VersionStamp.tsx` · `components/content/RoutedProducts.tsx` · `SituationProducts.tsx` · `components/admin/MetricTile.tsx` · `pages/admin/AdminProducts.tsx` · `AdminContact.tsx` · `AdminMetrics.tsx`
+
+**New routes:** `/admin/products` · `/admin/contact` · `/admin/metrics`
+
+**New endpoints:** `GET|POST|PATCH /admin/products` · `POST /admin/products/{id}/publish` · `GET /admin/contact` · `GET /admin/metrics` · `GET /questions/{slug}/related-products` · `GET /products/for-questions`
+
+**New env:** `SELLER_LEGAL_NAME` · `SELLER_ABN` · (CI) `MAILJET_API_KEY` · `MAILJET_SECRET_KEY` · `MAILJET_SENDER_EMAIL` · `MAILJET_SENDER_NAME` · `FRONTEND_URL`
+
+**New dependencies:** none in the app. Lighthouse CI is a CI-only devDependency.
+
+**The design values you will reach for most**
+
+```text
+Surface       bg-card / bg-gold-soft (#F3E9D2 · #2E2517)
+Border        1px var(--border) (#E6DFD0 · #332B1E)
+Radius        rounded-lg 8px (cards) · rounded-md 6px (inputs, thumbs)
+Padding       p-5 base, p-6 from sm
+Label         text-sm 500 --muted-foreground
+Value         text-sm 400 --foreground, tabular-nums on numerals
+Price         text-h3 600 --gold-strong, tabular-nums
+Eyebrow       .eyebrow — mono 12px uppercase +0.16em, 24px --gold rule
+Icon          16px Lucide, stroke 1.75, --gold-strong
+Hover         .hover-lift — 2px, shadow-md, 150ms --ease-standard
+Entrance      opacity 0→1 + y 8→0, 220ms --ease-entrance, stagger min(i,6)*0.03
+Focus         :focus-visible — 2px --ring, 2px offset, 4px radius
+Elevation     0 by default; shadow-lg on the lightbox only
+```
+
+**The commands that matter**
+
+```bash
+# The paywall still holds — including revocation, and including the twelve attacks.
+cd backend && pytest -q
+
+# No component holds a hex (email templates are the only sanctioned exception).
+rg -n '#[0-9a-fA-F]{3,8}\b' frontend/src --glob '!**/*.css'
+
+# No inverting token on the dark plane.
+rg -n 'bg-stage' frontend/src -l | xargs rg -n 'primary|accent'
+
+# No hard-coded currency symbol on a formatted amount.
+rg -n 'A\$|\$\{.*price' frontend/src --glob '*.tsx'
+
+# No hover distance drifted past 2px.
+rg -n 'translate-y-|whileHover' frontend/src
+
+# Every claim on a product page is backed by a column.
+psql "$DATABASE_URL" -f scripts/check_evidence_complete.sql
+
+# No two published products overlap.
+psql "$DATABASE_URL" -f scripts/check_overlaps.sql
+
+# Every index built cleanly.
+psql "$DATABASE_URL" -c "select indexrelid::regclass from pg_index where not indisvalid"
+
+# The frontend still compiles and still fits its budget.
+cd frontend && npx tsc --noEmit && npm run build && npm test && npx playwright test
+```
+
+---
+
+## 31. What this week deliberately leaves for whoever comes next
+
+Written here rather than only in the report, because a plan that names its own end state is easier to hand over than one that stops.
+
+**Ready to build, unblocked by this week's work:**
+- **Decision Pack v0** as files at A$79 — author-days only. The evidence layer (W4-R1), the overlap guard (W4-R3) and the routing (W4-R4) all apply to it unchanged the day it exists.
+- **The free diagnostic** — W4-R4 built its output layer first, deliberately. The diagnostic becomes a different way to reach the same routing, not a second recommendation engine.
+- **Consultant licence tiers** — the field and the enum ship this week. Decision #25 turns a label into revenue.
+
+**Blocked, with the gate named:**
+- `decision_workspace` — real engineering, weeks, and it should follow a demand signal from Decision Pack v0 rather than precede it.
+- Challenge My Thinking — an editorial backlog and a published confidentiality position (#29).
+- Question of the Week — editorial capacity (#30).
+- Going live on Stripe — and remember it is **bundled** with the Vercel and Render tier questions (§8.3). Three decisions, one day.
+
+**The one thing that would most improve this codebase and is not in any plan:** frontend test coverage beyond the four files W4-R9 starts. The backend has 62 tests and a discipline behind them; the frontend has a type checker and an end-to-end suite with nothing in between. Every bug this project has found by clicking around — the dead filter chips, the multipart upload, the stale closure in the video dialog, the NUL byte, the `w-ful` typo — lives in exactly that gap.
+
+---
+
+*Opens on the GO recorded in [`week3_report.md`](week3_report.md). Closes with `week4_report.md` and the final handover. Sourced from the intern brief's Week 4, `DESIGN.md` §16/§40/§41/§42/§43/§60/§62/§63, `BACKEND.md`, the Research Specification, `docs/new_additions.md` (triaged in §2.2), `docs/pricing.md`, `docs/handover.md`, `docs/db_index_evidence.md`, `frontend/src/styles/theme.css`, and a direct read of the repository on 2026-08-17.*

@@ -64,12 +64,25 @@ behind them would be the same category of problem as a fake receipt or a stub vi
 | Product | Price | Grants |
 |---|---:|---|
 | ~~Risk Register Template~~ | ~~A$29 AUD~~ | **Unpublished 2026-08-12** — the template became the free lead magnet (below), so this product would have charged for two things anyone can have. Not deleted; reversible in one flag. |
+| Quality Risk Management Presentation | **A$29 AUD** | `[ADDED 2026-08-15, week3_plan.md Phase 3]` One `.ppt` file, uploaded and priced conservatively (unverified depth — legacy format, no reader available) — see §4. |
 | **Vendor Risk Assessment Scorecard** | **A$39 AUD** | The scorecard file, and nothing else. The paid template — see below. |
+| Risk Assessment Template | **A$39 AUD** | `[ADDED 2026-08-15]` One 18-page worked risk-assessment example (a NEBOSH IG2-style document — see §4 for provenance). |
 | Risk Register Fundamentals | **A$49 AUD** | All 3 course lessons across both modules, **plus** the template file and Q001's guidance entitlement. |
+| Risk (Enterprise & operational) — question pack | **A$49 AUD** | `[ADDED 2026-08-15]` The Risk domain pack, `db/seed/014` finally run: 1 PDF (60 questions, typeset and ordered) + all 60 questions' `question_set` grant. |
+| TPRM Due Diligence Checklist | **A$49 AUD** | `[ADDED 2026-08-15]` One `.xlsx` task tracker (collect/screen/assess a vendor, with status/owner/dates), from the previously-unused vendor-risk file set. |
+| **Risk Register, start to finish** (bundle) | **A$79 AUD** | `[ADDED 2026-08-15]` Decision #29: Risk Register Fundamentals + the Risk domain pack, A$98 separately → A$79, saving A$19 (19.4%). One ordinary product; `product_contents` is the live union of both parts' grants — no new entitlement mechanism (RS 5.6). |
+| Complete TPRM Template Pack | **A$99 AUD** | `[ADDED 2026-08-15]` Two files, one product: a 15-item Vendor Risk Assessment Template (PDF) + a Vendor Evaluation with Scorecard (`.xlsx`) — the "multi-file pack" tier. |
 
-A$49 is the bottom of §1's "short course" tier. A$29 remains the ladder's "individual
-template" tier for the *next* template — it is simply not in use while the only
-template that exists is free.
+A$49 is the bottom of §1's "short course" tier. **A$29 is back in use** — the
+"individual template" tier now has two real occupants (§4) alongside the still-free,
+still-unpublished Risk Register Template above.
+
+**Catalogue count, 2026-08-15: 7 published products before the bundle, 8 with it** —
+closing `week3_plan.md` W3-R2's "≥6 published products … plus one bundle" acceptance
+line. Every price above is a real ladder rung, justified against §1's tiering rules by
+each file's actual depth (page count, sheet structure, file count) — never copied from
+this document's earlier illustrative table. See §4 for exactly which files these are
+and where they came from.
 
 ### The commercial model `[OWNER-DECIDED, 2026-08-12]`
 
@@ -162,3 +175,63 @@ Each new template/course should be priced by finding its row in §1's tiering ru
 against its *actual* depth (file count, lesson count, run time) — not by copying a
 number from this proposal's example table, which was illustrative, not a commitment
 to those exact product names.
+
+---
+
+## 4. §3's target catalogue, actually seeded (2026-08-15, week3_plan.md Phase 3)
+
+The proposal above is no longer a target — it's what's live, at the exact prices §3
+already named (Vendor Risk Assessment Template A$39, TPRM Due Diligence Checklist
+A$49, Complete TPRM Template Pack A$99), plus the domain pack and the bundle. Real
+content behind every price, per the standing rule, checked before pricing rather than
+assumed from a filename:
+
+**The six vendor-risk files (uploaded 2026-08-10, decision #28 confirmed the owner's
+own, purchased/licensed for resale).** One (`IC-Vendor-Risk-Comparison-with-Scorecard-10772.xlsx`)
+was already sold as the Vendor Risk Assessment Scorecard (§2). The other five, all now
+sold:
+- `IC-Sample-Vendor-Risk-Due-Diligence-Plan-10772.xlsx` — a task tracker (collect vendor
+  info → screen the vendor → assess the risk, with status/owner/dates) → **TPRM Due
+  Diligence Checklist, A$49**. Its PDF twin in the same upload batch
+  (`..._PDF.pdf`) was used only to inspect the real content before writing the
+  product description — not sold separately, to avoid selling the same material twice.
+- `IC-Vendor-Risk-Assessment-10772_PDF.pdf` (a 15-item rated risk checklist) +
+  `IC-Vendor-Evaluation-with-Scorecard-10772.xlsx` (a per-vendor evaluation form,
+  content-checked against the already-sold Comparison scorecard to confirm it's
+  genuinely different material, not a resell of the same sheet under a new name) →
+  **Complete TPRM Template Pack, A$99** — two files, one product, the "multi-file pack"
+  tier.
+
+**Two templates uploaded via the admin panel on 2026-08-15**, while testing the
+upload-bug fix (`handover.md` §1), left published with no product attached. Opening
+`risk-assessment-template.pdf` to write an honest description found it isn't generic
+vendor-risk material at all — it's an 18-page **NEBOSH Unit IG2 assessment** layout
+(learner declaration, malpractice-policy notice), a different provenance than the six
+files above and not covered by decision #28's confirmation. **Asked and confirmed live,
+2026-08-15: the owner holds the rights to sell both this file and the companion `.ppt`
+("Quality Risk Management Presentation").** Priced conservatively against what was
+actually verifiable — A$39 for the worked-example PDF (real 18-page depth, confirmed by
+reading it), A$29 for the presentation (legacy `.ppt` format, unreadable by any tool
+available this session, so priced at the "simple template" floor rather than guessed
+upward).
+
+**The domain pack** (`db/seed/014`, held since Week 2 on "no PDF, no Stripe Price") —
+both blockers closed this session: `scripts/build_domain_pack.py --domain Risk` run for
+real (60 questions, 97,470-byte PDF, byte-identical to the size named in the seed
+script's own docstring example), uploaded to Storage, a real test-mode Stripe
+Price created, then the seed re-run with both. **Risk (Enterprise & operational) —
+question pack, A$49** — the "professional checklist" tier, per §1.
+
+**The bundle** (decision #29) — Risk Register Fundamentals + the Risk pack, A$98
+separately, **A$79 together**. `db/seed/016_seed_bundle.sql` builds its
+`product_contents` as the live `SELECT DISTINCT` union of both parts' own grants,
+not a hand-copied id list — a future change to either part (a new lesson, a re-typeset
+pack) is picked up the next time the seed runs, and the one question both parts already
+shared (Q001, in both the course and the 60-question pack) collapses to one grant
+rather than two.
+
+Storage credentials (`SUPABASE_STORAGE_S3_ENDPOINT` etc.) and a live `rk_test_` Stripe
+key were both actually present in `backend/.env` this session, despite `.env.example`'s
+comment still marking storage as "STILL MISSING" — that comment is stale, not current
+state; worth updating in the same pass that reconciles Render's env vars (`handover.md`
+§4 item 15).

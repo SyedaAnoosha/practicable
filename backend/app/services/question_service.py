@@ -1,24 +1,15 @@
-"""Discovery scoring — week2_plan.md Phase 3 / DESIGN.md §57.
+"""Discovery scoring.
 
-A strict AND across three filters returns nothing at exactly the moment the product
-is meant to prove itself (DESIGN.md §19.2), so filtering is a RANKING, not a gate:
-each active constraint contributes graded credit — 2 points for an exact match, 1
-for the adjacent value on that dimension's ordinal scale, 0 beyond that — and a
-question is "exact" only when EVERY active constraint scored the full 2 points.
-
-v1's bug (§57.2): a question counted as exact whenever `close === 0 && exact > 0` —
-so a question that missed one constraint entirely (not merely landed adjacent) could
-still be called exact, as long as no OTHER constraint landed in the "adjacent"
-bucket. The fix here is `is_exact = active_constraints > 0 and exact_count ==
-active_constraints`: every active constraint must itself be an exact match.
+A strict AND across filters can return nothing, so filtering is a RANKING, not a gate:
+each active constraint contributes graded credit — 2 points for an exact match, 1 for
+the adjacent value on that dimension's ordinal scale, 0 beyond that — and a question is
+"exact" only when every active constraint scored the full 2 points.
 
 This file and `frontend/src/lib/scoring.ts` implement the identical rule in two
-languages. Neither hard-codes the ordinal scale as a literal — both read
-`sort_order` from the tag data they're handed (this module from `tag_values` rows
-via the caller; scoring.ts from the same field already present on every tag in the
-API response), so the owner can reorder or extend a dimension's scale from the DB
-with no deploy on either side. `tests/fixtures/scoring_cases.json` is read by both
-suites so the two implementations cannot silently diverge (Non-negotiable #10).
+languages. Neither hard-codes the ordinal scale; both read `sort_order` from the tag
+data they're handed, so the owner can reorder or extend a scale from the DB with no
+deploy. A shared fixture (`tests/fixtures/scoring_cases.json`) keeps the two from
+silently diverging.
 """
 from __future__ import annotations
 
@@ -33,9 +24,8 @@ CLOSE_POINTS = 1
 ORDINAL_DIMENSIONS = ("effort", "duration", "cost", "roi_horizon", "regulator_pressure")
 
 # Multi-valued, categorical (overlap, not distance) dimensions — `tier` is single-
-# valued per question but the *filter* can name several acceptable values (a
-# checkbox group, not radio buttons: DESIGN.md §19.5 point 7), so it is scored the
-# same way as `leadership_traits`, which is genuinely multi-valued on the question.
+# valued per question but the filter can name several acceptable values (a checkbox
+# group), so it's scored the same way as `leadership_traits`.
 MULTI_DIMENSIONS = ("tier", "leadership_traits")
 
 
@@ -53,15 +43,12 @@ class TagRef:
 
 @dataclass(frozen=True)
 class ScorableQuestion:
-    """Everything `score_question` needs about one question — deliberately not the
-    ORM row or an API model, so this module imports neither FastAPI nor SQLAlchemy
-    and can be unit-tested with plain data."""
+    """Everything `score_question` needs about one question — deliberately not the ORM
+    row or an API model, so this module can be unit-tested with plain data."""
 
     id: str
     domain_slug: str
-    # One TagRef per ordinal/tier dimension the question carries, keyed by
-    # dimension name — never more than one entry per key, matching the schema's
-    # single FK column per dimension.
+    # One TagRef per ordinal/tier dimension, keyed by dimension name.
     tags: dict[str, TagRef]
     # The one genuinely multi-valued per-question dimension.
     leadership_traits: tuple[TagRef, ...] = ()
@@ -114,8 +101,8 @@ class ScoredQuestion:
 
 
 def _ordinal_distance(requested_tag: Optional[TagRef], actual_tag: Optional[TagRef]) -> Optional[int]:
-    """`None` whenever either side has no tag on this dimension — no credit, but
-    never a crash (§57.6's explicit "unknown tag value" case)."""
+    """`None` whenever either side has no tag on this dimension — no credit, never a
+    crash."""
     if requested_tag is None or actual_tag is None:
         return None
     d = abs(requested_tag.sort_order - actual_tag.sort_order)
@@ -222,11 +209,9 @@ def rank_relaxation_candidates(
     questions: list[ScorableQuestion],
     filters: QuestionFilters,
 ) -> list[str]:
-    """§57.5's zero-result recovery: rank the *active* filter dimensions by how few
-    questions each admits on its own (against the full index, ignoring every other
-    filter), most restrictive first. The caller offers the top two as one-tap
-    relaxations. Computed, not hard-coded, so it reflects how the taxonomy actually
-    behaves today rather than a guess that goes stale as content is added.
+    """Zero-result recovery: rank the active filter dimensions by how few questions
+    each admits on its own, most restrictive first. Computed, not hard-coded, so it
+    reflects how the taxonomy actually behaves rather than a guess that goes stale.
     """
     active_dims: list[str] = []
     if filters.domain:

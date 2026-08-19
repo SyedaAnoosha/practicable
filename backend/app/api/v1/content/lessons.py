@@ -60,9 +60,8 @@ async def _lesson_entitled(*, lesson: Lesson, user_id: Optional[str], session: A
 
 
 async def _lesson_entitled_or_admin(*, lesson: Lesson, user: Optional[User], session: AsyncSession) -> bool:
-    """The content-serving counterpart to `_lesson_entitled` above — admin bypass, audited.
-    Takes the resolved `User` (role included), not just an id string, which is what the
-    plain id-only dependencies (`get_current_user_id[_optional]`) can't provide."""
+    """The content-serving counterpart to `_lesson_entitled` above, with an audited
+    admin bypass. Takes the resolved `User`, not just an id string."""
     if not user:
         return False
     return await has_access_to_or_admin(
@@ -78,9 +77,8 @@ class PlaybackTokenOut(BaseModel):
 class LessonDownloadOut(BaseModel):
     file_name: str
     file_size_bytes: int
-    # True when the underlying template is the free lead magnet. The frontend shows the
-    # email capture instead of the course paywall for these, so a visitor who has not
-    # bought the course can still take the file — see the note on the download endpoint.
+    # True when the underlying template is the free lead magnet — downloadable even by
+    # a visitor who hasn't bought the course.
     is_free: bool = False
 
 
@@ -117,15 +115,13 @@ class SidebarModuleOut(BaseModel):
 
 
 class LessonBlockOut(BaseModel):
-    """One ordered piece of the lesson's content (Product Spec §7.2 / week2_plan.md
-    Phase 2). `body`/`download` above stay populated too — the single-block backfill
-    of every pre-Phase-2 lesson means they and `blocks` describe the same content — but
-    new mixed-content lessons only exist here, as a sequence.
+    """One ordered piece of the lesson's content. `body`/`download` above stay populated
+    too for backfilled single-block lessons, but new mixed-content lessons exist only
+    here, as a sequence.
 
-    No URL or Mux token is ever embedded: a `video`/`file` block's own content is minted
-    on demand from `id` via /lesson-blocks/{id}/playback-token or /download-url, exactly
-    like the lesson-level endpoints below (BACKEND.md §4.1 — check, then mint, never
-    embed a link that outlives the check that authorized it).
+    No URL or Mux token is ever embedded: a `video`/`file` block's content is minted on
+    demand from `id` via its own playback-token/download-url endpoint — check, then
+    mint, never embed a link that outlives the check that authorized it.
     """
 
     id: str
@@ -188,9 +184,8 @@ async def get_lesson_in_course(
     if not module or module.course_id != course.id:
         raise HTTPException(status_code=404, detail="Lesson not found in this course")
 
-    # The bypass-with-audit path: this decides whether `body` (the actual protected
-    # content) is returned below, unlike the sidebar loop's `_lesson_entitled` calls
-    # further down, which only decide a cosmetic lock icon.
+    # Decides whether `body` is returned below — unlike the sidebar loop's
+    # `_lesson_entitled` calls further down, which only decide a lock icon.
     entitled = await _lesson_entitled_or_admin(lesson=lesson, user=user, session=session)
 
     modules = (
@@ -287,10 +282,9 @@ async def get_lesson_in_course(
 
     media = (await session.execute(select(Media).where(Media.lesson_id == lesson.id))).scalar_one_or_none()
 
-    # Same per-block-type gating the lesson-level fields below already use: text/video
-    # blocks have no free-preview mechanic (never shown unless `entitled`), but a `file`
-    # block whose template is the free lead magnet stays free wherever it appears —
-    # matching `download_out`'s rule two paragraphs down, for the same reason.
+    # Same per-block-type gating as the lesson-level fields below: text/video blocks
+    # have no free-preview mechanic, but a `file` block whose template is the free lead
+    # magnet stays free wherever it appears, matching `download_out`'s rule below.
     lesson_blocks = (
         (
             await session.execute(
@@ -335,11 +329,9 @@ async def get_lesson_in_course(
                 )
             )
 
-    # A free template stays free wherever it appears. The Risk Register Template is both
-    # the standalone lead magnet AND one of this course's lessons, and gating it here
-    # would have meant the same file was free on /templates and paywalled inside the
-    # course — the kind of inconsistency a buyer notices immediately. The lesson's own
-    # writing is still gated by `entitled` below; only the artefact is exempt.
+    # A free template stays free wherever it appears — the same file can't be free on
+    # /templates and paywalled inside a course. The lesson's own writing is still
+    # gated by `entitled`; only the artefact is exempt.
     download_out = None
     if lesson.download_template_id:
         template = (
@@ -422,16 +414,14 @@ class LessonDownloadUrlOut(BaseModel):
 async def get_lesson_download_url(
     lesson_id: str,
     session: AsyncSession = Depends(get_session),
-    # Optional so a free template inside a course is downloadable with no account, exactly
-    # as it is on /templates. Paid artefacts still 401 below when this is None. The full
-    # User (not just the id) so an admin without the entitlement gets the audited bypass
-    # rather than a plain 403 — see `has_access_to_or_admin`.
+    # Optional so a free template inside a course is downloadable with no account, as on
+    # /templates. Paid artefacts still 401 below. The full User, not just the id, so an
+    # admin without the entitlement gets the audited bypass rather than a plain 403.
     user: Optional[User] = Depends(get_current_user_optional),
 ):
-    """The download-type lesson's artefact, gated by LESSON entitlement (course access) —
-    unless the underlying template is the free lead magnet, in which case it is free here
-    too. The same file sold standalone goes through templates.py's TEMPLATE-gated path,
-    and these two endpoints must agree about whether a given file costs money.
+    """The download-type lesson's artefact, gated by LESSON entitlement — unless the
+    underlying template is the free lead magnet, in which case it's free here too. Must
+    agree with templates.py's TEMPLATE-gated path about whether a file costs money.
     """
     lesson = (
         await session.execute(select(Lesson).where(Lesson.id == uuid.UUID(lesson_id)))
@@ -445,9 +435,7 @@ async def get_lesson_download_url(
     if not template:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Free means free: no entitlement, no account, no check — the same rule as
-    # templates.py. The email capture fronting this in the UI is a conversion device,
-    # not a boundary, so it is not enforced here either.
+    # Free means free: no entitlement, no account, no check — same rule as templates.py.
     if not template.is_free:
         if user is None:
             raise HTTPException(
@@ -582,11 +570,9 @@ async def mark_lesson_complete(
 
 
 # ── Block-scoped content endpoints ─────────────────────────────────────────────────
-# week2_plan.md Phase 2 step 4: "entitlement is checked once per lesson, not per
-# block — but each video block still mints its own short-lived Mux token and each
-# file block its own presigned URL, on demand, exactly as today." The lesson-scoped
-# endpoints above stay as they are (they still work correctly on every backfilled
-# lesson, which has exactly one block matching its old single media/template row) —
+# Entitlement is checked once per lesson, not per block, but each video block still
+# mints its own short-lived Mux token and each file block its own presigned URL. The
+# lesson-scoped endpoints above still work for every backfilled single-block lesson;
 # these are the new path for a lesson with more than one video or file block.
 
 
@@ -596,10 +582,9 @@ async def get_block_playback_token(
     session: AsyncSession = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
-    """Block-scoped counterpart to /lessons/{lesson_id}/playback-token. The entitlement
-    check still runs against the block's PARENT LESSON — buying a lesson unlocks every
-    block inside it, not each block individually — but the Mux token is minted for
-    THIS block's own media row, so a lesson with two video blocks serves each correctly."""
+    """Block-scoped counterpart to /lessons/{lesson_id}/playback-token. Entitlement is
+    checked against the block's parent lesson — buying a lesson unlocks every block —
+    but the Mux token is minted for this block's own media row."""
     block = (
         await session.execute(
             select(LessonBlock)
@@ -637,7 +622,7 @@ async def get_block_download_url(
     user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Block-scoped counterpart to /lessons/{lesson_id}/download-url — same free-template
-    exception, same entitlement-on-the-parent-lesson rule, see get_block_playback_token."""
+    exception and entitlement-on-the-parent-lesson rule as get_block_playback_token."""
     block = (
         await session.execute(
             select(LessonBlock)

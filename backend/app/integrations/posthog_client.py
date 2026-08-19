@@ -74,9 +74,9 @@ def capture_download_failed(*, user_id: str, resource_type: str, resource_id: st
 
 
 def capture_refund_issued(*, user_id: str, order_id: str) -> None:
-    """`[NO CALL SITE YET]` No refund mechanism exists in the product as of Week 2 —
-    refunds happen via the Stripe dashboard directly (docs/week2_plan.md Phase 5 /
-    §11.3's refund policy names the pathway, but building an in-app refund action is
-    not in this week's scope). Defined now so the emitter exists the moment one is
-    built, rather than adding an eighth server-side call site under time pressure then."""
+    """Called from both refund paths (week3_plan.md Phase 4): `POST
+    /admin/orders/{id}/refund` and the `charge.refunded` webhook, both via
+    `refund_service.apply_refund()` post-commit — so a refund fires this exactly once
+    regardless of which of the two triggered it. Defined in Week 2 before either call
+    site existed; both now do."""
     _capture("refund_issued", distinct_id=user_id, properties={"order_id": order_id})
