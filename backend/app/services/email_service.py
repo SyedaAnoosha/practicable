@@ -47,6 +47,22 @@ _env = Environment(
 )
 
 
+def _format_version_stamp(version: str | None, last_reviewed_at: datetime | None) -> str | None:
+    """`v1.2 · reviewed 17 Aug 2026` — the exact string `VersionStamp.tsx` renders on
+    the product page, reproduced here so the receipt states the same fact rather than a
+    second, drifting formatting of it. Absence rule: both unset returns None, which the
+    template renders as nothing — never `v—` or an empty stamp line (week4_plan.md
+    §20.1, the rule every unset-evidence-field surface in this app already follows)."""
+    if not version and not last_reviewed_at:
+        return None
+    parts = []
+    if version:
+        parts.append(f"v{version}")
+    if last_reviewed_at:
+        parts.append(f"reviewed {last_reviewed_at.strftime('%d %b %Y').lstrip('0')}")
+    return " · ".join(parts)
+
+
 def _render(template_stem: str, **context) -> tuple[str, str]:
     """Renders a template's HTML body and its plain-text sibling from the same context.
     A template missing one half of the pair is a build-time error (TemplateNotFound),
@@ -170,30 +186,50 @@ async def send_receipt_email(
     primary_link: str = "",
     tax_line: str | None = None,
     order_date: datetime | None = None,
+    invoice_number: str | None = None,
+    product_versions: list[tuple[str | None, datetime | None]] | None = None,
 ) -> bool:
     """To the buyer: order reference, every product the order contains, amount, date,
     and the currently-drafted contracting entity (decision #27, closed — 'Effective
-    Risk Management', ABN left [OWNER]) — a document someone can submit to finance.
+    Risk Management') — a document someone can submit to finance. The entity is not
+    GST-registered and has no ABN, so no ABN field exists here or anywhere else in the
+    app — not blank, not [OWNER], simply absent.
 
     `product_names` is a list, not a single string, since week3_plan.md W3-R11: one
     receipt for a whole cart checkout, itemising every product, not one receipt per
     product. A direct "Buy" (the pre-cart path) is the one-item-list case of the same
-    call, not a second code path."""
+    call, not a second code path.
+
+    `product_versions` is the parallel (version, last_reviewed_at) tuple per entry in
+    `product_names` — week4_plan.md §20.9's "version renders under the line item."
+    Optional and independently absent per product (a cart can mix versioned and
+    unversioned products); omitted entirely (None) for a caller that predates this.
+
+    W4-R2: invoice_number and seller_legal_name enable tax-invoice-quality receipts
+    for business buyers."""
     amount_display = _format_amount(amount_cents, currency)
     # %-d (no leading zero) is glibc/macOS-only; %d is portable but zero-pads, so the
     # leading zero is stripped by hand instead — this runs on Windows in dev and Linux
     # on Render, and %-d raises ValueError on the former.
     display_date = (order_date or datetime.now(timezone.utc)).strftime("%d %B %Y").lstrip("0")
+    versions = product_versions or [(None, None)] * len(product_names)
+    product_lines = [
+        {"name": name, "version_stamp": _format_version_stamp(v, r)}
+        for name, (v, r) in zip(product_names, versions)
+    ]
     html, text = _render(
         "receipt",
         order_id=order_id,
         product_names=product_names,
+        product_lines=product_lines,
         amount_display=amount_display,
         order_date=display_date,
         tax_line=tax_line,
         primary_link=primary_link or settings.frontend_url.rstrip("/") + "/library",
         refund_position_text=REFUND_POSITION_TEXT,
         refunds_url=settings.frontend_url.rstrip("/") + "/legal/refunds",
+        invoice_number=invoice_number,
+        seller_legal_name=settings.seller_legal_name or None,
     )
     return await _send(
         to_email=to_email,

@@ -2,10 +2,16 @@ Thank you for your purchase
 
 Your order has been completed. Here is your receipt.
 
+{% if invoice_number %}
+Tax Invoice
+Invoice number: {{ invoice_number }}
+Date: {{ order_date }}
+
+{% endif %}
 Order reference: {{ order_id }}
-{{ "Products" if product_names|length > 1 else "Product" }}:
-{% for name in product_names %}
-- {{ name }}
+{{ "Products" if product_lines|length > 1 else "Product" }}:
+{% for line in product_lines %}
+- {{ line.name }}{% if line.version_stamp %} ({{ line.version_stamp }}){% endif %}
 {% endfor %}
 Date: {{ order_date }}
 {% if tax_line %}
@@ -18,5 +24,4 @@ View in your library: {{ primary_link }}
 {{ refund_position_text }}{% if refunds_url %} Read our refund policy: {{ refunds_url }}{% endif %}
 {% endif %}
 Billed by:
-Effective Risk Management
-ABN: to be confirmed
+{% if seller_legal_name %}{{ seller_legal_name }}{% else %}Effective Risk Management{% endif %}

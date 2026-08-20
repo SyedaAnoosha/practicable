@@ -120,6 +120,11 @@ async def stripe_webhook(
 
                 if user:
                     product_names = [p.name for p in products]
+                    # week4_plan.md §20.9: the receipt states each product's own
+                    # version/last_reviewed_at, same fact as the buy page's VersionStamp.
+                    product_versions = [(p.version, p.last_reviewed_at) for p in products]
+                    # W4-R2: Extract invoice number from Stripe session when available
+                    invoice_number = session_data.get('invoice', {}).get('number') if session_data.get('invoice') else None
                     # One receipt for the whole order, however many products it contains
                     # (W3-R11) — the same call a single "Buy" made before, just with a
                     # one-item list.
@@ -131,6 +136,8 @@ async def stripe_webhook(
                         product_names=product_names,
                         primary_link=library_url,
                         order_date=order.created_at,
+                        invoice_number=invoice_number,
+                        product_versions=product_versions,
                     )
                     # To the owner, not the buyer, and independent of the receipt above:
                     # one failing must not skip the other. One alert per order (not per
