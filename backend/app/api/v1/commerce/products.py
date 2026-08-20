@@ -1,12 +1,15 @@
 import uuid
+from datetime import datetime
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Course, Lesson, Module, Product, ProductContent, Question, Template
 from app.db.session import get_session
+from app.services.template_evidence import PreviewOut, format_line, resolve_previews
 
 router = APIRouter()
 
@@ -27,11 +30,28 @@ class ProductOut(BaseModel):
     price_amount: int
     currency: str
     contents: list[ProductContentOut]
+    # Evidence layer — W4-R1. Fields are nullable: absent = not yet set.
+    # The frontend EvidencePanel renders nothing for null fields (absence rule §20.1).
+    licence: Optional[str] = None
+    search_title: Optional[str] = None
+    version: Optional[str] = None
+    last_reviewed_at: Optional[datetime] = None
+    is_bundle: bool = False
+    # Present only when this product is exactly one template (see
+    # _resolve_contents_bulk) — a multi-item product has no single page count to show,
+    # so these stay null (absence rule, §20.1) rather than picking one item arbitrarily.
+    page_count: Optional[int] = None
+    sheet_count: Optional[int] = None
+    is_editable: Optional[bool] = None
+    has_macros: bool = False
+    min_office_version: Optional[str] = None
+    previews: list[PreviewOut] = []
+    format: Optional[str] = None
 
 
 async def _resolve_contents_bulk(
     products: list[Product], session: AsyncSession
-) -> dict[str, list[ProductContentOut]]:
+) -> tuple[dict[str, list[ProductContentOut]], dict[str, Template]]:
     """Label and route every item every given product contains, in a fixed number of
     queries regardless of how many products or contents there are.
 
@@ -49,7 +69,7 @@ async def _resolve_contents_bulk(
     catalogue's size.
     """
     if not products:
-        return {}
+        return {}, {}
 
     product_ids = [p.id for p in products]
     contents_result = await session.execute(
@@ -61,10 +81,11 @@ async def _resolve_contents_bulk(
     lesson_ids = [pc.content_id for pc in all_contents if pc.content_type == "lesson"]
     question_ids = [pc.content_id for pc in all_contents if pc.content_type == "question_set"]
 
-    template_titles: dict = {}
+    templates_by_id: dict = {}
     if template_ids:
-        r = await session.execute(select(Template.id, Template.title).where(Template.id.in_(template_ids)))
-        template_titles = dict(r.all())
+        r = await session.execute(select(Template).where(Template.id.in_(template_ids)))
+        templates_by_id = {t.id: t for t in r.scalars().all()}
+    template_titles = {tid: t.title for tid, t in templates_by_id.items()}
 
     lessons_by_id: dict = {}
     if lesson_ids:
@@ -81,7 +102,7 @@ async def _resolve_contents_bulk(
     course_slugs_by_id: dict = {}
     if course_ids:
         r = await session.execute(select(Course.id, Course.slug).where(Course.id.in_(course_ids)))
-        course_slugs_by_id = dict(r.all())
+        course_slugs_by_id = {course_id: slug for course_id, slug in r.all()}
 
     questions_by_id: dict = {}
     if question_ids:
@@ -115,10 +136,26 @@ async def _resolve_contents_bulk(
             ProductContentOut(content_type=pc.content_type, label=label or pc.content_type, href=href)
         )
 
-    return contents_by_product
+    # W4-R1's evidence facts (page count, previews, ...) live on `templates`, and only
+    # mean something unambiguous when a product IS a single template — a multi-item
+    # bundle has no one page count to show. Products.py's own absence rule handles a
+    # bundle gracefully: it's simply not in this map, so ProductOut's evidence fields
+    # stay null and EvidencePanel renders nothing extra for it.
+    contents_by_product_type: dict[str, list[str]] = {str(p.id): [] for p in products}
+    for pc in all_contents:
+        contents_by_product_type[str(pc.product_id)].append(pc.content_type)
+    single_template_by_product: dict[str, Template] = {}
+    for pc in all_contents:
+        if pc.content_type != "template":
+            continue
+        pid = str(pc.product_id)
+        if contents_by_product_type[pid] == ["template"] and pc.content_id in templates_by_id:
+            single_template_by_product[pid] = templates_by_id[pc.content_id]
+
+    return contents_by_product, single_template_by_product
 
 
-def _to_out(product: Product, contents: list[ProductContentOut]) -> ProductOut:
+def _to_out(product: Product, contents: list[ProductContentOut], template: Template | None = None) -> ProductOut:
     return ProductOut(
         id=str(product.id),
         slug=product.slug,
@@ -127,6 +164,18 @@ def _to_out(product: Product, contents: list[ProductContentOut]) -> ProductOut:
         price_amount=product.price_amount,
         currency=product.currency,
         contents=contents,
+        licence=product.licence.value if product.licence else None,
+        search_title=product.search_title,
+        version=product.version,
+        last_reviewed_at=product.last_reviewed_at,
+        is_bundle=product.is_bundle,
+        page_count=template.page_count if template else None,
+        sheet_count=template.sheet_count if template else None,
+        is_editable=template.is_editable if template else None,
+        has_macros=template.has_macros if template else False,
+        min_office_version=template.min_office_version if template else None,
+        previews=resolve_previews(template.preview_image_keys) if template else [],
+        format=format_line(template.file_name) if template and template.storage_key else None,
     )
 
 
@@ -148,8 +197,52 @@ async def list_products(session: AsyncSession = Depends(get_session)):
         select(Product).where(Product.published.is_(True)).order_by(Product.created_at.desc())
     )
     products = list(result.scalars().all())
-    contents_by_product = await _resolve_contents_bulk(products, session)
-    return [_to_out(p, contents_by_product[str(p.id)]) for p in products]
+    contents_by_product, single_template_by_product = await _resolve_contents_bulk(products, session)
+    return [
+        _to_out(p, contents_by_product[str(p.id)], single_template_by_product.get(str(p.id)))
+        for p in products
+    ]
+
+
+@router.get("/products/for-questions", response_model=list[ProductOut])
+async def list_products_for_questions(
+    ids: List[str] = Query(..., description="Question IDs to find products for"),
+    session: AsyncSession = Depends(get_session),
+):
+    """Products that include any of the given questions, ranked by price (cheapest first).
+    
+    Catalogue twin to /questions/{slug}/related-products. Used for catalogue page
+    situation-based product recommendations (week4_plan.md W4-R9).
+    """
+    if not ids:
+        return []
+    
+    # Convert string IDs to UUIDs
+    try:
+        question_uuids = [uuid.UUID(id) for id in ids]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid question ID format")
+    
+    # Find products that include any of these questions via product_contents
+    result = await session.execute(
+        select(Product)
+        .join(ProductContent, ProductContent.product_id == Product.id)
+        .where(
+            ProductContent.content_type == "question_set",
+            ProductContent.content_id.in_(question_uuids),
+            Product.published.is_(True),
+        )
+        # Cheapest first, deduplicated by product
+        .order_by(Product.price_amount)
+        .distinct()
+    )
+    
+    products = list(result.scalars().all())
+    contents_by_product, single_template_by_product = await _resolve_contents_bulk(products, session)
+    return [
+        _to_out(p, contents_by_product[str(p.id)], single_template_by_product.get(str(p.id)))
+        for p in products
+    ]
 
 
 @router.get("/products/{slug}", response_model=ProductOut)
@@ -162,5 +255,5 @@ async def get_product(slug: str, session: AsyncSession = Depends(get_session)):
     if not product or not product.published:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    contents_by_product = await _resolve_contents_bulk([product], session)
-    return _to_out(product, contents_by_product[str(product.id)])
+    contents_by_product, single_template_by_product = await _resolve_contents_bulk([product], session)
+    return _to_out(product, contents_by_product[str(product.id)], single_template_by_product.get(str(product.id)))

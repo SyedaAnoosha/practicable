@@ -1,6 +1,7 @@
 """Admin CRUD for templates, including the downloadable file upload."""
 import asyncio
 import uuid
+from datetime import datetime
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -13,6 +14,7 @@ from app.core.publish_guard import check_has_macros, check_preview_images
 from app.db.models import Author, Section, Template, User, Product, ProductContent
 from app.db.session import get_session
 from app.integrations.storage_client import delete_file, generate_presigned_upload_url, head_object, upload_file
+from app.services.template_evidence import format_line, resolve_previews
 
 from .common import PublishStateIn, apply_publish_state_or_422, ensure_unique_slug, get_or_404, record_audit, slugify
 
@@ -42,6 +44,16 @@ ALLOWED_PREVIEW_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 MAX_PREVIEW_UPLOAD_BYTES = 8 * 1024 * 1024
 
 
+class PreviewImageOut(BaseModel):
+    """One admin-facing preview row: the raw key (so the admin UI can issue a remove
+    call against it) plus a resolved URL to actually render the thumbnail, and its
+    alt text. Never sent to a public endpoint — see `template_evidence.PreviewOut`,
+    which strips the key."""
+    storage_key: str
+    url: str
+    alt: str
+
+
 class TemplateWriteIn(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     description: str = Field(min_length=1)
@@ -53,8 +65,8 @@ class TemplateWriteIn(BaseModel):
     is_editable: Optional[bool] = None
     has_macros: bool = False
     min_office_version: Optional[str] = None
-    preview_image_keys: List[str] = Field(default_factory=list)
     version: Optional[str] = None
+    last_reviewed_at: Optional[datetime] = None
 
 
 class TemplateOut(BaseModel):
@@ -77,11 +89,20 @@ class TemplateOut(BaseModel):
     is_editable: Optional[bool] = None
     has_macros: bool = False
     min_office_version: Optional[str] = None
-    preview_image_keys: List[str] = Field(default_factory=list)
+    preview_images: List[PreviewImageOut] = Field(default_factory=list)
     version: Optional[str] = None
+    last_reviewed_at: Optional[datetime] = None
+    format: Optional[str] = None
 
 
 def _to_out(t: Template) -> TemplateOut:
+    previews = []
+    for item in t.preview_image_keys or []:
+        key = item if isinstance(item, str) else item.get("key", "")
+        alt = "" if isinstance(item, str) else item.get("alt", "")
+        if not key:
+            continue
+        previews.append(PreviewImageOut(storage_key=key, url=resolve_previews([{"key": key, "alt": alt}])[0].url, alt=alt))
     return TemplateOut(
         id=str(t.id), slug=t.slug, title=t.title, description=t.description,
         file_name=t.file_name, file_size_bytes=t.file_size_bytes,
@@ -89,8 +110,10 @@ def _to_out(t: Template) -> TemplateOut:
         has_file=bool(t.storage_key),
         page_count=t.page_count, sheet_count=t.sheet_count, is_editable=t.is_editable,
         has_macros=t.has_macros, min_office_version=t.min_office_version,
-        preview_image_keys=list(t.preview_image_keys or []),
+        preview_images=previews,
         version=t.version,
+        last_reviewed_at=t.last_reviewed_at,
+        format=format_line(t.file_name) if t.storage_key else None,
     )
 
 
@@ -169,9 +192,13 @@ async def update_template(
     template.is_editable = payload.is_editable
     template.has_macros = payload.has_macros
     template.min_office_version = payload.min_office_version
-    template.preview_image_keys = payload.preview_image_keys
+    # preview_image_keys is NOT touched here — it's managed by the dedicated
+    # upload/confirm and remove-preview endpoints below, each of which needs to also
+    # act on Storage (write or delete an object), which a bare field assignment on this
+    # general-purpose PUT can't do safely.
     if payload.version is not None:
         template.version = payload.version
+    template.last_reviewed_at = payload.last_reviewed_at
     await record_audit(
         session, actor=admin, action="update_template", target_type="template",
         target_id=template.id, context={"title": template.title, "is_free": template.is_free},
@@ -315,6 +342,10 @@ class UploadConfirmIn(BaseModel):
     storage_key: str
     file_name: str = Field(min_length=1, max_length=255)
     kind: Literal["file", "preview"] = "file"
+    # Required for kind='preview' only (validated below, not via a bare Field(...),
+    # since kind='file' never supplies or needs one). §20.2: "alt text is a
+    # requirement, not a nicety" — enforced here, not left to the admin's memory.
+    alt: Optional[str] = Field(default=None, max_length=300)
 
 
 @router.post("/admin/templates/{template_id}/upload-url/confirm", response_model=TemplateOut)
@@ -338,6 +369,17 @@ async def confirm_template_upload(
     is_preview = payload.kind == "preview"
     max_bytes = MAX_PREVIEW_UPLOAD_BYTES if is_preview else MAX_UPLOAD_BYTES
 
+    if is_preview and not (payload.alt and payload.alt.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error": {
+                    "code": "alt_text_required",
+                    "message": "Describe what this page shows (e.g. \"Page 3: the weighted-criteria table\") — a buyer decides on this image, so it needs real alt text.",
+                }
+            },
+        )
+
     meta = await asyncio.to_thread(head_object, payload.storage_key)
     if meta is None:
         raise HTTPException(
@@ -353,8 +395,9 @@ async def confirm_template_upload(
         )
 
     if is_preview:
+        alt_text = (payload.alt or "").strip()
         existing = list(template.preview_image_keys or [])
-        existing.append(payload.storage_key)
+        existing.append({"key": payload.storage_key, "alt": alt_text})
         template.preview_image_keys = existing
         await record_audit(
             session, actor=admin, action="upload_template_preview", target_type="template",
@@ -381,6 +424,49 @@ async def confirm_template_upload(
             await asyncio.to_thread(delete_file, previous_key)
         except Exception:  # noqa: BLE001 — best-effort, row is already committed
             pass
+
+    return _to_out(template)
+
+
+class RemovePreviewIn(BaseModel):
+    storage_key: str
+
+
+@router.post("/admin/templates/{template_id}/preview/remove", response_model=TemplateOut)
+async def remove_template_preview(
+    template_id: uuid.UUID,
+    payload: RemovePreviewIn,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """The other half of the `kind='preview'` upload path — a wrong page, a bad crop, or
+    a scorecard that's since changed needs a way back out, not just a way in. Removes
+    the row from `preview_image_keys` and deletes the Storage object; the row update
+    commits first, same "row is truth, Storage cleanup is best-effort" ordering as the
+    sold-file replace path above.
+    """
+    template = await get_or_404(session, Template, template_id, "Template")
+    existing = list(template.preview_image_keys or [])
+    remaining = [
+        item for item in existing
+        if (item if isinstance(item, str) else item.get("key")) != payload.storage_key
+    ]
+    if len(remaining) == len(existing):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "preview_not_found", "message": "That preview image isn't on this template."}},
+        )
+    template.preview_image_keys = remaining
+    await record_audit(
+        session, actor=admin, action="remove_template_preview", target_type="template",
+        target_id=template.id, context={"storage_key": payload.storage_key, "remaining": len(remaining)},
+    )
+    await session.commit()
+
+    try:
+        await asyncio.to_thread(delete_file, payload.storage_key)
+    except Exception:  # noqa: BLE001 — best-effort, row is already committed
+        pass
 
     return _to_out(template)
 
@@ -436,7 +522,7 @@ async def create_template_product(
             currency="AUD",
             product_name=template.title,
         )
-    except stripe.error.StripeError as e:
+    except stripe.StripeError as e:
         # Stripe failed: return 502 with Stripe's message, no DB row created
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

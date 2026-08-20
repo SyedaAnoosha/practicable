@@ -42,7 +42,7 @@ async def stripe_webhook(
         event = construct_webhook_event(payload, sig_header)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid payload: {e}")
-    except stripe.error.SignatureVerificationError as e:
+    except stripe.SignatureVerificationError as e:
         raise HTTPException(status_code=400, detail=f"Invalid signature: {e}")
 
     # Idempotency: insert the event id first and return early on conflict, so a Stripe
@@ -116,7 +116,7 @@ async def stripe_webhook(
                 frontend_base = settings.frontend_url.rstrip("/")
                 library_url = f"{frontend_base}/library"
 
-                contents_by_product = await _resolve_contents_bulk(products, session)
+                contents_by_product, _ = await _resolve_contents_bulk(products, session)
 
                 if user:
                     product_names = [p.name for p in products]
@@ -232,7 +232,7 @@ async def stripe_webhook(
                     user_result = await session.execute(select(User).where(User.id == order.user_id))
                     user = user_result.scalar_one_or_none()
                     if user:
-                        contents_by_product = await _resolve_contents_bulk(result.revoked_products, session)
+                        contents_by_product, _ = await _resolve_contents_bulk(result.revoked_products, session)
                         removed_items = [
                             c.label
                             for product in result.revoked_products

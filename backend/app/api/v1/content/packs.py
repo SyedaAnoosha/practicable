@@ -32,8 +32,10 @@ from app.core.entitlements import (
     resolve_granted_content_ids,
     resolve_product_ids,
 )
+from datetime import datetime
 from app.db.models import Domain, Product, ProductContent, Question, TagValue, Template
 from app.db.session import get_session
+from app.services.template_evidence import PreviewOut, format_line, resolve_previews
 
 router = APIRouter()
 
@@ -72,6 +74,21 @@ class PackSummaryOut(BaseModel):
     template_id: Optional[str]
     file_name: Optional[str]
     file_size_bytes: Optional[int]
+    # Evidence layer — W4-R1. page_count..previews come from the pack's bundled
+    # template row (the PDF) — a pack with no template row yet has none of these set,
+    # same absence rule as everywhere else on this page (EvidencePanel §20.1).
+    licence: Optional[str] = None
+    search_title: Optional[str] = None
+    version: Optional[str] = None
+    last_reviewed_at: Optional[datetime] = None
+    is_bundle: bool = False
+    page_count: Optional[int] = None
+    sheet_count: Optional[int] = None
+    is_editable: Optional[bool] = None
+    has_macros: bool = False
+    min_office_version: Optional[str] = None
+    previews: list[PreviewOut] = []
+    format: Optional[str] = None
 
 
 class PackDetailOut(PackSummaryOut):
@@ -169,6 +186,18 @@ def _summary(product: Product, loaded: dict, owned: bool) -> dict:
         "template_id": str(tpl.id) if tpl else None,
         "file_name": tpl.file_name if tpl else None,
         "file_size_bytes": tpl.file_size_bytes if tpl else None,
+        "licence": product.licence.value if product.licence else None,
+        "search_title": product.search_title,
+        "version": product.version,
+        "last_reviewed_at": product.last_reviewed_at,
+        "is_bundle": product.is_bundle,
+        "page_count": tpl.page_count if tpl else None,
+        "sheet_count": tpl.sheet_count if tpl else None,
+        "is_editable": tpl.is_editable if tpl else None,
+        "has_macros": tpl.has_macros if tpl else False,
+        "min_office_version": tpl.min_office_version if tpl else None,
+        "previews": resolve_previews(tpl.preview_image_keys) if tpl else [],
+        "format": format_line(tpl.file_name) if tpl and tpl.storage_key else None,
     }
 
 

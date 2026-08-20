@@ -17,6 +17,7 @@ from app.core.entitlements import (
 )
 from app.integrations.posthog_client import capture_download_failed
 from app.integrations.storage_client import generate_presigned_url
+from app.services.template_evidence import PreviewOut, format_line, resolve_previews
 import uuid
 
 router = APIRouter()
@@ -26,6 +27,8 @@ class ProductRefOut(BaseModel):
     name: str
     price_amount: int
     currency: str
+
+from datetime import datetime
 
 class TemplateSummaryOut(BaseModel):
     id: str
@@ -38,6 +41,18 @@ class TemplateSummaryOut(BaseModel):
     # When true, `product` is None and `owned` is meaningless — the card shows an email
     # capture instead of a price.
     is_free: bool
+    # Evidence layer (W4-R1)
+    page_count: Optional[int] = None
+    sheet_count: Optional[int] = None
+    is_editable: Optional[bool] = None
+    has_macros: bool = False
+    min_office_version: Optional[str] = None
+    # Resolved {url, alt} pairs — never a raw Storage key (BACKEND.md §4.1).
+    previews: list[PreviewOut] = []
+    version: Optional[str] = None
+    last_reviewed_at: Optional[datetime] = None
+    # ".xlsx · 1 file" — read off the real uploaded file, never typed per product.
+    format: Optional[str] = None
 
 class DownloadUrlOut(BaseModel):
     download_url: str
@@ -106,6 +121,15 @@ async def list_templates(
                 # A free template never advertises a price, even if a product points at it.
                 product=None if t.is_free else product_out,
                 is_free=t.is_free,
+                page_count=t.page_count,
+                sheet_count=t.sheet_count,
+                is_editable=t.is_editable,
+                has_macros=t.has_macros,
+                min_office_version=t.min_office_version,
+                previews=resolve_previews(t.preview_image_keys),
+                version=t.version,
+                last_reviewed_at=t.last_reviewed_at,
+                format=format_line(t.file_name) if t.storage_key else None,
             )
         )
     return out
@@ -155,6 +179,15 @@ async def get_template(
         id=str(template.id), slug=template.slug, title=template.title,
         description=template.description, file_name=template.file_name,
         owned=owned, product=product_out, is_free=template.is_free,
+        page_count=template.page_count,
+        sheet_count=template.sheet_count,
+        is_editable=template.is_editable,
+        has_macros=template.has_macros,
+        min_office_version=template.min_office_version,
+        previews=resolve_previews(template.preview_image_keys),
+        version=template.version,
+        last_reviewed_at=template.last_reviewed_at,
+        format=format_line(template.file_name) if template.storage_key else None,
     )
 
 

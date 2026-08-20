@@ -10,7 +10,7 @@ import uuid
 from typing import Optional
 
 import stripe as stripe_sdk
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,19 +44,34 @@ class AdminOrderRowOut(BaseModel):
     # second request.
     order_status: str  # "pending" | "completed" | "failed" | "refunded"
     order_total_amount_cents: int
+    # Keyset pagination cursor — the created_at timestamp for this row
+    cursor: str
 
 
-async def _order_rows(session: AsyncSession) -> list[AdminOrderRowOut]:
+async def _order_rows(session: AsyncSession, cursor: Optional[str] = None, limit: int = 100) -> list[AdminOrderRowOut]:
     """One row per (order, order_item) — almost always one item per order today, but
     the schema allows more, and this table must never silently drop a second line item.
+    
+    Uses keyset pagination on Order.created_at for efficient large datasets.
     """
-    result = await session.execute(
+    query = (
         select(Order, OrderItem, User, Product)
         .join(OrderItem, OrderItem.order_id == Order.id)
         .join(User, User.id == Order.user_id)
         .join(Product, Product.id == OrderItem.product_id)
-        .order_by(Order.created_at.desc())
     )
+    
+    if cursor:
+        try:
+            cursor_date = cursor  # cursor is the ISO date string
+            query = query.where(Order.created_at < cursor_date)
+        except ValueError:
+            # Invalid cursor format - ignore and return from start
+            pass
+    
+    query = query.order_by(Order.created_at.desc()).limit(limit)
+    
+    result = await session.execute(query)
     rows = result.all()
     if not rows:
         return []
@@ -91,17 +106,25 @@ async def _order_rows(session: AsyncSession) -> list[AdminOrderRowOut]:
                 user_id=str(order.user_id),
                 order_status=order.status.value,
                 order_total_amount_cents=order.total_amount_cents,
+                cursor=order.created_at.isoformat(),
             )
         )
     return out
 
 
 @router.get("/admin/orders", response_model=list[AdminOrderRowOut])
-async def list_orders(session: AsyncSession = Depends(get_session)):
+async def list_orders(
+    cursor: Optional[str] = Query(default=None, description="Pagination cursor (ISO timestamp)"),
+    limit: int = Query(default=100, le=500, description="Maximum number of rows to return"),
+    session: AsyncSession = Depends(get_session),
+):
     """The reconciliation table: date, customer email, product, amount, currency,
     Stripe reference, entitlement status. `missing` is the payment-succeeded-webhook-
-    failed case the manual grant below exists for."""
-    return await _order_rows(session)
+    failed case the manual grant below exists for.
+    
+    Supports keyset pagination via cursor parameter for efficient large datasets.
+    """
+    return await _order_rows(session, cursor=cursor, limit=limit)
 
 
 @router.get("/admin/orders/export")
@@ -229,7 +252,7 @@ async def refund_order(
 
     try:
         create_refund(payment_intent_id=order.stripe_payment_intent_id)
-    except stripe_sdk.error.StripeError as e:
+    except stripe_sdk.StripeError as e:
         # §20.3: inline, never a toast — a toast for a money operation disappears
         # before it's read. The frontend renders this message directly in the dialog.
         raise HTTPException(status_code=502, detail=f"Stripe declined the refund: {e.user_message or str(e)}")
@@ -243,7 +266,7 @@ async def refund_order(
 
     user = (await session.execute(select(User).where(User.id == order.user_id))).scalar_one_or_none()
     if user:
-        contents_by_product = await _resolve_contents_bulk(result.revoked_products, session)
+        contents_by_product, _ = await _resolve_contents_bulk(result.revoked_products, session)
         removed_items = [
             c.label
             for product in result.revoked_products

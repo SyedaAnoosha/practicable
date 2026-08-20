@@ -80,12 +80,20 @@ async def test_preview_upload_end_to_end_real_storage(
 
         confirm_resp = await admin_client.post(
             f"/admin/templates/{template_id}/upload-url/confirm",
-            json={"storage_key": storage_key, "file_name": "preview-1.png", "kind": "preview"},
+            json={
+                "storage_key": storage_key, "file_name": "preview-1.png", "kind": "preview",
+                "alt": "Page 1 of the test template: the cover sheet",
+            },
         )
         assert confirm_resp.status_code == 200, confirm_resp.text
         out = confirm_resp.json()
-        assert storage_key in out["preview_image_keys"], out["preview_image_keys"]
-        assert len(out["preview_image_keys"]) == 1
+        preview_keys = [p["storage_key"] for p in out["preview_images"]]
+        assert storage_key in preview_keys, out["preview_images"]
+        assert len(out["preview_images"]) == 1
+        assert out["preview_images"][0]["alt"] == "Page 1 of the test template: the cover sheet"
+        # Never the raw key rendered as a URL — resolved to a real presigned Storage URL.
+        assert out["preview_images"][0]["url"] != storage_key
+        assert out["preview_images"][0]["url"].startswith("http")
 
         await db_session.refresh(template)
         assert template.storage_key == original_storage_key, (
@@ -124,3 +132,33 @@ async def test_preview_upload_rejects_non_image_content_type(admin_client: httpx
         },
     )
     assert resp.status_code == 415, resp.text
+
+
+@pytest.mark.asyncio
+async def test_preview_confirm_rejects_missing_alt_text(admin_client: httpx.AsyncClient, db_session: AsyncSession):
+    """§20.2: 'alt text is a requirement, not a nicety' — confirm refuses a preview with
+    no alt text (or whitespace-only) rather than silently accepting one, since nothing
+    downstream would ever prompt for it again once the row exists."""
+    section = Section(name="Upload Test Section 3", slug=f"upload-test-section3-{uuid.uuid4().hex[:8]}")
+    author = Author(name="Upload Test Author 3", slug=f"upload-test-author3-{uuid.uuid4().hex[:8]}")
+    db_session.add_all([section, author])
+    await db_session.flush()
+    template = Template(
+        slug=f"upload-test-template3-{uuid.uuid4().hex[:8]}",
+        title="Upload Test Template 3", description="d",
+        section_id=section.id, author_id=author.id, storage_key="templates/existing-file.xlsx",
+        file_name="existing.xlsx", file_size_bytes=100,
+        mime_type="application/pdf", preview_image_keys=[],
+    )
+    db_session.add(template)
+    await db_session.flush()
+
+    for bad_alt in (None, "", "   "):
+        payload = {"storage_key": "templates/x/previews/never-uploaded.png", "file_name": "p.png", "kind": "preview"}
+        if bad_alt is not None:
+            payload["alt"] = bad_alt
+        resp = await admin_client.post(
+            f"/admin/templates/{template.id}/upload-url/confirm", json=payload,
+        )
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"]["error"]["code"] == "alt_text_required"
