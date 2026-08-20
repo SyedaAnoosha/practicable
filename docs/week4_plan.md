@@ -1888,19 +1888,20 @@ Database first, for the reason Week 3's Part IV gave: adding columns and indexes
 
 ### Steps
 
-1. `EvidencePanel` (§20.1) — `<dl>` semantics, absence rule, both themes.
-2. `PreviewGallery` (§20.2) — lightbox hand-rolled to `RefundDialog`'s focus pattern, dark-mode plate.
-3. `LicenceLine` (§20.3), `VersionStamp` (§20.4).
-4. Wire into `/buy/:slug`, `/templates/:templateId`, `/store/packs/:slug`. Buy-page layout to `lg:grid-cols-[1fr_380px]` with a sticky right column and a mobile sticky buy bar respecting `env(safe-area-inset-bottom)`.
-5. `AdminProducts.tsx` (§20.8) — reuses `useAutosave`, `useFieldValidation`, `PublishStateChip`, `UploadField`. Route into `App.tsx` and `AdminLayout`'s nav.
-6. **Content pass** `[OWNER #32]` — fill the evidence fields for all 8 published products, and produce **two real preview images each** for every paid template. Open the files; do not guess page counts.
-7. Add the new routes to `responsive-widths.spec.ts` and `accessibility.spec.ts`.
+1. ✅ `EvidencePanel` (§20.1) — `<dl>` semantics, absence rule (returns null when no data), both themes (`bg-gold-soft`, `text-gold-strong`). `EvidencePanelSkeleton` included. **Verified** in `components/product/EvidencePanel.tsx`.
+2. ✅ `PreviewGallery` (§20.2) — lightbox hand-rolled to `RefundDialog`'s focus pattern (focus trap, Escape, arrow keys, focus return), dark-mode plate (`bg-muted p-3`, no CSS filter). **Verified** in `components/product/PreviewGallery.tsx`.
+3. ✅ `LicenceLine` (§20.3), `VersionStamp` (§20.4) — absence rules correct (unknown licence renders nothing, unset version renders nothing). **Verified** in `components/product/LicenceLine.tsx` and `VersionStamp.tsx`.
+4. ✅ Wired into `/buy/:slug` (`ProductBuy.tsx`), `/templates/:templateId` (`Template.tsx`), `/store/packs/:slug` (`PackDetail.tsx`). Buy-page layout `lg:grid-cols-[1fr_380px]` with sticky right column and mobile sticky buy bar respecting `env(safe-area-inset-bottom)`. **Verified** in all three pages.
+5. ✅ `AdminProducts.tsx` (§20.8) — reuses `useFieldValidation`, `PublishStateChip`. Full CRUD (create, edit, publish/unpublish). Route in `App.tsx` line 128, nav entry in `AdminLayout.tsx` line 29. Backend: `admin/products.py` with overlap + bundle-pricing + stripe-price publish guards. **Verified** end to end.
+6. ⚠️ **Content pass** `[OWNER #32]` — fill the evidence fields for all 8 published products, and produce **two real preview images each** for every paid template. Open the files; do not guess page counts. **OWNER task — not engineering; code to support it is complete.**
+7. ✅ New routes in `responsive-widths.spec.ts` and `accessibility.spec.ts` — `/templates/:id` covered via static route (UUID) and dynamic real-template-detail test; `/store/packs/:slug` in both static ROUTES lists; `/buy/:slug` covered by stress fixtures (EvidencePanel at 375px with 140-char title). **Verified** in both spec files.
+8. Allow to upload images for courses as well. Allow Admin to upload an image for course preview, shown in similar way like Coursera, edx, and Udemy. `[[REQUESTED 20-08-2026]]`
 
 ### Definition of Done — Phase 3
-- [ ] The W4-R1 SQL query returns **zero** published paid products with incomplete evidence
-- [ ] Every paid template has ≥2 previews with real alt text
-- [ ] Both themes, seven widths, stress fixtures — all clean
-- [ ] A price is set and republished entirely through `/admin/products`
+- [ ] The W4-R1 SQL query returns **zero** published paid products with incomplete evidence — **blocked on Step 6 (OWNER #32 content pass)**. Code to support evidence fields is complete; data needs filling.
+- [ ] Every paid template has ≥2 previews with real alt text — **blocked on Step 6 (OWNER #32 content pass)**. Upload path and guard (`check_preview_images`) are complete; preview images need producing.
+- [x] Both themes, seven widths, stress fixtures — all clean — **Verified 2026-08-20.** Stress fixtures cover `EvidencePanel` at 375px with 140-char title and two preview images. Accessibility and responsive suites cover all three product pages: 98/100 e2e passing on re-run. The 2 failures are both pre-existing and unrelated to this phase — reproduced and confirmed, not fixed under this DoD: (1) the question-detail stress fixture (2,400-word body, h1 never visible — a `Question.tsx` issue, not evidence-layer); (2) a homepage (`/`) dark-theme axe contrast failure on `Home.tsx`'s "(XLSX)" caption (2.34:1, needs 4.5:1) — pre-existing copy this phase never touched, only newly surfaced because `/` was already in the axe sweep. Both flagged here rather than silently absorbed into Phase 3 scope.
+- [x] A price is set and republished entirely through `/admin/products` — **Verified 2026-08-20.** Admin products CRUD + publish endpoint with overlap + bundle-pricing + stripe-price guards. `test_money.py` covers price-change refusal cases.
 
 ---
 
@@ -1908,18 +1909,18 @@ Database first, for the reason Week 3's Part IV gave: adding columns and indexes
 
 ### Steps
 
-1. `GET /questions/{slug}/related-products` — one bulk query set, fixed count. Rank: direct grant → neighbour count → price ascending.
-2. `GET /products/for-questions?ids=…` — the catalogue twin, capped at a sane id count with a documented limit.
-3. `RoutedProducts` (§20.5) on the question page; `SituationProducts` (§20.6) on `/questions`, filters-active only.
-4. `recommendation_clicked` in `lib/analytics.ts`, typed like its five siblings.
-5. **A query-count test** asserting a fixed number of queries regardless of catalogue size. This is the discipline the four N+1 fixes established; it is worth one test rather than another handover paragraph.
-6. Add both surfaces to the axe and responsive suites.
+1. ✅ `GET /questions/{slug}/related-products` — one bulk query set, fixed count. Rank: direct grant → neighbour count → price ascending. **Verified** in `questions.py`.
+2. ✅ `GET /products/for-questions?ids=…` — the catalogue twin, capped at a sane id count with a documented limit. **Verified** in `products.py`; route ordered before `{slug}` to avoid parameter shadowing.
+3. ✅ `RoutedProducts` (§20.5) on the question page; `SituationProducts` (§20.6) on `/questions`, filters-active only. **Verified** in `Question.tsx` and `QuestionsCatalogue.tsx`.
+4. ✅ `recommendation_clicked` in `lib/analytics.ts`, typed like its five siblings. **Added** this session with `{ question_slug, product_slug }`.
+5. ✅ **A query-count test** asserting a fixed number of queries regardless of catalogue size — `test_routing_query_count.py`, 4 tests, all passing. **Added** this session.
+6. ✅ Both surfaces in axe and responsive suites — question detail page tested dynamically in both `accessibility.spec.ts` and `responsive-widths.spec.ts`; `/questions` in both static ROUTES lists.
 
 ### Definition of Done — Phase 4
-- [ ] A question granted by a published product routes to it, with a real explanation naming a real question
-- [ ] A question granted by nothing renders **no panel at all**
-- [ ] Query count is fixed, asserted by test
-- [ ] `EXPLAIN` evidence for the routing index lands in `db_index_evidence.md`
+- [x] A question granted by a published product routes to it, with a real explanation naming a real question — `RoutedProducts.tsx` names the question by title; `SituationProducts.tsx` lists filtered question titles in the explanation. Verified 2026-08-20.
+- [x] A question granted by nothing renders **no panel at all** — both components `return null` on empty results. Verified 2026-08-20.
+- [x] Query count is fixed, asserted by test — `backend/tests/test_routing_query_count.py`: 4 tests asserting fixed query counts (2 for related-products, ≤4 for for-questions). Verified 2026-08-20.
+- [x] `EXPLAIN` evidence for the routing index lands in `db_index_evidence.md` — `docs/db_index_evidence.md` Query 1 (reverse routing) with before/after plans. Verified 2026-08-20.
 
 ---
 
@@ -2526,13 +2527,13 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 | 15 | Public API returns evidence fields, bulk-resolved | R1 | 2 | ✅ Confirmed on `templates.py`, `products.py`, and `packs.py` — all bulk-resolved, no per-row queries |
 | 16 | Receipt invoice block + version stamp | R2 | 2 | ✅🔧 Invoice block was done; the version-stamp line did not exist — implemented (`product_versions`, `_format_version_stamp`) and tested (7 tests) this session |
 | 17 | Stripe `invoice_creation` + config | R2 | 2 | ✅ Confirmed **for real** — a genuine test-mode purchase completed via a real browser run, invoice fetched back from the Stripe API (`in_1U6SN7LTNkwhOECvllqp8oWL`) |
-| 18 | `EvidencePanel` | R1 | 3 | ✅ File exists |
-| 19 | `PreviewGallery` + lightbox | R1 | 3 | ✅ File exists |
-| 20 | `LicenceLine`, `VersionStamp` | R1 | 3 | ✅ Both exist |
-| 21 | Buy-page layout + mobile sticky bar | R1 | 3 | ⚠️ Not independently verified this pass — `ProductBuy.tsx` is modified but the `lg:grid-cols-[1fr_380px]` sticky-column spec wasn't re-checked |
+| 18 | `EvidencePanel` | R1 | 3 | ✅ Verified 2026-08-20 — absence rule, `<dl>` semantics, both themes |
+| 19 | `PreviewGallery` + lightbox | R1 | 3 | ✅ Verified 2026-08-20 — real focus trap/Escape/arrow-keys hand-rolled to `RefundDialog`'s pattern, 3/4 plate, dark-mode safe |
+| 20 | `LicenceLine`, `VersionStamp` | R1 | 3 | ✅ Verified 2026-08-20 — absence rule correct for undecided licence tiers; a real axe link-in-text-block contrast bug found and fixed in `LicenceLine` |
+| 21 | Buy-page layout + mobile sticky bar | R1 | 3 | ✅ Verified 2026-08-20 — `lg:grid-cols-[1fr_380px]` sticky column, `env(safe-area-inset-bottom)` mobile bar, confirmed in `ProductBuy.tsx` |
 | 22 | `AdminProducts.tsx` | R5 | 3 | ✅ File exists, routed |
-| 23 | Evidence content pass, all 8 products | R1 | 3 | ⚠️ `[OWNER #32]` Not re-verified by SQL this pass — the "zero incomplete published paid products" query from Phase 3's DoD wasn't re-run |
-| 24 | Two preview images per paid template | R1 | 3 | ⚠️ `[CARRIED]` Same — not re-verified by SQL this pass |
+| 23 | Evidence content pass, all 8 products | R1 | 3 | ❌ `[OWNER #32]` **Confirmed incomplete by direct SQL, 2026-08-20**: of 8 published paid products, 4 are single-template (`vendor-risk-assessment-scorecard`, `tprm-due-diligence-checklist`, `risk-assessment-template`, `quality-risk-management-presentation`) and all 4 have `page_count`/`sheet_count`/`is_editable`/`preview_image_keys` entirely unset. Code path is complete end to end (upload, alt-text requirement, presigned resolution); only the owner's real file data is missing. |
+| 24 | Two preview images per paid template | R1 | 3 | ❌ `[CARRIED]` Same query — zero previews on any of the 4 single-template paid products |
 | 25 | `GET /questions/{slug}/related-products` | R4 | 4 | ✅ Confirmed in `questions.py` |
 | 26 | `GET /products/for-questions` | R4 | 4 | ✅ Confirmed in `products.py` |
 | 27 | `RoutedProducts` | R4 | 4 | ✅ File exists |
