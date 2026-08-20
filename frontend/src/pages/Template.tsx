@@ -10,7 +10,9 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { PageTitle } from '@/components/ui/PageTitle'
+import { EvidencePanel } from '@/components/product/EvidencePanel'
 
 interface DownloadUrlResponse {
   download_url: string
@@ -27,6 +29,13 @@ interface TemplateDetail {
   owned: boolean
   is_free: boolean
   product: { slug: string; name: string; price_amount: number; currency: string } | null
+  page_count?: number
+  sheet_count?: number
+  is_editable?: boolean
+  has_macros?: boolean
+  min_office_version?: string
+  preview_image_keys?: string[]
+  version?: string
 }
 
 type DownloadStatus = 'idle' | 'preparing' | 'downloaded' | 'error' | 'not-entitled'
@@ -176,11 +185,20 @@ export function Template() {
             </span>
             {template.is_free && <Badge variant="success">Free</Badge>}
           </div>
-          <CardTitle className="mt-3">{template.title}</CardTitle>
-          <CardDescription>{template.description}</CardDescription>
+          <PageTitle className="mt-3" title={template.title} description={template.description} />
         </CardHeader>
         <CardContent>
           <p className="mb-4 font-mono text-xs text-muted-foreground">{template.file_name}</p>
+
+          <EvidencePanel
+            pageCount={template.page_count}
+            sheetCount={template.sheet_count}
+            isEditable={template.is_editable}
+            hasMacros={template.has_macros}
+            minOfficeVersion={template.min_office_version}
+            previewImageKeys={template.preview_image_keys}
+            version={template.version}
+          />
 
           {canDownload && downloadButton}
 
