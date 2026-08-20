@@ -7,6 +7,7 @@ where a write needs to record who did it.
 import csv
 import io
 import uuid
+from datetime import datetime
 from typing import Optional
 
 import stripe as stripe_sdk
@@ -62,8 +63,15 @@ async def _order_rows(session: AsyncSession, cursor: Optional[str] = None, limit
     )
     
     if cursor:
+        # `[FIXED]` This used to assign `cursor_date = cursor` inside the try block —
+        # a bare assignment that can never raise ValueError, so a malformed cursor
+        # skipped the "ignore and return from start" the comment promised and instead
+        # reached asyncpg as a raw string compared against a timestamptz column,
+        # crashing with an unhandled 500 (`operator does not exist: timestamp with
+        # time zone < character varying`). Parsing the cursor here, before it ever
+        # reaches the query, is what actually makes the except clause reachable.
         try:
-            cursor_date = cursor  # cursor is the ISO date string
+            cursor_date = datetime.fromisoformat(cursor)
             query = query.where(Order.created_at < cursor_date)
         except ValueError:
             # Invalid cursor format - ignore and return from start
