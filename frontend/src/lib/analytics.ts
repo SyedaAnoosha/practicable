@@ -6,7 +6,7 @@ import posthog from 'posthog-js'
  * free-text search query, no message body. Do Not Track is honoured: if the browser
  * sends it, `init()` never loads the PostHog script at all.
  *
- * Five client-side events are tracked here; four server-side events
+ * Six client-side events are tracked here; four server-side events
  * (`purchase_completed`, `entitlement_delay`, `download_failed`, `refund_issued`) are
  * tracked from the backend instead. `checkout_completed`/`checkout_abandoned` are
  * dropped as redundant with `purchase_completed` and the gap PostHog already shows
@@ -27,6 +27,10 @@ interface AnalyticsEvents {
   // and `product_slug` joined by comma, rather than a second event name: it is still
   // the same funnel step PostHog measures the gap to `purchase_completed` from.
   checkout_started: { product_slug: string; price: number; cart_size?: number }
+  // week4_plan.md Phase 4 step 4 — a routed recommendation was clicked, linking
+  // the source question to the product it surfaced. §22's own claim is measurable
+  // rather than asserted.
+  recommendation_clicked: { question_slug: string; product_slug: string }
 }
 
 let initialized = false

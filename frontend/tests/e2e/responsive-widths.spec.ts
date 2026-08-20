@@ -99,3 +99,34 @@ for (const width of WIDTHS) {
     await expectNoHorizontalOverflow(page, href!)
   })
 }
+
+// week4_plan.md Phase 4 — question -> product routing. Against the real backend, not
+// mocked: a mocked `page.route()` would always match whatever URL the frontend sent and
+// could never have caught the real bug this guards against — `SituationProducts.tsx`
+// built `?ids=a,b,c` (one comma-joined value), but FastAPI's `ids: List[str] =
+// Query(...)` only accepts REPEATED params (`?ids=a&ids=b&ids=c`); the comma-joined form
+// parsed as a one-element list and failed `uuid.UUID(...)` with a 400 on every real
+// multi-question filter. `test_routing_query_count.py` never caught it because it
+// (correctly) calls the endpoint with repeated params — the bug lived entirely in the
+// gap between a backend test that used the right shape and a frontend that didn't.
+// `effort=mod` is a real filter value against the live seed data (`db/seed/`) with
+// enough matches to be worth asserting on; if the seed changes, point this at another
+// filter combination that still yields exact matches rather than deleting the coverage.
+test('SituationProducts resolves real product recommendations for an active filter', async ({ page }) => {
+  await page.goto('/questions?effort=mod')
+  await expect(page.getByText('Products for your situation')).toBeVisible()
+  // Not stuck on the loading skeleton, and not silently empty — a real product card,
+  // named and priced, is what proves the request round-tripped successfully.
+  await expect(page.getByRole('link', { name: 'View' }).first()).toBeVisible()
+})
+
+// Not "the first question in the index" — most questions have no product that grants
+// them (RoutedProducts correctly renders nothing for those), so this names a specific
+// real slug known to be granted by a published product, same reasoning as the two
+// hardcoded slugs in ROUTES above. If this question is ever unpublished or its granting
+// product changes, point this at another question a real product includes.
+test('RoutedProducts resolves real product recommendations on a question detail page', async ({ page }) => {
+  await page.goto('/questions/we-have-a-risk-register-but-no-one-uses-it')
+  await expect(page.getByText('Products that include this question')).toBeVisible()
+  await expect(page.getByRole('link', { name: 'View' }).first()).toBeVisible()
+})

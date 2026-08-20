@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils/cn'
+import { SituationProducts } from '@/components/content/SituationProducts'
 import {
   MULTI_DIMENSIONS,
   ORDINAL_DIMENSIONS,
@@ -680,6 +681,17 @@ export function QuestionsCatalogue() {
               >
                 Clear all
               </button>
+            </div>
+          )}
+
+          {/* Situation-based product recommendations - only when filters are active */}
+          {hasFilters && exact.length > 0 && (
+            <div className="mt-6">
+              <SituationProducts
+                questionIds={exact.map((s) => s.question.id)}
+                questionTitles={exact.map((s) => s.question.title)}
+                questionSlugs={exact.map((s) => s.question.slug)}
+              />
             </div>
           )}
 

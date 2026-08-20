@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { SectionHeading } from '@/components/ui/SectionHeading'
+import { RoutedProducts } from '@/components/content/RoutedProducts'
 
 interface Tag {
   dimension: string
@@ -357,6 +358,9 @@ export function Question() {
           </div>
         </section>
       )}
+
+      {/* Products that include this question - routed upsell panel */}
+      <RoutedProducts questionSlug={question.slug} questionTitle={question.title} />
 
       {/* A signpost to the course this question leads into, not a second player. Locked
           rows stay visible with a lock icon rather than being hidden. */}

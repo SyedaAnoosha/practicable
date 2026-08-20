@@ -311,7 +311,12 @@ async def search_questions(
                 **summaries_by_id[s.question.id].model_dump(),
                 score=s.score,
                 misses=[
-                    QuestionMissOut(dimension=m.dimension, requested=m.requested, actual=m.actual, distance=m.distance)
+                    QuestionMissOut(
+                        dimension=m.dimension,
+                        requested=list(m.requested) if isinstance(m.requested, tuple) else m.requested,
+                        actual=list(m.actual) if isinstance(m.actual, tuple) else m.actual,
+                        distance=m.distance,
+                    )
                     for m in s.misses
                 ],
             )
@@ -322,6 +327,44 @@ async def search_questions(
         has_filters=has_filters,
         relaxation_candidates=relaxation_candidates,
     )
+
+
+@router.get("/questions/{slug}/related-products", response_model=List[RelatedProductOut])
+async def get_related_products(
+    slug: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Products that include this question, ranked by price (cheapest first).
+    
+    Fixed query count: one join on product_contents. Used for question detail page
+    upsell panel (week4_plan.md W4-R8).
+    """
+    # Fetch question
+    result = await session.execute(
+        select(Question).where(Question.slug == slug)
+    )
+    question = result.scalar_one_or_none()
+    
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+    
+    # Find products that include this question via product_contents
+    related_result = await session.execute(
+        select(Product)
+        .join(ProductContent, ProductContent.product_id == Product.id)
+        .where(
+            ProductContent.content_type == ResourceType.QUESTION.value,
+            ProductContent.content_id == question.id,
+            Product.published.is_(True),
+        )
+        # Cheapest first — more than one product can grant the same question
+        .order_by(Product.price_amount)
+    )
+    
+    return [
+        RelatedProductOut(slug=p.slug, name=p.name, price_amount=p.price_amount, currency=p.currency)
+        for p in related_result.scalars().all()
+    ]
 
 
 @router.get("/questions/{slug}", response_model=QuestionOut)
