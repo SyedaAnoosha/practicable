@@ -20,8 +20,13 @@ import { authStagger, springItem } from '@/lib/motion'
 export default function AuthLayout() {
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row">
-      {/* ── Left: brand panel ── */}
-      <div className="relative isolate flex min-h-[38vh] w-full flex-col justify-between overflow-hidden bg-stage p-8 text-stage-foreground sm:p-10 lg:min-h-screen lg:w-1/2">
+      {/* ── Left: brand panel ──
+          A real <header> landmark, not a bare div: axe's landmark-one-main/region rules
+          (week4_plan.md Phase 0 step 3 — surfaced by adding /checkout/success, whose
+          signed-out redirect target this layout is, to accessibility.spec.ts) flagged the
+          wordmark, back link and headline as page content contained by no landmark at
+          all. */}
+      <header className="relative isolate flex min-h-[38vh] w-full flex-col justify-between overflow-hidden bg-stage p-8 text-stage-foreground sm:p-10 lg:min-h-screen lg:w-1/2">
         {/* auth-08 fills this panel with a hosted photograph. `.stage-aurora`
             (theme.css) replaces it with the same composition drawn in blue — no image
             request anywhere in the auth path, and it follows a theme swap because every
@@ -65,10 +70,10 @@ export default function AuthLayout() {
             first, not just what to read next.
           </motion.p>
         </motion.div>
-      </div>
+      </header>
 
       {/* ── Right: form column ── */}
-      <div id="main" className="relative flex w-full flex-col items-center justify-center bg-background p-6 sm:p-12 lg:w-1/2">
+      <main id="main" className="relative flex w-full flex-col items-center justify-center bg-background p-6 sm:p-12 lg:w-1/2">
         <div className="absolute right-5 top-5">
           <ThemeToggle />
         </div>
@@ -80,7 +85,7 @@ export default function AuthLayout() {
         >
           <Outlet />
         </motion.div>
-      </div>
+      </main>
     </div>
   )
 }
