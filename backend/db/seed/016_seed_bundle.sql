@@ -17,16 +17,26 @@
 -- Stripe (test mode) objects created for this, 2026-08-15:
 --   Risk Register, start to finish   prod_V4siVvd8YRZNIp / price_1U4iwoLTNkwhOECvx2OPNluE  (7900 AUD)
 
-INSERT INTO products (id, slug, name, description, stripe_price_id, price_amount, currency, published, created_at, updated_at)
+INSERT INTO products (id, slug, name, description, stripe_price_id, price_amount, currency, published, is_bundle, created_at, updated_at)
 SELECT
   gen_random_uuid(),
   'risk-register-bundle',
   'Risk Register, start to finish',
   'The course, plus every Risk question in the domain, curated. Risk Register Fundamentals and the Risk domain pack together, at a saving against buying them separately.',
   'price_1U4iwoLTNkwhOECvx2OPNluE',
-  7900, 'AUD', true,
+  7900, 'AUD', true, true,
   NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM products WHERE slug = 'risk-register-bundle');
+
+-- `is_bundle` (migration 013) didn't exist when this script was first written, so this
+-- row's flag defaulted to false and stayed false — invisible until week4_plan.md Phase
+-- 1's verification pass (2026-08-20) ran `check_overlaps.sql` for real and it returned
+-- 134 rows instead of the documented "zero," because `check_content_overlap` and
+-- `check_bundle_pricing` both read this column directly and the escape hatch never
+-- fired for the one product that needed it. Idempotent — a no-op once the flag is
+-- already true, so this line stays even after the immediate live-DB fix.
+UPDATE products SET is_bundle = true
+WHERE slug = 'risk-register-bundle' AND is_bundle = false;
 
 INSERT INTO product_contents (id, product_id, content_type, content_id, created_at, updated_at)
 SELECT gen_random_uuid(), bundle.id, src.content_type, src.content_id, NOW(), NOW()

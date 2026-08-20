@@ -266,3 +266,135 @@ despite an inconclusive or unchanged measurement** with an explicit, written rea
 (`/admin/orders`' four indexes await pagination; the course-tree pair's test data was
 too small) — not silently kept "for comfort," which is exactly what non-negotiable #14
 is guarding against.
+
+---
+
+# Migration `013` — the two new indexes (week4_plan.md Phase 1, verified 2026-08-20)
+
+**This evidence was produced retroactively.** Migration `013` was already applied to the
+real database (`alembic current` → `014`, i.e. past `013`) before this verification pass;
+this section exists because Phase 1's own Definition of Done requires it and it had never
+been written. Same method as migration `010` above and §27.1's own description — one
+`EXPLAIN (ANALYZE, BUFFERS)` run, 20,000 synthetic `product_contents` rows inserted
+inside a transaction that was rolled back, real row counts (`product_contents=139`,
+`products=9`) confirmed identical before and after. The script is not kept in the repo,
+same reasoning as `010`'s note above.
+
+**The honest result: both candidates measured as unhelpful.** Non-negotiable #11's own
+rule — "any index that does not change the plan is not created" — was not followed
+before `013` was applied. Recorded here rather than silently left for the next person to
+discover the same way; a decision on whether to drop them belongs to whoever owns the
+schema, not to this write-up.
+
+## Query 1 — reverse routing (`GET /products/for-questions`, `GET /questions/{slug}/related-products`)
+
+```sql
+SELECT p.id, p.slug, p.price_amount FROM product_contents pc
+JOIN products p ON p.id = pc.product_id
+WHERE pc.content_type = 'question_set' AND pc.content_id IN (:five_ids)
+AND p.published = true ORDER BY p.price_amount;
+```
+
+**Before `ix_product_contents_type_content_reverse`** (`content_type, content_id,
+product_id`) — planner uses `ix_product_contents_content`, built by **migration `010`**
+for this exact reverse direction (its own comment: *"Query 2b (reverse direction) —
+cheapest-product-per-resource resolvers in courses/templates/questions.py"*):
+
+```
+Index Scan using ix_product_contents_content on product_contents pc  (cost=0.29..9.14 rows=2 width=16) (actual time=0.014..0.032 rows=5 loops=1)
+  Index Cond: (((content_type)::text = 'question_set'::text) AND (content_id = ANY ('{...5 uuids...}'::uuid[])))
+  Buffers: shared hit=15
+Execution Time: 0.097 ms
+```
+
+**After** — `ix_product_contents_type_content_reverse` created and `ANALYZE`d:
+
+```
+Index Scan using ix_product_contents_content on product_contents pc  (cost=0.29..9.14 rows=2 width=16) (actual time=0.014..0.033 rows=5 loops=1)
+  Index Cond: (((content_type)::text = 'question_set'::text) AND (content_id = ANY ('{...5 uuids...}'::uuid[])))
+  Buffers: shared hit=15
+Execution Time: 0.105 ms
+```
+
+**Identical plan.** The planner never chooses the new index even when it is available —
+`migration 013`'s own docstring's claim (*"That direction has no index. This migration
+adds it"*) is factually wrong; `010` already had it, under a different name, one column
+narrower. The trailing `product_id` column in `013`'s version doesn't change anything
+here because the query still needs `products` for `price_amount`/`published`, so an
+index-only scan was never on the table either way. **Verdict: measured as unhelpful —
+functionally redundant with `ix_product_contents_content`.**
+
+## Query 2 — published product lookup by slug
+
+```sql
+SELECT id, name, price_amount FROM products WHERE slug = :slug AND published = true;
+```
+
+**Before/after `ix_products_published_slug`** (partial, `WHERE published = true`) — both
+identical, and neither uses an index at all:
+
+```
+Seq Scan on products  (cost=0.00..2.11 rows=1 width=51) (actual time=0.014..0.016 rows=0 loops=1)
+  Filter: (published AND ((slug)::text = 'risk-register-template'::text))
+  Rows Removed by Filter: 9
+Execution Time: 0.035 ms
+```
+
+At 9 real rows a sequential scan is correctly cheaper than any index regardless of what
+exists — the same class of result `010` recorded as "inconclusive at this test's scale"
+for the course-tree pair, except this one has a second, worse problem:
+
+**The query this index was built for is not the query the application issues.**
+`commerce/products.py:174` and `content/packs.py:232` — the only two `Product.slug ==`
+lookups in the codebase — filter by slug alone; neither adds `published = true` to the
+same statement. A partial index can only be used when the query's `WHERE` clause implies
+its predicate, so **this index cannot be used by any real call site today, regardless of
+scale**:
+
+```sql
+-- what the real code issues (no published filter) — the partial index is unusable here
+SELECT id, name, price_amount FROM products WHERE slug = :slug;
+```
+```
+Seq Scan on products  (cost=0.00..2.11 rows=1 width=51) (actual time=0.014..0.016 rows=1 loops=1)
+  Filter: ((slug)::text = 'risk-register-template'::text)
+Execution Time: 0.039 ms
+```
+
+**Verdict: measured as unhelpful — built for a query shape the application doesn't
+issue, and inconclusive at this scale even for the query it was built for.**
+
+## Summary — migration `013`
+
+| Index | Query it serves | Verdict |
+|---|---|---|
+| `ix_product_contents_type_content_reverse` | reverse routing | **Unhelpful — redundant with `ix_product_contents_content` (migration `010`), never chosen by the planner even when present** |
+| `ix_products_published_slug` | published product by slug | **Unhelpful — no real call site filters `published` in the same query; inconclusive at 9 rows for the one that would** |
+
+Neither finding blocks Phase 1 — the indexes exist, cost near-nothing to maintain at this
+table size, and dropping a live index is a separate, deliberate action this write-up
+doesn't take unilaterally. What it does is what non-negotiable #14 asks for: the
+measurement is on the record, honestly, rather than assumed helpful because it exists.
+
+## A third finding, not about an index — `is_bundle` was never backfilled
+
+`check_overlaps.sql` (W4-R3, meant to return zero rows against the live catalogue) was
+run for real during this verification and returned **134 rows**, not zero. Cause:
+`risk-register-bundle` — the one product that actually is a bundle — had `is_bundle =
+false`. Migration `013` added the column with `server_default = false` for every
+existing row and nothing backfilled the one row that needed `true`; `db/seed/016_seed_
+bundle.sql` pre-dates the column entirely, so its `INSERT` never set it either. Both
+`check_content_overlap` and `check_bundle_pricing` read this column directly, so the
+guard's entire escape hatch was silently unreachable for the one product that needed it.
+
+**Fixed 2026-08-20**: the live row (`UPDATE products SET is_bundle = true WHERE slug =
+'risk-register-bundle'`) and the seed script (adds `is_bundle` to the `INSERT` column
+list for a fresh seed, plus the same idempotent `UPDATE` so a database seeded before this
+fix self-heals on the next run). Re-running `check_overlaps.sql` afterward returns **2
+rows**, both `risk-register-fundamentals` × `risk-enterprise-op-question-pack` sharing
+one `question_set` grant (Q001) — a real, small, pre-existing overlap between two
+*standalone* products (neither is a bundle of the other), not an artefact of the flag
+bug. `handover.md`'s own record of the bundle's construction already names this as the
+one question both parts grant. **Left as a named finding, not resolved here** — whether
+one shared question between two non-bundle products is acceptable overlap or should have
+its grant removed from one side is a catalogue-content decision, not an engineering one.
