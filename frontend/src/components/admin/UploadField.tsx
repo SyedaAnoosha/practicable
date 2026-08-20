@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { CircleCheck, Loader2, UploadCloud } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/Button'
+import { Input, Label } from '@/components/ui/Input'
 
 /** week3_plan.md §20.4 — one component, two configurations, so a second upload widget
  * (and a second upload bug) never has to happen. `kind` picks which admin endpoints it
@@ -17,13 +18,14 @@ import { Button } from '@/components/ui/Button'
  */
 export type UploadResult =
   | { kind: 'template'; storageKey: string; fileName: string }
+  | { kind: 'preview'; storageKey: string; fileName: string; alt: string }
   | { kind: 'video'; muxAssetId: string; muxPlaybackId: string; durationSeconds: number | null }
 
 interface UploadFieldProps {
-  kind: 'template' | 'video'
-  /** Template: the template row the file attaches to. Video: unused — the caller
-   * attaches the finished asset to a lesson itself, since a video upload can start
-   * before a lesson decision is finalised. */
+  kind: 'template' | 'preview' | 'video'
+  /** Template/preview: the template row the file attaches to. Video: unused — the
+   * caller attaches the finished asset to a lesson itself, since a video upload can
+   * start before a lesson decision is finalised. */
   templateId?: string
   accept: string
   acceptedTypesText: string
@@ -45,8 +47,14 @@ export function UploadField({
   const [fileName, setFileName] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  // kind='preview' only — §20.2: "alt text is a requirement, not a nicety". Captured
+  // before the file picker is even usable, so there's no path to a preview image with
+  // none: the confirm endpoint refuses one anyway (422 alt_text_required), but this
+  // keeps that server refusal from ever actually being hit in the admin UI.
+  const [previewAlt, setPreviewAlt] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const cancelled = useRef(false)
+  const altId = useId()
 
   useEffect(() => () => {
     cancelled.current = true
@@ -119,19 +127,30 @@ export function UploadField({
       setPhase('uploading')
 
       try {
-        if (kind === 'template') {
+        if (kind === 'template' || kind === 'preview') {
           if (!templateId) throw new Error('No template selected.')
           const { data: target } = await api.post<{ upload_url: string; storage_key: string }>(
             `/admin/templates/${templateId}/upload-url`,
-            { file_name: file.name, content_type: file.type || 'application/octet-stream', file_size_bytes: file.size },
+            {
+              file_name: file.name, content_type: file.type || 'application/octet-stream',
+              file_size_bytes: file.size, kind,
+            },
           )
           await putWithProgress(target.upload_url, file)
+          const alt = previewAlt.trim()
           await api.post(`/admin/templates/${templateId}/upload-url/confirm`, {
             storage_key: target.storage_key,
             file_name: file.name,
+            kind,
+            ...(kind === 'preview' ? { alt } : {}),
           })
           setPhase('ready')
-          onComplete({ kind: 'template', storageKey: target.storage_key, fileName: file.name })
+          if (kind === 'preview') {
+            onComplete({ kind: 'preview', storageKey: target.storage_key, fileName: file.name, alt })
+            setPreviewAlt('')
+          } else {
+            onComplete({ kind: 'template', storageKey: target.storage_key, fileName: file.name })
+          }
         } else {
           const { data: target } = await api.post<{ upload_id: string; upload_url: string }>('/admin/media/upload-url')
           await putWithProgress(target.upload_url, file)
@@ -147,7 +166,7 @@ export function UploadField({
         setErrorMessage(readable ?? (err instanceof Error ? err.message : 'Something went wrong. Please try again.'))
       }
     },
-    [kind, templateId, maxSizeBytes, putWithProgress, pollMedia, onComplete],
+    [kind, templateId, maxSizeBytes, previewAlt, putWithProgress, pollMedia, onComplete],
   )
 
   const onDrop = (e: React.DragEvent) => {
@@ -191,30 +210,53 @@ export function UploadField({
     )
   }
 
+  const altRequired = kind === 'preview'
+  const altReady = !altRequired || previewAlt.trim().length > 0
+
   return (
     <div>
+      {altRequired && (
+        <div className="mb-3">
+          <Label htmlFor={altId}>Alt text</Label>
+          <Input
+            id={altId}
+            value={previewAlt}
+            onChange={(e) => setPreviewAlt(e.target.value)}
+            placeholder="e.g. Page 3 of the scorecard: the weighted-criteria table"
+            className="mt-1.5"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Describe what this page shows — a buyer decides on this image, so it needs real alt text,
+            not "preview".
+          </p>
+        </div>
+      )}
       <label
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+        onDragOver={(e) => { if (altReady) { e.preventDefault(); setDragOver(true) } }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={onDrop}
+        onDrop={(e) => { if (altReady) onDrop(e); else e.preventDefault() }}
         className={cn(
-          'flex cursor-pointer flex-col items-center gap-2 rounded-md border-2 border-dashed border-border p-8 text-center transition-colors duration-150',
-          dragOver && 'border-border-strong bg-muted',
+          'flex flex-col items-center gap-2 rounded-md border-2 border-dashed border-border p-8 text-center transition-colors duration-150',
+          altReady ? 'cursor-pointer' : 'cursor-not-allowed opacity-60',
+          dragOver && altReady && 'border-border-strong bg-muted',
           phase === 'error' && 'border-destructive',
         )}
       >
         <UploadCloud className="size-6 text-muted-foreground" aria-hidden="true" />
-        <span className="text-sm font-medium text-foreground">Drop a file, or choose one</span>
+        <span className="text-sm font-medium text-foreground">
+          {altReady ? 'Drop a file, or choose one' : 'Add alt text above to choose a file'}
+        </span>
         <span className="text-xs text-muted-foreground">{acceptedTypesText}</span>
         <input
           ref={inputRef}
           type="file"
           accept={accept}
+          disabled={!altReady}
           className="sr-only"
           onChange={(e) => {
             const file = e.target.files?.[0]
             e.target.value = ''
-            if (file) void handleFile(file)
+            if (file && altReady) void handleFile(file)
           }}
         />
       </label>

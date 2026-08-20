@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
+import type { Preview } from '@/components/product/PreviewGallery'
 
 interface DownloadUrlResponse {
   download_url: string
@@ -34,8 +35,10 @@ interface TemplateDetail {
   is_editable?: boolean
   has_macros?: boolean
   min_office_version?: string
-  preview_image_keys?: string[]
+  previews?: Preview[]
   version?: string
+  last_reviewed_at?: string
+  format?: string
 }
 
 type DownloadStatus = 'idle' | 'preparing' | 'downloaded' | 'error' | 'not-entitled'
@@ -191,13 +194,17 @@ export function Template() {
           <p className="mb-4 font-mono text-xs text-muted-foreground">{template.file_name}</p>
 
           <EvidencePanel
+            format={template.format}
             pageCount={template.page_count}
             sheetCount={template.sheet_count}
             isEditable={template.is_editable}
             hasMacros={template.has_macros}
             minOfficeVersion={template.min_office_version}
-            previewImageKeys={template.preview_image_keys}
+            previews={template.previews}
             version={template.version}
+            lastReviewedAt={template.last_reviewed_at}
+            title={template.title}
+            className="mb-4"
           />
 
           {canDownload && downloadButton}

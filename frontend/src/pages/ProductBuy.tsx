@@ -8,8 +8,10 @@ import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { track } from '@/lib/analytics'
 import { useCartStore } from '@/stores/useCartStore'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { EvidencePanel } from '@/components/product/EvidencePanel'
+import type { Preview } from '@/components/product/PreviewGallery'
 
 interface ProductContent {
   content_type: string
@@ -32,11 +34,30 @@ interface ProductData {
   price_amount: number
   currency: string
   contents: ProductContent[]
+  licence?: string
+  search_title?: string
+  version?: string
+  last_reviewed_at?: string
+  is_bundle?: boolean
+  // Evidence layer (W4-R1) — present only when this product is exactly one template;
+  // a multi-item product has no single set of file facts to show (absence rule).
+  page_count?: number
+  sheet_count?: number
+  is_editable?: boolean
+  has_macros?: boolean
+  min_office_version?: string
+  previews?: Preview[]
+  format?: string
 }
 
 // DESIGN.md §29.1: the pre-redirect summary. Stripe owns the actual card form (C2) —
 // this is the moment right before the handoff, not a catalogue page to browse through
 // (week1_plan.md Phase 4 step 9: the buy surface routes straight here, one click).
+//
+// week4_plan.md Phase 3 step 4: `lg:grid-cols-[1fr_380px]` — the description and
+// contents list on the left, the evidence + price + buy surface sticky on the right
+// from `lg`, and a mobile sticky buy bar below it (respecting the home-indicator safe
+// area on iOS) so the primary action is always one thumb-reach away on a long page.
 export function ProductBuy() {
   const { slug } = useParams<{ slug: string }>()
   const [isRedirecting, setIsRedirecting] = useState(false)
@@ -119,20 +140,52 @@ export function ProductBuy() {
     )
   }
 
-  return (
-    <div className="mx-auto w-full max-w-xl px-5 py-8 sm:px-8">
-      {/* Same accent-blue left-rule family as the question page's buy card and the course
-          buy surface — the conversion moment earns the accent. */}
-      <Card
-        className="border-l-4 shadow-sm transition-[box-shadow] duration-150 hover:shadow-md"
-        style={{ borderLeftColor: 'var(--accent)' }}
+  const priceBlock = (
+    <div className="flex items-baseline justify-between">
+      <span className="text-sm text-muted-foreground">
+        {product.is_bundle ? 'Bundle price' : 'Price'}
+      </span>
+      <span className="text-h3 font-semibold tabular-nums text-gold-strong">
+        {formatCurrency(product.price_amount, product.currency)}
+      </span>
+    </div>
+  )
+
+  const buySurface = alreadyOwned ? (
+    <>
+      <p className="text-sm text-foreground" role="status">
+        You already own this — no need to pay again.
+      </p>
+      <Link to="/dashboard">
+        <Button className="w-full">Go to your library</Button>
+      </Link>
+    </>
+  ) : (
+    <div className="flex flex-col gap-2 sm:flex-row">
+      <Button onClick={handleCheckout} loading={isRedirecting} className="w-full sm:flex-1">
+        Continue to secure checkout
+      </Button>
+      {/* Sits alongside, not instead of, Buy — a buyer who wants one thing still gets
+          the one-click path (week3_plan.md W3-R11). */}
+      <Button
+        onClick={handleAddToCart}
+        variant="outline"
+        disabled={inCart}
+        className="w-full sm:w-auto"
       >
-        <CardHeader>
-          <CardTitle>{product.name}</CardTitle>
-          <CardDescription>{product.description}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          <ul className="flex flex-col gap-2 text-sm text-foreground">
+        <ShoppingCart className="size-4" aria-hidden="true" />
+        {inCart ? 'In your cart' : 'Add to cart'}
+      </Button>
+    </div>
+  )
+
+  return (
+    <div className="mx-auto w-full max-w-4xl px-5 py-8 pb-28 sm:px-8 lg:pb-8">
+      <div className="lg:grid lg:grid-cols-[1fr_380px] lg:items-start lg:gap-8">
+        <div>
+          <PageTitle title={product.name} description={product.description} />
+
+          <ul className="mt-6 flex flex-col gap-2 text-sm text-foreground">
             {product.contents.map((c) => {
               const Icon = CONTENT_ICON[c.content_type] ?? FileQuestion
               // Lesson/template links 403 gracefully with a clear "not entitled yet"
@@ -159,55 +212,88 @@ export function ProductBuy() {
               )
             })}
           </ul>
+        </div>
 
-          <div className="flex items-baseline justify-between border-t border-border pt-4">
-            <span className="text-sm text-muted-foreground">Subtotal</span>
-            {/* Accent-blue, but only because this is 24px — the accent-blue token is
-                large-text-only on light surfaces (theme.css). Do not shrink it. */}
-            <span className="text-2xl font-semibold tabular-nums text-accent">
-              {formatCurrency(product.price_amount, product.currency)}
-            </span>
-          </div>
+        {/* Right column: evidence + the buy surface, sticky from `lg` so it stays in
+            view on a long description. Hidden below `lg` in favour of the fixed
+            mobile bar so the primary action never appears twice on screen at once. */}
+        <div className="mt-8 hidden flex-col gap-5 lg:sticky lg:top-24 lg:mt-0 lg:flex">
+          <EvidencePanel
+            format={product.format}
+            pageCount={product.page_count}
+            sheetCount={product.sheet_count}
+            isEditable={product.is_editable}
+            hasMacros={product.has_macros}
+            minOfficeVersion={product.min_office_version}
+            previews={product.previews}
+            version={product.version}
+            lastReviewedAt={product.last_reviewed_at}
+            licence={product.licence}
+            title={product.name}
+          />
 
-          {alreadyOwned ? (
-            <>
-              <p className="text-sm text-foreground" role="status">
-                You already own this — no need to pay again.
+          <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 shadow-sm">
+            {priceBlock}
+            {buySurface}
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
               </p>
-              <Link to="/dashboard">
-                <Button className="w-full">Go to your library</Button>
-              </Link>
-            </>
-          ) : (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button onClick={handleCheckout} loading={isRedirecting} className="w-full sm:flex-1">
-                Continue to secure checkout
-              </Button>
-              {/* Sits alongside, not instead of, Buy — a buyer who wants one thing
-                  still gets the one-click path (week3_plan.md W3-R11). */}
-              <Button
-                onClick={handleAddToCart}
-                variant="outline"
-                disabled={inCart}
-                className="w-full sm:w-auto"
-              >
-                <ShoppingCart className="size-4" aria-hidden="true" />
-                {inCart ? 'In your cart' : 'Add to cart'}
-              </Button>
-            </div>
-          )}
+            )}
+            <p className="text-center text-xs text-muted-foreground">
+              Payment is handled by Stripe. We never see your card details.
+            </p>
+          </div>
+        </div>
 
+        {/* Mobile/tablet: evidence inline below the description, buy surface lives in
+            the fixed bottom bar instead. */}
+        <div className="mt-8 flex flex-col gap-5 lg:hidden">
+          <EvidencePanel
+            format={product.format}
+            pageCount={product.page_count}
+            sheetCount={product.sheet_count}
+            isEditable={product.is_editable}
+            hasMacros={product.has_macros}
+            minOfficeVersion={product.min_office_version}
+            previews={product.previews}
+            version={product.version}
+            lastReviewedAt={product.last_reviewed_at}
+            licence={product.licence}
+            title={product.name}
+          />
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
             </p>
           )}
+        </div>
+      </div>
 
-          <p className="text-center text-xs text-muted-foreground">
-            Payment is handled by Stripe. We never see your card details.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Fixed mobile buy bar — `env(safe-area-inset-bottom)` keeps the primary
+          button clear of the home indicator on iOS rather than sitting flush
+          against it. */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card px-5 py-3 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] lg:hidden"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        <div className="mx-auto flex w-full max-w-4xl items-center gap-3">
+          <span className="whitespace-nowrap text-lg font-semibold tabular-nums text-gold-strong">
+            {formatCurrency(product.price_amount, product.currency)}
+          </span>
+          <div className="flex-1">
+            {alreadyOwned ? (
+              <Link to="/dashboard">
+                <Button className="w-full">Go to your library</Button>
+              </Link>
+            ) : (
+              <Button onClick={handleCheckout} loading={isRedirecting} className="w-full">
+                Continue to secure checkout
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

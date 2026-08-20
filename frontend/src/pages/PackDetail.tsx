@@ -10,6 +10,8 @@ import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { EvidencePanel } from '@/components/product/EvidencePanel'
+import type { Preview } from '@/components/product/PreviewGallery'
 
 interface PackQuestion {
   slug: string
@@ -32,6 +34,18 @@ interface PackDetail {
   file_size_bytes: number | null
   honesty_notice: string
   questions: PackQuestion[]
+  licence?: string
+  search_title?: string
+  version?: string
+  last_reviewed_at?: string
+  is_bundle?: boolean
+  page_count?: number
+  sheet_count?: number
+  is_editable?: boolean
+  has_macros?: boolean
+  min_office_version?: string
+  previews?: Preview[]
+  format?: string
 }
 
 interface DownloadUrlResponse {
@@ -198,6 +212,21 @@ export function PackDetail() {
                 {pack.file_size_bytes ? ` · ${formatBytes(pack.file_size_bytes)}` : ''}
               </p>
             )}
+
+            <EvidencePanel
+              format={pack.format}
+              pageCount={pack.page_count}
+              sheetCount={pack.sheet_count}
+              isEditable={pack.is_editable}
+              hasMacros={pack.has_macros}
+              minOfficeVersion={pack.min_office_version}
+              previews={pack.previews}
+              licence={pack.licence}
+              version={pack.version}
+              lastReviewedAt={pack.last_reviewed_at}
+              title={pack.name}
+              className="mt-5 border-0 bg-transparent p-0"
+            />
 
             <div className="mt-5">
               {pack.owned ? (
