@@ -13,6 +13,12 @@ import AxeBuilder from '@axe-core/playwright'
  * Read-only: every route below is a GET against published, public content — no sign-up,
  * no purchase, no write of any kind against the real backend this suite points at.
  */
+// week4_plan.md Phase 3 step 7: two of the evidence-layer product-detail routes, added
+// against real seeded rows (see responsive-widths.spec.ts's identical note on that
+// coupling and on why `/buy/:slug` isn't here — it requires sign-in, so it's out of
+// scope for this anonymous-GET sweep) — each renders `EvidencePanel`'s `<dl>`,
+// `PreviewGallery`'s lightbox and `LicenceLine`, none of which axe had ever scanned
+// before this pass.
 const PUBLIC_ROUTES = [
   '/',
   '/questions',
@@ -24,6 +30,8 @@ const PUBLIC_ROUTES = [
   '/legal/privacy',
   '/legal/refunds',
   '/checkout/success',
+  '/templates/4935c92a-3138-4dd4-9c70-1d23beb0a8b4',
+  '/store/packs/risk-register-fundamentals',
 ] as const
 
 for (const route of PUBLIC_ROUTES) {

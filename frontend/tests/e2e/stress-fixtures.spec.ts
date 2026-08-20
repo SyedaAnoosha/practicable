@@ -157,4 +157,47 @@ test.describe('DESIGN.md §49.2 stress fixtures — 375px, no horizontal overflo
     await expect(page.getByText(LONG_AUTHOR_NAME_42)).toBeVisible()
     await expectNoHorizontalOverflow(page)
   })
+
+  // week4_plan.md W4-R1 acceptance: "The panel renders correctly at 375px with a
+  // 140-character product name and a 42-character author name — no overflow, no
+  // clipped preview." `EvidencePanel` had never been exercised by this file at all
+  // until Phase 3 — this is that fixture. A 1x1 transparent GIF stands in for the two
+  // preview images so the assertion is about layout, not about a real Storage round
+  // trip. `/templates/:id` rather than `/buy/:slug` — both render the same
+  // `EvidencePanel`, but `/buy/:slug` sits behind the signed-in layout (App.tsx) and
+  // this suite is deliberately anonymous, same as every other test in this file.
+  const TRANSPARENT_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+
+  test('template detail: a 140-char title, full evidence facts and two previews', async ({ page }) => {
+    await page.route(`${API_ORIGIN}/templates/stress-long-template**`, (route) =>
+      route.fulfill({
+        json: {
+          id: 'stress-long-template',
+          slug: 'stress-long-template',
+          title: LONG_TITLE_140,
+          description: 'A stress fixture for the template detail page, not a real template.',
+          file_name: 'stress-fixture.xlsx',
+          owned: false,
+          product: { slug: 'stress-long-product', name: LONG_TITLE_140, price_amount: 9900, currency: 'AUD' },
+          is_free: false,
+          page_count: null,
+          sheet_count: 4,
+          is_editable: true,
+          has_macros: false,
+          min_office_version: 'Excel 2016 and later',
+          previews: [
+            { url: TRANSPARENT_GIF, alt: 'Page 1 of the stress fixture: the cover sheet' },
+            { url: TRANSPARENT_GIF, alt: 'Page 2 of the stress fixture: the weighted-criteria table' },
+          ],
+          version: '1.2',
+          last_reviewed_at: '2026-08-17T00:00:00Z',
+          format: '.xlsx · 1 file',
+        },
+      }),
+    )
+    await page.goto('/templates/stress-long-template')
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByText('Excel 2016 and later')).toBeVisible()
+    await expectNoHorizontalOverflow(page)
+  })
 })

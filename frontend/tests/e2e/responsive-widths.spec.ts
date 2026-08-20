@@ -33,7 +33,26 @@ async function expectNoHorizontalOverflow(page: import('@playwright/test').Page,
 
 // The public routes most likely to carry the widest content: card grids (§49's own
 // example), the longest real title in each catalogue, and the two-column store grid.
-const ROUTES = ['/', '/questions', '/courses', '/templates', '/store', '/contact'] as const
+//
+// week4_plan.md Phase 3 step 7: two of the evidence layer's product-detail routes,
+// added here against real seeded rows rather than mocked data — same "what real,
+// current content looks like" rule the rest of this file follows. `/buy/:slug` is
+// deliberately NOT here — it sits behind the signed-in layout (App.tsx), so it isn't a
+// public route this anonymous sweep can reach; its own coverage is the mocked
+// `/templates/:id` stress fixture (same `EvidencePanel`) plus the authenticated e2e
+// suites. These two slugs name real rows in the seeded catalogue (`db/seed/`); if the
+// referenced template or pack is ever unpublished or removed, point these at another
+// published one rather than deleting the coverage.
+const ROUTES = [
+  '/',
+  '/questions',
+  '/courses',
+  '/templates',
+  '/store',
+  '/contact',
+  '/templates/4935c92a-3138-4dd4-9c70-1d23beb0a8b4',
+  '/store/packs/risk-register-fundamentals',
+] as const
 
 for (const width of WIDTHS) {
   test.describe(`${width}px`, () => {
