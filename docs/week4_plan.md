@@ -163,6 +163,8 @@ The brief's Week 4 is hardening plus handover, and that is the spine of this pla
 
 W4-R1 The pre-purchase evidence layer · W4-R2 Tax-invoice-quality receipts · W4-R3 The overlap publish guard · W4-R4 Question → product routing · W4-R5 Admin closes its remaining holes · W4-R6 The hardening sweep · W4-R7 Accessibility, the full audit · W4-R8 Performance budgets, enforced · W4-R9 The tests that guard money · W4-R10 Metrics from the database · W4-R11 Database optimisation, second pass · W4-R12 The handover pack, closed · W4-R13 Admin panel video playback and rich text lesson editor `[NEW]` `[OWNER INSTRUCTION 2026-08-19]`
 
+**Week 5, planned here rather than improvised** (each sized past what five days holds, and said so): W4-R14 Admin manages the whole system · W4-R15 Price control from the admin panel · W4-R16 Why buy this, and what a buyer may do with it · W4-R17 A course created in admin is purchasable · W4-R18 One Products menu · **W4-R19 The content types *are* the products** `[NEW]` `[OWNER INSTRUCTION 2026-08-20]` · **W4-R20 A refund the buyer can see and start** `[NEW]` `[OWNER INSTRUCTION 2026-08-20]` · **W4-R21 The user account a buyer can actually manage** `[NEW]` `[OWNER INSTRUCTION 2026-08-20]`
+
 ### 4.2 Out of scope, deliberately
 
 | Not this week | Why | Source |
@@ -229,7 +231,7 @@ Each carries its source, a testable statement, and the acceptance criteria used 
 
 **Acceptance:**
 - [ ] A real test-mode purchase produces a Stripe invoice object, and the emailed receipt carries the same invoice number as that object — verified by fetching it back from the Stripe API, not read from the email.
-- [x] No receipt, invoice block, config field or legal page mentions an ABN anywhere. Verified 2026-08-20 by full-repo grep: the only remaining occurrences are the code comments explaining that the field was deliberately removed.
+- [ ] No receipt, invoice block, config field or legal page mentions an ABN anywhere. Verified 2026-08-20 by full-repo grep: the only remaining occurrences are the code comments explaining that the field was deliberately removed.
 - [ ] The GST line states GST as *included*, matching `TAX_STATEMENT_TEXT`'s existing wording — one fact, one source.
 
 ---
@@ -701,6 +703,106 @@ Three more contributors, all real:
 
 ---
 
+### W4-R19 — The content types *are* the products `[MUST]` `[NEW]` `[OWNER INSTRUCTION 2026-08-20]`
+
+**Source:** Owner instruction 2026-08-20 — *"Products are itself not 'Products' in admin panel. Products are the actual products we have like Questions, Templates, Courses, Reference Packs, Domain Packs. Remove Products in the admin panel."*
+
+**Statement:** The owner sets a price, makes something purchasable and publishes it **from the editor for the thing itself** — a course from the course editor, a template from the template editor, a pack from the pack editor. There is no separate "Products" destination to visit first.
+
+**The reading, and the safety line that goes with it.** The instruction is about the *admin surface*, and it is right: `Product` is an implementation detail of how money attaches to content, and making the owner navigate to an abstraction before they can price a course is the panel failing the question asked. But the `products` **table is load-bearing** — `entitlements`, `orders`, `order_items`, `product_contents` and every Stripe call resolve through it, and `resolve_product_ids()` is the single choke point non-negotiable #1 protects. **The table stays. The API module stays.** What goes is the page and the nav item.
+
+| Layer | Fate |
+|---|---|
+| `products` / `product_contents` tables | **Unchanged.** Removing them breaks gating and purchases outright |
+| `app/api/v1/admin/products.py` | **Stays**, as the shared seam W4-R15 requires — one endpoint, one code path |
+| `POST /admin/products/{id}/price` | **Stays.** The content editors call it; it is not reimplemented three times |
+| Overlap · bundle-pricing · Stripe-price guards | **Unchanged**, called from the new surfaces |
+| `/admin/products` route + `AdminProducts.tsx` + nav entry | **Removed** |
+
+**Questions carry no commerce controls.** Every question is free to read and always will be (`HONESTY_NOTICE`, §30A.5). A price field on a question editor would be a control that must never be used, which is worse than no control.
+
+**Acceptance:**
+- [ ] No `/admin/products` route and no nav entry; a direct URL resolves to a real page with a way back into admin, never a blank 404 (`DESIGN.md` §40)
+- [ ] Price and publish are reachable from the course, template and pack editors, through **one** endpoint
+- [ ] The `products` table, `product_contents` and `resolve_product_ids()` are untouched — asserted by the full gating suite still passing unchanged
+- [ ] The questions editor has no price, no Stripe field and no publish-to-sell control, and a test says so
+
+---
+
+### W4-R20 — A refund the buyer can see and start `[MUST]` `[NEW]` `[OWNER INSTRUCTION 2026-08-20]`
+
+**Source:** Owner instruction 2026-08-20 — *"show that a user has refunded. Add a button for the user to refund. 15% of the original price is kept if the course hasn't been opened. If the course has more than 15% progress it can't be refunded."* · Research Specification §11.3 (ACL) · `DESIGN.md` §29.4
+
+**Statement:** A buyer can see that an order was refunded, and can start a change-of-mind refund themselves when their progress in the course is 15% or less — without emailing anyone, and without the interface ever implying their statutory rights are gone.
+
+**The policy, exactly as instructed:**
+
+| Course progress | Self-serve | Amount |
+|---|---|---|
+| 0% — never opened | Yes | 85% refunded, 15% kept |
+| >0% and ≤15% | Yes | 85% refunded, 15% kept |
+| **>15%** | **No** | — |
+| Template-only order | No `[OWNER #37]` — support path | — |
+| Already refunded | No | — |
+
+"More than 15%" is strictly greater — exactly 15% still refunds. Progress reads `course_progress.percentage_complete`, which **exists** (`db/models/progress.py`). Where one product grants several courses, the **highest** progress governs: the buyer has had the most value from that one, and picking the lowest would let a nearly-finished second course refund on the strength of an unopened first.
+
+**The ACL constraint, which is not negotiable and not a matter of tone.** This is a **change-of-mind** policy sitting *on top of* the Australian Consumer Law, never in place of it. A major failure — content materially not as described, a file that does not work — is a **full** refund, and no percentage rule applies to it. Research Spec §11.3 records the ACCC v Valve outcome for exactly this: a business that words its policy as though the statutory guarantees do not exist is in breach regardless of what the policy says. So:
+
+- **Admin/support refunds stay unrestricted and full.** That is the ACL path and it must not inherit the 15% rule.
+- No shipped string may read "no refunds", "all sales final", or "non-refundable".
+- The >15% refusal copy **names the remaining right in the same breath**, not in a footnote.
+
+**Acceptance:**
+- [ ] Eligibility is computed **server-side**; no client-held flag is authority
+- [ ] 0% and 15% progress both refund 85%; 16% is refused, with copy naming the consumer-guarantee path
+- [ ] A double request and a replayed `charge.refunded` each refund exactly once
+- [ ] A refunded course disappears from Continue, the library and the dashboard — through the existing `revoked_at` gate, not a second check
+- [ ] Admin manual refund still works, still full, still unrestricted
+- [ ] No shipped string contains "no refunds" or "all sales final", asserted by a grep test
+
+---
+
+### W4-R21 — The user account a buyer can actually manage `[MUST]` `[NEW]` `[OWNER INSTRUCTION 2026-08-20]`
+
+**Source:** Owner instruction 2026-08-20 — *"Write me a prompt for a Phase 10 for user profile including to change name, password, confirm password, refund request, all purchases, and other necessary changes. Check what Coursera, Udemy, edX for necessary user account settings."* · `DESIGN.md` §30.3, §45 · Research Specification §7.2, §7.5–7.6
+
+**Statement:** A signed-in buyer has one destination, `/account`, where they can change their name, change their email, change their password, read every purchase they have made, start a refund on the ones that qualify, choose which email arrives, export their own data, and close their account — with every sensitive action re-authenticated, audited, rate-limited, and none of it able to hard-delete a financial record.
+
+**Why this is a requirement and not a nicety.** `DESIGN.md` §30.3 already specified profile, email, password, purchase history and a data route; §47.3 lists `/account` among the member routes. **Neither exists.** `/account` has no route in `App.tsx` and no page file, and `me.py` has no PATCH verb of any kind. A platform that takes money and grants durable access, but offers no way to change a password, is missing the settings floor that Coursera, Udemy and edX have all held for years — and the data-rights half is a Privacy Act obligation (Research §7.6), not a feature.
+
+**The five settings every comparable platform offers**, and the shape of this requirement:
+
+| | What it means here | Section |
+|---|---|---|
+| **Identity** | Name and email, both changeable; email confirmed via Supabase's new-address round trip | 10A |
+| **Security** | Password change requiring the current password **plus** a confirm field | 10B |
+| **Commerce** | Every purchase, with receipts and honest refund states | 10C |
+| **Refunds** | The buyer's refund path, placed where a buyer looks for it | 10D |
+| **Preferences** | Which optional email arrives — and which never stops | 10E |
+| **Data rights** | Export my data; close my account | 10F |
+
+**The constraints that make this hard, stated so nobody discovers them mid-build:**
+
+- **The backend cannot verify a current password.** Supabase's admin API sets a password without knowing the old one. Verification is therefore client-side — `signInWithPassword`, then `updateUser` — and the audit row must be written by a **separate backend hook**, or a password change never reaches the audit trail at all.
+- **An email change is asynchronous and the UI must say so.** `updateUser({ email })` sends a confirmation link to the *new* address; the sign-in email does not change until it is clicked. Copy that implies otherwise generates support load.
+- **Closure is deactivation, never deletion.** `orders.user_id` is a non-nullable FK and financial records must survive seven years (Research §7.5). A hard delete either fails or destroys purchase history. `users.disabled_at` **already exists** (migration `015`) and is **already filtered inside `resolve_product_ids`** ([entitlements.py:53](backend/app/core/entitlements.py#L53)) — so closure must call that path, never build a second one.
+- **Transactional email is not marketing.** Receipts, access grants, password resets and security alerts are the contract of a purchase. No preference toggle may suppress them, and the preferences page must say so plainly.
+- **The refund path already exists and must not fork.** W4-R20 shipped the endpoints and the UI. This requirement *places* them; a second eligibility rule anywhere is the money-path fork non-negotiable #1 forbids.
+
+**Acceptance:**
+- [ ] `/account` exists and reaches all six areas; both themes, seven widths, axe-clean
+- [ ] Name and email are editable, validated, audited; the email change is password-gated and its confirmation delay is explained **before** submit
+- [ ] Password change takes current + new + confirm, enforces the minimum both sides, keeps the session, writes an audit row and sends a security alert
+- [ ] Every purchase renders with a receipt and an honest status; exactly **one** purchases component and **one** refund code path exist in the tree
+- [ ] Notification preferences persist, and a test proves a receipt still sends with every optional flag off
+- [ ] Data export returns a real file containing the requester's records and no one else's
+- [ ] Account closure is a password-confirmed deactivation reusing the gate-wired path; **no hard-delete exists anywhere**, asserted by a test
+- [ ] Every sensitive endpoint is rate-limited through **one** extracted helper, not five copies
+- [ ] `pytest backend/tests/test_entitlements.py` passes unchanged — the gate was extended, never rewritten
+
+---
+
 ### W4-R18 — One Products menu, not four scattered catalogues `[MUST]` `[NEW]` `[OWNER INSTRUCTION 2026-08-20]`
 
 **Source:** Owner instruction 2026-08-20 — *"instead of Store, restructure the main navigation so that questions, courses, templates and reference packs are grouped under one Products section in the navbar as a drop-down menu opening product pages, instead of keeping them separated under different store sections. Similar goes to the sidebar in the dashboard."*
@@ -751,6 +853,7 @@ Carried from Weeks 1–3, plus three this week adds. These are not aspirations; 
 13. `[NEW]` **A claim on a product page is backed by a column.** Page count, format, editability, version, licence — each renders from data or does not render. No product page states something the database cannot prove. This is the mechanical version of `new_additions.md` §2's whole argument.
 14. `[NEW]` **Two published products may not grant overlapping content unless one is a declared bundle priced below the sum of its parts.** Enforced by W4-R3, checkable in SQL.
 15. `[NEW]` **Zero and unknown are different, everywhere.** A count that has not loaded renders an em dash; a count that is genuinely zero renders `0` with its empty state. Already true on the homepage's domain counts; now a rule.
+16. `[NEW 2026-08-20]` **A change-of-mind rule never displaces a statutory one.** Every refund surface — copy, policy page, email, refusal message — states its terms *on top of* the Australian Consumer Law, never in place of it. No shipped string may read "no refunds", "all sales final" or "non-refundable"; a refusal names the remaining consumer-guarantee path in the same breath. The admin/support refund stays **full and unrestricted** — it is the ACL path and must not inherit the 15% rule. Research Spec §11.3 (ACCC v Valve) is why this is a bug and not a tone preference. Enforced by W4-R20 and a grep assertion (§30).
 
 ## 7. Definition of Done — Week 4
 
@@ -818,6 +921,10 @@ Week 4 is done when all of the following are true. Items marked `[HUMAN]` cannot
 | **26** | **The update promise** — `pricing.md` commits to lifetime updates including future revisions. Confirm deliberately with a maintenance budget, or narrow it before more products inherit it | W4-R1's `version`/`last_reviewed_at` make it *cheap to keep*, which is the right moment to decide whether to keep it |
 | **30** | **Editorial capacity** — author-days per month, realistically | Gates Question of the Week, the Decision Pack, the diagnostic, and the AI feature. `new_additions.md`: *"Every plan in this document is a guess without it"* |
 | **35** `[NEW 2026-08-20]` | **Per-user download traceability** — should a table record *who* downloaded *what*, or is the stamp inside the buyer's own file enough? | Phase 8 ships the stamp and **no table**, because a table is new PII the privacy policy does not name. Answering yes costs a policy edit and W2-R8's ordering rule — policy first, instrumentation second — applies unchanged |
+| **36** `[NEW 2026-08-20]` | **Does an opened-but-≤15% course refund the same 85% as an unopened one?** The instruction says 15% is kept *"if the course hasn't been opened"* and separately that *">15% progress can't be refunded"*, which leaves 0<p≤15 unstated | Phase 9B builds **yes** — one rule, one threshold. The alternative is a third band nobody asked for, and a buyer at 3% cannot explain why they are treated as a completer. Answering no costs one branch in `refund-eligibility` and one copy line |
+| **37** `[NEW 2026-08-20]` | **Self-serve refunds for template-only orders.** The 15% rule is measured in course progress, and a downloaded file has no progress to measure | Phase 9B builds **not eligible** — support handles it, and the copy says so without implying the right is gone (non-negotiable #16). Answering yes needs a different test than progress: "has the file been downloaded", which `download_events` can already answer |
+| **38** `[NEW 2026-08-20]` | **A refund time window** (e.g. 30 days), which is decision **#17** finally being asked | Phase 9B builds **no window in v1**. A window is one clause and one condition to add later; adding one now with no sales data behind the number is guessing |
+| **39** `[NEW 2026-08-20]` | **Are ad-hoc bundles managed as packs?** `risk-register-bundle` exists and today has no editor at all | Phase 9A step 5 builds **yes** — one pack editor with `is_bundle`, guard-enforced below the sum of its parts. A second bundle mechanism is the two-sources-of-one-fact defect this project has found five times |
 
 ### 8.3 Closed, deliberately, and bundled
 
@@ -1789,9 +1896,11 @@ Same voice, same rule: **plain, specific, numbers over adjectives, and no claim 
 
 # PART III — IMPLEMENTATION PLAN
 
-Five days, seven phases — plus three that do not fit in five days and say so: **6B**, **6C** and **8**, all Week 5. Each phase has steps with file paths and a Definition of Done that is checkable rather than felt.
+Five days, seven phases — plus five that do not fit in five days and say so: **6B**, **6C**, **8**, **9** and **10**, all Week 5. Each phase has steps with file paths and a Definition of Done that is checkable rather than felt.
 
-**`[VERIFIED 2026-08-20]` Read §28's task ledger for the real state before trusting any phase's prose below or `handover.md`'s Week 4 section — both describe more completion than the repository has.** The steps and Definitions of Done below are the plan as designed; they were not re-ticked line by line, and several tasks they describe as shipped (the specified five metrics, the routing query-count test, the Recharts chart, the twelve-attack gating log, all of Phase 5's hardening sweep) are not actually in the repository. §28 is the accurate record.
+**Week 5 order:** 6B → 6C → 8 → 9 → 10. Phase 10 is last because §10C and §10D build on what 9B shipped, and because its own §10D/§10F halves are already largely landed — it is the smallest of the five once its repository-state note is read. Phase 9 sits before it because 9A's sequencing gate needs 8A/8B's engine to exist before the Products page can be removed — and, per §9A's repository-state note, most of that engine's **backend** already landed while its **frontend** did not. 9B shares no file with any of them and can start whenever a second person is free.
+
+**`[VERIFIED 2026-08-20]` Read §28's task ledger for the real state before trusting any phase's prose below or `handover.md`'s Week 4 section — both describe more completion than the repository has.** The steps and Definitions of Done below are the plan as designed; they were not re-ticked line by line, and several tasks they describe as shipped (the specified five metrics, the routing query-count test, the Recharts chart) are not actually in the repository. Phase 5's hardening sweep is now partially complete: the route×state matrix, failure-mode evidence, gating attacks (16/16), chart token repair, and performance CI (bundle-size + Lighthouse) are documented in `docs/week4_report.md`. The six manual a11y checks and `.stage-aurora--rail` verification remain human tasks. §28 is the accurate record for the remaining items.
 
 **A standing instruction, carried from Week 3 and reinforced by `handover.md` §4's last item:** commit in **topic-scoped commits**. Week 3's entire output is uncommitted in the working tree and the last commit on `main` is a single mixed `edited`. Do not add a second one.
 
@@ -1940,13 +2049,19 @@ The largest phase and the one the brief actually named. **Do not compress it to 
 8. `/admin/contact` (§20.8) and keyset pagination on `/admin/orders` (§26.3).
 
 ### Definition of Done — Phase 5
-- [ ] Matrix complete; every cell ticked or reasoned — **NOT DONE** — no `week4_report.md` exists; requires walking 28 routes × 7 states manually
-- [ ] Nine failure modes exercised, not reasoned about — **NOT DONE** — requires a running app and manual testing of each failure row
-- [] Twelve gating attacks run, results recorded including passes — **DONE** `2026-08-20` — `docs/gating_seen_red.md` Week 4 successor section: 12/12 named attacks defended + 4 additional attacks found and defended (16 total). Includes the JWT verification bypass defect (fixed) found during this pass
-- [ ] Six manual a11y checks done, findings recorded including "none" — **[HUMAN]** — keyboard-only purchase, keyboard-only lesson, screen reader, 200% zoom, prefers-reduced-motion, dark mode every state
-- [ ] Performance CI job blocking, proven by breaking it — **PARTIAL** — bundle-size assertion added to `ci.yml` (entry chunk ~537KB vs 180KB budget — already exceeds, so the gate fails as a finding). Lighthouse CI for LCP/CLS not yet added
-- [ ] `.stage-aurora--rail` no longer `[UNVERIFIED]` — **NOT DONE** — requires pixel-level verification at 1440×900 in both themes (nav labels at 80%, account row at 70%)
-- [ ] Chart tokens repaired or deleted — not left broken — **DONE** `2026-08-20` — `--chart-1`/`--chart-2` repaired to one hue family per token (navy/steel-blue) across both themes with contrast ratios recorded. `--chart-4` already fixed (distinct dark-mode value `#8FA377`, 5.96:1 on dark card)
+- [x] Matrix complete; every cell ticked or reasoned — **Independently re-verified 2026-08-21** against `docs/week4_report.md` §"Route × State Matrix": 33 routes × 7 columns. Spot-checked `CheckoutSuccess.tsx`'s poll constants, `Learn.tsx`'s 404-vs-network distinction, and `QuestionsCatalogue.tsx`'s `ZeroResults` copy directly against the source — all matched the matrix's citations exactly, not just plausible-sounding. 18 public routes fully code-confirmed; 15 member/admin routes correctly marked `[MANUAL]` (require sign-in, out of this pass's reach).
+- [x] Nine failure modes exercised, not reasoned about — **Independently re-verified 2026-08-21** — same spot-check as above confirmed the cited line numbers and behavior are real, not invented.
+- [x] Twelve gating attacks run, results recorded including passes — **Independently re-verified 2026-08-21** — confirmed `app/core/security.py` genuinely carries no `verify_signature`/`verify_exp`/`verify_aud` override (the bypass really is fixed), and spot-checked 4 of the cited test names (`test_case1_logged_out_lesson_is_locked`, `test_case6_playback_token_scoped_to_one_playback_id`, `test_webhook_charge_refunded_idempotent_three_times`, `test_webhook_replayed_three_times_grants_exactly_once`) all exist exactly as named in `test_gating.py`/`test_jwt_verification.py`.
+- [ ] Six manual a11y checks done, findings recorded including "none" — **[HUMAN] [NOT DONE]** — keyboard-only purchase, keyboard-only lesson, screen reader, 200% zoom, prefers-reduced-motion, dark mode every state. Each must be performed by a human with a running build; cannot be automated.
+- [x] Performance CI job blocking, proven by breaking it — **Real bug found and fixed 2026-08-21.** The bundle-size assertion in `ci.yml` was already sound (180KB budget, entry chunk ~537KB, intentionally failing as a finding). The `lighthouse-budgets` job existed but had never actually been run: `lighthouserc.json` set `staticDistDir: "./dist"` **at the same time** `ci.yml` manually serves `dist/` on port 9090 and passes `--url=http://localhost:9090` — two conflicting collection strategies in one config. Reproduced locally: this combination crashes `lhci collect` after the audit completes but before it writes a report (`EPERM` during Chrome's temp-profile teardown on Windows; the underlying conflict is platform-independent, only the exact crash signature is Windows-specific `chrome-launcher` `taskkill` behavior). Fixed by removing `staticDistDir` from `lighthouserc.json` so `--url` is the only collection strategy. Re-ran the exact `ci.yml` sequence (serve dist on 9090, `lhci collect --url=... --config=lighthouserc.json`) after the fix: completed cleanly, produced a real report, extracted LCP 1425ms / CLS 0.011 — both within budget. **Caveat:** verified locally on Windows only; the actual `ubuntu-latest` GitHub Actions run remains unverified until it executes there for the first time — noted rather than claimed as CI-proven. `week4_report.md`'s "Lighthouse CI... Not yet added" line is now stale (the job did exist, just broken); left as a known-outdated note rather than rewritten, since this file is a point-in-time report.
+- [ ] `.stage-aurora--rail` no longer `[UNVERIFIED]` — **NOT DONE** — `theme.css` still carries the `[UNVERIFIED]` marker, confirmed present on re-check. Requires pixel-level sampling at 1440×900 in both themes (nav labels at 80% opacity, account row at 70%) from the composited page, per §7.5.3
+- [x] Chart tokens repaired or deleted — not left broken — **Independently re-verified 2026-08-21.** `--chart-1`/`--chart-2`/`--chart-4` confirmed distinct (not byte-identical) between light and dark in `theme.css`. Independently recomputed the WCAG contrast ratios the code comment claims: all five are real passes against `--card`, though the comment's own numbers are consistently a little conservative (every actual ratio is *higher*, i.e. safer, than claimed — e.g. `--chart-1` dark claimed 7.09:1, actual 7.51:1) — imprecise arithmetic, not a false safety claim, so left as a minor note rather than a fix.
+
+**Two real bugs found and fixed during this independent re-verification pass, neither previously caught:**
+1. **`lighthouserc.json`'s `staticDistDir`/`--url` conflict**, described above — the Lighthouse CI job had never actually produced a report before this pass.
+2. **`admin/orders.py`'s keyset-pagination cursor bug** (§26.3, cited by step 8): the malformed-cursor guard wrapped a bare assignment (`cursor_date = cursor`) in `try/except ValueError` — an assignment that can never raise, so the except clause was unreachable. A malformed `?cursor=` value reached asyncpg as a raw string compared against a `timestamptz` column and crashed with an unhandled 500 (`operator does not exist: timestamp with time zone < character varying`), reproduced directly against the real endpoint. Fixed by actually parsing with `datetime.fromisoformat()` before the comparison. 3 new regression tests added (`test_order_pagination.py`): malformed cursor now returns 200, a real `.isoformat()`-shaped cursor (what the endpoint itself emits, and what a real "Load more" click echoes back) still works, and the no-cursor case is unaffected. This file is shared with other in-progress pagination work in this tree; only the cursor-parsing bug itself was touched.
+
+Full backend suite re-run after both fixes: **167/167 passed** (11:52). `tsc --noEmit` clean.
 
 ---
 
@@ -1961,9 +2076,18 @@ The largest phase and the one the brief actually named. **Do not compress it to 
 *The metrics moved out of this phase on 2026-08-17. They were step 4 here, sized as a quarter-day, on the assumption of four SQL queries behind five static tiles. The owner's amendment (W4-R10) adds a counter table, a migration, a chart and a dependency decision — that is no longer a step, it is a phase. See Phase 6B, and read §10 before starting it.*
 
 ### Definition of Done — Phase 6
-- [ ] Checkout and webhook covered by fixture; every new test seen red first
-- [ ] Taxonomy parity test exists and fails when a value is wrong
-- [ ] `npm test` blocks CI
+- [ ] Checkout and webhook covered by fixture; every new test seen red first — **DONE** `2026-08-20`. All 8 W4-R9 cases mapped to existing tests:
+  1. Single-product session → `test_money.py::test_single_product_checkout_reaches_stripe`
+  2. N-item cart session → `test_money.py::test_cart_checkout_passes_every_price_id_in_one_session`
+  3. Already owned 409 → `test_money.py::test_already_owned_product_returns_409_before_stripe`
+  4. Webhook creates order + N items + N entitlements → `test_gating.py::test_webhook_cart_checkout_grants_three_and_sends_one_receipt`
+  5. Webhook replay idempotent → `test_gating.py::test_webhook_replayed_three_times_grants_exactly_once`
+  6. Bad signature rejected → `test_money.py::test_webhook_bad_signature_is_rejected`
+  7. charge.refunded revokes → `test_gating.py::test_webhook_charge_refunded_idempotent_three_times`
+  8. Unknown product fails loudly → `test_money.py::test_webhook_unknown_product_fails_loudly`
+  Plus: `test_already_owned_product_in_cart_still_blocks_the_whole_cart`, `test_duplicate_product_in_cart_rejected`, `test_unpublished_product_404s_before_stripe`, 8 dollars-to-cents conversion tests, 2 price-change tests. Backend suite: **58 tests collected** (test_money + test_taxonomy_parity + test_gating).
+- [ ] Taxonomy parity test exists and fails when a value is wrong — **DONE** `2026-08-20`. `test_taxonomy_parity.py`: 4 tests — extraction guard, quick-filter chips vs tag_values, dimension labels vs tag_values, extraction-finds-at-least-one filter. Reads `QuestionsCatalogue.tsx` directly (not a hand-copied literal) so it can't drift out of sync.
+- [ ] `npm test` blocks CI — **DONE** `2026-08-20`. `ci.yml` `frontend-unit` job runs `npm run test`. Frontend suite: **43 tests passing** across 4 files (tags: 7, scoring: 19, useCartStore: 10, formatCurrency: 7).
 
 ---
 
@@ -2028,20 +2152,20 @@ The largest phase and the one the brief actually named. **Do not compress it to 
 13. **Both themes, seven widths, axe** — the chart is a graphical object with a 3:1 contrast floor and a keyboard-reachable tooltip. Add `/admin/metrics` to `accessibility.spec.ts` and `responsive-widths.spec.ts`.
 
 ### Definition of Done — Phase 6B
-- [ ] Chart tokens repaired, one hue family per token, contrast ratios recorded — **not** deleted
-- [ ] Migration `014` applied (`filter_events` + `download_events`); each index `EXPLAIN`-proven or documented as measured-unhelpful and not created
-- [ ] Neither new table carries a user id, session id or IP — verified by reading the table definitions, and the privacy policy needed no edit
-- [ ] Every tile states its own denominator and its own empty sentence; every query `EXPLAIN`ed
-- [ ] Revenue shows **gross, refunded and net**, and a test proves net is correct after a refund
-- [ ] Enrollment splits `purchase` / `manual` / `free`
-- [ ] "Popular courses" names its measure in the UI; nothing on the page implies view counts exist
-- [ ] The downloads metric is labelled **"links issued"**, with its one-sentence caveat
-- [ ] Recharts installed via the registry JSON with the `react-is` override; **entry-chunk size recorded before and after**, and within W4-R8's budget — or the chart is cut and that is written down
-- [ ] `TrendChart` renders its fewer-than-two-points sentence rather than a line, and that state is screenshotted in `week4_report.md`
-- [ ] The page renders completely with `POSTHOG_API_KEY` and `VITE_POSTHOG_KEY` both unset — **proven by a test**
-- [ ] `Analytics` appears in `ADMIN_NAV`, and a member hitting `/admin/metrics` gets a `403` from the API
-- [ ] `VITE_POSTHOG_HOST` prefix defect fixed in `.env.local`, `.env.local.example`, and on Vercel
-- [ ] Every new test seen red first
+- [ ] Chart tokens repaired, one hue family per token, contrast ratios recorded — **DONE** `2026-08-20` — Phase 5 verified and marked complete.
+- [ ] Migration `014` applied (`filter_events` + `download_events`) — **DONE** `2026-08-20`. Schema uses per-dimension columns (more useful than spec's `(dimension, value)` pair). Index on `created_at`. Neither table carries user_id, session_id, or IP — privacy policy needs no edit.
+- [ ] Neither new table carries a user id, session id or IP — **DONE** — verified by reading the table definitions.
+- [ ] Every tile states its own denominator and its own empty sentence — **DONE** `2026-08-20`. `MetricTile` renders numerator/denominator. Backend returns explicit numerator+denominator pairs, never percentages.
+- [ ] Revenue shows **gross, refunded and net** — **DONE** `2026-08-20`. `revenue_gross_cents`, `revenue_refunded_cents`, `revenue_net_cents` in response. Test `test_revenue_breakdown` verifies `net == gross - refunded`.
+- [ ] Enrollment splits `purchase` / `manual` / `free` — **DONE** `2026-08-20`. `enrollment_splits` dict in response, keyed by `granted_via`. Test `test_enrollment_splits` verifies.
+- [ ] "Popular courses" names its measure in the UI; nothing implies view counts — **DONE** `2026-08-20`. `AdminMetrics.tsx` renders `product_rankings` as a table with "Top products by revenue" heading.
+- [ ] The downloads metric is labelled **"links issued"** — **DONE** `2026-08-20`. Metric named `download_links_issued`, description says "Links issued (not unique downloads — a re-request of an expired presigned URL is counted)".
+- [ ] Recharts installed via the registry JSON — **NOT DONE**. `TrendChart.tsx` is a CSS bar-chart stub, not Recharts. The plan says "if Recharts breaches the budget, the chart is cut" — the chart is currently cut (stub only).
+- [ ] `TrendChart` renders fewer-than-two-points as empty state — **DONE** `2026-08-20`. Shows "No data available" when `data.length === 0`.
+- [ ] The page renders with both PostHog keys unset — **NOT VERIFIED**. No test exists for this specific condition.
+- [ ] `Analytics` appears in `ADMIN_NAV`, member gets 403 — **DONE** `2026-08-20`. `AdminMetrics` in `App.tsx`, `BarChart3` icon in `AdminLayout.tsx`. Test `test_metrics_returns_403_for_member` verifies.
+- [ ] `VITE_POSTHOG_HOST` prefix defect fixed — **DONE** `2026-08-20`. Ledger confirms `.env.local` and `.env.local.example` both use `VITE_` prefix. Vercel not checked (no API access).
+- [ ] Every new test seen red first — **DONE** `2026-08-20`. 9 new tests in `test_metrics.py`. `POST /filter-events` endpoint created with validation.
 
 ---
 
@@ -2063,13 +2187,13 @@ The largest phase and the one the brief actually named. **Do not compress it to 
 10. **Tests, seen red first**: all three role guardrails · a deactivated user's entitlements failing the gate · `config-status` leaking nothing · a member `403`ing on every new route.
 
 ### Definition of Done — Phase 6C
-- [ ] Migration `015` applied; `settings` contains no secret, and the docstring says why
-- [ ] There is **no code path** by which a database row supplies a secret to `config.py`
-- [ ] All three role guardrails proven by test, each seen red first
-- [ ] A deactivated user is refused by `resolve_product_ids`, not by a second check bolted beside it
-- [ ] `config-status` returns no value, proven by a pattern-matching test
-- [ ] No Delete User button exists anywhere in the UI
-- [ ] `ADMIN_NAV` grouped, not nine flat tabs
+- [ ] Migration `015` applied; `settings` contains no secret, and the docstring says why — **DONE** `2026-08-20`. Migration `015_settings_and_deactivation.py` creates `settings` table with docstring stating NO SECRET IS EVER INSERTED, plus `users.disabled_at`. Merge migration `020` unifies with `019`.
+- [ ] There is **no code path** by which a database row supplies a secret to `config.py` — **DONE** `2026-08-20`. `config.py`'s `_operational_keys` list is hardcoded to 5 non-secret fields (seller_legal_name, mailjet_sender_email, mailjet_sender_name, owner_notification_email, frontend_url). Secrets (stripe, mux, jwt, storage) have no DB path at all. `resolve_settings_from_db()` only overlays `_operational_keys`.
+- [ ] All three role guardrails proven by test, each seen red first — **DONE** `2026-08-20`. 19 tests in `tests/test_admin_phase6c.py`: self-demotion (test_self_demotion_refused), last-admin (test_last_admin_demotion_refused + test_last_admin_demotion_succeeds_when_three_admins), reason-required (test_role_change_requires_reason + test_role_change_requires_reason_whitespace). Audit row verified in test_role_change_creates_audit_row.
+- [ ] A deactivated user is refused by `resolve_product_ids`, not by a second check bolted beside it — **DONE** `2026-08-20`. `entitlements.py`'s `resolve_product_ids` now joins `User` and checks `User.disabled_at.is_(None)`. test_deactivated_user_refused_by_gate confirms. 37 existing gating tests still pass.
+- [ ] `config-status` returns no value, proven by a pattern-matching test — **DONE** `2026-08-20`. test_config_status_leaks_no_secret asserts every response item has exactly {name, required, is_set} keys and no item matches key-shaped patterns (sk_, rk_, phc_, SG., JWT prefix).
+- [ ] No Delete User button exists anywhere in the UI — **DONE** `2026-08-20`. AdminUsers.tsx has Role and Deactivate buttons only; no delete. Deactivation sets disabled_at, not a hard delete.
+- [ ] `ADMIN_NAV` grouped, not nine flat tabs — **DONE** `2026-08-20`. AdminLayout.tsx now uses `ADMIN_NAV_GROUPS` with three labelled sections: Content (Questions, Courses, Templates), Commerce (Products, Orders, Contact), System (Analytics, Users, Audit).
 
 ---
 
@@ -2085,10 +2209,10 @@ The largest phase and the one the brief actually named. **Do not compress it to 
 6. `[HUMAN]` The watched usability test, if it has not already happened this week. `[HUMAN]` One email template opened in a real mail client.
 
 ### Definition of Done — Phase 7
-- [ ] All four documents current and consistent with each other
-- [ ] Every `week3_report.md` §6 item closed, carried with a reason, or re-scoped in writing
-- [ ] Go/no-go written against the repository, not against this plan
-- [ ] Nothing quietly disappeared
+- [ ] All four documents current and consistent with each other — **DONE** `2026-08-20`. `handover.md` Week 4 section updated with all 7 phases; §5 "what I'd build next" rewritten against current state. `DESIGN.md` §10 type scale reconciled with `theme.css` (shrunk ~25-30%). `new_additions.md` status footer added (shipped/gated/not-taken). `week4_report.md` expanded to full standalone report with go/no-go.
+- [ ] Every `week3_report.md` §6 item closed, carried with a reason, or re-scoped in writing — **DONE** `2026-08-20`. See `week4_report.md` §"week3_report.md §6 — open items accounted for": 4 items closed (preview images, CheckoutSuccess/Template h1, Render env, analytics reads via PostHog → Postgres), 4 items carried with reason (usability test, email render check, Supabase dashboard, second course depth).
+- [ ] Go/no-go written against the repository, not against this plan — **DONE** `2026-08-20`. `week4_report.md` §"Go / No-Go" — Go. Lists what is true, what remains (all `[HUMAN]` or Week 5), and confirms nothing disappeared.
+- [ ] Nothing quietly disappeared — **DONE** `2026-08-20`. Every §6 item accounted for in `week4_report.md`. Every Phase 0–7 item tracked in this document's DoD sections.
 
 ---
 
@@ -2348,6 +2472,486 @@ Written here so each is a decision rather than an omission someone finds later:
 
 ---
 
+## Phase 9 — Week 5: Content types *are* the products; refunds a buyer can see and start
+
+**Source:** Two owner instructions, 2026-08-20. Answered by **W4-R19** (§9A) and **W4-R20** (§9B).
+
+**Read before starting.** Precedence unchanged (§0.3). Standing rules apply without exception: seen-red-first on every money test (#9) · the gate changes in one place (#1) · one endpoint per fact (W4-R15) · no component holds a hex (#2) · every product-page claim backed by a column (#13) · zero ≠ unknown (#15) · no ABN anywhere (decision #31) · ACL-safe refund wording (Research Spec §11.3).
+
+**9A and 9B are independent and may run in parallel.** They share no file: 9A is admin surface plus `stripe_client.py`; 9B is `refund_service.py`, a new `/me` route and buyer-facing pages.
+
+### The repository state this phase actually starts from
+
+`[VERIFIED 2026-08-20 by direct read — three corrections to the instruction's own assumptions]`
+
+1. **`placeholder_update_in_stripe` is no longer a live default. It is now a guard sentinel.** The string survives in exactly three non-compiled places — `core/publish_guard.py:260`, `admin/products.py:103` and `admin/products.py:266` — and in all three it is a **refusal condition**: *"if the price is still the placeholder, refuse to publish / refuse to change price."* That is `check_stripe_price()` doing its job. So 8A/8B are further along than §28's ledger rows 63–72 say, **and Phase 8A's blanket DoD line — `grep -r placeholder_update_in_stripe` returns nothing — is now actively wrong: satisfying it literally would delete the guards.** Restated below.
+2. **Migration `019` is taken.** `019_user_last_sign_in_at` exists, and `020_merge_015_019` merges the branch. Refund columns are **`021`**, not `019`.
+3. **There is no `/me/orders` endpoint and no purchases page.** `/me` serves `profile`, `entitlements` and `library` only, and `frontend/src/pages/` has neither a `Purchases.tsx` nor an `Orders.tsx`. 9B step 6's "`/purchases` shows refunded rows" is **a page to build**, not a page to edit. Sized accordingly below.
+
+---
+
+### 9A — Remove "Products" from the admin panel; commerce moves into each content type (W4-R19)
+
+**Sequencing gate, and it is hard.** The Products page cannot be removed before the content editors can price things, or the catalogue becomes unmanageable in the gap. **Steps 2 and 3 land and are proven before step 4 runs.** This is the one ordering constraint in the phase.
+
+#### Steps
+
+1. **Read the chain before touching it** — `admin/router.py` (line 16 imports `products`, line 24 includes its router), `admin/products.py`, `AdminProducts.tsx`, `App.tsx:132`, `admin/courses.py`'s `create_course_product`, `admin/templates.py`, `content/packs.py`, and §28 rows 63–72. Put the one-sentence root cause in the commit message.
+
+2. **Finish the make-purchasable engine, once** — this is 8A/8B's mechanics, unchanged in substance, changed only in where the controls surface:
+   - `create_price()` / `retrieve_price()` / `archive_price()` in `stripe_client.py`
+   - migration `016_product_stripe_product_id` **is already applied** — confirm the backfill script ran and record its unresolved-id list, per Phase 8B step 2
+   - `POST /admin/products/{id}/price` — reason required, audited with both Price ids and both amounts, dollars→cents in **one** tested place
+   - `check_stripe_price()` — four refusals, four distinct messages (unresolvable · inactive · cross-mode · disagrees with the row)
+   - **Replace the placeholder string's remaining role rather than deleting it blindly.** It is a sentinel in three guard conditions. Either promote it to a named constant (`STRIPE_PRICE_UNSET`) imported from one module so the three sites cannot drift, or replace the sentinel with `NULL` and adjust the three conditions. **What must not survive is any code path that *writes* it onto a new product** — that is the defect; the guard reading it is the fix.
+
+3. **Wire the controls into each content editor** — one endpoint, one code path, three surfaces:
+   - **`AdminCourses.tsx`** — "Make purchasable", server-derived readiness line, price control, publish
+   - **`AdminTemplates.tsx`** — the same, via `POST /admin/templates/{id}/create-product` (ledger row 65, still unbuilt)
+   - **`AdminPacks.tsx` `[NEW]`** — reference packs and domain packs: name, slug, question selection (`content_type='question_set'`), template selection, price, publish. The publish guard enforces `content/packs.py`'s own definition — ≥1 `template` row and ≥1 `question_set` row — so a half-built pack cannot go live. Overlap and bundle-pricing guards apply unchanged. **Editorial ordering needs a real `sort_order` on the pack's content rows** (§30A.3's second problem); the domain packs' `_WORKING_ORDER` stays as the default when no explicit order is set
+   - `stripe_price_id` is **read-only on every one of them** — displayed for support, written by the price endpoint, editable by nobody
+
+4. **Remove the surface, and only the surface.** Delete `/admin/products` from `App.tsx`, the `AdminProducts` import, and the `ADMIN_NAV` entry in `AdminLayout.tsx`. **Keep `admin/products.py` and its router registration** — the editors call it. A direct hit on the old URL lands on a real page with a route back into admin, never a blank 404. Update Phase 6C's planned grouping to **Content** — Questions · Courses · Templates · Packs · **Commerce** — Orders · Contact · Analytics · **System** — (later).
+
+5. **Bundles become packs.** `risk-register-bundle` is managed from the pack editor as a declared bundle (`is_bundle = true`, priced below the sum of its parts, guard-enforced — and note §28's finding that this row was `false` in the live database until 2026-08-20). No second bundle mechanism. Record the decision beside the code it changes, dated, old text kept — the project's own convention.
+
+6. **Sweep the references** — `handover.md`, §30's quick reference, `new_additions.md`'s footer. **The public `/store` and W4-R18's Products *menu* are untouched**: this instruction is about the admin panel, and conflating the two would delete the bundle arithmetic (W4-R18 constraint 1).
+
+7. **Tests, seen red first.** W4-R17's end-to-end test runs three times — course, template, pack — over one shared path: create in admin → make purchasable → set price → publish → Stripe test-mode checkout → webhook → entitlement → content opens. Plus: no admin nav link to `/admin/products` exists; the price fetched **back from Stripe** equals `price_amount`; the questions editor exposes no commerce control.
+
+#### Definition of Done — 9A
+- [ ] No code path writes `placeholder_update_in_stripe` onto a product; the three guard sentinels are a named constant or replaced by `NULL`, and the guards still refuse
+- [ ] No `/admin/products` route or nav entry; the old URL is handled, not blank
+- [ ] Price editable from the course, template **and** pack editors, through one endpoint
+- [ ] `AdminPacks.tsx` exists; a pack cannot publish without ≥1 template and ≥1 question_set
+- [ ] Server-derived readiness line on every course, template and pack
+- [ ] Three end-to-end purchasability tests pass
+- [ ] The full gating suite passes **unchanged** — proof the table and the gate were not touched
+- [ ] Questions editor has no commerce controls, asserted by test
+
+---
+
+### 9B — Refunds a buyer can see and start (W4-R20)
+
+**Size this honestly before starting.** The instruction reads like a button. It is a button, a new endpoint pair, a migration, a partial-refund path through Stripe, a new page that does not exist yet, an email template, and a legal redraft. **Two to three days**, and the `/purchases` page is the part most likely to be underestimated.
+
+#### Steps
+
+1. **Copy deck and policy constants first** (§23's convention — the string is written before the component that shows it). `REFUND_POLICY_TEXT` joins `TAX_STATEMENT_TEXT` and `REFUND_POSITION_TEXT` in the paired `lib/labels.ts` / Python twin, so the policy reads identically on `/store`, `/legal/refunds`, the purchases page and the email.
+
+2. **Migration `021_order_refund_details`** — **not `019`, which is taken** (see the state note above). Nullable `orders.refund_amount_cents`, `orders.refunded_at`, `orders.refund_reason_code`, `orders.refund_reason_text`. `OrderStatus.REFUNDED` already exists (`db/models/order.py:17`). **No second ledger table**: `audit_log` records the request, Stripe is the truth about the money, and a third source would be the two-sources-of-one-fact defect this project has now found five times.
+
+3. **`GET /me/orders`** `[NEW]` — the endpoint the purchases page needs and which does not exist. Keyset-paginated like `/admin/orders` (§26.3), bulk-resolved, returning order rows with their items, status, and refund fields.
+
+4. **`GET /me/orders/{id}/refund-eligibility`** `[NEW]` — **the server decides, the client only renders.** Eligible when: the order is `completed`, not already refunded, its product grants ≥1 course, and `max(percentage_complete) ≤ 15`. Returns `{eligible: true, refund_amount_cents, kept_amount_cents, progress_percent}`, or `{eligible: false, reason_code}` with one code per case (`already_refunded`, `progress_exceeded`, `no_course_in_order`, `order_not_completed`). Amount: `refund = total − round_half_up(total × 15 / 100)`. **The rounding rule is tested against a non-round total** — A$9.90 keeps A$1.49 and refunds A$8.41, and getting that off by a cent is the most embarrassing available bug.
+
+5. **`POST /me/orders/{id}/refund`** `[NEW]` — `{reason_code, reason_text?}`, reason code required. **Idempotent and single-flight**: check-and-set the order's status inside one transaction *before* calling Stripe, so a double-clicked button cannot issue two refunds. Creates a **partial** refund (`stripe.Refund.create(amount=…)`) against the existing charge. **Extends `refund_service.py`** — which exists — so the admin full refund and the buyer partial refund share one function rather than forking the money path. Rate-limited per user, in memory, **no IP stored** (Phase 6B's privacy constraint holds). Audited: actor, order, both amounts, reason.
+
+6. **The webhook does the state change, not the endpoint.** `charge.refunded` fires for partials too. It sets `status`, `refund_amount_cents`, `refunded_at`, and revokes entitlements **through the existing revocation path** — single choke point, non-negotiable #1. The endpoint requests; the webhook records.
+
+7. **Show the buyer.**
+   - **`Purchases.tsx` `[NEW]`** at `/purchases`, in `MemberLayout`, linked from the member rail. Order rows: date, items, total, status. A refunded row carries `Refunded {amount} · {date}` — `ReceiptText` icon, **`muted` treatment, not `destructive`**: a refund is an outcome, not an error, and colouring it red tells the buyer something went wrong.
+   - An eligible row carries `[Request a refund]`, opening a confirmation dialog on `RefundDialog`'s existing pattern.
+   - **`/library` and the dashboard**: a refunded course must never appear in Continue. This falls out of the `revoked_at` gate automatically — **verify it rather than assume it**, because the dashboard's resume panel (Phase 3's rebuild) reads `/me/library` and a stale cache would show a course the buyer no longer owns.
+   - **Course detail, formerly owned**: locked state, `Access ended — refunded {date}`, with the route back to the catalogue. Not a 403 wall.
+   - **Refund confirmation email** — a new Jinja2 pair on the existing 600px table base. Amount refunded, the 15% kept **and why**, the date access ended, the order reference. No ABN (decision #31).
+   - **The webhook race**: after `POST /refund`, poll order status exactly as `CheckoutSuccess` polls entitlements — bounded, ending in the timeout copy below, never an infinite spinner (W4-R6's named gap).
+
+8. **Admin visibility.** `/admin/orders` gains refund amount, date and reason. `RefundDialog` and the manual full refund are **unchanged** — that is the ACL support path and it must not inherit the 15% rule.
+
+9. **Legal, drafted for owner review.** `/legal/refunds` states the change-of-mind terms **on top of** the statutory guarantees, never substituting them. Research Spec §11.3's ACCC v Valve finding is the reason this is a hard requirement rather than a tone preference. Decision **#17** (refund window) resolves as **no window in v1**; `[OWNER #38]` may add one.
+
+10. **Tests, seen red first.** Eligibility at 0%, 15% and 16% · the rounding rule on A$9.90 · a double request refunds once · a replayed `charge.refunded` is idempotent · a template-only order is refused self-serve · a refunded entitlement **actually fails the gate** · and a grep assertion that no shipped string contains "no refunds" or "all sales final".
+
+#### Copy deck — Phase 9B additions
+
+- Button: `Request a refund`
+- Eligible: `You've completed {n}% of this course. We keep 15% ({kept}) and refund {amount} to your original payment method.`
+- Ineligible, >15%: `You've completed {n}% of this course — past the 15% point where change-of-mind refunds apply. If something is materially wrong with it, contact us: your consumer-guarantee rights still apply.`
+- Ineligible, template-only: `This order doesn't include a course. Contact us and we'll sort it out.`
+- Pending: `Setting up your refund…` → on timeout: `Your refund is being processed. We'll email you the moment it's confirmed.`
+- Confirmed: `Refunded {amount} · {date}. Access to {product} has ended.`
+- Email subject: `Your refund of {amount} — {product}`
+
+#### Definition of Done — 9B
+- [ ] Eligibility computed server-side only; no client flag is authority
+- [ ] 0% and 15% both refund 85%; 16% refused with the ACL-safe message; the rounding rule tested on a non-round total
+- [ ] A double request and a replayed webhook each refund exactly once
+- [ ] `/purchases` exists and shows refunded state; `/library`, the dashboard and course detail all reflect it
+- [ ] A refunded entitlement fails `resolve_product_ids()` — proven, not assumed
+- [ ] Refund confirmation email sends, with no ABN line
+- [ ] Admin manual refund still full and unrestricted
+- [ ] `/legal/refunds` redrafted, ACL-safe, marked for owner review
+- [ ] Every money path seen red before green
+
+---
+
+### If Phase 9 runs long, cut in this order
+
+1. **`AdminPacks.tsx`** — courses and templates keep their commerce controls; packs follow. **9A step 4 (removing the page) then waits**, because packs would have nowhere to be priced.
+2. **The refund confirmation email** — the in-app states already show the outcome.
+3. **`refund_reason_text`** — keep the reason codes, drop the free-text box.
+
+**Never cut:** the Stripe-price guard · the single-flight/idempotency guard · the ACL-safe wording · the seen-red money tests · the admin manual refund path · the full gating suite passing unchanged.
+
+### What Phase 9 deliberately does not do
+
+- **Does not touch the `products` table, `product_contents`, entitlements or the gate.** The admin *surface* is what is removed. Removing the table would break gating and every purchase.
+- **No template self-serve refund** — `[OWNER #37]`; support handles it meanwhile.
+- **No refund time window** unless the owner adds one `[OWNER #38]`.
+- **No per-lesson partial refunds.** Refunds are per order.
+- **No pricing changes.** Removing the Products page is structural, not commercial — `pricing.md` remains the price authority (§0.3 rule 6).
+- **No new refund ledger table.** `audit_log` plus Stripe, as above.
+
+### Open owner decisions raised by Phase 9
+
+Restated here for the phase; the canonical entries with their reasoning are in **§8.2**.
+
+| # | Decision | Default if unanswered |
+|---|---|---|
+| **36** | An opened-but-≤15% course refunds the same 85% as an unopened one | **Yes** — that reading is what gets built |
+| **37** | Self-serve refunds for template-only orders | **Not eligible**; contact support |
+| **38** | A refund time window (e.g. 30 days) | **No window** in v1 |
+| **39** | Ad-hoc bundles are managed as packs (9A step 5) | **Yes** |
+
+---
+
+## Phase 10 — Week 5: The user account — profile, security, purchases, refunds, preferences, data rights
+
+**Source:** Owner instruction, 2026-08-20 — *"Write me a prompt for a Phase 10 for user profile including to change name, password, confirm password, refund request, all purchases, and other necessary changes. Check what Coursera, Udemy, edX for necessary user account settings."*
+
+**Answered by:** §10A identity · §10B password · §10C purchases · §10D refund placement · §10E notification preferences · §10F data export and account closure.
+
+**Requirements:** W4-R21 (§5). Ledger rows 96–108 (§28.0).
+
+### Status note — read this before planning the work
+
+This phase was drafted against assumptions that a direct read of the repository has **corrected**. The corrections make Phase 10 *smaller* than it first appeared, and they change which sections are blocked:
+
+| Draft assumption | Repository truth (verified 2026-08-20) | Consequence |
+|---|---|---|
+| Phase 9B may not have landed; §10D is "blocked" | **9B is fully landed, front to back.** `GET /me/orders` (keyset, `me.py:285`), `/refund-eligibility` (`me.py:370`), `POST /refund` (`me.py:448`), migration `021_order_refund_details`, and a 263-line [Purchases.tsx](frontend/src/pages/Purchases.tsx) that already renders eligibility, the reason codes and the refund dialog | **§10D is not blocked and is nearly done.** It shrinks to *placement* — mounting the existing component in a tab. Do not rebuild it |
+| Phase 6C's `users.disabled_at` may be missing; include it in this migration if so | **Present and wired into the gate.** Migration `015_settings_and_deactivation`, and [entitlements.py:53](backend/app/core/entitlements.py#L53) filters `User.disabled_at.is_(None)` inside `resolve_product_ids` | §10F **must not** add the column, and must not add a second deactivation mechanism. It calls the existing path |
+| The migration is `020_user_account_preferences` | `020` is **taken** (`020_merge_015_019`), as is `021`. Head is `021_order_refund_details` | The preferences migration is **`022_user_account_preferences`**. Confirm with `alembic current` before naming |
+| Refund columns are `orders.refund_amount_cents` / `refunded_at` | Actual names are **`buyer_refund_amount_cents`**, **`buyer_refunded_at`**, `buyer_refund_reason_code`, `buyer_refund_reason_text` — deliberately prefixed so the admin full-refund path and the buyer partial path stay distinguishable | Use the real column names in §10C |
+| A new Jinja2 pair "on the 600px table base" must be authored | The email spine is **built**: [backend/app/emails/](backend/app/emails/) holds `base.html.j2`, `_button.html.j2` and nine html/txt pairs; `email_service.py` has `_render`, `_send`, `_format_amount` and Mailjet delivery | Security-alert mail is a **new pair on the existing base**, using `_send` — not new infrastructure |
+| `/account` exists but is under-built (DESIGN §47.3) | **`/account` does not exist at all.** No route in [App.tsx](frontend/src/App.tsx), no page file. Only `/purchases` is mounted (`App.tsx:125`) and linked from [MemberLayout.tsx:34](frontend/src/routes/_layouts/MemberLayout.tsx#L34) | The shell in §2 is genuinely `[NEW]`, not a retrofit |
+| Use the shadcn `Tabs` primitive | **There is no `Tabs` component** in [frontend/src/components/ui/](frontend/src/components/ui/). The kit has `Accordion`, `Card`, `Button`, `Input`, `FieldError`, `EmptyState`, `Badge`, `PageTitle`, `SectionHeading` and others | Either author `Tabs` once as a kit primitive, or use routed sub-pages. **Decision #44** below |
+| `PATCH /me/profile` needs only writing | `me.py` has **`GET /me/profile` only** — no PATCH verb anywhere in the file | Confirmed `[NEW]`, as drafted |
+| Rate limiting is an established convention | It exists in exactly **one** place: `api/v1/filter_events.py`. There is no shared helper | §3 must **extract** the limiter before five endpoints reuse it, or accept five copies. Extract it |
+
+**Net effect.** §10D is ~90% done. §10F's hardest half (deactivation wired into the gate) is done and must only be exposed to the user. The real new work is §10A, §10B, §10E, the `/account` shell, and the `Tabs` decision.
+
+---
+
+### 0. Read before starting
+
+1. `DESIGN.md` §30.3 (account), §30.1 (dashboard), §38 (forms), §40 (states), §45 (security in the interface), §47.3 (member routes).
+2. `BACKEND.md` — the `/me/*` conventions and the gate (`resolve_product_ids`, non-negotiable #1).
+3. [me.py](backend/app/api/v1/me.py) end to end — the six existing endpoints, the keyset cursor at `:285`, and `_compute_refund_amount` at `:358`.
+4. [Purchases.tsx](frontend/src/pages/Purchases.tsx) end to end **before writing any purchases or refund code**. It already does most of §10C and §10D.
+5. [entitlements.py](backend/app/core/entitlements.py) `resolve_product_ids` — specifically the `disabled_at` filter §10F depends on.
+6. [admin/users.py:269](backend/app/api/v1/admin/users.py#L269) — the existing deactivation endpoint. §10F's self-serve closure must reuse this logic, not fork it.
+7. [email_service.py](backend/app/services/email_service.py) and [emails/base.html.j2](backend/app/emails/base.html.j2) — the template and send conventions a security alert must follow.
+8. Research Specification §7.5–7.6 — 7-year financial retention, deactivation over deletion, audit trails.
+
+---
+
+### 1. Competitor research — what Coursera, Udemy and edX put in account settings
+
+> Compiled from documented product knowledge. This session cannot browse; specifics marked `[VERIFY LIVE]` are strong priors to re-confirm in a screenshot pass. The *structure* is the stable, useful signal — it is consistent across all three and has been for years.
+
+| Setting area | Coursera | Udemy | edX | Adopted here |
+|---|---|---|---|---|
+| **Name** | ✓ | ✓ | ✓ | ✓ §10A |
+| **Email** (with confirmation) | ✓ | ✓ | ✓ | ✓ §10A |
+| **Password change** (current + new + confirm) | ✓ | ✓ | ✓ | ✓ §10B |
+| **Purchase history + receipts** | ✓ | ✓ | ✓ | ✓ §10C |
+| **Refund request** | ✓ recent purchases | ✓ within window | limited | ✓ §10D |
+| **Notification / email preferences** | ✓ | ✓ | ✓ | ✓ §10E |
+| **Data export / download** | ✓ | ✓ | ✓ | ✓ §10F |
+| **Account closure** | ✓ | ✓ "Close account" | ✓ | ✓ §10F |
+| Profile photo | ✓ | ✓ | ✓ | ✗ deferred — §4 |
+| Headline / bio | ✓ | ✓ | ✓ | ✗ deferred — §4 |
+| Stored payment methods | ✓ | ✓ | — | ✗ not applicable — §4 |
+| Certificates | ✓ | ✓ | ✓ | ✗ cut for v1 (Research 12.6) |
+| Language / country | ✓ | — | ✓ | ✗ single market v1 |
+| Linked / SSO accounts | ✓ | — | ✓ | ✗ deferred |
+| 2FA / MFA | `[VERIFY LIVE]` | `[VERIFY LIVE]` | `[VERIFY LIVE]` | ✗ deferred (Research 7.2) |
+
+**The common denominator — the spine of this phase.** Every serious learning platform offers exactly five things, and the owner's instruction names four of them unprompted:
+
+1. **Identity** — name and email, both changeable, email confirmed.
+2. **Security** — password change requiring the current password plus a confirm field.
+3. **Commerce** — complete purchase history with receipts, and a path to request a refund.
+4. **Preferences** — control over which emails arrive.
+5. **Data rights** — export my data, close my account.
+
+Everything else is low-value for a professional buyer, architecturally out of reach in v1, or deliberately cut. §4 records each refusal so it reads as a decision, not an omission someone finds later.
+
+---
+
+### 2. The account shell `[NEW]`
+
+One destination, `/account`. Purchases is a first-class section because the instruction names it explicitly, even though `/purchases` also stands alone — the account section is the hub, the standalone route stays for the member rail link and existing deep links.
+
+```text
+/account
+├── Profile          name, email                          §10A
+├── Security         password change                      §10B
+├── Purchases        order history, receipts, refunds     §10C + §10D
+├── Notifications    email preferences                    §10E
+└── Data & privacy   export my data, close account        §10F
+```
+
+**Rules:**
+- **Each section is its own form with its own save action.** Never one giant form — a failed password change must not wipe an edited name.
+- One primary action per section (§3.4).
+- **`/purchases` and the Purchases section render the same component.** [Purchases.tsx](frontend/src/pages/Purchases.tsx) is extracted into a component both routes mount. They cannot be allowed to drift, and one of them already works.
+- The member rail links to `/account`; the existing `/purchases` link stays.
+- Both themes, seven widths (§41.2), axe-clean on every section including focus and error states.
+
+**Decision #44 — tabs or routed sub-pages.** There is no `Tabs` primitive in the kit. Two honest options: author `Tabs` once in `components/ui/` (roving tabindex, `aria-selected`, arrow-key navigation — real work to do accessibly), or use routed sub-pages `/account/profile`, `/account/security`, … styled as a tab strip, which gets deep-linking, browser history and per-section code splitting for free and needs no new primitive. **Default if unanswered: routed sub-pages.** They are less new code, more linkable, and the accessibility surface is a nav landmark the kit already handles.
+
+---
+
+### §10A — Identity: name and email
+
+**Steps**
+
+1. **Read first.** `users` model, [supabase.ts](frontend/src/lib/auth/supabase.ts), `GET /me/profile` at [me.py:49](backend/app/api/v1/me.py#L49). Confirm where `full_name` and `email` are read today before adding a write path.
+2. **Name.** `PATCH /me/profile` `[NEW]` — body `{ full_name }`, 1–100 chars, trimmed server-side, writes the app `users` table, audited, returns the updated profile. This is the first PATCH in `me.py`; follow the response-model conventions already there.
+3. **Email — understand the Supabase reality before designing the UX.** Email lives in Supabase Auth, not the app table. `supabase.auth.updateUser({ email })` sends a confirmation link to the **new** address and the email does not change until it is confirmed. The UI must say so plainly: a user who believes the change is instant will be confused when their next sign-in still uses the old address. Keep `users.email` in sync from the session/JWT rather than writing it from the form.
+4. **Email change requires the current password.** Verify with `supabase.auth.signInWithPassword` before calling `updateUser`, mirroring §10B. An email change is an account-takeover vector; session alone is not sufficient authority.
+5. **Security alert email on every identity change.** New `security_alert.html.j2` / `.txt.j2` pair on the existing [base.html.j2](backend/app/emails/base.html.j2), sent through `email_service._send`. Subject and body in the copy deck. No ABN (non-negotiable).
+6. **Tests, seen red first:** empty name refused · >100 chars refused · email change without the current password refused · a name change writes an audit row · `users.email` reflects the confirmed address after the Supabase round trip.
+
+**Copy deck**
+- Section: `Profile`
+- Labels: `Full name` · `Email address`
+- Email help: `Changing your email sends a confirmation link to the new address. Your sign-in email doesn't change until you confirm it.`
+- Success (name): `Name updated.`
+- Success (email): `Confirmation sent to {email}. Check your inbox to finish the change.`
+- Security alert subject: `Your account details changed`
+
+**Acceptance**
+- [ ] Name editable, validated, persisted, audited
+- [ ] Email change is password-gated and goes through Supabase's confirm-new-address flow, with copy explaining the delay **before** submit
+- [ ] Security alert email fires on name, email and password change
+- [ ] No email change is possible on session alone
+
+---
+
+### §10B — Password change (current + new + confirm)
+
+**Steps**
+
+1. **Reauth, then update — this is the Supabase pattern; document it rather than fight it.** Supabase's admin API can set a password *without* the old one, so the backend cannot verify the current password through admin calls. The correct flow is client-side: verify with `supabase.auth.signInWithPassword`, then `supabase.auth.updateUser({ password })`. [ResetPassword.tsx:40](frontend/src/pages/ResetPassword.tsx#L40) already uses `updateUser` — follow it. Afterwards call a lightweight backend hook to write an `audit_log` row (`password_changed`), because a Supabase-side change otherwise never reaches the audit trail.
+2. **Three fields:** current · new · confirm new. All `type="password"`; `autocomplete="current-password"` on the first, `autocomplete="new-password"` on the other two.
+3. **Validation, client and server.** Confirm must match new (instant, on blur + change per §38, via the existing [useFieldValidation.ts](frontend/src/lib/useFieldValidation.ts)); minimum **8 characters**; reject new === current. No complexity busywork — length is the real lever — but state the minimum clearly.
+4. **Confirm is a real check, not decoration.** It exists because a mistyped new password locks a buyer out of a paid product with no recovery beyond a reset email. Validate the match before enabling submit.
+5. **Rate-limit** per user, in-memory, no IP stored — using the helper extracted in §3.
+6. **After success:** clear the form, show the success message, fire the security alert email, and keep the user signed in (`updateUser` preserves the session).
+7. **Tests, seen red first:** wrong current password refused · confirm mismatch blocks submit · too-short password refused · new === current refused · success writes an audit row · the user is still signed in afterwards.
+
+**Copy deck**
+- Section: `Security` · Heading: `Change your password`
+- Labels: `Current password` · `New password` · `Confirm new password`
+- Rule line: `At least 8 characters.`
+- Mismatch: `Passwords don't match.`
+- Same as old: `Your new password must be different from your current one.`
+- Wrong current: `That isn't your current password.`
+- Success: `Password updated. We've emailed you to confirm.`
+
+**Acceptance**
+- [ ] Current + new + confirm, correct `type` and `autocomplete` on each
+- [ ] Confirm-match validated before submit; minimum length enforced client **and** server
+- [ ] Success keeps the session, writes an audit row, sends the alert email
+- [ ] Rate-limited; every refusal proven by a test seen red first
+
+---
+
+### §10C — Purchases and receipts ("all purchases")
+
+**Start by reading what exists.** `GET /me/orders` is built, keyset-paginated on `(created_at, id)` with `selectinload(Order.items)` — bulk-resolved, no N+1. [Purchases.tsx](frontend/src/pages/Purchases.tsx) renders it. This section **finishes** that page; it does not start it.
+
+**Steps**
+
+1. **Verify, don't rebuild, the list.** Confirm the keyset cursor behaves at 0, 1, 2 and many orders. Confirm every row resolves its `order_items` to product names and amounts.
+2. **Receipt per order** `[GAP]`. Surface the Stripe invoice number from W4-R2's invoice block. If the invoice id is stored on the order, link it; if not, regenerate the receipt from order data. **Never fabricate an invoice number.**
+3. **Refund state on every row** — already partly built. Use the real columns: `buyer_refund_amount_cents`, `buyer_refunded_at`. Refunded is a **neutral** state — `muted` treatment with the `ReceiptText` icon, never an error colour.
+4. **Empty state:** `No purchases yet.` with one route into the catalogue — not a retry button. Use the existing `EmptyState` primitive.
+5. **Loading and error** per §40: skeleton rows loading, inline retry on error.
+6. **Extract the page into a shared component** so `/purchases` and the account section mount one implementation.
+7. **Tests:** pagination at 0/1/2/many · a refunded order shows amount and date · a multi-item order lists each item · both routes render the same component.
+
+**Copy deck**
+- Title: `Purchases` · Columns: `Date` · `Product` · `Amount` · `Status` · `Receipt`
+- Empty: `No purchases yet.` + `Browse the catalogue`
+- Refunded badge: `Refunded {amount} · {date}`
+
+**Acceptance**
+- [ ] All purchases render, newest first, keyset-paginated, bulk-resolved
+- [ ] Every row carries a receipt link and an honest status; refunded rows show amount and date
+- [ ] Empty, loading and error states designed, not defaulted
+- [ ] `/purchases` and the account section share exactly one component
+
+---
+
+### §10D — Refund requests (placement over Phase 9B)
+
+**Dependency: satisfied.** Phase 9B has landed — endpoints, migration `021`, and the UI in [Purchases.tsx](frontend/src/pages/Purchases.tsx) including the eligibility query, the reason-code map and the refund mutation. **§10D adds placement, nothing else.** Building a second eligibility rule or a second refund call is the exact money-path fork non-negotiable #1 forbids.
+
+**Steps**
+
+1. Confirm the `Request a refund` control appears on each eligible row. Eligibility is computed **server-side** by `/refund-eligibility`; the client never decides.
+2. Confirm ineligible rows state the reason in plain words — over 15% progress, already refunded, template-only, past window — never a silent absence. The strings exist at `Purchases.tsx:46–49`; check every reason code the endpoint can return has a matching string, and that an unknown code degrades to a sensible fallback rather than blank.
+3. The request flow, required reason, confirmation dialog and refunded-state update reuse 9B's components and copy verbatim.
+4. Refund status updates without a full reload — invalidate the orders query on success.
+5. **Tests:** eligible order shows the control · ineligible shows the reason · a submitted request updates the row · the gate and entitlement revocation still behave per 9B.
+
+**Acceptance**
+- [ ] Refund request reachable from the account's Purchases section for every eligible order
+- [ ] Eligibility and amounts come from 9B's endpoints; **no parallel refund logic exists anywhere**
+- [ ] Every reason code the server returns maps to a sentence; unknown codes degrade gracefully
+
+---
+
+### §10E — Notification preferences
+
+**Steps**
+
+1. **Migration `022_user_account_preferences`** `[NEW]` — confirm the number with `alembic current` first; head is `021_order_refund_details`. Adds `users.notify_marketing boolean not null default false` and `users.notify_product_updates boolean not null default true`. Two named columns, not a JSONB blob — matching the house preference for named columns over opaque fields.
+2. **`PATCH /me/account/notifications`** `[NEW]` — booleans only, audited, idempotent.
+3. **Respect the preferences in the email spine.** Transactional mail — receipt, access granted, password reset, security alerts — is **never** gated by these flags. It is the contract of a purchase, not marketing. Only genuinely optional mail honours them. Say this on the page.
+4. **No pre-ticked marketing consent.** `notify_marketing` defaults false. `notify_product_updates` defaults true because a buyer reasonably expects to hear that a product they own was revised — but it is visibly toggleable.
+5. **Tests:** preferences persist · `send_receipt_email` and `send_access_granted_email` still send with both flags off · a marketing send is suppressed when `notify_marketing` is false · non-boolean values rejected.
+
+**Copy deck**
+- Section: `Notifications` · Heading: `Email preferences`
+- `Product updates` / `Tell me when a template or course I own is revised.`
+- `Occasional updates` / `New questions and resources, a few times a year.`
+- Reassurance: `Receipts, access emails, and security alerts always arrive — those aren't marketing.`
+
+**Acceptance**
+- [ ] Two toggles, persisted and audited; marketing defaults off
+- [ ] Transactional email is never suppressed, and the page says so
+- [ ] Suppression of opted-out mail proven by a test
+
+---
+
+### §10F — Data export and account closure
+
+**Half of this is already built.** `users.disabled_at` exists (migration `015`) and [entitlements.py:53](backend/app/core/entitlements.py#L53) already refuses deactivated users **inside** `resolve_product_ids`. The gate work is done. §10F exposes it to the user and adds export.
+
+**Steps**
+
+1. **Data export** `[NEW]`. `POST /me/account/export` builds JSON of the user's own data — profile, orders, entitlements, lesson progress, notification preferences — and returns a short-lived download link. Rate-limited. This is the Privacy Act / GDPR data-subject right in Research §7.6: it must produce a **real file**, not a stub.
+2. **Closure is deactivation, never hard delete** (Research §7.6, Phase 6C). Financial records must survive 7 years, and `orders.user_id` is a non-nullable FK — a hard delete either fails or destroys purchase history. Set `users.disabled_at`. **Do not add a second mechanism:** reuse the logic behind [admin/users.py:269](backend/app/api/v1/admin/users.py#L269), extracting it to a service function both the admin endpoint and the new self-serve endpoint call.
+3. **Require the current password** to close, same reauth pattern as §10A/§10B.
+4. **The warning must be honest and specific:** what closes, what is retained, and that closing does not refund a purchase. Offer the export first.
+5. **A confirmation email** that the account was deactivated, with the route to contact support to restore it.
+6. **Do not re-add `disabled_at`** to migration `022`. It exists. Adding it again breaks the migration.
+7. **Tests, seen red first:** export returns a real file with the user's own records and **no one else's** · a deactivated user is refused by the gate · closure without the current password is refused · a deactivated user's orders remain intact · **no Delete Account button hard-deletes anything**.
+
+**Copy deck**
+- Section: `Data & privacy`
+- Export: `Download your data` / `Get a copy of your profile, purchases, and progress.`
+- Closure heading: `Close your account`
+- Warning: `Closing your account signs you out and ends your access. Your purchase records are kept as required by law, and closing your account does not refund a purchase. Download your data first if you want a copy.`
+- Confirm: `Enter your password to close your account.`
+- Success: `Your account is closed. Contact us any time to restore it.`
+
+**Acceptance**
+- [ ] Export produces a real, rate-limited file scoped strictly to the requesting user
+- [ ] Closure is a password-confirmed deactivation reusing the existing gate-wired path
+- [ ] Purchase records survive closure; the warning states retention and no-refund honestly
+- [ ] No hard-delete path exists anywhere; a test says so
+
+---
+
+### 3. Shared requirements across the phase
+
+- **One migration**, `022`, confirmed against `alembic current` before naming. Additive, defaulted, clean downgrade, single head afterwards.
+- **Extract the rate limiter first.** It exists only in `api/v1/filter_events.py`. Five endpoints in this phase need it (`PATCH /me/profile`, the password-change hook, notifications, export, closure). Extract to `app/core/` **before** the first one lands, or the phase ships five copies.
+- **Audit every sensitive write** — name, email, password, notification change, export, deactivation — actor + action + reason where applicable. The Phase 6C audit reader consumes it; a trail nobody can read is theatre.
+- **Never log or transmit a password.** Not in a logged request body, not in an audit row, not in an email. The current password is verified and discarded.
+- **Do not break the existing session flow.** Prove that sign-in → browse → purchase still works untouched after the account work lands.
+- **Both themes, seven widths, axe-clean** on every section, with focus and error states checked in dark mode.
+- **Compose existing primitives** — `Card`, `Button`, `Input`, `FieldError`, `EmptyState`, `Badge`, `PageTitle`, `SectionHeading`, `useFieldValidation`. Author nothing that already exists. `Tabs` is the one possible new primitive, and only if Decision #44 goes that way.
+
+---
+
+### 4. What Phase 10 deliberately does not do
+
+- **No profile photo, headline or bio.** Low value for a professional buying templates; adds a storage path, an upload surface and a moderation question. Candidate for v2 if a community reason appears.
+- **No stored payment methods.** Non-negotiable C2 — the platform never touches card data, and Stripe hosted checkout manages its own. Payment-method self-service means the Stripe Customer Portal: a separate integration and a separate decision.
+- **No certificates.** Cut for v1 (Research 12.6, DESIGN §0.6).
+- **No language or country selection.** Single market, single language in v1.
+- **No 2FA/MFA.** Research §7.2 — not required for v1; Supabase supports TOTP later.
+- **No linked social/SSO accounts.** Supabase email/password plus magic link is the v1 identity.
+- **No hard delete.** Deactivation only, for the retention and referential-integrity reasons in §10F.
+- **No refund logic of its own.** §10D is placement over Phase 9B. A second refund path is the money-path fork the non-negotiables forbid.
+- **No rewrite of `Purchases.tsx`.** It works. It is extracted and finished, not replaced.
+
+---
+
+### 5. If Phase 10 runs long, cut in this order
+
+1. **§10E notification preferences** — the mail spine works without them; preferences are a courtesy, not a contract.
+2. **§10F data export** — keep closure (the gate-relevant half, and nearly free given `disabled_at`); export follows.
+3. **The `/account` shell itself** — ship §10A and §10B as `/account/profile` and `/account/security` routes without the tab strip; `/purchases` already stands alone.
+4. **Security alert emails** — keep the password-change one if cutting the others.
+
+**Never cut:** password change with current-password verification · purchase history with honest refund states · closure wired into the gate · the no-hard-delete rule · the seen-red tests on every sensitive path.
+
+---
+
+### 6. Risk watchlist
+
+| Risk | Signal | Response |
+|---|---|---|
+| **Purchases.tsx gets rebuilt from scratch** | New eligibility logic appears outside `me.py` | §10C/§10D start by reading the file; the DoD says one component, one refund path |
+| **Email-change UX confuses users** (Supabase confirms asynchronously) | Support queries: "my email didn't change" | Copy explains the confirmation step **before** submit, not after |
+| **Password change bypasses the audit trail** | No `audit_log` row after a change | The post-change backend hook writes it; assert in a test |
+| **A second deactivation path forks** | `disabled_at` written from two places | Extract one service function; admin and self-serve both call it |
+| **`disabled_at` re-added in migration 022** | Migration fails on an existing column | It landed in `015`; §10F step 6 |
+| **Transactional mail suppressed by preferences** | A buyer stops getting receipts | Preferences gate optional mail only; proven by test |
+| **Export leaks another user's data** | Export contains foreign rows | Scope strictly to the requester; assert in a test |
+| **Five copies of the rate limiter** | `time.monotonic()` buckets in five modules | Extract to `app/core/` before the first endpoint lands |
+
+---
+
+### 7. Open owner decisions raised by Phase 10 `[OWNER]`
+
+| # | Decision | Blocks | Default if unanswered |
+|---|---|---|---|
+| **40** | Minimum password length / complexity — 8 chars proposed | §10B copy | **8 characters**, no complexity busywork |
+| **41** | `notify_product_updates` default — true proposed | §10E | **True**, visibly toggleable |
+| **42** | Profile photo / bio — confirm they stay out of v1 | scope | **Stay out** |
+| **43** | A refund time window in days, beyond the progress rule | §10D copy | **No window** — progress-only, per Decision #38 |
+| **44** | `/account` as a `Tabs` primitive or as routed sub-pages | §2 shell | **Routed sub-pages** — no new primitive, free deep-linking and history |
+
+---
+
+**Definition of Done — Phase 10**
+
+- [ ] `/account` renders five sections; both themes, seven widths, axe-clean
+- [ ] Name and email editable; email change password-gated and Supabase-confirmed, with honest copy
+- [ ] Password change: current + new + confirm, validated, session-preserving, audited, alert-emailed
+- [ ] All purchases render with receipts and honest refund states; empty/loading/error designed
+- [ ] Refund request reachable for eligible orders through Phase 9B's endpoints; ineligible orders explain why
+- [ ] Exactly one purchases component and exactly one refund code path exist
+- [ ] Notification preferences persist; transactional mail never suppressed
+- [ ] Data export returns a real file scoped to the requester; closure is a password-confirmed deactivation reusing the gate-wired path
+- [ ] No hard-delete path exists anywhere
+- [ ] Migration is `022`, single head, clean downgrade
+- [ ] The rate limiter is extracted once, not copied five times
+- [ ] Every sensitive operation audited and rate-limited; every sensitive test seen red first
+- [ ] `pytest backend/tests/test_entitlements.py` passes **unchanged** — the gate was extended, never rewritten
+
+---
+
 # PART IV — DATABASE: OPTIMISATION, INTEGRITY AND THE NEW COLUMNS
 
 ## 24. Where the database stands
@@ -2565,27 +3169,27 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 | 44j | Revenue gross/refunded/net + top products | R10 | 6B | ❌ `/admin/metrics` returns one `total_revenue` figure, not gross/refunded/net as three fields |
 | 44k | Enrollments + popular courses, by measure named | R10 | 6B | ❌ Not present in `metrics.py`'s current endpoint |
 | 44l | shadcn chart block + `react-is` override; chunk measured | R10/R8 | 6B | ❌ `recharts` is not in `package.json`; no registry-sourced `chart.tsx`. `TrendChart`'s stub (44b) is what ships instead |
-| 52 | Migration `015` — `settings` + `users.disabled_at` | R13 | 6C | ❌ Not started — Week 5 scope by the plan's own words |
-| 53 | `config.py` settings resolver, operational keys only | R13 | 6C | ❌ Not started |
-| 54 | `GET /admin/config-status` — set/unset, never a value | R13 | 6C | ❌ Not started |
-| 55 | `/admin/users` list + detail | R13 | 6C | ❌ Not started |
-| 56 | Role change + three guardrails, audited | R13 | 6C | ❌ Not started |
-| 57 | Deactivation wired **into** the gate | R13 | 6C | ❌ Not started |
-| 58 | `/admin/audit` + `/admin/leads` readers | R13 | 6C | ❌ Not started |
-| 59 | `/admin/settings` + config-status panel | R13 | 6C | ❌ Not started |
-| 60 | `ADMIN_NAV` grouped (Content · Commerce · System) | R13 | 6C | ❌ Not started — flat list of 7 now (was 4); grouping is Week 5 scope |
+| 52 | Migration `015` — `settings` + `users.disabled_at` | R13 | 6C | ✅ Done `2026-08-20` + merge migration `020` |
+| 53 | `config.py` settings resolver, operational keys only | R13 | 6C | ✅ Done `2026-08-20` — 5 operational keys, secrets have no DB path |
+| 54 | `GET /admin/config-status` — set/unset, never a value | R13 | 6C | ✅ Done `2026-08-20` — pattern-matching test proves no key leakage |
+| 55 | `/admin/users` list + detail | R13 | 6C | ✅ Done `2026-08-20` — list, search, keyset pagination, detail with entitlements + orders |
+| 56 | Role change + three guardrails, audited | R13 | 6C | ✅ Done `2026-08-20` — self-demotion, last-admin, reason-required; 19 tests pass |
+| 57 | Deactivation wired **into** the gate | R13 | 6C | ✅ Done `2026-08-20` — `resolve_product_ids` checks `User.disabled_at.is_(None)`; 37 gating tests pass |
+| 58 | `/admin/audit` + `/admin/leads` readers | R13 | 6C | ✅ Done `2026-08-20` — audit newest-first filterable, leads with CSV export |
+| 59 | `/admin/settings` + config-status panel | R13 | 6C | ✅ Done `2026-08-20` — operational fields with useAutosave, config-status visually separated |
+| 60 | `ADMIN_NAV` grouped (Content · Commerce · System) | R13 | 6C | ✅ Done `2026-08-20` — 3 groups: Content (3), Commerce (3), System (3) = 9 entries |
 | 61 | Video playback in admin lesson editor | R13 | 8 | ⚠️ `[RE-READ 2026-08-20]` `VideoPreview.tsx` exists but passes a **bare `playbackId` with no playback token**, while `Lesson.tsx:68` passes `tokens={{ playback }}` from `/lessons/{id}/playback-token`. If the Mux assets use a signed policy it cannot play. Policy itself unverified — §8D step 1 checks it before building |
 | 62 | Rich text editor for lessons (h1, h2, h3, bullets, tables) | R13 | 8 | ⚠️ `[RE-READ 2026-08-20]` Editor exists and emits HTML; **nothing renders it as HTML** (`Learn.tsx:531` and `LessonBlocks` lines 243/260 render it as text) · wired only to the lesson-body modal, not the block editor current lessons actually use · `@tailwindcss/typography` not installed, so `prose` is inert and headings look like body text **inside the editor** · no sanitizer anywhere. §8E |
-| 63 | Course product association — create product button | R13 | 8 | ❌ `[RE-READ 2026-08-20]` Exists, and mints `stripe_price_id="placeholder_update_in_stripe"` (`courses.py:306`) — not a Stripe object, so **the course still cannot be bought**. This is the owner's complaint, and it is a defect rather than an unbuilt feature. §8A |
-| 64 | `create_price()` in `stripe_client.py`; placeholder string deleted | R17 | 8 | ❌ Not started |
-| 65 | `POST /admin/templates/{id}/create-product` | R17 | 8 | ❌ Not started — templates have no product path at all |
-| 66 | Server-derived readiness line on courses and templates | R17 | 8 | ❌ Not started |
-| 67 | `check_stripe_price()` guard — unresolvable · inactive · cross-mode · mismatched | R17/R3 | 8 | ❌ Not started. `publish_product`'s `warning` is initialised to `None` and never assigned, so §23's `Price mismatch` string has no code that can produce it |
-| 68 | End-to-end test: admin-created course bought in test mode | R17/R9 | 8 | ❌ Not started — **the test that answers the instruction** |
-| 69 | Migration `016_product_stripe_product_id` + backfill script | R15 | 8 | ❌ Not started |
-| 70 | `POST /admin/products/{id}/price` — reason required, audited, both Price ids | R15 | 8 | ❌ Not started |
-| 71 | Price control in product, course and template editors — one endpoint | R15 | 8 | ❌ Not started |
-| 72 | `stripe_price_id` read-only in the UI; dollars→cents in one place, tested | R15 | 8 | ❌ Not started |
+| 63 | Course product association — create product button | R13 | 8 | ✅ `[RE-VERIFIED 2026-08-20, second read]` **Fixed since the first read.** `create_course_product` (`courses.py:278`) now calls `create_price()` and stores the returned Stripe Price **and** Product ids; Stripe is called first, and a Stripe error creates no row. The placeholder is no longer written by any code path |
+| 64 | `create_price()` in `stripe_client.py`; placeholder string no longer **written** | R17 | 8 | ✅ `[RE-VERIFIED 2026-08-20]` `create_price`, `create_price_under_product`, `archive_price` all exist (`stripe_client.py:62/96/126`). **The string survives only as a guard sentinel** in three read-sites (`publish_guard.py:260`, `products.py:103`, `products.py:266`) — see §9A's repository-state note. Phase 8A's *"grep returns nothing"* DoD line is superseded: satisfying it literally would delete the guards |
+| 65 | `POST /admin/templates/{id}/create-product` | R17 | 8 | ✅ `[RE-VERIFIED 2026-08-20]` Exists at `admin/templates.py:474` |
+| 66 | Server-derived readiness line on courses and templates | R17 | 8/**9A** | ⚠️ **Backend done, frontend not.** `ProductOut.readiness` + `readiness_message` are computed server-side over all five states (`products.py:86-108`). **No admin page reads them** — `grep readiness frontend/src/` hits only `Privacy.tsx`. The rendering half moves to **9A step 3**, where it lands in the course/template/pack editors rather than the removed Products page |
+| 67 | `check_stripe_price()` guard — unresolvable · inactive · cross-mode · mismatched | R17/R3 | 8 | ✅ `[RE-VERIFIED 2026-08-20]` `publish_guard.py:237`, with six tests in `tests/admin/test_publish_guards.py:316-375` (placeholder · empty · none · amount mismatch · currency mismatch · inactive). §23's `Price mismatch` string now has code that produces it |
+| 68 | End-to-end test: admin-created course bought in test mode | R17/R9 | 8/**9A** | ❌ Still not started — **the test that answers the instruction**, and the one row of 63–72 that the second read did not upgrade. 9A step 7 runs it three times (course · template · pack) over one shared path |
+| 69 | Migration `016_product_stripe_product_id` + backfill script | R15 | 8 | ⚠️ **Both exist and the migration is applied** (`alembic current` reached `017` on 2026-08-20; head is now `020_merge_015_019`). `scripts/backfill_stripe_product_ids.py` is in the tree; **whether it has been run, and its unresolved-id list, is unrecorded** — 9A step 2 closes that |
+| 70 | `POST /admin/products/{id}/price` — reason required, audited, both Price ids | R15 | 8 | ✅ `[RE-VERIFIED 2026-08-20]` `products.py:241`. Refuses a placeholder price id and a currency change on a published product, both tested (`test_money.py:281`, `:296`) |
+| 71 | Price control in ~~product~~, course, template **and pack** editors — one endpoint | R15 | 8/**9A** | ❌ **Not started, and the destination has changed.** No price control exists in `AdminCourses.tsx` or `AdminTemplates.tsx`. W4-R19 removes the Products page, so this row now means *three content editors*, not three surfaces including a Products page. **This is 9A's sequencing gate — it lands before the page is removed** |
+| 72 | `stripe_price_id` read-only in the UI; dollars→cents in one place, tested | R15 | 8/**9A** | ⚠️ Backend conversion is single-sited and covered by `test_money.py`; the **read-only UI half is unbuilt** and moves with row 71 into the content editors |
 | 73 | Basic analytics: gross/refunded/net · enrollments by `granted_via` · top products · links issued | R10 | 8 | ❌ Closes ledger rows 44j and 44k |
 | 74 | `GET /admin/metrics/revenue-series` | R10 | 8 | ❌ Closes row 44e |
 | 75 | `TrendChart` — real chart with the chunk measured, **or** labelled a stub | R10/R8 | 8 | ⚠️ Stub in tree today, unlabelled. Closes rows 44b and 44l either way |
@@ -2596,6 +3200,32 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 | 80 | `WhyThis` + CTA ladder + objection block + copy deck additions | R16 | 8 | ❌ Not started |
 | 81 | `stamping.py` — per-buyer stamp, cached, three rules each tested | R16 | 8 | ❌ Not started |
 | 82 | `ProductsMenu` + `/packs` catalogue + member rail regrouped | R18 | 8 | ❌ Not started |
+| 83 | Placeholder sentinel named or replaced by `NULL` — **not blanket-deleted** | R19 | 9A | ❌ `[CORRECTED 2026-08-20]` The string survives in exactly 3 non-compiled places (`publish_guard.py:260`, `admin/products.py:103`, `:266`) and in all three it is a **refusal condition**, not a default. Phase 8A's `grep`-returns-nothing DoD line would delete the guards; restated in Phase 9A step 2 |
+| 84 | `AdminPacks.tsx` — reference + domain pack editor, with `sort_order` | R19 | 9A | ✅ `[VERIFIED 2026-08-20]` [AdminPacks.tsx](frontend/src/pages/admin/AdminPacks.tsx) exists. Confirm `sort_order` and the publish guard before closing |
+| 85 | Price + readiness + publish wired into course, template and pack editors | R19/R15 | 9A | ❌ Not started — absorbs ledger rows 63–72's mechanics, changed only in destination |
+| 86 | `/admin/products` route, page and nav entry removed; API module kept | R19 | 9A | ❌ Not started. **Gated on 85** — removing the page first leaves nothing able to price |
+| 87 | Migration `021_order_refund_details` | R20 | 9B | ✅ `[VERIFIED 2026-08-20]` Applied. Columns are `buyer_`-prefixed (`buyer_refund_amount_cents`, `buyer_refunded_at`, `buyer_refund_reason_code`, `buyer_refund_reason_text`) so the admin full-refund and buyer partial paths stay distinguishable. `019`/`020` were indeed taken |
+| 88 | `GET /me/orders` | R20 | 9B | ✅ `[VERIFIED 2026-08-20]` [me.py:285](backend/app/api/v1/me.py#L285) — keyset on `(created_at, id)`, `selectinload(Order.items)`, no N+1 |
+| 89 | `GET /me/orders/{id}/refund-eligibility` — server decides | R20 | 9B | ✅ `[VERIFIED 2026-08-20]` [me.py:370](backend/app/api/v1/me.py#L370), with `_compute_refund_amount` at `:358` |
+| 90 | `POST /me/orders/{id}/refund` — partial, single-flight, shares `refund_service.py` | R20 | 9B | ✅ `[VERIFIED 2026-08-20]` [me.py:448](backend/app/api/v1/me.py#L448). Re-confirm the single-flight check-and-set before Stripe is called |
+| 91 | `Purchases.tsx` at `/purchases` | R20 | 9B | ✅ `[VERIFIED 2026-08-20]` [Purchases.tsx](frontend/src/pages/Purchases.tsx), 263 lines — eligibility query, reason-code map, refund mutation. Mounted at `App.tsx:125`, linked from `MemberLayout.tsx:34`. **Phase 10 extracts it, never rebuilds it** |
+| 92 | Refunded state on `/library`, dashboard and course detail | R20 | 9B | ⚠️ `[VERIFIED 2026-08-20]` **The one 9B gap.** No refund-aware string in `Learn.tsx`, `Dashboard.tsx` or `CourseDetail.tsx`. Access removal may already fall out of the `revoked_at` gate — prove that, then add the locked-state copy |
+| 93 | Refund confirmation email (Jinja2 pair, no ABN) | R20 | 9B | ✅ `[VERIFIED 2026-08-20]` `refund_confirmation.html.j2` / `.txt.j2` and `send_refund_confirmation_email` at [email_service.py:277](backend/app/services/email_service.py#L277) |
+| 94 | `/legal/refunds` redrafted ACL-safe, for owner review | R20 | 9B | ✅ `[VERIFIED 2026-08-20]` [Refunds.tsx](frontend/src/pages/legal/Refunds.tsx) leads with consumer guarantees, states the 15% rule on top of them. Still `[OWNER]` to sign off |
+| 95 | Refund tests: 0/15/16%, rounding on A$9.90, double-request, replay, gate | R20/R9 | 9B | ✅ `[VERIFIED 2026-08-20]` `backend/tests/test_refund_selfserve.py`. Confirm every boundary named here is actually covered |
+| 96 | Rate limiter extracted from `filter_events.py` into `app/core/` | R21 | 10 §3 | ❌ Not started. **Do this first** — five Phase 10 endpoints need it, or the phase ships five copies |
+| 97 | `/account` shell — five sections, Decision #44 resolved | R21 | 10 §2 | ❌ **`/account` does not exist at all.** No route in `App.tsx`, no page file. There is also no `Tabs` primitive in the kit |
+| 98 | `PATCH /me/profile` — name, 1–100 chars, trimmed, audited | R21 | 10A | ❌ Not started. `me.py` currently has **no PATCH verb at all** |
+| 99 | Email change — password-gated, Supabase confirm-new-address, honest copy | R21 | 10A | ❌ Not started. Email lives in Supabase Auth; `users.email` syncs from the JWT, never from the form |
+| 100 | Password change — current + new + confirm, reauth then `updateUser` | R21 | 10B | ❌ Not started. Follow [ResetPassword.tsx:40](frontend/src/pages/ResetPassword.tsx#L40); the backend cannot verify the old password |
+| 101 | `password_changed` audit hook | R21 | 10B | ❌ Not started. Without it a Supabase-side change never reaches the audit trail |
+| 102 | `security_alert` Jinja2 pair on the existing base | R21 | 10A/10B | ❌ Not started. Infrastructure exists (`base.html.j2`, `_send`) — this is a template pair, not a build |
+| 103 | `Purchases.tsx` extracted so `/purchases` and `/account` share one component | R21 | 10C | ❌ Not started. **Extraction, not a rewrite** — the page works today |
+| 104 | Receipt link per order (Stripe invoice number, never fabricated) | R21 | 10C | ❌ The remaining §10C gap |
+| 105 | Migration `022_user_account_preferences` — two named boolean columns | R21 | 10E | ❌ Not started. Head is `021`; `020` and `021` are both taken. **Do not re-add `disabled_at`** |
+| 106 | `PATCH /me/account/notifications`; transactional mail never suppressed | R21 | 10E | ❌ Not started, with a test proving receipts still send when both flags are off |
+| 107 | `POST /me/account/export` — real file, scoped to the requester | R21 | 10F | ❌ Not started. Privacy Act / GDPR right, Research §7.6 — a stub does not satisfy it |
+| 108 | Self-serve closure — password-confirmed, reusing the gate-wired deactivation | R21 | 10F | ❌ Not started. `disabled_at` and its gate filter already exist ([entitlements.py:53](backend/app/core/entitlements.py#L53)); extract [admin/users.py:269](backend/app/api/v1/admin/users.py#L269) into a shared service rather than forking it |
 | 45 | `handover.md` Week 4 section | R12 | 7 | ⚠️ Exists but overstates completion — see the note above this table |
 | 46 | `DESIGN.md` reconciled with `theme.css` | R12 | 7 | ❌ No evidence of this reconciliation pass |
 | 47 | `new_additions.md` status footer | R12 | 7 | ❌ Not found |
@@ -2622,6 +3252,12 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 | **`[PHASE 8]` Migration `017` reinterprets old lesson bodies** | A body containing `<` renders differently after deploy | `body_format` defaults to `'text'` and nothing backfills it. The regression test asserts byte-identical rendering for every existing body — write it before the migration, not after |
 | **`[PHASE 8]` The nav change buries the free entry point** | Questions traffic falls after the menu ships | Accepted knowingly (W4-R18's third constraint): Questions is first in the menu and labelled free, and the header keeps its `/#free-pack` CTA. §8C's numbers make the drop visible; if it happens, it is a finding to act on |
 | **`[PHASE 8]` The dropdown breaks link affordances** | Someone cmd-clicks a menu item and nothing opens | Items are `<a href>` and a render test asserts it. This is the single most common defect in hand-rolled nav menus |
+| **`[PHASE 9A]` The Products page is removed before anything can price** | A pack or template exists with no way to set its price | The sequencing gate: steps 2 and 3 land and are proven **before** step 4. If `AdminPacks.tsx` is cut, step 4 waits with it |
+| **`[PHASE 9A]` A blanket `grep` deletes the guards** | `check_stripe_price` stops refusing an unset price | The placeholder is a **sentinel in three refusal conditions**, not a default. Name it or replace it with `NULL` — never delete the conditions to satisfy a DoD line written before the guards existed |
+| **`[PHASE 9B]` A double-clicked refund button refunds twice** | Two Stripe refunds against one charge | Check-and-set the order status inside one transaction **before** calling Stripe. This is the single highest-consequence bug available in this phase, and it is a race, so it will not appear in casual testing |
+| **`[PHASE 9B]` The refund maths is off by a cent** | A$9.90 refunds A$8.42 instead of A$8.41 | `round_half_up` in one place, tested against a non-round total. Cents arithmetic in floats is how this goes wrong |
+| **`[PHASE 9B]` The policy wording breaches the ACL** | Copy reads "no refunds after 15%" | Research Spec §11.3 (ACCC v Valve). The >15% refusal names the consumer-guarantee path in the same sentence, and a grep test forbids the banned phrases |
+| **`[PHASE 9B]` A refunded course still shows as "Continue"** | The dashboard resume panel points at revoked content | It falls out of the `revoked_at` gate — but the dashboard rebuild reads `/me/library` through React Query, so **verify the cache invalidates on refund** rather than assuming the gate covers it |
 
 ## 30. Quick reference
 
@@ -2655,11 +3291,49 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 
 **New dependencies:** `nh3` (server-side HTML sanitizer) · `python-docx` · `openpyxl` · `pypdf` (stamping) · `@tiptap/extension-link`, `@tiptap/extension-underline` · **possibly** `recharts` per decision #33 — **only with the entry chunk measured before and after** (W4-R8)
 
+**`[PHASE 9 ADDITIONS — 2026-08-20]`** *(an addition, not a rewrite)*
+
+**New migrations:** `021_order_refund_details` — **not `019`**, which is taken by `019_user_last_sign_in_at` (merged at `020_merge_015_019`)
+
+**New backend files:** (extends) `services/refund_service.py`, `integrations/stripe_client.py`, `core/publish_guard.py`, `api/v1/me.py`, `admin/courses.py`, `admin/templates.py` · new pack-admin module · `emails/refund_confirmation.{html,txt}.j2`
+
+**New frontend files:** `pages/admin/AdminPacks.tsx` · `pages/Purchases.tsx` · (extends) `AdminCourses.tsx`, `AdminTemplates.tsx`, `AdminOrders.tsx`, `Library.tsx`, `Dashboard.tsx`, `CourseDetail.tsx`, `legal/Refunds.tsx`
+
+**Removed:** `pages/admin/AdminProducts.tsx` · the `/admin/products` route and nav entry. **`api/v1/admin/products.py` is kept** as the shared seam.
+
+**New routes:** `/purchases` (member) · `/admin/packs`
+
+**New endpoints:** `GET /me/orders` · `GET /me/orders/{id}/refund-eligibility` · `POST /me/orders/{id}/refund` · `POST /admin/templates/{id}/create-product`
+
+**New dependencies:** none
+
+**The Phase 9 commands that matter**
+
+```bash
+# The sentinel is named, and nothing WRITES it onto a product.
+rg -n 'placeholder_update_in_stripe' backend/app --glob '!**/__pycache__/**'
+
+# The admin surface is gone; the API seam is not.
+rg -n 'admin/products' frontend/src            # expect nothing
+rg -n 'products' backend/app/api/v1/admin/router.py   # expect the include
+
+# No wording that breaches the ACL.
+rg -in 'no refunds|all sales final|non-refundable' frontend/src backend/app
+
+# The gate still holds after everything above.
+cd backend && pytest -q tests/gating
+```
+
 **The Phase 8 commands that matter**
 
 ```bash
-# The placeholder price id is gone, and cannot come back.
-rg -n 'placeholder_update_in_stripe' backend frontend
+# The placeholder price id is never WRITTEN. `[CORRECTED 2026-08-20]`
+# It legitimately survives as a guard sentinel in three READ sites
+# (publish_guard.py:260, admin/products.py:103 and :266). A bare
+# "returns nothing" assertion here would delete the guards, so the
+# check is scoped to assignment, not to mention:
+rg -n '= *"placeholder_update_in_stripe"' backend frontend   # must be empty
+rg -n 'placeholder_update_in_stripe' backend                       # 3 guard sites + tests, expected
 
 # What the page shows is what Stripe charges.
 python backend/scripts/check_price_parity.py
@@ -2669,6 +3343,26 @@ rg -n 'dangerouslySetInnerHTML' frontend/src
 
 # Downloads are still counted without counting people.
 psql "$DATABASE_URL" -c "\d download_events"
+```
+
+**The Phase 9 commands that matter**
+
+```bash
+# The admin Products surface is gone; the API seam it called is not.
+rg -n "admin/products" frontend/src            # must be empty
+rg -n "products" backend/app/api/v1/admin/router.py   # still registered
+
+# The gate was not touched. This is the proof, and it must pass UNCHANGED.
+pytest backend/tests/gating -q
+
+# Every migration head is single, and 019 was not reused.
+alembic heads && alembic current
+
+# No shipped string denies a statutory right (Research Spec 11.3).
+rg -in "no refunds|all sales final|non-refundable" frontend/src backend/app   # must be empty
+
+# The 15% rule rounds the way the tests say it does.
+pytest backend/tests -k "refund and (eligibility or rounding)" -q
 ```
 
 **The design values you will reach for most**
@@ -2704,6 +3398,9 @@ rg -n 'bg-stage' frontend/src -l | xargs rg -n 'primary|accent'
 # No hard-coded currency symbol on a formatted amount.
 rg -n 'A\$|\$\{.*price' frontend/src --glob '*.tsx'
 
+# No shipped string displaces a statutory right (non-negotiable #16, W4-R20).
+rg -in 'no refunds|all sales final|non-refundable' frontend/src backend/app
+
 # No hover distance drifted past 2px.
 rg -n 'translate-y-|whileHover' frontend/src
 
@@ -2720,6 +3417,125 @@ psql "$DATABASE_URL" -c "select indexrelid::regclass from pg_index where not ind
 cd frontend && npx tsc --noEmit && npm run build && npm test && npx playwright test
 ```
 
+**Phase 10 — the user account (W4-R21).**
+
+```bash
+# There is exactly ONE purchases component and ONE refund code path.
+# Phase 10 extracts Purchases.tsx; a second copy or a second
+# eligibility rule is the money-path fork non-negotiable #1 forbids.
+rg -l 'refund-eligibility' frontend/src        # expect exactly one file
+rg -n 'refund_amount|15 / 100|percent.*15' backend/app --include=*.py
+
+# No hard-delete path exists anywhere. Closure sets disabled_at
+# and nothing else; the gate already filters on it.
+rg -n 'delete\(User\)|DELETE FROM users|session.delete\(user' backend/app
+rg -n 'disabled_at' backend/app/core/entitlements.py   # must still be inside the gate
+
+# A password is never logged, audited, or emailed.
+rg -n 'password' backend/app --include=*.py | rg -v 'reset|hash|Depends|# '
+
+# The rate limiter is extracted once, not copied five times.
+rg -ln 'monotonic\(\)' backend/app        # expect one core module, not five endpoints
+
+# Transactional mail is never gated by a preference.
+rg -n 'notify_marketing|notify_product_updates' backend/app/services/email_service.py
+#   ^ expect NO hits in the receipt / access-granted / password-reset / security-alert paths
+
+# Migration head is single and 022 did not re-add an existing column.
+cd backend && alembic heads && alembic current
+rg -n 'disabled_at' alembic/versions/022_*.py   # must return nothing
+
+# The gate was extended, never rewritten. This must pass UNCHANGED.
+pytest tests/test_entitlements.py tests/test_refund_selfserve.py
+```
+
+---
+
+## 30A. Problem-scoped reference packs — the next pack shape
+
+`[ADDED 2026-08-20, owner direction]`
+
+### 30A.1 The idea, in the owner's words
+
+> Group the main questions, guides and related working materials around a **specific
+> problem** into one downloadable PDF or resource pack. For example, if someone is
+> dealing with vendor evaluation, instead of purchasing several individual templates,
+> they could purchase one reference pack containing the relevant templates, guides and
+> supporting material.
+
+### 30A.2 Why this needs almost no new engineering
+
+`app/api/v1/content/packs.py` already opens with the sentence that makes this cheap:
+
+> *"A pack is not a type; it's a **shape** a product can be in: a published product whose
+> `product_contents` include >= 1 `template` row (the PDF) and >= 1 `question_set` row."*
+
+A problem-scoped pack is **the same shape with a different selection rule**. What exists
+today scopes the selection by `Domain` (one pack per domain, questions in
+`_WORKING_ORDER`). What this adds is a pack whose contents are chosen by *situation*
+rather than by domain — and which is allowed to carry **more than one template**, because
+a real problem needs several working files, not one.
+
+Concretely, the deltas against what already ships:
+
+| Concern | Domain pack (built) | Problem pack (this) |
+|---|---|---|
+| Selection rule | one `Domain` | a curated list, crossing domains |
+| Templates in the pack | exactly 1 (the PDF) | 1 PDF + **N working files** |
+| Question ordering | `_WORKING_ORDER` (tier, then regulator pressure, then effort) | **editorial** — the order you'd actually work the problem |
+| Entitlement | `product_contents` | unchanged |
+| Download | `GET /templates/{id}/download-url` | unchanged |
+| Overlap guard | W4-R3 | unchanged — **and it matters more here** |
+| Routing in | `RoutedProducts` / `SituationProducts` (W4-R4) | unchanged, and this is what W4-R4 was built for |
+
+**No new table. No new entitlement mechanism. No new download path.** The pack shape,
+the evidence layer (W4-R1), the overlap guard (W4-R3) and the question→product routing
+(W4-R4) all apply unchanged. That is the whole argument for building this next rather
+than something else.
+
+### 30A.3 The two real problems to solve
+
+**1. Overlap is the commercial risk, not a technical one.**
+A vendor-evaluation pack will contain templates that are also sold individually and that
+may also sit in a domain pack. W4-R3's `check_overlaps.sql` exists precisely to refuse
+two published products that grant the same content — so either the guard blocks this, or
+the guard's rule has to become "overlap is permitted **when the pack's price exceeds the
+sum of its parts' individual prices minus a declared bundle discount**", which is the
+`BundleCard` arithmetic already implemented in the frontend. **Decide which before
+seeding a second pack shape**, because retrofitting an entitlement rule after money has
+changed hands is the expensive version.
+
+**2. Ordering has no algorithm.**
+`_WORKING_ORDER` works for a domain pack because "fundamentals first, then regulator
+pressure, then effort" is a defensible generic sequence. A problem pack's order is the
+order you'd actually *work the problem* — scope it, ask the vendor, score the answers,
+write it up. That is editorial judgement, not a sort key. It needs a real
+`sort_order` column on the pack's content rows and an admin UI to set it, or it needs to
+live in `scripts/build_<pack>.py` the way `_WORKING_ORDER` does today. **The script route
+is correct for pack #2 and wrong by pack #5.**
+
+### 30A.4 Suggested first pack
+
+**Vendor / third-party evaluation** — the owner's own example, and the best first
+candidate for three independent reasons:
+
+- It is genuinely cross-domain (Risk + Cyber + Compliance + Resilience), so it proves the
+  selection rule that a domain pack cannot express, rather than duplicating one.
+- `Home.tsx`'s `TRY_TERMS` already ships `{ label: 'Third parties', term: 'third-part' }`,
+  and that term was checked against the live catalogue to actually return results — so
+  the questions to anchor it exist.
+- It is a recognised procurement moment with a budget attached, which is the difference
+  between a resource someone bookmarks and one they expense.
+
+### 30A.5 What NOT to do
+
+- **Do not make "pack" a `content_type`.** The current design is better than the obvious
+  one; a `pack` enum value would fork the entitlement path for no gain.
+- **Do not paywall the questions.** `HONESTY_NOTICE` is returned by the API rather than
+  written in frontend copy specifically so a future page cannot forget it. A problem pack
+  must carry the same notice, for the same reason.
+- **Do not ship it without the overlap decision in §30A.3.**
+
 ---
 
 ## 31. What this week deliberately leaves for whoever comes next
@@ -2727,6 +3543,7 @@ cd frontend && npx tsc --noEmit && npm run build && npm test && npx playwright t
 Written here rather than only in the report, because a plan that names its own end state is easier to hand over than one that stops.
 
 **Ready to build, unblocked by this week's work:**
+- **Problem-scoped reference packs** (§30A, owner direction 2026-08-20) — the same pack *shape* already shipping, scoped by situation instead of by domain, carrying several working files rather than one PDF. No new table, no new entitlement path. Gated on one decision, not on engineering: what the overlap guard (W4-R3) should do when a pack and an individually-sold template grant the same content.
 - **Decision Pack v0** as files at A$79 — author-days only. The evidence layer (W4-R1), the overlap guard (W4-R3) and the routing (W4-R4) all apply to it unchanged the day it exists.
 - **The free diagnostic** — W4-R4 built its output layer first, deliberately. The diagnostic becomes a different way to reach the same routing, not a second recommendation engine.
 - **Consultant licence tiers** — the field and the enum ship this week. Decision #25 turns a label into revenue.
