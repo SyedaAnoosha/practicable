@@ -2076,7 +2076,7 @@ Full backend suite re-run after both fixes: **167/167 passed** (11:52). `tsc --n
 *The metrics moved out of this phase on 2026-08-17. They were step 4 here, sized as a quarter-day, on the assumption of four SQL queries behind five static tiles. The owner's amendment (W4-R10) adds a counter table, a migration, a chart and a dependency decision — that is no longer a step, it is a phase. See Phase 6B, and read §10 before starting it.*
 
 ### Definition of Done — Phase 6
-- [ ] Checkout and webhook covered by fixture; every new test seen red first — **DONE** `2026-08-20`. All 8 W4-R9 cases mapped to existing tests:
+- [x] Checkout and webhook covered by fixture; every new test seen red first — **Independently re-verified 2026-08-21.** All 8 named cases confirmed to exist exactly as cited (function names checked directly against `test_money.py`/`test_gating.py`, not just trusted from the doc), plus the 3 "plus" tests also confirmed present:
   1. Single-product session → `test_money.py::test_single_product_checkout_reaches_stripe`
   2. N-item cart session → `test_money.py::test_cart_checkout_passes_every_price_id_in_one_session`
   3. Already owned 409 → `test_money.py::test_already_owned_product_returns_409_before_stripe`
@@ -2085,9 +2085,11 @@ Full backend suite re-run after both fixes: **167/167 passed** (11:52). `tsc --n
   6. Bad signature rejected → `test_money.py::test_webhook_bad_signature_is_rejected`
   7. charge.refunded revokes → `test_gating.py::test_webhook_charge_refunded_idempotent_three_times`
   8. Unknown product fails loudly → `test_money.py::test_webhook_unknown_product_fails_loudly`
-  Plus: `test_already_owned_product_in_cart_still_blocks_the_whole_cart`, `test_duplicate_product_in_cart_rejected`, `test_unpublished_product_404s_before_stripe`, 8 dollars-to-cents conversion tests, 2 price-change tests. Backend suite: **58 tests collected** (test_money + test_taxonomy_parity + test_gating).
-- [ ] Taxonomy parity test exists and fails when a value is wrong — **DONE** `2026-08-20`. `test_taxonomy_parity.py`: 4 tests — extraction guard, quick-filter chips vs tag_values, dimension labels vs tag_values, extraction-finds-at-least-one filter. Reads `QuestionsCatalogue.tsx` directly (not a hand-copied literal) so it can't drift out of sync.
-- [ ] `npm test` blocks CI — **DONE** `2026-08-20`. `ci.yml` `frontend-unit` job runs `npm run test`. Frontend suite: **43 tests passing** across 4 files (tags: 7, scoring: 19, useCartStore: 10, formatCurrency: 7).
+  Plus: `test_already_owned_product_in_cart_still_blocks_the_whole_cart`, `test_duplicate_product_in_cart_rejected`, `test_unpublished_product_404s_before_stripe`, 8 dollars-to-cents conversion tests, 2 price-change tests.
+
+  **"Seen red first" actually proven, not just asserted**: temporarily disabled the `_already_fully_owned` guard in `checkout.py` (`if False and await _already_fully_owned(...)`) and re-ran cases 3 and its "plus" sibling — both genuinely failed (`assert 200 == 409`), confirming they are real assertions on real behavior, not tautologies. Restored the guard (clean `git diff`, empty), re-ran — both green again. Full backend suite re-run after the restore: **167/167 passed** (12:22).
+- [x] Taxonomy parity test exists and fails when a value is wrong — **Independently re-verified 2026-08-21**, with one correction: `test_taxonomy_parity.py` has **3 tests, not 4** — the DoD text's "4 tests" listed one test twice under two different descriptions ("extraction guard" and "extraction-finds-at-least-one filter" are the same `test_extraction_finds_at_least_one_filter`). Genuinely reads `QuestionsCatalogue.tsx` from disk (confirmed — not a hand-copied literal). **Proven by breaking one**, per the DoD's own instruction: changed a real `QUICK_FILTERS` value (`'s'` → `'not-a-real-seeded-value'`) in the actual frontend source, re-ran the suite — `test_quick_filter_chips_match_real_tag_values` failed with the exact broken pair named in its assertion message. Reverted (clean `git diff` against the pre-existing unrelated `recordFilterEvent` diff already in this file), re-ran — all 3 green again.
+- [x] `npm test` blocks CI — **Independently re-verified 2026-08-21.** Ran the real suite (not trusted from the doc): **4 test files, 43 tests, all passing** — `tags.test.ts` (7), `scoring.test.ts` (19, confirmed via vitest's own verbose reporter after a naive `grep` undercounted it — many cases are data-driven off `scoring_cases.json`), `useCartStore.test.ts` (10), `formatCurrency.test.ts` (7). Exact match to the claimed breakdown. Confirmed `ci.yml`'s `frontend-unit` job has no `continue-on-error` escape, so a failing test genuinely fails the workflow run.
 
 ---
 
