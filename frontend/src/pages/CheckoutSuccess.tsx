@@ -7,7 +7,8 @@ import { queryKeys } from '@/lib/query/keys'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useCartStore } from '@/stores/useCartStore'
 import { Button } from '@/components/ui/Button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Card, CardContent, CardHeader } from '@/components/ui/Card'
+import { PageTitle } from '@/components/ui/PageTitle'
 import { SUPPORT_MAILTO } from '@/lib/support'
 
 interface ProductContent {
@@ -117,7 +118,7 @@ export function CheckoutSuccess() {
           <span className="flex size-10 items-center justify-center rounded-full bg-success/10 text-success ring-1 ring-inset ring-success/25">
             <CircleCheck className="size-5" aria-hidden="true" />
           </span>
-          <CardTitle className="mt-3">{entitled ? "You're in." : 'Payment confirmed.'}</CardTitle>
+          <PageTitle className="mt-3" title={entitled ? "You're in." : 'Payment confirmed.'} />
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {products.length > 0 && (
