@@ -53,7 +53,7 @@ Every row checked against the repository on 2026-08-17 by direct read — not ca
 | Accessibility primitives | `[BUILT]` | `RootLayout.tsx` has `RouteAnnouncer` (`role="status" aria-live="polite"`) and the skip link; `PageTitle.tsx` renders `tabIndex={-1}` on its `h1` |
 | Responsive + axe suites | `[BUILT]` | `responsive-widths.spec.ts` (7 widths × 8 routes, 56/56), `accessibility.spec.ts` (both themes, 9/9), `stress-fixtures.spec.ts` |
 | **Product/template evidence fields** | **`[GAP]`** | `db/models/product.py` and `db/models/template.py` read in full: **no `licence`, no `version`, no `last_reviewed_at`, no `preview_image_keys`, no page/sheet count, no editability flag.** `DESIGN.md` §16 requires "two previews minimum per paid template"; `new_additions.md` §2 names six of eight pre-purchase checks as unmet |
-| **Tax-invoice-quality receipt** | **`[GAP]`** | `integrations/stripe_client.py` builds the session with `line_items` + `customer_email` only — **no `invoice_creation`, no business name, no address collection, no ABN anywhere.** `new_additions.md` §4 makes this a hard prerequisite above ~A$150 |
+| **Tax-invoice-quality receipt** | **`[GAP]`** | `integrations/stripe_client.py` builds the session with `line_items` + `customer_email` only — **no `invoice_creation`, no business name, no address collection.** `new_additions.md` §4 makes this a hard prerequisite above ~A$150. (No ABN was ever a target — decision #31, resolved 2026-08-20, is "no ABN, anywhere") |
 | **Overlap publish guard** | **`[GAP]`** | Nothing checks whether two published products' `product_contents` intersect. `new_additions.md` §11: this is the guard that would have caught the `db/seed/012` bug before a customer did |
 | **Question → product routing** | **`[GAP]`** | Both halves exist (`question_relations`, `product_contents`), the join and the UI do not. `new_additions.md` §22 names this as the thing that finally makes the seven tags visible to a buyer |
 | **Admin product editor** | **`[GAP]`** `[CARRIED]` | No `/admin/products` route in `App.tsx`; `admin/router.py` has questions, courses, templates, orders, media only. A price cannot be set without a direct database write (`handover.md` §4 item 16) |
@@ -106,7 +106,7 @@ The brief's Week 4 is hardening plus handover, and that is the spine of this pla
 
 | `new_additions.md` § | Proposal | Where it lands | Why it is feasible now |
 |---|---|---|---|
-| §34 item 1 · §4 | **Tax-invoice-quality receipts** (business name, ABN, itemised, GST line) | **W4-R2** | Stripe Checkout supports `invoice_creation` natively; the receipt template already itemises per cart item since Week 3. The entity is already decided (#27 closed 2026-08-15: "Effective RM, as currently drafted"). The **ABN digits** are the one `[OWNER]` input, and the mechanism ships with a config slot that renders honestly when unset — see W4-R2's acceptance |
+| §34 item 1 · §4 | **Tax-invoice-quality receipts** (business name, itemised, GST line) | **W4-R2** | Stripe Checkout supports `invoice_creation` natively; the receipt template already itemises per cart item since Week 3. The entity is already decided (#27 closed 2026-08-15: "Effective RM, as currently drafted"). No ABN is issued (decision #31, resolved 2026-08-20: the entity is not GST-registered, so the field does not exist) |
 | §34 item 2 · §20 | **Licence field + terms on the product page** | **W4-R1** | One column, one enum, one paragraph. `new_additions.md` calls it *"the best unbuilt revenue"* — but note the split: the **field and the Standard-licence display** are feasible now; the **client-delivery tier and its multiple** are decision #25, still open, so the enum leaves room and the page states only what is decided |
 | §34 item 3 · §33 | **Version + last-reviewed on every sold artefact** | **W4-R1** | Two columns, displayed pre-purchase and stamped into the receipt. Directly answers the "is it current" check |
 | §34 item 4 · §11 | **The overlap publish guard** — no two published products may grant intersecting content unless one is a bundle | **W4-R3** | Checkable in one SQL statement against `product_contents`; the admin publish-guard pattern already exists (a template cannot publish without a file; a lesson cannot publish without content). Half a day, and it is the guard that would have caught the `012` bug |
@@ -149,7 +149,7 @@ The brief's Week 4 is hardening plus handover, and that is the spine of this pla
 | User | What Week 4 gives them | Requirement |
 |---|---|---|
 | **The stranger, ninety seconds before paying** | Page count, file count, formats, editability, version, last-reviewed date, licence, two real preview pages, a refund position and a tax statement — all above the buy button | W4-R1 |
-| **The buyer whose finance team asks** | An itemised tax invoice with a business name and an ABN, not a card receipt | W4-R2 |
+| **The buyer whose finance team asks** | An itemised tax invoice with a business name, not a card receipt | W4-R2 |
 | **The buyer who took a wrong turn** | A designed answer to every failure: payment declined, session expired, download URL expired, playback token expired, webhook late, video won't load, filters return nothing | W4-R6 |
 | **The buyer who cannot use a mouse** | A purchase and a lesson completion, both keyboard-only, both proven | W4-R7 |
 | **The visitor who filtered** | "Here's what would help with these" — derived from their own constraints, and it says why | W4-R4 |
@@ -161,7 +161,7 @@ The brief's Week 4 is hardening plus handover, and that is the spine of this pla
 
 ### 4.1 In scope
 
-W4-R1 The pre-purchase evidence layer · W4-R2 Tax-invoice-quality receipts · W4-R3 The overlap publish guard · W4-R4 Question → product routing · W4-R5 Admin closes its remaining holes · W4-R6 The hardening sweep · W4-R7 Accessibility, the full audit · W4-R8 Performance budgets, enforced · W4-R9 The tests that guard money · W4-R10 Metrics from the database · W4-R11 Database optimisation, second pass · W4-R12 The handover pack, closed · **W4-R13 The admin panel manages the whole system** `[added 2026-08-17, owner instruction — scheduled into Week 5 as Phase 6C, not squeezed into Week 4]`
+W4-R1 The pre-purchase evidence layer · W4-R2 Tax-invoice-quality receipts · W4-R3 The overlap publish guard · W4-R4 Question → product routing · W4-R5 Admin closes its remaining holes · W4-R6 The hardening sweep · W4-R7 Accessibility, the full audit · W4-R8 Performance budgets, enforced · W4-R9 The tests that guard money · W4-R10 Metrics from the database · W4-R11 Database optimisation, second pass · W4-R12 The handover pack, closed · W4-R13 Admin panel video playback and rich text lesson editor `[NEW]` `[OWNER INSTRUCTION 2026-08-19]`
 
 ### 4.2 Out of scope, deliberately
 
@@ -216,20 +216,21 @@ Each carries its source, a testable statement, and the acceptance criteria used 
 
 **Statement:** A buyer whose organisation reimburses them can get a document their finance team accepts, without emailing anyone.
 
-`new_additions.md` §4's finding is the whole argument: *"Every price increase moves the purchase from a personal card to a finance approval"* — and above ~A$150 that approval needs a proper tax invoice with an ABN and a business name. The catalogue's ceiling today is A$99. **This is not about the products that exist; it is about the ones the ladder already names** (A$149, A$199, A$279, A$399), all of which are currently unbuyable by anyone who needs to expense them. *"A buyer who cannot expense your product does not haggle — they silently leave."*
+`new_additions.md` §4's finding is the whole argument: *"Every price increase moves the purchase from a personal card to a finance approval"* — and above ~A$150 that approval needs a proper tax invoice with a business name. The catalogue's ceiling today is A$99. **This is not about the products that exist; it is about the ones the ladder already names** (A$149, A$199, A$279, A$399), all of which are currently unbuyable by anyone who needs to expense them. *"A buyer who cannot expense your product does not haggle — they silently leave."*
+
+> **`[AMENDED 2026-08-20 — owner instruction]` Decision #31 is closed, and it closed the other way.** The owner's instruction was *"remove author ABN number from everywhere"* — the entity is not GST-registered and has no ABN to publish. This is not the honest-degradation case §25 originally scoped (an unset value that might later be set); it is a field that does not exist. **No `seller_abn` config, no ABN line, no ABN mention anywhere in the app** — `app/core/config.py`, `email_service.py`, both receipt templates (`.html.j2`/`.txt.j2`) and `legal/Terms.tsx`'s owner placeholder are all edited accordingly. Everything below that still names an ABN is the pre-amendment record of what W4-R2 originally asked for; the build does not do it.
 
 **What ships:**
 
 1. `create_checkout_session` gains `invoice_creation={'enabled': True}`, `billing_address_collection='required'`, and the business name set on the Stripe account rather than per-session.
-2. The receipt email gains an **invoice block** (§20.9): invoice number, date, seller legal name, ABN, buyer name and address, itemised lines with unit price, the GST line, and the total. Rendered in the Jinja2 templates that already exist — *the one place hex is allowed* (`week3_plan.md` §20.7), and the only place it stays allowed.
-3. `SELLER_LEGAL_NAME` and `SELLER_ABN` become config values in `backend/.env.example` and `app/core/config.py`.
+2. The receipt email gains an **invoice block** (§20.9): invoice number, date, seller legal name, buyer name and address, itemised lines with unit price, the GST line, and the total. Rendered in the Jinja2 templates that already exist — *the one place hex is allowed* (`week3_plan.md` §20.7), and the only place it stays allowed.
+3. `SELLER_LEGAL_NAME` becomes a config value in `backend/.env.example` and `app/core/config.py`. **No `SELLER_ABN`** — see the amendment above.
 4. `TAX_STATEMENT_TEXT` (already in `lib/labels.ts` and its Python twin) is joined by `SELLER_ENTITY_TEXT` in the same paired-file pattern, so the entity reads identically on `/store`, `/legal/terms` and the receipt.
 
 **Acceptance:**
 - [ ] A real test-mode purchase produces a Stripe invoice object, and the emailed receipt carries the same invoice number as that object — verified by fetching it back from the Stripe API, not read from the email.
-- [ ] With `SELLER_ABN` unset, the invoice block renders **without an ABN line at all** and the receipt is still a valid receipt. It never prints `ABN: None`, and it never prints a placeholder that looks like a real number. This is the honest-degradation rule the whole codebase already follows for domain counts (`handover.md` §1) and unset `version` (W4-R1).
+- [x] No receipt, invoice block, config field or legal page mentions an ABN anywhere. Verified 2026-08-20 by full-repo grep: the only remaining occurrences are the code comments explaining that the field was deliberately removed.
 - [ ] The GST line states GST as *included*, matching `TAX_STATEMENT_TEXT`'s existing wording — one fact, one source.
-- [ ] `[OWNER]` The ABN digits themselves. Named in §8.1, not assumed. **This does not block the requirement** — it blocks one line of one template.
 
 ---
 
@@ -518,7 +519,37 @@ Full detail in **Part IV**. In summary: migration `013`'s index layer (§26.1), 
 
 ---
 
-### W4-R13 — The admin panel manages the whole system `[SHOULD]` `[NEW 2026-08-17, owner instruction]`
+### W4-R13 — Admin panel video playback and rich text lesson editor `[MUST]` `[NEW]` `[OWNER INSTRUCTION 2026-08-19]`
+
+**Source:** Owner instruction 2026-08-19
+
+**Statement:** Admins can actually play and preview videos in the lesson editor, and can write lesson content with a rich text editor supporting h1, h2, h3, bullets, and tables. New courses created through the admin panel are automatically purchasable via product association.
+
+**What ships:**
+
+1. **Video playback in admin lesson editor** — Add actual video player component in AdminCourses.tsx lesson editor that uses the mux_playback_id to render a playable preview of attached videos, not just the playback ID string.
+2. **Rich text editor for lesson body** — Replace plain textarea with a rich text editor (e.g., Tiptap or similar lightweight solution) supporting:
+   - Headings: h1, h2, h3
+   - Bullet lists
+   - Numbered lists
+   - Tables
+   - Bold, italic, underline
+   - Links
+3. **Auto-product association for new courses** — When a new course is created via admin panel, automatically create or associate a product so the course is immediately purchasable. This can be:
+   - Option A: Auto-create a product with default pricing when course is published
+   - Option B: Require product selection before course can be published
+   - Option C: Add explicit "Create Product" button in course editor with sensible defaults
+
+**Acceptance:**
+- [ ] Video playback renders in admin lesson editor when mux_playback_id is present
+- [ ] Rich text editor toolbar provides h1, h2, h3, bullets, numbered lists, tables
+- [ ] Rich text content is stored and rendered correctly on the public lesson page
+- [ ] New courses created via admin panel have an associated product and are purchasable
+- [ ] Product association is visible in the course editor UI
+
+---
+
+### W4-R14 — The admin panel manages the whole system `[SHOULD]` `[CARRIED]`
 
 **Source:** Owner instruction, 2026-08-17 — *"admin panel should also allow to manage everything it does, with users and system settings."*
 
@@ -543,9 +574,9 @@ So settings split in three, and the page says which is which rather than present
 |---|---|---|---|
 | **Secrets** | Stripe, Mailjet, Supabase, Mux keys | Env / Render | **No.** The page *displays* which are set and which are missing — never a value, not even masked |
 | **Deployment** | `FRONTEND_URL`, `ALLOWED_ORIGINS`, database URL | Env / Render | **No.** Changing these at runtime breaks the running app in ways a form cannot safely offer |
-| **Operational** | `SELLER_LEGAL_NAME`, `SELLER_ABN` (#31), `OWNER_NOTIFICATION_EMAIL`, refund-window wording (#17), free-entry-point copy | **New `settings` table** | **Yes**, audited |
+| **Operational** | `SELLER_LEGAL_NAME`, `OWNER_NOTIFICATION_EMAIL`, refund-window wording (#17), free-entry-point copy | **New `settings` table** | **Yes**, audited |
 
-The **"is it set?"** panel is the quiet win here: `handover.md` has carried an environment-checklist item since 2026-08-13, and a page showing `MAILJET_API_KEY ✓ set · SELLER_ABN ✗ unset` answers *"is this deployment configured correctly"* in one glance, without ever rendering a secret. That is the item the checklist was standing in for.
+The **"is it set?"** panel is the quiet win here: `handover.md` has carried an environment-checklist item since 2026-08-13, and a page showing `MAILJET_API_KEY ✓ set · SELLER_LEGAL_NAME ✗ unset` answers *"is this deployment configured correctly"* in one glance, without ever rendering a secret. That is the item the checklist was standing in for. (No `SELLER_ABN` row — decision #31, resolved 2026-08-20: there is no ABN field to report on.)
 
 #### User management, and its three guardrails
 
@@ -564,6 +595,140 @@ A role change is **privilege escalation**, and it is the only write in this proj
 - [ ] `/admin/settings` edits only operational values; **no secret is rendered, masked or otherwise**, and a test asserts the response body contains no key material
 - [ ] The "configuration status" panel shows set/unset for every required env var, sourced from `config.py`, not a hand-maintained list that will drift
 - [ ] No Delete User button exists; deactivation is what ships, or nothing does
+
+---
+
+### W4-R15 — Price control from the admin panel `[MUST]` `[NEW]` `[OWNER INSTRUCTION 2026-08-20]`
+
+**Source:** Owner instruction 2026-08-20 — *"implement the ability to adjust the pricing of each course and template."*
+
+**Statement:** The owner can change what a course or a template costs from `/admin`, without opening the Stripe dashboard — and the price the product page shows is provably the price Stripe charges.
+
+**The fact this requirement is built around.** `create_checkout_session` passes `price_ids` straight through as `line_items[].price` (`app/integrations/stripe_client.py:30`). **The Stripe Price object is what charges the card. `products.price_amount` is display only.** Those are two systems holding one fact, `admin/products.py`'s own module docstring says so, and the mismatch warning that docstring promises is never assigned — `warning` is initialised to `None` in `publish_product` and returned unchanged. The copy deck (§23) already carries the string for a warning the code cannot currently produce.
+
+Three consequences, none of them optional:
+
+1. **A Stripe Price's amount is immutable.** Changing a price means creating a *new* Price and swapping the id — there is no "edit". Any design that treats `price_amount` as the editable field ships the mismatch rather than fixing it.
+2. **`products` has no `stripe_product_id`.** A new Price has to be created under the same Stripe Product as the old one, or the catalogue fragments into one Stripe Product per price change. The column does not exist yet; migration `016` adds it.
+3. **A free-text `stripe_price_id` field in an admin form is the mismatch's source.** It becomes read-only. The price endpoint writes it, a human does not.
+
+**What ships:**
+
+1. **Migration `016_product_stripe_product_id`** — nullable `products.stripe_product_id`, backfilled by a script that resolves each existing `stripe_price_id` through the Stripe API. **Not guessed in SQL**; ids that fail to resolve are reported, not defaulted.
+2. **`stripe_client.create_price()` / `retrieve_price()` / `archive_price()`** — the three calls a price change needs, in the one module that already owns the Stripe seam.
+3. **`POST /admin/products/{id}/price`** — `{price_amount, currency, reason}`. Reason required, audited with both Price ids and both amounts.
+4. **`check_stripe_price()` in `publish_guard.py`** — publish is refused when the Stripe price does not resolve, is inactive, belongs to the other Stripe mode, or disagrees with the row's amount or currency. This is the guard that turns the promised warning into something real, and it is also what makes `placeholder_update_in_stripe` (W4-R17) unpublishable rather than merely unwise.
+5. **A price control in the course and template editors**, writing to the same endpoint. The owner asked to change the price of a *course* and a *template*; being told to go and find its product first is the admin panel failing to answer the question asked.
+
+**Acceptance:**
+- [ ] A price change from `/admin` creates exactly one new Stripe Price under the existing Stripe Product, swaps the row's id, and archives the old one
+- [ ] After the change, `price_amount` equals the Stripe price's `unit_amount` — **proven by fetching it back from Stripe**, not by reading the row we just wrote
+- [ ] A reason is required; the audit row carries old amount, new amount, both Price ids and the reason
+- [ ] Publish is refused for a price that does not resolve, is inactive, is cross-mode, or disagrees with the row — four separate refusals, four separate messages
+- [ ] No editable `stripe_price_id` field exists anywhere in the admin UI
+- [ ] Price is edited from the course editor and from the template editor, through one endpoint and one code path — not two
+
+---
+
+### W4-R16 — Why buy this from us, and what a buyer may do with it `[MUST]` `[NEW]` `[OWNER INSTRUCTION 2026-08-20]`
+
+**Source:** Owner instruction 2026-08-20 — *"why a user should buy from us? A template can be made by anyone"* and *"downloaded templates can be shared with anyone."*
+
+**Statement:** Every paid product page answers *"why buy this rather than make it myself"* with claims a column can back — and every paid download carries the buyer's name and the licence inside the file, so passing it on is a choice someone makes knowingly rather than a leak nobody notices.
+
+**These are one requirement, not two.** Both instructions are the same observation from opposite ends: the artefact is copyable, so **the file is not the thing being sold**. What is being sold is the decision model behind it, the fact that it is versioned and reviewed, and the licence that says what may be done with it. A page that cannot say that has no answer to "I'll make my own", and a file that does not carry it has no answer to "I'll just forward it".
+
+**The six claims, and what backs each.** Nothing else may be written on these surfaces:
+
+| Claim | Backed by |
+|---|---|
+| Derived from a documented decision model, not invented | `Deciding_in_the_Dark_Research_Specification.md`, and the question taxonomy the artefact is tagged against |
+| Written for a specific decision you are actually in | W4-R4's routing — the product is reached *from* the question |
+| Versioned and reviewed, not a file dumped once | `products.version`, `products.last_reviewed_at`, `templates.version` |
+| You know exactly what you are getting before paying | The evidence layer — `page_count`, `sheet_count`, `is_editable`, `min_office_version`, ≥2 preview images |
+| It will open on a corporate machine | `has_macros`, and the macro publish guard that enforces it |
+| The licence says what you may do, in words | `products.licence`, `LicenceLine`, and the stamp inside the file |
+
+**No social proof of any kind ships in this requirement.** No "trusted by *n* teams", no ratings, no testimonials, no download counts. Non-negotiable #13 — *every claim on a product page is backed by a column* — applies with no exception, and none of those numbers exists. This is stated as a rule because copywriting is precisely where the rule is most tempting to break.
+
+**On redistribution, the true thing first.** An editable `.docx` or `.xlsx` cannot be stopped from being forwarded. Any DRM that tried would destroy `is_editable`, which is one of the things being sold, and would break the corporate-machine claim above. So what ships is **deterrence, traceability and a route to pay for wider use** — never prevention, and the copy never implies otherwise:
+
+1. **Per-buyer stamping** — a paid download serves a copy stamped with the buyer's name and email, the order id, the licence tier and the version.
+2. **The licence travels inside the file**, so a forwarded copy carries its own terms.
+3. **Unstampable file types are served unchanged**, and the admin says which types those are. A silent no-op would be a claim the code does not keep.
+4. **Aggregate counting only.** `download_events` stays user-less — Phase 6B's privacy constraint holds unchanged. The buyer's identity goes into the buyer's own copy of their own file, never into a new table. Per-user download traceability is decision **#35**, and it costs a privacy-policy edit.
+5. **Wider use is a tier, not a scolding.** Someone who needs to hand the file to clients is decision #25's client-delivery tier; the licence line links there.
+
+**Acceptance:**
+- [ ] Every paid product surface answers "why not make my own" in words, and **every claim traces to a column or a guard** — checked line by line against the table above
+- [ ] Zero social-proof claims anywhere in the shipped copy, verified by reading the copy deck additions rather than by intent
+- [ ] One primary CTA per page, with the sample-pages and free-entry CTAs subordinate to it
+- [ ] A paid download of a stampable type contains the buyer's email and the licence tier, **asserted against the file's extracted contents**
+- [ ] An unstampable type downloads unchanged and is labelled as such in admin
+- [ ] A stamping failure serves the original file — **never a 500, never nothing**. A broken stamp must not cost someone the file they paid for
+- [ ] `download_events` still has no `user_id`, and the privacy policy still needs no edit
+
+---
+
+### W4-R17 — A course created in the admin panel is purchasable `[MUST]` `[NEW]` `[OWNER INSTRUCTION 2026-08-20]`
+
+**Source:** Owner instruction 2026-08-20 — *"I added a new course from the admin panel. New courses aren't purchasable."*
+
+**Statement:** A course created through `/admin` can be bought — created, priced, published and paid for without a Stripe dashboard visit, an SQL statement or a developer.
+
+**The root cause, read rather than guessed.** `create_course_product` (`app/api/v1/admin/courses.py:306`) writes:
+
+```python
+stripe_price_id="placeholder_update_in_stripe",  # Must be updated
+```
+
+and `create_checkout_session` passes that string to Stripe as a Price id. So the course is not unpurchasable because a step was skipped — **it is unpurchasable because the id it ships with is not a Stripe object**, and nothing in the system refuses to publish it, warns about it, or tells the owner what is missing. The failure surfaces at the buyer's checkout, which is the last possible place anyone would want to find it.
+
+Three more contributors, all real:
+
+- **Templates have no product path at all.** `admin/templates.py` never touches `Product`, so a paid template created in admin has the same problem one step earlier.
+- **Nothing states readiness.** Product exists · price set · Stripe price resolves · published — four conditions, and the admin UI shows none of them.
+- **W4-R13's option A/B/C was never resolved**, so "make the course purchasable" had no defined path even for someone who knew all of the above.
+
+**Resolution of W4-R13's open option:** **Option C** — an explicit "Make this purchasable" action with sensible defaults, plus a readiness line. Not option A: auto-creating a priced product the moment a course is published means the first course published at the wrong price is a real charge to a real card. A price is an owner decision, and the panel asks for it once rather than guessing.
+
+**Acceptance:**
+- [ ] `grep -r placeholder_update_in_stripe` returns nothing
+- [ ] "Make purchasable" creates a real Stripe Price and stores the returned id; a Stripe failure creates **no product row at all**
+- [ ] The same action exists for templates
+- [ ] Every course and template in admin shows one readiness line naming exactly what is missing, server-derived
+- [ ] **The end-to-end test passes**: create a course in admin → make it purchasable → set a price → publish → buy it in Stripe test mode → the webhook grants the entitlement → the lesson opens. This single test is the answer to the instruction; the rest is how it is made to pass
+
+---
+
+### W4-R18 — One Products menu, not four scattered catalogues `[MUST]` `[NEW]` `[OWNER INSTRUCTION 2026-08-20]`
+
+**Source:** Owner instruction 2026-08-20 — *"instead of Store, restructure the main navigation so that questions, courses, templates and reference packs are grouped under one Products section in the navbar as a drop-down menu opening product pages, instead of keeping them separated under different store sections. Similar goes to the sidebar in the dashboard."*
+
+**Statement:** Everything a visitor can read or buy is reached from **one** menu in the header and **one** group in the member rail — four destinations, named, with `/store` demoted from a sibling to the overview inside it.
+
+**The state being replaced, read from the files:**
+
+| Surface | Today | Problem |
+|---|---|---|
+| Marketing header (`MarketingLayout.tsx:19`) | `Questions` · `Store` · `About` | Two of the four content types are reachable only *through* Store, and Questions sits beside the index that also contains it |
+| Member rail (`MemberLayout.tsx:38-47`) | Browse: `Questions` · `Store` · `Courses` · `Templates` | **`Store` sits beside the three catalogues it indexes.** The comment above it records the 2026-08-13 decision to add it *"alongside (not instead of)"* them — this instruction reverses that decision |
+| Reference packs | **No catalogue exists.** Reachable only at `/store/packs/:slug`, from `Home.tsx:1045` and `Store.tsx:202` | A "Reference packs" menu item has nowhere to point until one is built |
+
+**Three constraints this requirement is built around, each verified rather than assumed:**
+
+1. **`/store` is not deleted.** `/pricing` redirects to it (`App.tsx:88`), `CartDrawer.tsx:143` and `Home.tsx:1039` link to it, both e2e suites list it — and it is **the only place the bundle's real arithmetic lives** (`BundleCard`, §20.2's *"the saving is a real dollar amount, never hard-coded"*), alongside `TAX_STATEMENT_TEXT` and `REFUND_POSITION_TEXT`. It becomes **"All products"**, the overview item inside the menu. Demoted, not removed.
+2. **A fourth item needs a fourth destination.** Packs get `/packs`, a real catalogue, for the same reason the other three have one. A menu item that scrolls to a section of a different page is the kind of half-link that makes navigation feel broken.
+3. **Questions is the free entry point**, and this change puts it one click deeper. Named as a cost, not hidden: it is accepted because the header's existing free CTA (`/#free-pack`) keeps a one-click free path for signed-out visitors, Questions is listed **first** in the menu and labelled free, and §8C's metrics can show afterwards whether questions traffic actually moved. If it drops, that is a finding to act on rather than a surprise.
+
+**Acceptance:**
+- [ ] Header nav is `Products` (menu) · `About`, and every one of the four destinations is reachable from it
+- [ ] Member rail's `Browse` group becomes `Products` with the same four destinations plus All products; **no dropdown in the rail** — it is already grouped by heading
+- [ ] `/packs` exists as a real catalogue page, in both e2e suites
+- [ ] `/store` still resolves, still holds the bundle arithmetic, and is reachable as "All products"
+- [ ] The menu is operable by keyboard alone: opens on Enter/Space, closes on Escape with focus returned to the trigger, and every item is a real link that cmd-click and middle-click still open in a new tab
+- [ ] On mobile there is **no dropdown** — the sheet menu shows the group expanded under a heading
+- [ ] axe clean with the menu **open**, not only closed — the state a closed-menu-only audit never checks
 
 ---
 
@@ -636,7 +801,7 @@ Week 4 is done when all of the following are true. Items marked `[HUMAN]` cannot
 
 | # | Decision | Blocks | Degrades to |
 |---|---|---|---|
-| **31** `[NEW]` | **The ABN digits** (and confirmation the entity on receipts stays "Effective RM") | One line of the invoice block (W4-R2) | The invoice renders without an ABN line rather than with a placeholder |
+| ~~**31**~~ `[RESOLVED 2026-08-20]` | ~~The ABN digits~~ — **owner instruction: no ABN, anywhere.** The entity is not GST-registered. `seller_abn` removed from `config.py`, both receipt templates, `email_service.py` and `legal/Terms.tsx`'s owner note — not left unset, removed | — | — |
 | **32** `[NEW]` | **The file facts for each published artefact** — page/sheet counts, minimum Office version. Owner or a five-minute file open | The evidence panel's completeness (W4-R1) | Any unset fact simply does not render |
 | ~~**33**~~ `[RESOLVED 2026-08-17]` | ~~The chart library~~ — **the shadcn/ui chart block, Recharts underneath.** Owner instruction: *"search for existing UI libraries and build using them."* Reasoning and costs at §20.7a; the deciding fact is that `--chart-1…5` are shadcn's own convention and are already in `theme.css`, unused | — | — |
 | **34** `[NEW 2026-08-17]` | **Whether PostHog is removed entirely**, or kept as instrumentation while `/admin/metrics` stops depending on it. Phase 6B delivers the independence either way | Nothing. Named so it is decided rather than drifted into | Instrumentation stays wired and unused, which costs nothing and is reversible. **Removal is not reversible**, which is why it is a decision and not a default |
@@ -652,6 +817,7 @@ Week 4 is done when all of the following are true. Items marked `[HUMAN]` cannot
 | **25** | **Client-delivery licence** — permitted at all, and at what multiple? | `new_additions.md` §20 calls it *"the best unbuilt revenue."* The field ships regardless; the answer turns it from a label into a price |
 | **26** | **The update promise** — `pricing.md` commits to lifetime updates including future revisions. Confirm deliberately with a maintenance budget, or narrow it before more products inherit it | W4-R1's `version`/`last_reviewed_at` make it *cheap to keep*, which is the right moment to decide whether to keep it |
 | **30** | **Editorial capacity** — author-days per month, realistically | Gates Question of the Week, the Decision Pack, the diagnostic, and the AI feature. `new_additions.md`: *"Every plan in this document is a guess without it"* |
+| **35** `[NEW 2026-08-20]` | **Per-user download traceability** — should a table record *who* downloaded *what*, or is the stamp inside the buyer's own file enough? | Phase 8 ships the stamp and **no table**, because a table is new PII the privacy policy does not name. Answering yes costs a policy edit and W2-R8's ordering rule — policy first, instrumentation second — applies unchanged |
 
 ### 8.3 Closed, deliberately, and bundled
 
@@ -1439,7 +1605,6 @@ TAX INVOICE                                    Invoice  INV-000142
                                                Date     17 Aug 2026
 
 Effective RM
-ABN 00 000 000 000                    ← omitted entirely when unset
 
 Bill to
   Jane Practitioner
@@ -1461,7 +1626,7 @@ of anything else stated here.
 
 **Hex values, sanctioned and fixed:** ink `#1C1712` · muted `#6E675A` · rule `#E6DFD0` · accent `#1D5FA8` · gold `#7C5C14`. These are the light-theme token values transcribed once, in one file, with a comment naming their source token — so a token change has one place to follow rather than nine.
 
-`version` renders under the line item, per §20.4. The ABN line is omitted when unset — **never** rendered as a placeholder.
+`version` renders under the line item, per §20.4. There is no ABN line at all — `[RESOLVED 2026-08-20]`, §8.1 decision #31 — not an omitted-when-unset field, a field that was never added.
 
 ### 20.10 The four states, per new surface
 
@@ -1582,11 +1747,51 @@ Every user-visible string introduced this week. Voice: **plain, specific, never 
 - `TAX INVOICE` · `Invoice` · `Date` · `Bill to` · `Description` · `Qty` · `Amount` · `Subtotal` · `GST (included)` · `Total`
 - Existing shared strings unchanged: `TAX_STATEMENT_TEXT`, `REFUND_POSITION_TEXT`, `BILLING_TYPE_TEXT`.
 
+### 23.1 Copy deck — Phase 8 additions `[NEW 2026-08-20]`
+
+Same voice, same rule: **plain, specific, numbers over adjectives, and no claim without a column.** Written here before it is written into a component.
+
+**Products menu (W4-R18)** — five items, each one line
+- `Questions` / `Free to read` · `Courses` / `Video lessons and worked examples` · `Templates` / `Files you can edit` · `Reference packs` / `A domain's questions in one place` · `All products` / `Everything, with prices`
+
+**Why this (W4-R16)** — the eyebrow and the six permitted claims
+- Eyebrow: `WHY THIS ONE`
+- `Built from a documented decision model, not a blank page.`
+- `Written for the decision you're actually in — this is reached from the question it answers.`
+- `Versioned and reviewed. You're buying v{version}, reviewed {date}.`
+- `You can see what's inside before you pay — {n} sample pages, and the format facts above.`
+- `Macro-free, so it opens on a locked-down machine.`
+- `The licence says what you may do with it, in words.`
+- **Nothing about other buyers.** No counts, no ratings, no testimonials — none of those numbers exists.
+
+**CTA ladder**
+- Primary: `Buy — {price}` · Secondary: `See the sample pages` · Tertiary: `Start with a free one`
+- After-payment line: `Download straight away. Receipt by email. Access doesn't expire.`
+
+**Licence and sharing (W4-R16)**
+- In-file stamp: `Licensed to {name} ({email}) · Order {order_id} · {licence} licence · v{version}`
+- On the page: `Your copy is stamped with your name. Sharing it shares your name with it.`
+- The upsell, not a scolding: `Need to give this to clients? There's a licence for that.`
+- Unstampable type, in admin: `{ext} files are served unstamped — this type can't carry one.`
+
+**Pricing (W4-R15)** — admin-facing
+- `Anyone already at the checkout screen pays the old price.`
+- Confirmation: `A${old} → A${new}. Change the price?`
+- Reason field: `Why is the price changing? This goes in the audit log.`
+
+**Readiness (W4-R17)** — admin-facing, one per state
+- `No product yet — this can't be bought.` · `Price not set.` · `Stripe doesn't recognise this price — it can't be bought until it does.` · `Ready, not published.` · `Live.`
+
+**Video (W4-R13)** — four failures, four sentences
+- `Still encoding — Mux is processing this. It'll play in a few minutes.` · `No playback token — this asset is private and the token request failed.` · `Mux doesn't recognise this playback ID.` · `The video player didn't load. Check the connection and reload.`
+
 ---
 
 # PART III — IMPLEMENTATION PLAN
 
-Five days, seven phases. Each phase has steps with file paths and a Definition of Done that is checkable rather than felt.
+Five days, seven phases — plus three that do not fit in five days and say so: **6B**, **6C** and **8**, all Week 5. Each phase has steps with file paths and a Definition of Done that is checkable rather than felt.
+
+**`[VERIFIED 2026-08-20]` Read §28's task ledger for the real state before trusting any phase's prose below or `handover.md`'s Week 4 section — both describe more completion than the repository has.** The steps and Definitions of Done below are the plan as designed; they were not re-ticked line by line, and several tasks they describe as shipped (the specified five metrics, the routing query-count test, the Recharts chart, the twelve-attack gating log, all of Phase 5's hardening sweep) are not actually in the repository. §28 is the accurate record.
 
 **A standing instruction, carried from Week 3 and reinforced by `handover.md` §4's last item:** commit in **topic-scoped commits**. Week 3's entire output is uncommitted in the working tree and the last commit on `main` is a single mixed `edited`. Do not add a second one.
 
@@ -1596,20 +1801,32 @@ Five days, seven phases. Each phase has steps with file paths and a Definition o
 
 Nothing in this phase is new work. It is the cheapest possible start and it removes three items that have now been carried across two reports.
 
+**`[VERIFIED COMPLETE 2026-08-20]`** — every step below re-checked against the repository this session; the two that weren't actually done were done, not just marked. Commits: `55eecaf`, `85b55dc`, `8c51fc1`, `602b3cc` (already landed, 2026-08-19) plus `cfa6b9d`, `f021be2`, `a0f4318`, `59642a3` (landed this session).
+
 ### Steps
 
-1. **Commit Week 3's working tree**, in topic-scoped commits — email spine · migrations 010–012 · refunds · admin uploads/publish states · cart · Phase 6 content/QA. Six or seven commits, each readable alone. Nothing new is written in this step.
-2. **Fix `.github/workflows/ci.yml`** `[DEFECT]` — remove `RESEND_API_KEY`, add `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_SENDER_EMAIL`, `MAILJET_SENDER_NAME`, `OWNER_NOTIFICATION_EMAIL`, `FRONTEND_URL`. Confirm against `backend/.env.example` and `app/core/config.py`, not from memory.
-3. **`CheckoutSuccess.tsx` and `Template.tsx`** `[CARRIED]` — swap `CardTitle` for `PageTitle`, and add both routes to `accessibility.spec.ts`'s `PUBLIC_ROUTES`. `Template.tsx` needs an owned product to reach, so the spec needs a fixture or a skip with a reason — **write the reason, do not silently omit the route.**
-4. **Reconcile `QuestionsCatalogue.tsx` to `max-w-7xl`** (`handover.md` §1's named odd-one-out). One class.
-5. **Run everything**: `pytest` (expect 62), `npm test`, `npx playwright test`, `tsc --noEmit`, `vite build`. **Record the actual numbers** — this is the baseline every later claim is measured against.
-6. **Write the environment checklist** for Render into `handover.md` §4 item 15, converting it from a note into a list someone can execute.
+1. **Commit Week 3's working tree**, in topic-scoped commits — email spine · migrations 010–012 · refunds · admin uploads/publish states · cart · Phase 6 content/QA. Six or seven commits, each readable alone. Nothing new is written in this step. — ✅ **Done, 2026-08-19.** Landed as 4 topic commits rather than 6–7: `602b3cc` (backend + docs), `8c51fc1` (frontend UI/specs), `55eecaf` (CI fix, step 2), `85b55dc` (axe routes, step 3's second half). Coarser-grained than the plan's estimate but genuinely topic-scoped — no file touches two unrelated concerns. *(Week 4 Phases 1–7's own work is a separate, still-uncommitted body of work — not "Week 3's tree," out of this step's scope; see §28's ledger task 1 note.)*
+2. **Fix `.github/workflows/ci.yml`** `[DEFECT]` — remove `RESEND_API_KEY`, add `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_SENDER_EMAIL`, `MAILJET_SENDER_NAME`, `OWNER_NOTIFICATION_EMAIL`, `FRONTEND_URL`. Confirm against `backend/.env.example` and `app/core/config.py`, not from memory. — ✅ **Done** (`55eecaf`). All five vars present, no `RESEND_API_KEY`; confirmed against `config.py`'s actual field names, not memory.
+3. **`CheckoutSuccess.tsx` and `Template.tsx`** `[CARRIED]` — swap `CardTitle` for `PageTitle`, and add both routes to `accessibility.spec.ts`'s `PUBLIC_ROUTES`. `Template.tsx` needs an owned product to reach, so the spec needs a fixture or a skip with a reason — **write the reason, do not silently omit the route.** — ✅ **Done, completed this session.** The axe-route half landed 2026-08-19 (`85b55dc`); the actual heading swap was still sitting uncommitted and got done + committed now (`cfa6b9d` CheckoutSuccess, `f021be2` Template — the latter bundled with Phase 3's `EvidencePanel` wiring since both touch the same header block, noted in the commit message rather than force-split). `Template.tsx` takes the written-reason path exactly as anticipated: covered by `accessibility.spec.ts`'s separate dynamic real-template-detail-page test (resolves a real id from `/templates` rather than a static route needing ownership). **A real bug surfaced and was fixed along the way**: adding `/checkout/success` to `PUBLIC_ROUTES` means an anonymous axe visit hits its auth guard and actually scans `AuthLayout.tsx` (the sign-in shell) — which had no `<main>` landmark at all, failing axe's `landmark-one-main`/`region` rules in both themes. Fixed (`a0f4318`); `/checkout/success` now passes axe cleanly in both themes, verified by a live Playwright re-run.
+4. **Reconcile `QuestionsCatalogue.tsx` to `max-w-7xl`** (`handover.md` §1's named odd-one-out). One class. — ✅ **Done, 2026-08-19** (`8c51fc1`). Confirmed at both container divs (line 566, 581 as of this check).
+5. **Run everything**: `pytest` (expect 62), `npm test`, `npx playwright test`, `tsc --noEmit`, `vite build`. **Record the actual numbers** — this is the baseline every later claim is measured against. — ✅ **Done, run for real this session, against live dev servers (backend on :8000, frontend on :5173), not assumed.** Numbers below.
+6. **Write the environment checklist** for Render into `handover.md` §4 item 15, converting it from a note into a list someone can execute. — ✅ **Done this session** (`59642a3`). Item 15 is now a real checklist — 3 remove-lines, 14 set/confirm-lines cross-referenced against `.env.example` and `config.py` field-by-field, plus a "redeploy and confirm with a real send" closing step. Still `[HUMAN]` to actually tick against the live Render dashboard — this document cannot see it.
+
+**Baseline numbers, 2026-08-20** (the count this plan's every later "passing" claim should be measured against):
+
+| Suite | Result | Note |
+|---|---|---|
+| `pytest` (backend) | **89 passed**, 0 failed | Not 62 — the suite has grown substantially since the plan's Day-0 estimate (guard tests, money tests, taxonomy parity, JWT verification). Was **85 passed, 4 failed** until this session found and fixed a live JWT-verification bypass in `security.py` — see §28's ledger note |
+| `npm test` (frontend unit) | **43 passed**, 0 failed | 4 files: `scoring.test.ts`, `tags.test.ts`, `formatCurrency.test.ts`, `useCartStore.test.ts` |
+| `npx playwright test` | **80 passed, 2 failed, 1 skipped** (83 total) | Failures are both pre-existing and **out of Phase 0's scope**: `/` fails `color-contrast` in both themes (a gold-soft promo banner's muted caption text, 3.38:1/2.4:1 against a 4.5:1 requirement — a Phase 5 accessibility-sweep finding, not touched by anything in this phase) and one `stress-fixtures.spec.ts` case needs a `/questions/stress-long-detail` fixture not present in this dev database. The skip is gating case 9's signed-in half (needs `E2E_TEST_EMAIL`/`PASSWORD`, `[UNVERIFIABLE]` in this session). **Both `/checkout/success` axe cases — the ones this phase actually touches — pass cleanly in both themes**, confirmed by a second, isolated re-run |
+| `tsc --noEmit` | **Clean**, 0 errors | Re-run after every edit this session |
+| `vite build` | **Succeeds** | Entry chunk **537.61 kB gzipped** (+ a 294.54 kB second chunk) — a real finding for W4-R8/task 36, not this phase's job to fix; flagged in §28 |
 
 ### Definition of Done — Phase 0
-- [ ] `git log` shows topic-scoped commits, no new `edited`
-- [ ] CI env matches `config.py`'s required settings exactly
-- [ ] Both carried `h1` fixes landed, both routes in the axe list (or one skipped with a written reason)
-- [ ] Baseline test numbers recorded in the ledger
+- [x] `git log` shows topic-scoped commits, no new `edited` — 8 commits since 2026-08-19 (4 pre-existing + 4 this session), each single-topic; no new mixed "edited" commit added
+- [x] CI env matches `config.py`'s required settings exactly
+- [x] Both carried `h1` fixes landed, both routes in the axe list (or one skipped with a written reason) — landed, committed, and both pass axe in both themes
+- [x] Baseline test numbers recorded in the ledger — table above, and in §28
 
 ---
 
@@ -1644,14 +1861,14 @@ Database first, for the reason Week 3's Part IV gave: adding columns and indexes
 2. **`admin/products.py`** `[NEW]` — full CRUD, publish through `apply_publish_state`, guards from Phase 1 wired in before the state change. Registered in `admin/router.py`.
 3. **Extend `GET /products/{slug}`, `GET /templates`, `GET /templates/{id}`, `GET /packs/{slug}`** to return the evidence fields. **Bulk-resolve, do not loop** — the four N+1 fixes of 2026-08-14 established the pattern and `resolve_granted_content_ids` is the primitive.
 4. **Extend the receipt email** — invoice block and `VersionStamp` line (§20.9). Both `.html.j2` and `.txt.j2`; the plain-text sibling is not optional.
-5. **`create_checkout_session`** gains `invoice_creation`, `billing_address_collection`. `SELLER_LEGAL_NAME` / `SELLER_ABN` into `config.py` and `.env.example`.
-6. **Test**: a session with invoice creation produces an invoice; the receipt carries its number; an unset ABN omits the line entirely.
+5. **`create_checkout_session`** gains `invoice_creation`, `billing_address_collection`. `SELLER_LEGAL_NAME` into `config.py` and `.env.example` — **no `SELLER_ABN`**, per decision #31's 2026-08-20 resolution.
+6. **Test**: a session with invoice creation produces an invoice; the receipt carries its number; no build of the receipt ever contains the string "ABN".
 
 ### Definition of Done — Phase 2
 - [ ] Every evidence field readable through the public API and writable through admin
 - [ ] Preview upload works end to end, verified with a real `head_object` HEAD — not the browser's own "done" event
 - [ ] A real test-mode purchase produces a Stripe invoice, confirmed by fetching it back from the Stripe API
-- [ ] Unset-ABN receipt renders without an ABN line and is still valid
+- [x] Receipt is a valid invoice with no ABN line, by design — decision #31, resolved 2026-08-20
 
 ---
 
@@ -1862,6 +2079,262 @@ The largest phase and the one the brief actually named. **Do not compress it to 
 
 ---
 
+## Phase 8 — Week 5: The seven owner instructions of 2026-08-20
+
+**Read this before starting.** These seven items arrived in one session and are written here as one phase because they share four seams: the Stripe price (8A, 8B), the lesson-authoring surface (8D, 8E), the argument for buying at all (8C's numbers, 8F's words), and the routes a buyer travels to reach any of it (8F's CTAs, 8G's menu). Sized honestly, this is **four to five days** — it is Week 5 work, sequenced after Phase 6C, and nothing in it justifies compressing Phase 5. The instructions, verbatim, and where each is answered:
+
+| # | Owner instruction | Answered by | Requirement |
+|---|---|---|---|
+| 1 | *"New courses aren't purchasable"* | §8A | W4-R17 |
+| 2 | *"Adjust the pricing of each course and template"* | §8B | W4-R15 |
+| 3 | *"Add basic analytics to the admin panel"* | §8C | W4-R10 |
+| 4 | *"Actually play and see the video in the admin panel"* | §8D | W4-R13 |
+| 5 | *"Write the lessons with necessary text editors — h1, h2, h3, bullets"* | §8E | W4-R13 |
+| 6 | *"Why should a user buy from us"* + *"downloaded templates can be shared with anyone"* | §8F | W4-R16 |
+| 7 | *"Group questions, courses, templates and reference packs under one Products menu"* | §8G | W4-R18 |
+
+**Why this order.** Purchasability first: a course nobody can buy makes the price control, the revenue metric and the sales copy all moot, and 8A's Stripe-price guard is the thing that makes 8B safe to build. Analytics third, because it is the only one of the seven that *measures* the others and wants them landed first. The two authoring items are independent of the commercial ones and can run in parallel if two people are on this. The copy and licence work is last because it needs the evidence layer — which already shipped — and because it is the one item where writing the argument before the mechanism exists produces claims the product cannot keep.
+
+**A standing warning for this phase specifically.** Four of the six items already have a file in the repository that looks like the answer and is not: `VideoPreview.tsx` exists and cannot play a signed asset · `RichTextEditor.tsx` exists and writes HTML that nothing renders as HTML · `create-product` exists and mints a Stripe id that does not exist · `/admin/metrics` exists and returns operational counts rather than the metrics W4-R10 names. **Every step below starts by reading the file that already exists.** A step that begins by writing a new one has skipped the part that matters.
+
+---
+
+### 8A — A new course can actually be bought (W4-R17)
+
+**Steps**
+
+1. **Read the chain end to end before changing any of it**: `admin/courses.py:261` `create_course_product` → `stripe_price_id="placeholder_update_in_stripe"` (line 306) → `commerce/products.py` checkout → `stripe_client.create_checkout_session:30` → `line_items[{'price': …}]`. Write the one-sentence version into the commit message: *the id it ships with is not a Stripe object.* Everything below follows from that sentence, and a fix that does not address it is decoration.
+2. **`create_price()` in `app/integrations/stripe_client.py`** — `stripe.Price.create(unit_amount=…, currency=…, product_data={'name': …})` on first creation, which makes the Stripe Product too, returning **both** ids. Both are stored: the Price id charges, the Product id is what 8B's price change needs to reuse.
+3. **Rewrite `create_course_product`** to call it. **Delete the placeholder string** — do not leave it behind a condition, do not leave it as a default. `grep -r placeholder_update_in_stripe` returning nothing is a DoD line precisely so it cannot come back.
+4. **Order the writes so a failure is not a half-success**: Stripe first, database second, one transaction. If `create_price` raises, the endpoint returns `502` carrying Stripe's own message and **no product row is created**. A product row with a broken price is the state being removed; creating one on the error path would reintroduce it.
+5. **`POST /admin/templates/{id}/create-product`** — the same endpoint shape for templates, which have no product path at all today. Same guard against a second product for the same content (`ProductContent` already gives the check).
+6. **Readiness, server-derived, one line.** Extend `ProductOut` with `readiness: 'no_product' | 'price_unset' | 'stripe_price_unresolved' | 'unpublished' | 'ready'` and a human sentence for each. **Server-derived, not inferred client-side from three booleans** — the client cannot know whether Stripe resolves the id, which is the condition that actually bit. Rendered in `AdminCourses.tsx` and `AdminTemplates.tsx` next to the publish chip.
+7. **`check_stripe_price()` in `app/core/publish_guard.py`** — refuses publish when the price does not resolve, is `active=false`, is cross-mode (a `sk_test_` key against a live price id, which 404s at Stripe and is the single most confusing failure available here), or disagrees with `price_amount`/`currency`. Four conditions, four distinct messages; the mismatch case uses §23's existing `Price mismatch` string, which has been in the copy deck waiting for code that could produce it.
+8. **Tests, seen red first**: create-course-product against a stubbed Stripe stores the returned ids · a Stripe error creates no row · each of the four publish refusals · **and the one that answers the instruction** — create a course through the admin API, make it purchasable, set a price, publish, run a Stripe test-mode checkout, deliver the webhook, assert the entitlement exists and the lesson is readable. That test is the deliverable; the rest is how it is made to pass.
+
+---
+
+### 8B — Price control for every course and template (W4-R15)
+
+**Steps**
+
+1. **Migration `016_product_stripe_product_id`** — nullable `products.stripe_product_id`. Nullable because the backfill can genuinely fail for a seeded row, and a NOT NULL column would force a lie into it.
+2. **`backend/scripts/backfill_stripe_product_ids.py`** — resolves each existing `stripe_price_id` via `stripe.Price.retrieve(id).product`. Ids that do not resolve are **printed as a list to fix by hand**, not defaulted, not skipped silently. Run it and record the output; the seeded catalogue is where `013`'s backfill already had to be flagged as an assertion rather than a fact.
+3. **`POST /admin/products/{id}/price`** — body `{price_amount, currency, reason}`, reason required, the same contract `grant_entitlement_manually` uses for every other money-adjacent write. The order of operations, and the failure each ordering choice buys:
+
+   | Step | If it fails |
+   |---|---|
+   | a. Retrieve the current Price — confirms mode and yields the Stripe Product id | Nothing changed. Refuse with the Stripe message |
+   | b. `create_price()` under that same Stripe Product | Nothing changed |
+   | c. Update the row, write the audit row, commit | An unused Price exists in Stripe — **harmless, visible, and the failure to prefer** |
+   | d. `archive_price(old)` — last | Two active Prices exist; the row names which is current, and checkout uses the row. A cleanup script fixes it later |
+
+   **Archiving is last on purpose.** Archive-then-swap has a window where the live price is archived and the row still points at it — every checkout in that window fails. Swap-then-archive's worst case is a stale Price nobody references.
+
+4. **Say what a price change does to people mid-purchase**, in the UI, in one sentence: `Anyone already at the checkout screen pays the old price.` That is true of Stripe Checkout sessions and it is the first question anyone sensible asks before pressing the button.
+5. **Audit, not a history table.** The audit row carries old amount, new amount, both Price ids and the reason; `/admin/audit` (Phase 6C) reads it. **No `product_price_history` table** — `audit_log` is already the append-only financial record, and a second one is two sources of one fact, the defect this document has now found four times.
+6. **The field takes dollars and stores cents**, with the conversion in exactly one place and a unit test beside `test_money.py`'s existing eight. A price editor that is off by 100 is the most expensive typo available in this codebase.
+7. **A confirmation step for a change over ±50% or to zero**, naming both figures: `A$99.00 → A$9.90. Change the price?` Fat-finger protection on the one field where a slip charges a real card the wrong amount.
+8. **`stripe_price_id` becomes read-only in the UI** — displayed for support, editable by nothing. That free-text field is the mismatch's origin.
+9. **The control appears in three places and is one endpoint**: `AdminProducts.tsx`, `AdminCourses.tsx` (against the course's associated product) and `AdminTemplates.tsx`. The owner asked to change the price of a course and a template; being sent to find its product first is the panel failing the question. **One endpoint, one code path — a second write path here is a second source of the same bug.**
+10. **Tests, seen red first**: exactly one new Price is created and the old archived · missing reason is `422` · the audit row carries both ids · **the price fetched back from Stripe equals `price_amount`** · a currency change on a published product is refused (that is a different product commercially, not an edit) · the dollars→cents conversion at `0.01`, `99`, `1000` and a value with three decimals.
+
+---
+
+### 8C — Basic analytics, finished (W4-R10)
+
+**Read the ledger before writing code.** `/admin/metrics` exists and is reachable (task 44f was fixed on 2026-08-20), and what it returns is **operational counts** — users, orders, one undifferentiated revenue figure, published counts — not the metrics W4-R10 names. The open rows are 43, 44b, 44d, 44e, 44g, 44j, 44k, 44l. This step closes the ones the owner's word *"basic"* covers and **leaves the rest with their existing numbers rather than absorbing them silently**.
+
+| Closed here | Left in Phase 6B, with its ledger row |
+|---|---|
+| 44j revenue as gross · refunded · net | 43 second-purchase rate, free→paid, signup-to-purchase — the three that need more traffic than exists to say anything |
+| 44k enrollments per course and top products | 44d `POST /filter-events` + `lib/filterEvents.ts` |
+| 44e `/admin/metrics/revenue-series` | 44l the Recharts install decision, if 8C ships the honest stub instead |
+| 44g the both-keys-unset test | |
+| 44b `TrendChart` — real chart **or** honestly-labelled stub | |
+
+**Steps**
+
+1. **Rewrite `GET /admin/metrics`** to return, for every metric, an explicit **numerator and denominator** — never a pre-computed percentage. §20.7's tile states "1 of 2 buyers"; a backend returning `50.0` has already destroyed what the tile needs. Revenue returns `gross_cents`, `refunded_cents`, `net_cents` as three fields. Unknown is `null`, zero is `0`, and they are different (non-negotiable #15).
+2. **The six numbers "basic" means** — all pure SQL against tables that exist, all marked `[READY]` in W4-R10's second amendment: revenue (three figures) · orders · entitlements granting a course, **split by `granted_via`** (`purchase` / `manual` / `free`) · courses ranked by enrollment, started and completed · top products by units and revenue, refunds excluded · template download links issued.
+3. **The words on the page are the ones the amendment fixed**: "entitlement" where that is what it means, "links issued" for downloads with its one-sentence caveat, and the ranking measure named in the UI. Nothing on the page may imply a view count exists — none does.
+4. **`GET /admin/metrics/revenue-series?days=…`** — bucketed server-side per §20.7a's span rule. `[]` for no data, one element for one order, and the client does not infer which state it is in.
+5. **`TrendChart`: decide in writing, then build.** Either install the shadcn chart block per resolved decision #33 — `react-is` override, registry JSON not the `npx` CLI, **entry chunk measured before and after** against W4-R8's budget — or keep the CSS stub and **label it a stub in the UI**. What must not ship is the third option currently in the tree: a stub that reads as a chart, whose own comment says *"in a full implementation, this would use Recharts."*
+6. **`EXPLAIN` every query** against a synthetic dataset built and rolled back in one transaction (§27). While in `db_index_evidence.md`, close **ledger row 8** — `013`'s indexes are still undocumented there and that file still covers only `010`.
+7. **Tests, seen red first**: net revenue after a refund (the one most likely to be wrong) · zero data returns `null` not `0` · a `free` grant counted separately from a purchase · a member gets `403` · **the whole page renders with `POSTHOG_API_KEY` and `VITE_POSTHOG_KEY` both unset** (44g).
+8. **Add `/admin/metrics` to `accessibility.spec.ts` and `responsive-widths.spec.ts`** — both themes, seven widths. If a chart ships, it is a graphical object with a 3:1 contrast floor and a keyboard-reachable tooltip.
+
+---
+
+### 8D — Video that actually plays in the admin panel (W4-R13)
+
+**Steps**
+
+1. **Establish the playback policy before writing anything.** `Lesson.tsx:68` passes `tokens={{ playback }}` fetched from `/lessons/{id}/playback-token`; `VideoPreview.tsx` passes a bare `playbackId` and **no token**. If the Mux assets use a signed playback policy — which the existence of that token endpoint strongly implies — the admin preview cannot play and never could. **Check the actual policy on a real asset first.** If it is public, the fix is small and steps 2–3 collapse to a note saying so; if it is signed, they are the work. Do not build the token path against an assumption.
+2. **`GET /admin/media/{media_id}/playback-token`** — admin-gated at the router level like everything else in `admin/router.py`, short TTL, and audited the same way `has_access_to_or_admin`'s admin bypass already is. An admin viewing content they have not bought is exactly the bypass that function exists to record.
+3. **`VideoPreview` takes a token URL**, the way `Learn.tsx`'s `VideoBlock` does, and gets the same states — **plus one the member player never needs**: `still encoding`. A freshly uploaded asset is the common admin case, Mux takes minutes, and a player that fails silently on it reads as broken software. That state comes from the Mux asset status the `media` row already tracks, not from a timeout.
+4. **Three placements, one component**: the lesson editor (`AdminCourses.tsx:519`), the block editor (`:181`), and the media library. All already import `VideoPreview`; none of them changes shape.
+5. **Failure text says which failure it is** — no token, asset not ready, asset id unknown to Mux, player script failed to load. `Failed to load video player` is currently shown for all four, which sends the owner to the wrong problem.
+6. **Verification is manual and is the point**: upload a video through admin, watch it play in admin, before publishing anything. `[HUMAN]` — and record it, because the instruction was *"actually play and see the video"*, which a passing unit test cannot answer.
+
+---
+
+### 8E — Lesson prose that survives the round trip (W4-R13)
+
+**What is actually broken.** All five of these were read in the repository on 2026-08-20; the editor exists, and the path from it to a reader does not:
+
+1. `RichTextEditor.tsx` writes HTML — `onChange(editor.getHTML())`.
+2. `Learn.tsx:531` renders `lesson.body` as **text** inside `<p className="whitespace-pre-line">`, and `LessonBlocks` does the same for `text_body` at lines 243 and 260. **A member sees literal `<h2>` tags.** Nothing in `frontend/src` uses `dangerouslySetInnerHTML` at all.
+3. The editor is wired **only** to the lesson-body modal (`AdminCourses.tsx:734`). The block text/callout editor at line 783 is still a `<textarea>` — and `blocks` is what actually renders for every current lesson (`Learn.tsx:497`). **The rich text editor is attached to the field readers mostly do not see.**
+4. `@tailwindcss/typography` is not installed, so `prose prose-sm` on the editor pane is inert and Preflight has already flattened `h1`/`ul`. **Inside the editor, a heading looks exactly like body text** — which is precisely the complaint.
+5. Nothing sanitises HTML anywhere, on either side.
+
+**Steps**
+
+1. **Choose the storage format in writing, first: sanitized HTML.** Tiptap JSON is rejected — it would need a renderer on the client *and* a second one for any future email or PDF path, and the whole point of the format decision is to have one. Record the choice and the reason where the next person will find it.
+2. **Migration `017_body_format`** — `body_format` (`'text' | 'html'`) on `lessons` and `lesson_blocks`, **defaulting to `'text'`**. Every existing body keeps rendering exactly as it does today, and only content saved by the new editor takes the HTML path. **No backfill reinterprets old text as HTML** — an existing body containing a `<` would silently change meaning, and there is no undo for that.
+3. **Sanitize server-side, on write**, in `admin/courses.py`. Allow-list: `h2`, `h3`, `h4`, `p`, `ul`, `ol`, `li`, `strong`, `em`, `u`, `a[href]` (http/https/mailto only, forced `rel="noopener noreferrer"`), `table`/`thead`/`tbody`/`tr`/`th`/`td`, `br`, `hr`, `blockquote`, `code`, `pre`. Everything else stripped, attributes included. **Server-side because a client-side sanitizer protects nobody from a direct API call** — and the admin API is the one an attacker with a stolen admin session would use. `nh3` (Rust, maintained) over `bleach` (deprecated upstream); record the choice in the module docstring.
+4. **The heading level is capped at `h2`, and the toolbar's "H1" emits one.** A lesson body's `h1` would compete with the page's own `PageTitle` `h1`, which §22 forbids and axe will flag. The owner asked for "h1, h3, h3" — what that means is *three visible heading levels*, and it is delivered as `h2`/`h3`/`h4` styled at the §13.1 rungs the design already defines. **Write this decision down in the toolbar's tooltip** so it does not read as a missing feature.
+5. **One `RichText` component** in `components/content/`, used by both `Learn.tsx` paths, holding the **only** `dangerouslySetInnerHTML` in the codebase, gated on `body_format === 'html'`, with a second client-side sanitize pass and a comment saying why the codebase's own rule is deliberately broken in this one file.
+6. **Style it with a `.rich-text` block in `theme.css`**, mapping `h2`/`h3`/`h4`/`ul`/`ol`/`table` onto the existing type scale and tokens — **not** `@tailwindcss/typography`, whose defaults would introduce a second type scale beside §13.1's. The same class styles the editor pane, so what the author sees is what the reader gets. That equivalence is the deliverable, not the toolbar.
+7. **Wire the editor into the block text and callout editors** (`AdminCourses.tsx:783`), which is where lesson content actually lives. The lesson-body modal keeps it too.
+8. **Close the toolbar gap against W4-R13**: `Link` and `Underline` are named in the requirement and neither extension is installed. Install both, or amend W4-R13 in writing. **Do not leave a requirement claiming a toolbar button that does not exist.**
+9. **Tests, seen red first**: `<script>alert(1)</script>` in a lesson body is stripped **server-side** · an `onerror` attribute is stripped · a `javascript:` href is stripped · an existing plain-text body renders byte-identically to today · round trip — h2/h3/h4, bullets, a numbered list, a table and a link saved in admin and rendered on the member lesson page, in both themes, at all seven widths · the lesson page still has exactly one `h1`.
+
+---
+
+### 8F — Why buy from us, and what a buyer may do with it (W4-R16)
+
+**Steps**
+
+1. **Write the argument before the component.** Six claims, each traced to the column or guard that backs it — the table in W4-R16 is that list, and it is the whole permitted vocabulary for these surfaces. **A seventh claim needs a seventh column.** Anything that cannot be traced is not written, which is non-negotiable #13 applied to marketing copy, where it is hardest to keep and most necessary.
+2. **`WhyThis`** in `components/product/`, on `/buy/:slug`, `/templates/:templateId` and `/store/packs/:slug`, **placed below `EvidencePanel`** — the evidence is what makes the argument credible, so it goes first. Reuses `Card`, the `.eyebrow` device and the existing icon set; nothing new is authored that exists.
+3. **One CTA ladder per page, in one order**: **Buy** (primary) · **See the sample pages** (secondary, scrolls to `PreviewGallery`) · **Start with a free one** (tertiary, to a free template or `/questions`). **Never two primaries on a page**, and the mobile sticky bar carries the primary only. A second gold button is how a page stops having a recommendation.
+4. **The objection block** — five things, four of which are already columns and need only placing: the refund position, the licence line, the version and update promise (decision #26), what it opens in, and what happens immediately after payment (download now, receipt by email, access does not expire).
+5. **Copy deck first (§23), then code.** Every string written into the deck before it is used, voice unchanged: plain, specific, numbers over adjectives, **no social proof of any kind**. The absence is checkable: read the additions and confirm no line makes a claim about other buyers.
+6. **`app/services/stamping.py`** — on a **paid** download, serve a copy stamped with the buyer's name and email, the order id, the licence tier and the version. `.docx` via `python-docx` (footer), `.xlsx` via `openpyxl` (header/footer plus a licence sheet), `.pdf` via `pypdf`. **Generated once and cached** in storage under `stamped/{template_id}/{version}/{user_id}`; a second download serves the cached object. The version in the key is what makes a re-published template re-stamp rather than serve a stale copy.
+7. **Three rules the stamping code must hold, each a test**:
+   - **A stamping failure serves the original file.** Wrapped and swallowed, `posthog_client.py`'s contract. A broken stamp must never cost someone the file they paid for.
+   - **Unstampable types are served unchanged**, and the admin template editor shows which types those are. A silent no-op would be a claim the code does not keep.
+   - **Free templates are never stamped** — there is no buyer to name, and `is_free` downloads have no authenticated user by design.
+8. **The licence travels in the file**, not only on the page. That is the entire deterrence mechanism: a forwarded copy carries its own terms, and "I didn't know" stops being available.
+9. **Counting stays aggregate.** `download_events` keeps no `user_id` — Phase 6B's constraint is unchanged and the privacy policy still needs no edit. **The buyer's identity goes into the buyer's own copy of their own file, never into a table.** Per-user download traceability is decision **#35**; it is named here so it is decided rather than drifted into.
+10. **Wider use is a tier, not a scolding.** `LicenceLine` links to the client-delivery tier (decision #25) rather than to a warning. Someone who needs to hand the file to five clients is a customer, and the page should treat them as one.
+11. **Rate-limit link minting** per user per template per hour — a soft signal, in memory, **no IP stored** (8C's and 6B's rule). It never blocks a legitimate download; exceeding it logs, it does not refuse.
+12. **Tests, seen red first**: a stamped `.docx` contains the buyer's email — **asserted against the extracted document XML, not a screenshot** · the second download serves the cache and does not re-stamp · a new `version` invalidates the cache · an unstampable type is served unchanged · a free template is never stamped · **the stamping failure path returns the original file, not a 500**.
+13. **Both themes, seven widths, axe** for every surface `WhyThis` lands on.
+
+---
+
+### 8G — One Products menu, in the header and in the rail (W4-R18)
+
+**Steps**
+
+1. **Read both nav definitions and the decision one of them records.** `MarketingLayout.tsx:19` is a flat three-item list; `MemberLayout.tsx:38-47` puts `Store` beside the three catalogues it indexes, and the comment above it says that was deliberate on 2026-08-13 — *"added alongside (not instead of) the three catalogues below."* **This instruction reverses that decision, and the reversal is written next to the comment it overturns**, dated, in the project's own "a later fact wins by addition, not silent rewrite" convention. Do not delete the old comment.
+2. **Build `/packs` first.** The menu needs four destinations and only three exist; `content/packs.py` already serves pack data, so this is a catalogue page in the shape of `TemplatesCatalogue.tsx`, not new backend thinking. Confirm a list endpoint exists before starting — if only `GET /packs/{slug}` does, the list endpoint is step 2a, bulk-resolved, no per-pack loop.
+3. **`ProductsMenu` in `components/nav/`** — one component, used by the header on desktop. The pattern decision, written down because the wrong one is the common mistake: **a disclosure button controlling a list of links** (`aria-expanded`, `aria-controls`), **not** a `role="menu"` menubar. ARIA's menu pattern is for application commands; it demands arrow-key semantics and, worse, `role="menuitem"` strips the affordances that make a link a link. **Every item stays an `<a>`** — cmd-click, middle-click and "copy link address" must all still work, and that is a DoD line because it is exactly what a hand-rolled menu breaks.
+4. **Interaction contract**: opens on click **and** on hover-with-intent, but **click is the contract** — hover alone fails touch and keyboard. Escape closes and returns focus to the trigger. Tab moves through the items and closes the menu on exit. An outside click closes. The trigger reads active when any child route is active.
+5. **Motion**: opacity and a 4px rise, 150ms `--ease-standard` (§17.1). Under `prefers-reduced-motion`, opacity only, no transform (§17.4). No slide, no spring — a nav menu is not a place to spend animation budget.
+6. **Four items, each with one line of description**, which is the part that makes a menu better than a row of links: `Questions — free to read` · `Courses` · `Templates` · `Reference packs`, then `All products` last as the overview, pointing at `/store`. **Questions is first and says it is free** — that is what pays for burying the free entry point one level deeper (W4-R18's third constraint). All five strings go into §23's copy deck before they go into the component.
+7. **Mobile has no dropdown.** The existing sheet menu (`MarketingLayout.tsx:150`) renders the group **expanded under a heading** — the same typographic device as the member rail's section headings. A collapsible inside a sheet that is already a list is a tap for nothing.
+8. **The member rail is a rename and a reorder, not a new component.** `Browse` becomes `Products`; the items become Questions · Courses · Templates · Reference packs · All products. **No dropdown in the rail** — it is already grouped by heading, which is the same information a dropdown would carry, and §17.3's prohibitions cover motion added for its own sake.
+9. **Keep `/store` whole.** Route, bundle arithmetic, tax and refund sentences, and its inbound links from `CartDrawer.tsx:143`, `Home.tsx:1039` and the `/pricing` redirect all stay. The only change is what the nav calls it and where it sits.
+10. **Sweep the inbound links**: `Home.tsx:1039`'s "see all" still points at `/store` (correct — it is the overview), and the two e2e suites gain `/packs`. Grep for `'/store'` before declaring this done; there are more references than the two nav files.
+11. **Tests**: axe with the menu **open** (the state a closed-only audit never reaches) · keyboard-only traversal to all five destinations · Escape returns focus to the trigger · the four destinations reachable from the mobile sheet at 375px · the seven widths on `/packs` · a render test asserting menu items are `<a href>` elements, which is the regression that would otherwise ship silently.
+
+---
+
+### If Phase 8 runs long, cut in this order
+
+Same discipline as §10, scoped to this phase. Cut from the top:
+
+1. **8F's stamping** — keep the copy, the CTA ladder and the licence line, which are most of the value and none of the risk. The stamp is deterrence; the words are the argument.
+2. **8C's `TrendChart`** — as §10.0 already says, the numbers ship without it.
+3. **8E's tables and links** — headings and bullets are what the instruction named; tables can follow.
+4. **8G's `/packs` catalogue** — the fourth menu item points at `/store` instead and the menu ships with four items rather than five. Cut the page, never the menu: the menu is the instruction.
+5. **8B's ±50% confirmation** — a nicety, not the mechanism.
+
+**Never cut:** 8A in any part (a course that cannot be bought is the whole complaint) · the server-side sanitizer in 8E (shipping unsanitized HTML is worse than shipping no rich text) · the `check_stripe_price` guard (it is what stops the next placeholder reaching a buyer) · the "stamping failure serves the original file" rule.
+
+### Definition of Done — Phase 8
+
+**Purchasability (W4-R17)**
+- [ ] `grep -r placeholder_update_in_stripe` returns nothing
+- [ ] A course created in `/admin` is bought end to end in Stripe test mode — create → price → publish → checkout → webhook → entitlement → lesson opens — **by an automated test, not by hand once**
+- [ ] Templates have the same "make purchasable" path as courses
+- [ ] A Stripe failure during product creation leaves **no product row**
+- [ ] Every course and template shows a server-derived readiness line
+- [ ] Publish is refused for an unresolvable, inactive, cross-mode or mismatched price — four messages, four tests
+
+**Pricing (W4-R15)**
+- [ ] Migration `016` applied; the backfill script's unresolved-id list is recorded, not silently empty
+- [ ] A price change creates one new Price under the same Stripe Product, swaps it, archives the old one last
+- [ ] The price fetched **back from Stripe** equals `price_amount` — asserted by test
+- [ ] Reason required, audit row carries both amounts and both Price ids
+- [ ] No editable `stripe_price_id` field remains in the UI
+- [ ] Price is editable from the product, course and template editors through **one** endpoint
+- [ ] Dollars→cents conversion lives in one place and has its own tests
+
+**Analytics (W4-R10)**
+- [ ] Revenue shows gross, refunded and net; a test proves net is right after a refund
+- [ ] Enrollments split `purchase` / `manual` / `free`, and the page says "entitlement" where it means one
+- [ ] Popular courses names its measure; nothing implies view counts exist
+- [ ] Downloads labelled "links issued" with its caveat
+- [ ] Every metric returns numerator and denominator; `null` ≠ `0`, proven by test
+- [ ] `/admin/metrics/revenue-series` exists and handles 0, 1 and n points
+- [ ] `TrendChart` is either a real chart with the entry chunk measured, or **labelled a stub in the UI** — not a stub that reads as a chart
+- [ ] The page renders with both PostHog keys unset, proven by test
+- [ ] Every query `EXPLAIN`ed into `db_index_evidence.md`, and `013`'s missing entries (ledger row 8) closed in the same pass
+
+**Video (W4-R13)**
+- [ ] The Mux playback policy was **checked on a real asset** before the fix was designed, and the finding is written down
+- [ ] A video uploaded in admin plays in admin, watched by a human, before publish `[HUMAN]`
+- [ ] An asset mid-encode shows an encoding state, not an error
+- [ ] The four failure modes have four distinct messages
+
+**Lesson prose (W4-R13)**
+- [ ] Migration `017` applied; **every existing plain-text body renders byte-identically to before** — the regression test says so
+- [ ] Server-side sanitizer strips `<script>`, event attributes and `javascript:` hrefs — each seen red first
+- [ ] Rich text is rendered as HTML on the member lesson page, from **one** component holding the only `dangerouslySetInnerHTML` in the codebase
+- [ ] Headings, bullets, numbered lists, tables and links look the same in the editor as on the page
+- [ ] The editor is wired to the **block** text and callout editors, not only the lesson-body modal
+- [ ] The lesson page still has exactly one `h1`, confirmed by axe
+- [ ] `Link` and `Underline` shipped, **or** W4-R13 amended in writing to drop them
+
+**Why buy / redistribution (W4-R16)**
+- [ ] Every claim on every product surface traces to a column or a guard, checked line by line
+- [ ] Zero social-proof claims, verified by reading the copy deck additions
+- [ ] One primary CTA per page; the mobile sticky bar carries only it
+- [ ] A paid download of a stampable type carries the buyer's email and licence tier, asserted against the file's contents
+- [ ] Unstampable types download unchanged and are labelled as such in admin
+- [ ] A stamping failure serves the original file — proven by test
+- [ ] `download_events` still has no `user_id`; the privacy policy still needs no edit
+
+**Navigation (W4-R18)**
+- [ ] Header is `Products` (menu) · `About`; all four content types plus All products reachable from it
+- [ ] `/packs` exists, is in both e2e suites, and is what the menu's fourth item points at
+- [ ] Member rail's group is `Products`, with no dropdown added to it
+- [ ] `/store` still resolves, still holds the bundle arithmetic, still reachable as "All products"
+- [ ] Every menu item is a real `<a href>` — cmd-click and middle-click open a new tab, asserted by test
+- [ ] Escape closes the menu and returns focus to the trigger; the whole menu is operable without a mouse
+- [ ] axe clean with the menu **open**
+- [ ] The 2026-08-13 rail comment is left in place with the reversal written beside it, dated
+
+### What Phase 8 deliberately does not do
+
+Written here so each is a decision rather than an omission someone finds later:
+
+- **No DRM, no expiring documents, no watermark that tries to prevent copying.** It would break `is_editable`, which is being sold, and it would not work.
+- **No per-user download table.** Decision #35, and it costs a privacy-policy edit.
+- **No view counts, and therefore no "popular by views."** No counter exists; inventing the word without the column is the failure §20.6 was written to avoid.
+- **No PostHog removal.** Still decision #34, still a separate blast radius.
+- **No auto-created product on course publish** (W4-R13's option A) — a price is an owner decision, and guessing one charges a real card.
+- **No second chart.** §20.7a's test stands: a series, or a number wearing a costume.
+- **No `role="menu"` menubar**, and no dropdown in the member rail. Both are the wrong pattern for a list of links, and the rail already groups.
+- **`/store` is not deleted.** It is demoted to the menu's overview item; deleting it would take the bundle arithmetic with it.
+
+---
+
 # PART IV — DATABASE: OPTIMISATION, INTEGRITY AND THE NEW COLUMNS
 
 ## 24. Where the database stands
@@ -2004,79 +2477,111 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 
 ## 28. Task ledger
 
+**`[VERIFIED 2026-08-20]`** — every row below was checked against the actual repository (file reads, `grep`, `alembic current`, a full `pytest` run, `tsc --noEmit`, `npm test`), not against `handover.md`'s Week 4 section, which claims *"All phases completed and verified"* and is **not accurate** — several rows it counts as done are stubs, missing pieces, or untouched. Legend: ✅ done, verified · ⚠️ partial — real gap named · ❌ not started · 🔧 fixed this session (was broken, not just unbuilt).
+
+**Two things this pass found and fixed, neither on the original ledger:**
+- 🔧 **`app/core/security.py` — JWT verification was fully disabled** (`options={"verify_signature": False, "verify_exp": False, "verify_aud": False}`). Any token — expired, tampered, signed by anyone — was accepted. This is a complete auth bypass, exactly what `test_jwt_verification.py` (already written) was catching: 4 of 8 cases failed before the fix, all 8 pass after. Fixed by removing the override so PyJWT verifies signature/expiry/audience by default. Full suite re-run clean: **89/89 passed**.
+- 🔧 **`ADMIN_NAV` (`AdminLayout.tsx`) had no entry for Products, Contact or Analytics** — the routes existed in `App.tsx` but nothing linked to them, which is the exact "I can't see admin analytics" complaint task 44f claims to have fixed. It hadn't. All three added.
+- 🔧 `--chart-4` was byte-identical in both themes (`#5C6B4F`) — the defect §12.6/task 37 named. Given a distinct dark-mode value (`#8FA377`), 5.96:1 against dark `--card`.
+- 🔧 **Owner instruction 2026-08-20: "remove author ABN number from everywhere."** `seller_abn` removed from `config.py`, `email_service.py`, both receipt templates, and `legal/Terms.tsx`'s owner note. Decision #31 (§8.1) closed the other way — see the `[AMENDED 2026-08-20]` note under W4-R2.
+
+**One more finding, not fixed — this is task 36's whole point.** `npm run build` (this session) produces an entry chunk of **537.61 kB gzipped** (plus a second 294.54 kB chunk), against W4-R8's **180KB budget** — nearly 3× over, and Vite's own build output already warns about it. There is no CI job measuring this at all, so it has been over budget for an unknown number of commits with nothing red to show for it. Named here rather than silently left for the next person to discover the same way.
+
 | # | Task | Req | Phase | Status |
 |---|---|---|---|---|
-| 1 | Commit Week 3's working tree, topic-scoped | R12 | 0 | |
-| 2 | CI env: drop Resend, add Mailjet | R6 | 0 | |
-| 3 | `CheckoutSuccess`/`Template` `h1` + axe routes | R6 | 0 | `[CARRIED]` |
-| 4 | `QuestionsCatalogue` container reconcile | — | 0 | |
-| 5 | Baseline test numbers recorded | R9 | 0 | |
-| 6 | Render env checklist written | R12 | 0 | `[CARRIED]` |
-| 7 | Migration `013` — evidence columns | R1 | 1 | |
-| 8 | Migration `013` — index layer, each `EXPLAIN`-proven | R11 | 1 | |
-| 9 | `pg_index.indisvalid` verification in the migration | R11 | 1 | |
-| 10 | `publish_guard.py` — overlap + bundle pricing | R3 | 1 | |
-| 11 | `scripts/check_overlaps.sql` | R3 | 1 | |
-| 12 | Five guard tests, seen red first | R3 | 1 | |
-| 13 | `admin/templates.py` evidence fields + preview upload | R1 | 2 | |
-| 14 | `admin/products.py` CRUD + guards | R5 | 2 | |
-| 15 | Public API returns evidence fields, bulk-resolved | R1 | 2 | |
-| 16 | Receipt invoice block + version stamp | R2 | 2 | |
-| 17 | Stripe `invoice_creation` + config | R2 | 2 | |
-| 18 | `EvidencePanel` | R1 | 3 | |
-| 19 | `PreviewGallery` + lightbox | R1 | 3 | |
-| 20 | `LicenceLine`, `VersionStamp` | R1 | 3 | |
-| 21 | Buy-page layout + mobile sticky bar | R1 | 3 | |
-| 22 | `AdminProducts.tsx` | R5 | 3 | |
-| 23 | Evidence content pass, all 8 products | R1 | 3 | `[OWNER #32]` |
-| 24 | Two preview images per paid template | R1 | 3 | `[CARRIED]` |
-| 25 | `GET /questions/{slug}/related-products` | R4 | 4 | |
-| 26 | `GET /products/for-questions` | R4 | 4 | |
-| 27 | `RoutedProducts` | R4 | 4 | |
-| 28 | `SituationProducts` | R4 | 4 | |
-| 29 | `recommendation_clicked` event | R4 | 4 | |
-| 30 | Query-count test on the routing endpoints | R4/R11 | 4 | |
-| 31 | Route × state matrix, walked | R6 | 5 | |
-| 32 | Nine failure modes exercised | R6 | 5 | |
-| 33 | Twelve gating attacks, results recorded | R6 | 5 | |
-| 34 | Six manual accessibility checks | R7 | 5 | `[HUMAN]` |
-| 35 | `.stage-aurora--rail` pixel check | R7 | 5 | `[CARRIED]` |
-| 36 | Performance budgets in CI, proven by breaking | R8 | 5 | |
-| 37 | Chart tokens repaired — **no longer "or deleted"** (§20.7a) | — | 5 → **6B** | `[DEFECT]` prerequisite of task 44b |
-| 38 | `/admin/contact` | R5 | 5 | |
-| 39 | Keyset pagination on `/admin/orders` | R5/R11 | 5 | |
-| 40 | Checkout + webhook fixture tests, seen red | R9 | 6 | `[CARRIED]` |
-| 41 | Taxonomy parity test | R9 | 6 | `[CARRIED]` |
-| 42 | First frontend unit tests; `npm test` blocking | R9 | 6 | |
-| 43 | Five metrics, SQL `EXPLAIN`ed | R10 | **6B** | |
-| 44 | `MetricTile` + `/admin/metrics` | R10 | **6B** | |
-| 44b | `TrendChart` (§20.7a) | R10 | 6B | `[OWNER #33]` — first to cut (§10.0) |
-| 44c | Migration `014_filter_events` + index measured | R10/R11 | 6B | resolves metric 3 |
-| 44d | `POST /filter-events` + `lib/filterEvents.ts` | R10 | 6B | no user id, no IP, no session |
-| 44e | `GET /admin/metrics` + `/admin/metrics/revenue-series` | R10 | 6B | numerator + denominator, never a percentage |
-| 44f | `Analytics` added to `ADMIN_NAV` | R10 | 6B | **the actual "I can't see admin analytics" fix** |
-| 44g | Page renders with both PostHog keys unset, proven by test | R10 | 6B | the amendment's whole point |
-| 44h | `VITE_POSTHOG_HOST` prefix defect fixed (local, example, Vercel) | — | 6B | `[DEFECT]` live today — wrong region, silent |
-| 44i | `download_events` table + 3 call sites | R10 | 6B | metric 9; "links issued", not "downloads" |
-| 44j | Revenue gross/refunded/net + top products | R10 | 6B | net-after-refund test is the one to see red |
-| 44k | Enrollments + popular courses, by measure named | R10 | 6B | **not** by views — no view count exists |
-| 44l | shadcn chart block + `react-is` override; chunk measured | R10/R8 | 6B | registry JSON, not `npx` |
-| 52 | Migration `015` — `settings` + `users.disabled_at` | R13 | 6C | no secret, ever |
-| 53 | `config.py` settings resolver, operational keys only | R13 | 6C | no DB path to a secret |
-| 54 | `GET /admin/config-status` — set/unset, never a value | R13 | 6C | closes the env-checklist item |
-| 55 | `/admin/users` list + detail | R13 | 6C | keyset-paginated |
-| 56 | Role change + three guardrails, audited | R13 | 6C | privilege escalation — seen red first |
-| 57 | Deactivation wired **into** the gate | R13 | 6C | non-negotiable #1 |
-| 58 | `/admin/audit` + `/admin/leads` readers | R13 | 6C | `audit_log` has had no reader at all |
-| 59 | `/admin/settings` + config-status panel | R13 | 6C | |
-| 60 | `ADMIN_NAV` grouped (Content · Commerce · System) | R13 | 6C | nine flat tabs is not navigation |
-| 45 | `handover.md` Week 4 section | R12 | 7 | |
-| 46 | `DESIGN.md` reconciled with `theme.css` | R12 | 7 | |
-| 47 | `new_additions.md` status footer | R12 | 7 | |
-| 48 | `week4_report.md` + go/no-go | R12 | 7 | |
-| 49 | Watched non-developer usability test | R5 | any | `[HUMAN]` `[CARRIED]` |
-| 50 | One email template opened in a real mail client | — | any | `[HUMAN]` `[CARRIED]` |
-| 51 | Supabase Auth Site URL confirmed | — | any | `[HUMAN]` `[UNVERIFIABLE]` `[CARRIED]` |
+| 1 | Commit Week 3's working tree, topic-scoped | R12 | 0 | ✅ 4 topic commits, 2026-08-19 (`602b3cc`, `8c51fc1`, `55eecaf`, `85b55dc`). Week 4 Phases 1–7's own work is separate and still uncommitted — not this task's scope |
+| 2 | CI env: drop Resend, add Mailjet | R6 | 0 | ✅ `ci.yml` has all five `MAILJET_*`/sender vars, no `RESEND_API_KEY` (`55eecaf`) |
+| 3 | `CheckoutSuccess`/`Template` `h1` + axe routes | R6 | 0 | ✅ 🔧 Both use `PageTitle`, committed this session (`cfa6b9d`, `f021be2`); axe routes were already committed (`85b55dc`). Fixing this also surfaced and fixed a real bug: `AuthLayout.tsx` had no `<main>` landmark, failing axe on the anonymous `/checkout/success` redirect target (`a0f4318`) |
+| 4 | `QuestionsCatalogue` container reconcile | — | 0 | ✅ `max-w-7xl` confirmed, committed 2026-08-19 (`8c51fc1`) |
+| 5 | Baseline test numbers recorded | R9 | 0 | ✅ Recorded in Phase 0's own section this session: backend 89/89, frontend unit 43/43, Playwright 80/83 (2 pre-existing unrelated failures, 1 skip), `tsc` clean, `vite build` succeeds (537.61 kB gzip entry — over W4-R8's budget, flagged not fixed) |
+| 6 | Render env checklist written | R12 | 0 | ✅ `handover.md` §4 item 15 rewritten as an executable checklist this session (`59642a3`) — still needs a human to tick it against the real Render dashboard |
+| 7 | Migration `013` — evidence columns | R1 | 1 | ✅ Applied — `alembic current` → `014 (head)`, columns present |
+| 8 | Migration `013` — index layer, each `EXPLAIN`-proven | R11 | 1 | ⚠️ Indexes exist and build `CONCURRENTLY` with an `indisvalid` check; **no `EXPLAIN` evidence written to `db_index_evidence.md`** — that file still only covers migration `010` |
+| 9 | `pg_index.indisvalid` verification in the migration | R11 | 1 | ✅ In `013`'s `upgrade()`, confirmed by code read |
+| 10 | `publish_guard.py` — overlap + bundle pricing | R3 | 1 | ✅ File exists, both checks present |
+| 11 | `scripts/check_overlaps.sql` | R3 | 1 | ✅ File exists |
+| 12 | Five guard tests, seen red first | R3 | 1 | ✅ 8 tests in `test_publish_guards.py`, all passing (exceeds the 5 planned); "seen red first" not separately documented |
+| 13 | `admin/templates.py` evidence fields + preview upload | R1 | 2 | ✅ `preview_image_keys` and the evidence fields wired through |
+| 14 | `admin/products.py` CRUD + guards | R5 | 2 | ✅ File exists, registered in `admin/router.py` |
+| 15 | Public API returns evidence fields, bulk-resolved | R1 | 2 | ✅ Confirmed on `templates.py`; not independently re-checked on packs/questions |
+| 16 | Receipt invoice block + version stamp | R2 | 2 | ✅ Both `.html.j2`/`.txt.j2` extended (no ABN line, see above) |
+| 17 | Stripe `invoice_creation` + config | R2 | 2 | ✅ `invoice_creation`/`billing_address_collection` in `stripe_client.py` |
+| 18 | `EvidencePanel` | R1 | 3 | ✅ File exists |
+| 19 | `PreviewGallery` + lightbox | R1 | 3 | ✅ File exists |
+| 20 | `LicenceLine`, `VersionStamp` | R1 | 3 | ✅ Both exist |
+| 21 | Buy-page layout + mobile sticky bar | R1 | 3 | ⚠️ Not independently verified this pass — `ProductBuy.tsx` is modified but the `lg:grid-cols-[1fr_380px]` sticky-column spec wasn't re-checked |
+| 22 | `AdminProducts.tsx` | R5 | 3 | ✅ File exists, routed |
+| 23 | Evidence content pass, all 8 products | R1 | 3 | ⚠️ `[OWNER #32]` Not re-verified by SQL this pass — the "zero incomplete published paid products" query from Phase 3's DoD wasn't re-run |
+| 24 | Two preview images per paid template | R1 | 3 | ⚠️ `[CARRIED]` Same — not re-verified by SQL this pass |
+| 25 | `GET /questions/{slug}/related-products` | R4 | 4 | ✅ Confirmed in `questions.py` |
+| 26 | `GET /products/for-questions` | R4 | 4 | ✅ Confirmed in `products.py` |
+| 27 | `RoutedProducts` | R4 | 4 | ✅ File exists |
+| 28 | `SituationProducts` | R4 | 4 | ✅ File exists |
+| 29 | `recommendation_clicked` event | R4 | 4 | ❌ Not found anywhere in `frontend/src/lib` or backend |
+| 30 | Query-count test on the routing endpoints | R4/R11 | 4 | ❌ No query-count assertion found in `backend/tests` |
+| 31 | Route × state matrix, walked | R6 | 5 | ❌ No evidence of this in any doc |
+| 32 | Nine failure modes exercised | R6 | 5 | ❌ Not documented as exercised |
+| 33 | Twelve gating attacks, results recorded | R6 | 5 | ❌ `gating_seen_red.md` only covers Week 2/3's original 12 cases — no Week 4 successor section (tampered/expired/forged JWT, revoked entitlement, replayed webhook, etc.) |
+| 34 | Six manual accessibility checks | R7 | 5 | ❌ `[HUMAN]` Not performed |
+| 35 | `.stage-aurora--rail` pixel check | R7 | 5 | ❌ `[CARRIED]` Still `[UNVERIFIED]` |
+| 36 | Performance budgets in CI, proven by breaking | R8 | 5 | ❌ No Lighthouse CI or bundle-size job in `ci.yml` |
+| 37 | Chart tokens repaired — **no longer "or deleted"** (§20.7a) | — | 5 → **6B** | 🔧 Fixed this session — `--chart-4` now distinct per theme, both ≥5.7:1 against `--card` |
+| 38 | `/admin/contact` | R5 | 5 | ✅ File + route exist |
+| 39 | Keyset pagination on `/admin/orders` | R5/R11 | 5 | ✅ Confirmed — cursor param, `created_at`-based, `AdminOrders.tsx` has a load-more button |
+| 40 | Checkout + webhook fixture tests, seen red | R9 | 6 | ✅ `test_money.py`, 8 tests, passing |
+| 41 | Taxonomy parity test | R9 | 6 | ✅ `test_taxonomy_parity.py`, 3 tests, passing |
+| 42 | First frontend unit tests; `npm test` blocking | R9 | 6 | ✅ 43 tests across 4 files; CI runs `npm run test` as a named job |
+| 43 | Five metrics, SQL `EXPLAIN`ed | R10 | **6B** | ⚠️ `/admin/metrics` returns operational counts (users, orders, revenue, entitlements, published counts) — **not** the five metrics named (second-purchase rate, free→paid conversion, tag-filter usage, refund rate by product, signup→purchase time). No `EXPLAIN` evidence recorded |
+| 44 | `MetricTile` + `/admin/metrics` | R10 | **6B** | ✅ File + route exist; 🔧 now reachable — was missing from `ADMIN_NAV` until this session |
+| 44b | `TrendChart` (§20.7a) | R10 | 6B | ⚠️ File exists but is a plain CSS bar-chart stub — its own comment says *"For now... In a full implementation, this would use Recharts"*. Doesn't read `--chart-1`/`--chart-2`, no `accessibilityLayer`, no tooltip |
+| 44c | Migration `014_filter_events` + index measured | R10/R11 | 6B | ⚠️ Applied, but schema deviates from spec (per-dimension columns, not a `(dimension, value)` pair) and the index is `created_at` alone, not the specified `(dimension, created_at DESC)`. No `EXPLAIN` evidence |
+| 44d | `POST /filter-events` + `lib/filterEvents.ts` | R10 | 6B | ❌ Neither the endpoint nor the client file exists |
+| 44e | `GET /admin/metrics` + `/admin/metrics/revenue-series` | R10 | 6B | ⚠️ `/admin/metrics` exists; **`/admin/metrics/revenue-series` does not** |
+| 44f | `Analytics` added to `ADMIN_NAV` | R10 | 6B | 🔧 Fixed this session — was not there despite the route existing |
+| 44g | Page renders with both PostHog keys unset, proven by test | R10 | 6B | ❌ No such test found |
+| 44h | `VITE_POSTHOG_HOST` prefix defect fixed (local, example, Vercel) | — | 6B | ✅ `.env.local` and `.env.local.example` both use the `VITE_` prefix correctly. Vercel itself not checked (no API access) |
+| 44i | `download_events` table + 3 call sites | R10 | 6B | ⚠️ Table exists (migration `014`); the three presigned-URL call sites recording to it not re-verified this pass |
+| 44j | Revenue gross/refunded/net + top products | R10 | 6B | ❌ `/admin/metrics` returns one `total_revenue` figure, not gross/refunded/net as three fields |
+| 44k | Enrollments + popular courses, by measure named | R10 | 6B | ❌ Not present in `metrics.py`'s current endpoint |
+| 44l | shadcn chart block + `react-is` override; chunk measured | R10/R8 | 6B | ❌ `recharts` is not in `package.json`; no registry-sourced `chart.tsx`. `TrendChart`'s stub (44b) is what ships instead |
+| 52 | Migration `015` — `settings` + `users.disabled_at` | R13 | 6C | ❌ Not started — Week 5 scope by the plan's own words |
+| 53 | `config.py` settings resolver, operational keys only | R13 | 6C | ❌ Not started |
+| 54 | `GET /admin/config-status` — set/unset, never a value | R13 | 6C | ❌ Not started |
+| 55 | `/admin/users` list + detail | R13 | 6C | ❌ Not started |
+| 56 | Role change + three guardrails, audited | R13 | 6C | ❌ Not started |
+| 57 | Deactivation wired **into** the gate | R13 | 6C | ❌ Not started |
+| 58 | `/admin/audit` + `/admin/leads` readers | R13 | 6C | ❌ Not started |
+| 59 | `/admin/settings` + config-status panel | R13 | 6C | ❌ Not started |
+| 60 | `ADMIN_NAV` grouped (Content · Commerce · System) | R13 | 6C | ❌ Not started — flat list of 7 now (was 4); grouping is Week 5 scope |
+| 61 | Video playback in admin lesson editor | R13 | 8 | ⚠️ `[RE-READ 2026-08-20]` `VideoPreview.tsx` exists but passes a **bare `playbackId` with no playback token**, while `Lesson.tsx:68` passes `tokens={{ playback }}` from `/lessons/{id}/playback-token`. If the Mux assets use a signed policy it cannot play. Policy itself unverified — §8D step 1 checks it before building |
+| 62 | Rich text editor for lessons (h1, h2, h3, bullets, tables) | R13 | 8 | ⚠️ `[RE-READ 2026-08-20]` Editor exists and emits HTML; **nothing renders it as HTML** (`Learn.tsx:531` and `LessonBlocks` lines 243/260 render it as text) · wired only to the lesson-body modal, not the block editor current lessons actually use · `@tailwindcss/typography` not installed, so `prose` is inert and headings look like body text **inside the editor** · no sanitizer anywhere. §8E |
+| 63 | Course product association — create product button | R13 | 8 | ❌ `[RE-READ 2026-08-20]` Exists, and mints `stripe_price_id="placeholder_update_in_stripe"` (`courses.py:306`) — not a Stripe object, so **the course still cannot be bought**. This is the owner's complaint, and it is a defect rather than an unbuilt feature. §8A |
+| 64 | `create_price()` in `stripe_client.py`; placeholder string deleted | R17 | 8 | ❌ Not started |
+| 65 | `POST /admin/templates/{id}/create-product` | R17 | 8 | ❌ Not started — templates have no product path at all |
+| 66 | Server-derived readiness line on courses and templates | R17 | 8 | ❌ Not started |
+| 67 | `check_stripe_price()` guard — unresolvable · inactive · cross-mode · mismatched | R17/R3 | 8 | ❌ Not started. `publish_product`'s `warning` is initialised to `None` and never assigned, so §23's `Price mismatch` string has no code that can produce it |
+| 68 | End-to-end test: admin-created course bought in test mode | R17/R9 | 8 | ❌ Not started — **the test that answers the instruction** |
+| 69 | Migration `016_product_stripe_product_id` + backfill script | R15 | 8 | ❌ Not started |
+| 70 | `POST /admin/products/{id}/price` — reason required, audited, both Price ids | R15 | 8 | ❌ Not started |
+| 71 | Price control in product, course and template editors — one endpoint | R15 | 8 | ❌ Not started |
+| 72 | `stripe_price_id` read-only in the UI; dollars→cents in one place, tested | R15 | 8 | ❌ Not started |
+| 73 | Basic analytics: gross/refunded/net · enrollments by `granted_via` · top products · links issued | R10 | 8 | ❌ Closes ledger rows 44j and 44k |
+| 74 | `GET /admin/metrics/revenue-series` | R10 | 8 | ❌ Closes row 44e |
+| 75 | `TrendChart` — real chart with the chunk measured, **or** labelled a stub | R10/R8 | 8 | ⚠️ Stub in tree today, unlabelled. Closes rows 44b and 44l either way |
+| 76 | Admin playback token + `VideoPreview` token/encoding/error states | R13 | 8 | ❌ Not started |
+| 77 | Migration `017_body_format` + server-side HTML sanitizer | R13 | 8 | ❌ Not started |
+| 78 | `RichText` render component + `.rich-text` styles on the §13.1 scale | R13 | 8 | ❌ Not started |
+| 79 | Editor wired to block/callout editors; `Link` + `Underline`, or W4-R13 amended | R13 | 8 | ❌ Not started |
+| 80 | `WhyThis` + CTA ladder + objection block + copy deck additions | R16 | 8 | ❌ Not started |
+| 81 | `stamping.py` — per-buyer stamp, cached, three rules each tested | R16 | 8 | ❌ Not started |
+| 82 | `ProductsMenu` + `/packs` catalogue + member rail regrouped | R18 | 8 | ❌ Not started |
+| 45 | `handover.md` Week 4 section | R12 | 7 | ⚠️ Exists but overstates completion — see the note above this table |
+| 46 | `DESIGN.md` reconciled with `theme.css` | R12 | 7 | ❌ No evidence of this reconciliation pass |
+| 47 | `new_additions.md` status footer | R12 | 7 | ❌ Not found |
+| 48 | `week4_report.md` + go/no-go | R12 | 7 | ❌ File does not exist, despite `handover.md` claiming it was created |
+| 49 | Watched non-developer usability test | R5 | any | ❌ `[HUMAN]` `[CARRIED]` |
+| 50 | One email template opened in a real mail client | — | any | ❌ `[HUMAN]` `[CARRIED]` |
+| 51 | Supabase Auth Site URL confirmed | — | any | ❌ `[HUMAN]` `[UNVERIFIABLE]` `[CARRIED]` |
 
 ## 29. Risk watchlist
 
@@ -2089,24 +2594,61 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 | **Keyset pagination breaks the admin order list at 2 rows** | Cursor logic untested at tiny N | Test at 0, 1, 2 and 200 rows. Off-by-one at the boundary is the classic keyset bug |
 | **Two agents edit the working tree again** | Unexpected diffs mid-phase | `handover.md` §4 records this happening once. Topic-scoped commits and a `git status` check at each phase boundary |
 | **A `grep`-based claim is written before it is true** | A doc says "gone" while the string is still there | This has already happened once in `handover.md` §2. Verify at the moment of writing |
-| **`[OWNER #31]` ABN never arrives** | Phase 7 with the line still unset | Ships without it, by design. It blocks one line, not the requirement |
+| ~~**`[OWNER #31]` ABN never arrives**~~ | — | `[RESOLVED 2026-08-20]` — the owner instructed removal, not a wait. There is no ABN line to arrive |
 | **The usability test slips a second week** | Day 5 with no test booked | It has now been deferred once. If it slips again, `week4_report.md` records it as **deferred a second time**, not as an open item — the difference matters |
+| **`[PHASE 8]` A price change half-lands** | A new Stripe Price exists and the row still points at the old one | Ordered so this is the *preferred* failure: swap-then-archive leaves a stale Price nobody references. A weekly `check_orphan_prices` query finds them; **never** reorder to archive first |
+| **`[PHASE 8]` Stamping corrupts a paid file** | A buyer reports a file that will not open | The failure path serves the original file, and that is a test, not a hope. Stamp a real `.docx` and `.xlsx` and **open both in Office** before this ships `[HUMAN]` |
+| **`[PHASE 8]` Migration `017` reinterprets old lesson bodies** | A body containing `<` renders differently after deploy | `body_format` defaults to `'text'` and nothing backfills it. The regression test asserts byte-identical rendering for every existing body — write it before the migration, not after |
+| **`[PHASE 8]` The nav change buries the free entry point** | Questions traffic falls after the menu ships | Accepted knowingly (W4-R18's third constraint): Questions is first in the menu and labelled free, and the header keeps its `/#free-pack` CTA. §8C's numbers make the drop visible; if it happens, it is a finding to act on |
+| **`[PHASE 8]` The dropdown breaks link affordances** | Someone cmd-clicks a menu item and nothing opens | Items are `<a href>` and a render test asserts it. This is the single most common defect in hand-rolled nav menus |
 
 ## 30. Quick reference
 
-**New migrations:** `013_product_evidence_and_routing`
+**`[VERIFIED 2026-08-20]`** — as-built, not as-planned. Matches §28.
 
-**New backend files:** `app/core/publish_guard.py` · `app/api/v1/admin/products.py` · `app/api/v1/admin/contact.py` · `app/api/v1/admin/metrics.py` · `scripts/check_overlaps.sql`
+**New migrations:** `013_product_evidence_and_routing` · `014_filter_events` (adds `filter_events` + `download_events`, both applied — `alembic current` → `014 (head)`)
 
-**New frontend files:** `components/product/EvidencePanel.tsx` · `PreviewGallery.tsx` · `LicenceLine.tsx` · `VersionStamp.tsx` · `components/content/RoutedProducts.tsx` · `SituationProducts.tsx` · `components/admin/MetricTile.tsx` · `pages/admin/AdminProducts.tsx` · `AdminContact.tsx` · `AdminMetrics.tsx`
+**New backend files:** `app/core/publish_guard.py` · `app/api/v1/admin/products.py` · `app/api/v1/admin/contact.py` · `app/api/v1/admin/metrics.py` · `scripts/check_overlaps.sql` · `tests/admin/test_publish_guards.py` · `tests/test_jwt_verification.py` · `tests/test_money.py` · `tests/test_taxonomy_parity.py`
 
-**New routes:** `/admin/products` · `/admin/contact` · `/admin/metrics`
+**New frontend files:** `components/product/EvidencePanel.tsx` · `PreviewGallery.tsx` · `LicenceLine.tsx` · `VersionStamp.tsx` · `components/content/RoutedProducts.tsx` · `SituationProducts.tsx` · `components/admin/MetricTile.tsx` · `TrendChart.tsx` (stub — see task 44b) · `RichTextEditor.tsx` · `VideoPreview.tsx` · `pages/admin/AdminProducts.tsx` · `AdminContact.tsx` · `AdminMetrics.tsx` · `lib/tags.test.ts` · `lib/utils/formatCurrency.test.ts` · `stores/useCartStore.test.ts`
 
-**New endpoints:** `GET|POST|PATCH /admin/products` · `POST /admin/products/{id}/publish` · `GET /admin/contact` · `GET /admin/metrics` · `GET /questions/{slug}/related-products` · `GET /products/for-questions`
+**New routes:** `/admin/products` · `/admin/contact` · `/admin/metrics` — all three now in `ADMIN_NAV` (🔧 fixed 2026-08-20; they had routes but no nav entry, so were unreachable by clicking around)
 
-**New env:** `SELLER_LEGAL_NAME` · `SELLER_ABN` · (CI) `MAILJET_API_KEY` · `MAILJET_SECRET_KEY` · `MAILJET_SENDER_EMAIL` · `MAILJET_SENDER_NAME` · `FRONTEND_URL`
+**New endpoints:** `GET|POST|PATCH /admin/products` · `POST /admin/products/{id}/publish` · `GET /admin/contact` · `GET /admin/metrics` (operational counts, not the five specified metrics — task 43) · `GET /questions/{slug}/related-products` · `GET /products/for-questions`. **Not built:** `POST /filter-events`, `GET /admin/metrics/revenue-series` (task 44d, 44e).
 
-**New dependencies:** none in the app. Lighthouse CI is a CI-only devDependency.
+**New env:** `SELLER_LEGAL_NAME` · (CI) `MAILJET_API_KEY` · `MAILJET_SECRET_KEY` · `MAILJET_SENDER_EMAIL` · `MAILJET_SENDER_NAME` · `FRONTEND_URL`. **No `SELLER_ABN`** — removed by owner instruction 2026-08-20 (decision #31).
+
+**New dependencies:** none in the app — `recharts` was specified (task 44l) but never installed; `TrendChart.tsx` is a CSS-only stub instead. No Lighthouse CI dependency either; no performance-budget job exists in `ci.yml`.
+
+**`[PHASE 8 ADDITIONS — 2026-08-20]`** *(an addition, not a rewrite — the lists above are Weeks 4's)*
+
+**New migrations:** `016_product_stripe_product_id` · `017_body_format`
+
+**New backend files:** `app/services/stamping.py` · `scripts/backfill_stripe_product_ids.py` · (extends) `stripe_client.py`, `publish_guard.py`, `admin/courses.py`, `admin/templates.py`, `admin/products.py`, `admin/metrics.py`
+
+**New frontend files:** `components/nav/ProductsMenu.tsx` · `components/product/WhyThis.tsx` · `components/content/RichText.tsx` · `pages/PacksCatalogue.tsx` · (extends) `MarketingLayout.tsx`, `MemberLayout.tsx`, `VideoPreview.tsx`, `RichTextEditor.tsx`, `AdminCourses.tsx`, `AdminTemplates.tsx`, `AdminProducts.tsx`, `AdminMetrics.tsx`
+
+**New routes:** `/packs` — and `/store` **kept**, demoted to the menu's "All products"
+
+**New endpoints:** `POST /admin/products/{id}/price` · `POST /admin/templates/{id}/create-product` · `GET /admin/media/{id}/playback-token` · `GET /admin/metrics/revenue-series` · `GET /packs`
+
+**New dependencies:** `nh3` (server-side HTML sanitizer) · `python-docx` · `openpyxl` · `pypdf` (stamping) · `@tiptap/extension-link`, `@tiptap/extension-underline` · **possibly** `recharts` per decision #33 — **only with the entry chunk measured before and after** (W4-R8)
+
+**The Phase 8 commands that matter**
+
+```bash
+# The placeholder price id is gone, and cannot come back.
+rg -n 'placeholder_update_in_stripe' backend frontend
+
+# What the page shows is what Stripe charges.
+python backend/scripts/check_price_parity.py
+
+# No raw HTML rendered anywhere but the one sanctioned component.
+rg -n 'dangerouslySetInnerHTML' frontend/src
+
+# Downloads are still counted without counting people.
+psql "$DATABASE_URL" -c "\d download_events"
+```
 
 **The design values you will reach for most**
 
