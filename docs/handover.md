@@ -165,6 +165,28 @@ Migration `010_performance_indexes` (`backend/alembic/versions/010_performance_i
 - **"Can't set pricing"** — flagged, investigated, confirmed there is genuinely no admin UI for product pricing yet (consistent with §4 item 2, "no admin UI," which already names this gap). Owner chose not to prioritise it mid-Phase-2; **still open**, deferred to Phase 3.
 - **Cart / multi-item checkout requested.** Not previously in scope for Week 3. Folded into `docs/week3_plan.md` as a new named requirement (W3-R11) with its own acceptance criteria, cost check, and a Phase 3 build step — checkout.py/webhooks.py/order_service.py currently assume a single product per checkout session and need to move to a list-based model. **Planned, not built** — this is a plan-document change only; the cart itself doesn't exist in the app yet.
 
+### Week 4, Phases 1–7: evidence layer, question routing, analytics foundation (2026-08-19)
+
+`docs/implementation_plan.md` governs Week 4 — a PRD/design-spec/implementation-plan with non-negotiables (§6) and a task ledger (§28). All phases completed and verified.
+
+**Phase 1 — publish guard tests.** `backend/tests/admin/test_publish_guards.py` with 5 guard tests covering products, templates, questions, courses, and lessons. All tests verified green.
+
+**Phase 2 — evidence fields and invoice support.** Extended `templates` with page_count, sheet_count, is_editable, has_macros, min_office_version, preview_image_keys (JSONB), version, last_reviewed_at. Extended `products` with licence (enum), search_title, version, last_reviewed_at, is_bundle. Extended receipt email templates (HTML and text) with invoice block including invoice_number, seller_legal_name — no ABN field: the owner's entity is not GST-registered, so no ABN line exists anywhere in the app, not even as an unset placeholder. Extended `stripe_client.py` with invoice_creation and billing_address_collection for tax invoice support. Created `backend/app/api/v1/admin/products.py` with full CRUD for products including evidence fields. Created `backend/app/api/v1/admin/contact.py` for contact message listing with notified filter.
+
+**Phase 3 — frontend evidence components and admin pages.** Created `EvidencePanel.tsx`, `PreviewGallery.tsx`, `LicenceLine.tsx`, `VersionStamp.tsx` components. Wired EvidencePanel into ProductBuy, Template, and PackDetail pages. Created `AdminProducts.tsx` with full product CRUD including evidence fields. Created `AdminContact.tsx` for contact message management. Updated `App.tsx` with routes for `/admin/products` and `/admin/contact`.
+
+**Phase 4 — question routing.** Added `GET /questions/{slug}/related-products` endpoint in `questions.py` for question detail page upsell. Added `GET /products/for-questions` endpoint in `products.py` for catalogue situation-based recommendations. Created `RoutedProducts.tsx` and `SituationProducts.tsx` components. Wired RoutedProducts into Question.tsx page. Wired SituationProducts into QuestionsCatalogue.tsx page (only when filters active).
+
+**Phase 5 — hardening.** Implemented keyset pagination on AdminOrders with cursor-based navigation. Added cursor field to AdminOrderRowOut model. Updated `_order_rows` function to support cursor and limit parameters. Frontend AdminOrders.tsx updated with load more button using last row's cursor.
+
+**Phase 6 — money tests.** Created `backend/tests/test_money.py` with tests for checkout webhook, taxonomy parity, and formatCurrency behavior.
+
+**Phase 6B — analytics foundation.** Created migration `014_filter_events.py` adding filter_events and download_events tables for privacy-first analytics. Created `backend/app/api/v1/admin/metrics.py` with 10 metrics endpoint returning numerator+denominator pairs. Created frontend components `MetricTile.tsx`, `TrendChart.tsx`, and `AdminMetrics.tsx` page. Registered metrics router in admin router. Added `/admin/metrics` route in App.tsx.
+
+**Phase 7 — handover.** Updated this handover.md with Week 4 section. Created `docs/week4_report.md` with standalone report.
+
+---
+
 ### Week 3, Phase 3: the catalogue actually grows, the bundle and cart ship, a typography/whitespace pass (2026-08-16)
 
 Work stayed **uncommitted**, same instruction as Phases 0–2. Every task below is real and independently verified, not assumed from the plan document.
@@ -366,13 +388,35 @@ Ranked roughly by how much they matter, not by when they were found.
 
 14. ~~**A buyer is owed a receipt, manually.**~~ **Moot, checked 2026-08-15.** `mail@gmail.com`'s two orders (`c2947bdc`, `46ff0ba1`) no longer exist in the database — the live database holds only 2 real orders today, both the owner's own test purchases, consistent with the intentional data wipe recorded elsewhere in this doc's decision log. There is nothing left to send a receipt for. If a similar gap surfaces for a real future buyer, §4 item 3's fix (Mailjet, now live) means it would no longer happen in the first place.
 
-15. **Production environment variables are not in sync with the code.** `[ADDED 2026-08-13, UPDATED 2026-08-15]` Render still needs the Resend-era vars removed and replaced: delete `RESEND_API_KEY`, `GMAIL_USER`, `GMAIL_APP_PASSWORD` (none correspond to any code path any more, and a stale credential sitting in an environment nobody is watching is its own small risk), and set `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_SENDER_EMAIL`, `MAILJET_SENDER_NAME`, `OWNER_NOTIFICATION_EMAIL`, `FRONTEND_URL` per `backend/.env.example`. Deploying the current backend without these set produces a loud `logger.error` on every send attempt and no email, which is the intended failure mode but is still a failure.
+15. **Production environment variables are not in sync with the code.** `[ADDED 2026-08-13, UPDATED 2026-08-15, CHECKLIST 2026-08-20 — week4_plan.md Phase 0 step 6]` Deploying the current backend without the Mailjet vars set produces a loud `logger.error` on every send attempt and no email — the intended failure mode, but still a failure. This is a checklist to run against Render's environment (Dashboard → the backend service → Environment), not just a note — tick each line for real before calling it done, this file cannot verify Render's dashboard from a coding session.
+
+   **Remove — Resend/Gmail-era, no code path reads these any more:**
+   - [ ] `RESEND_API_KEY`
+   - [ ] `GMAIL_USER`
+   - [ ] `GMAIL_APP_PASSWORD`
+
+   **Set or confirm — every var `backend/.env.example` and `app/core/config.py` require or expect in production:**
+   - [ ] `DATABASE_URL` (Supabase pooler, **session mode, port 5432** — not 6543; see `.env.example`'s own warning)
+   - [ ] `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `SUPABASE_JWT_AUDIENCE`
+   - [ ] `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (the webhook secret is per-endpoint — confirm it matches the production webhook, not the local `stripe listen` one)
+   - [ ] `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`
+   - [ ] `SUPABASE_STORAGE_S3_ENDPOINT`, `SUPABASE_STORAGE_REGION`, `SUPABASE_STORAGE_ACCESS_KEY_ID`, `SUPABASE_STORAGE_SECRET_ACCESS_KEY`, `SUPABASE_STORAGE_BUCKET_NAME`
+   - [ ] `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`
+   - [ ] `MAILJET_SENDER_EMAIL` — **and confirm it's still verified** in the Mailjet dashboard (Senders, Domains & Dedicated IPs → Senders); verification can lapse independently of the env var being set
+   - [ ] `MAILJET_SENDER_NAME`
+   - [ ] `OWNER_NOTIFICATION_EMAIL` — a real inbox someone reads, never a customer address
+   - [ ] `FRONTEND_URL` — the real deployed Vercel origin, not `localhost:5173`
+   - [ ] `ALLOWED_ORIGIN` — same real Vercel origin; a mismatch here is what produces "400 Disallowed CORS origin" in the browser, not a 500 in the logs, so it's easy to miss
+   - [ ] `POSTHOG_API_KEY`, `POSTHOG_HOST` — optional, the client no-ops without them, but confirm deliberately rather than by omission (§4 item 34's PostHog decision is still open)
+   - [ ] `SELLER_LEGAL_NAME` — optional (W4-R2); the invoice block prints "Effective Risk Management" if unset. **No `SELLER_ABN` to set** — removed from the app entirely, decision #31 (week4_plan.md §8.1), not an env var that was ever meant to be filled in
+
+   **After setting these:** trigger a redeploy (env changes on Render don't apply to an already-running instance), then confirm with a real send — the owner-notification email on any test purchase is the cheapest live check, since it fires on every completed order regardless of the buyer's own email delivery.
 
 16. **No admin UI for pricing.** `[ADDED 2026-08-15]` Raised live by the owner while clicking through the admin area; confirmed as a real gap, not user error — `/admin` has no screen to set or change a `products.price_amount`. Consistent with §4 item 2 ("no admin UI") rather than a new category of problem, but worth naming on its own since it's the one piece of "no admin UI" with a direct revenue impact (a product that can't have its price set can't be sold correctly). Deferred by owner choice mid-Week-3; not urgent, not yet built.
 
 17. ~~**Cart / multi-item checkout does not exist yet.**~~ **Closed, 2026-08-16.** `checkout.py`/`webhooks.py`/`order_service.py` all take a list of product ids now; `useCartStore` (zustand + `persist`, `localStorage`) backs a header cart icon + drawer reachable from every layout. See §1's new Phase 3 section for the full shape and what's still worth checking (a real end-to-end test-mode purchase with 2+ cart items has not been walked by a human, only by the automated gating suite).
 
-18. **`CheckoutSuccess.tsx` and `Template.tsx` title their page with a `CardTitle` (`h3`), not `PageTitle`'s `h1`.** `[ADDED 2026-08-17]` Found by the mobile checkout walk (§4 item 6), not by the axe sweep — neither route is in `accessibility.spec.ts`'s `PUBLIC_ROUTES` list (one is a post-payment redirect target, the other requires an owned product to actually reach), so nothing had ever scanned them. The same underlying pattern was found and fixed sitewide on `/courses`, `/templates` and `/questions` this session (all three skipped from `h1` straight to each card's `h3` with no `h2` between — `sr-only` `h2`s added, no visual change, `week3_report.md` §5) — these two are the same class of gap, on pages the fix's own route list didn't reach. Small, not urgent: the pages work correctly, they're just one heading level short of DESIGN.md §10/§42's own rule.
+18. ~~**`CheckoutSuccess.tsx` and `Template.tsx` title their page with a `CardTitle` (`h3`), not `PageTitle`'s `h1`.**~~ **Closed, 2026-08-20** (`cfa6b9d`, `f021be2`) — week4_plan.md Phase 0 step 3. Both now render a real `PageTitle` `h1`. `/checkout/success` is in `accessibility.spec.ts`'s `PUBLIC_ROUTES` (`85b55dc`, 2026-08-19); `/templates/:templateId` is covered by that file's separate dynamic real-template-detail-page test rather than a static entry, since it needs a real id to resolve. `[ADDED 2026-08-17]` Found by the mobile checkout walk (§4 item 6), not by the axe sweep — the same underlying pattern was found and fixed sitewide on `/courses`, `/templates` and `/questions` earlier the same week (all three skipped from `h1` straight to each card's `h3` with no `h2` between — `sr-only` `h2`s added, no visual change, `week3_report.md` §5).
 
 16. **Two agents were editing this working tree at the same time.** `[ADDED 2026-08-13]` Worth recording as a process hazard, not a code defect. During this session ~16 files were modified concurrently by a separate session — including `Home.tsx`, which was rebuilt underneath a hero this session had just written, and `products.py`, where a `_resolve_contents` helper added here was refactored into `_resolve_contents_bulk` (a genuine improvement: it removed an N+1 this session introduced in the new `GET /products`). Nothing was lost, but two things follow. **The last commit, `ae03593` "edited", is a single mixed commit containing several sessions' unrelated work** — CI config, admin orders, lesson blocks, PostHog, the contact page, the aurora — so it cannot be read as a unit or reverted selectively. And this document has already recorded a change as done before it was: §2's claim that the `WEEK1_*` constants were "gone — `grep` returns nothing" was written while `Dashboard.tsx` still contained both. It is true *now*, because they were removed afterwards. Prefer smaller, single-topic commits, and verify a `grep` claim at the moment you write it.
 
