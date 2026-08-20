@@ -13,7 +13,7 @@ from app.db.models.lesson_block import LessonBlock, LessonBlockType
 from app.db.models.module_question import ModuleQuestion
 from app.db.models.template import Template
 from app.db.models.media import Media, MediaStatus
-from app.db.models.product import Product, ProductContent
+from app.db.models.product import Product, ProductContent, Licence
 from app.db.models.order import Order, OrderItem, OrderStatus
 from app.db.models.entitlement import Entitlement, GrantedVia
 from app.db.models.progress import LessonProgress, CourseProgress
