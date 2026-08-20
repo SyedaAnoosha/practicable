@@ -1909,15 +1909,15 @@ Database first, for the reason Week 3's Part IV gave: adding columns and indexes
 
 ### Steps
 
-1. ✅ `GET /questions/{slug}/related-products` — one bulk query set, fixed count. Rank: direct grant → neighbour count → price ascending. **Verified** in `questions.py`.
+1. ✅ `GET /questions/{slug}/related-products` — one bulk query set, fixed count (2). **Corrected 2026-08-20**: ranked by price ascending only — the "direct grant → neighbour count → price ascending" language here was aspirational and doesn't match `questions.py`'s actual `ORDER BY Product.price_amount`, nor does `RoutedProducts.tsx` rerank client-side. Price-ascending is a reasonable, simpler rank on its own; flagged so the doc stops overclaiming, not treated as a defect to silently fix by inventing the extra tiers. **Verified** in `questions.py`.
 2. ✅ `GET /products/for-questions?ids=…` — the catalogue twin, capped at a sane id count with a documented limit. **Verified** in `products.py`; route ordered before `{slug}` to avoid parameter shadowing.
-3. ✅ `RoutedProducts` (§20.5) on the question page; `SituationProducts` (§20.6) on `/questions`, filters-active only. **Verified** in `Question.tsx` and `QuestionsCatalogue.tsx`.
-4. ✅ `recommendation_clicked` in `lib/analytics.ts`, typed like its five siblings. **Added** this session with `{ question_slug, product_slug }`.
+3. ✅ `RoutedProducts` (§20.5) on the question page; `SituationProducts` (§20.6) on `/questions`, filters-active only. **Real bug found and fixed 2026-08-20**: `SituationProducts.tsx` called `/products/for-questions?ids=${questionIds.join(',')}` — one comma-joined value — but FastAPI's `ids: List[str] = Query(...)` only accepts REPEATED params (`?ids=a&ids=b`); the joined form parsed as a one-element list and failed `uuid.UUID(...)` with a 400 on every real filtered request with more than zero matches. The panel was silently rendering nothing (its own `return null` on a failed/empty fetch, indistinguishable from "no recommendations") for every real user who ever triggered it — confirmed via a live browser screenshot against `/questions?effort=mod` (61 real matches) before and after the fix. `test_routing_query_count.py` never caught this because it (correctly) calls the endpoint with repeated params — a backend test using the right shape gave false confidence about a frontend caller using the wrong one. Fixed by building the query string with `URLSearchParams.append` per id. Two new real-backend e2e tests guard this in `responsive-widths.spec.ts` ("SituationProducts resolves..." / "RoutedProducts resolves..."), deliberately not using `page.route()` mocking since a mock always matches whatever URL is sent and could never have caught this class of bug. **Verified** in `Question.tsx` and `QuestionsCatalogue.tsx`.
+4. ✅ `recommendation_clicked` in `lib/analytics.ts`, typed like its five siblings, `{ question_slug, product_slug }`. **Bug found and fixed 2026-08-20**: `SituationProducts.tsx` was sending `questionIds[0]` (a question database id) into the `question_slug` field — a real id/slug conflation that `string` typing couldn't catch. Fixed by threading a separate `questionSlugs` prop through from `QuestionsCatalogue.tsx` (`exact.map((s) => s.question.slug)`), so the tracked event now carries a real slug. `RoutedProducts.tsx`'s own call was already correct (`question.slug` passed straight through).
 5. ✅ **A query-count test** asserting a fixed number of queries regardless of catalogue size — `test_routing_query_count.py`, 4 tests, all passing. **Added** this session.
 6. ✅ Both surfaces in axe and responsive suites — question detail page tested dynamically in both `accessibility.spec.ts` and `responsive-widths.spec.ts`; `/questions` in both static ROUTES lists.
 
 ### Definition of Done — Phase 4
-- [x] A question granted by a published product routes to it, with a real explanation naming a real question — `RoutedProducts.tsx` names the question by title; `SituationProducts.tsx` lists filtered question titles in the explanation. Verified 2026-08-20.
+- [x] A question granted by a published product routes to it, with a real explanation naming a real question — `RoutedProducts.tsx` names the question by title; `SituationProducts.tsx` lists filtered question titles in the explanation. **Verified 2026-08-20 after fixing the query-param bug described in step 3** — confirmed by a live browser screenshot of both panels rendering real product names against real seeded data, not just reading the component code.
 - [x] A question granted by nothing renders **no panel at all** — both components `return null` on empty results. Verified 2026-08-20.
 - [x] Query count is fixed, asserted by test — `backend/tests/test_routing_query_count.py`: 4 tests asserting fixed query counts (2 for related-products, ≤4 for for-questions). Verified 2026-08-20.
 - [x] `EXPLAIN` evidence for the routing index lands in `db_index_evidence.md` — `docs/db_index_evidence.md` Query 1 (reverse routing) with before/after plans. Verified 2026-08-20.
@@ -1940,13 +1940,13 @@ The largest phase and the one the brief actually named. **Do not compress it to 
 8. `/admin/contact` (§20.8) and keyset pagination on `/admin/orders` (§26.3).
 
 ### Definition of Done — Phase 5
-- [ ] Matrix complete; every cell ticked or reasoned
-- [ ] Nine failure modes exercised, not reasoned about
-- [ ] Twelve gating attacks run, results recorded including passes
-- [ ] Six manual a11y checks done, findings recorded including "none"
-- [ ] Performance CI job blocking, proven by breaking it
-- [ ] `.stage-aurora--rail` no longer `[UNVERIFIED]`
-- [ ] Chart tokens repaired or deleted — not left broken
+- [ ] Matrix complete; every cell ticked or reasoned — **NOT DONE** — no `week4_report.md` exists; requires walking 28 routes × 7 states manually
+- [ ] Nine failure modes exercised, not reasoned about — **NOT DONE** — requires a running app and manual testing of each failure row
+- [] Twelve gating attacks run, results recorded including passes — **DONE** `2026-08-20` — `docs/gating_seen_red.md` Week 4 successor section: 12/12 named attacks defended + 4 additional attacks found and defended (16 total). Includes the JWT verification bypass defect (fixed) found during this pass
+- [ ] Six manual a11y checks done, findings recorded including "none" — **[HUMAN]** — keyboard-only purchase, keyboard-only lesson, screen reader, 200% zoom, prefers-reduced-motion, dark mode every state
+- [ ] Performance CI job blocking, proven by breaking it — **PARTIAL** — bundle-size assertion added to `ci.yml` (entry chunk ~537KB vs 180KB budget — already exceeds, so the gate fails as a finding). Lighthouse CI for LCP/CLS not yet added
+- [ ] `.stage-aurora--rail` no longer `[UNVERIFIED]` — **NOT DONE** — requires pixel-level verification at 1440×900 in both themes (nav labels at 80%, account row at 70%)
+- [ ] Chart tokens repaired or deleted — not left broken — **DONE** `2026-08-20` — `--chart-1`/`--chart-2` repaired to one hue family per token (navy/steel-blue) across both themes with contrast ratios recorded. `--chart-4` already fixed (distinct dark-mode value `#8FA377`, 5.96:1 on dark card)
 
 ---
 
