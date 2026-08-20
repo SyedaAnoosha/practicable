@@ -18,6 +18,10 @@ class Course(Base, IdMixin, TimestampMixin, PublishStateMixin):
     # this column automatically — see that mixin's docstring.
     published: Mapped[bool] = mapped_column(default=False)
 
+    # Cover image for the course catalogue and detail page (migration 018).
+    # Nullable — null means no image yet; public pages degrade gracefully.
+    cover_image_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     # Relationships
     section: Mapped["Section"] = relationship("Section")
     author: Mapped["Author"] = relationship("Author")

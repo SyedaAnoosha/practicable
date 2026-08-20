@@ -2,8 +2,9 @@
 Mux video and a downloadable file to a lesson, and (week2_plan.md Phase 2) an ordered
 sequence of content blocks for mixed-content lessons.
 """
+import asyncio
 import uuid
-from typing import Literal, Optional
+from typing import Literal, Optional, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -22,11 +23,14 @@ from app.db.models import (
     Media,
     MediaStatus,
     Module,
+    Product,
+    ProductContent,
     Section,
     Template,
     User,
 )
 from app.db.session import get_session
+from app.integrations.storage_client import delete_file, generate_presigned_upload_url, head_object
 
 from .common import PublishStateIn, apply_publish_state_or_422, ensure_unique_slug, get_or_404, record_audit, slugify
 
@@ -103,6 +107,7 @@ class CourseDetailOut(BaseModel):
     description: str
     published: bool
     publish_state: str
+    cover_image_url: Optional[str] = None
     modules: list[ModuleOut]
 
 
@@ -121,7 +126,7 @@ def _block_out(b: LessonBlock) -> LessonBlockOut:
     )
 
 
-def _lesson_out(lesson: Lesson, media: Optional[Media], blocks: Optional[list[LessonBlock]] = None) -> LessonOut:
+def _lesson_out(lesson: Lesson, media: Optional[Media], blocks: Optional[Sequence[LessonBlock]] = None) -> LessonOut:
     blocks = blocks or []
     playback_id = media.mux_playback_id if media else None
     if lesson.lesson_type == LessonType.MIXED:
@@ -161,22 +166,24 @@ async def list_courses(session: AsyncSession = Depends(get_session)):
     if not courses:
         return []
     # Two grouped counts rather than a query per course, avoiding an N+1.
-    module_counts = dict(
-        (
+    module_counts = {
+        course_id: count
+        for course_id, count in (
             await session.execute(
                 select(Module.course_id, func.count()).group_by(Module.course_id)
             )
         ).all()
-    )
-    lesson_counts = dict(
-        (
+    }
+    lesson_counts = {
+        course_id: count
+        for course_id, count in (
             await session.execute(
                 select(Module.course_id, func.count(Lesson.id))
                 .join(Lesson, Lesson.module_id == Module.id)
                 .group_by(Module.course_id)
             )
         ).all()
-    )
+    }
     return [
         CourseRowOut(
             id=str(c.id), slug=c.slug, title=c.title, subtitle=c.subtitle,
@@ -214,6 +221,8 @@ async def get_course(course_id: uuid.UUID, session: AsyncSession = Depends(get_s
             .all()
         )
         for lesson in lessons:
+            # Query above filters on Lesson.module_id.in_(module_ids), so this is never None.
+            assert lesson.module_id is not None
             lessons_by_module.setdefault(lesson.module_id, []).append(lesson)
         if lessons:
             lesson_ids = [lesson.id for lesson in lessons]
@@ -239,10 +248,20 @@ async def get_course(course_id: uuid.UUID, session: AsyncSession = Depends(get_s
             for b in block_rows:
                 blocks_by_lesson.setdefault(b.lesson_id, []).append(b)
 
+    # Resolve cover image URL (best-effort — an invalid key just returns None)
+    cover_image_url = None
+    if course.cover_image_key:
+        try:
+            from app.integrations.storage_client import generate_presigned_url
+            cover_image_url = generate_presigned_url(course.cover_image_key, expiry_seconds=3600)
+        except Exception:  # noqa: BLE001
+            pass
+
     return CourseDetailOut(
         id=str(course.id), slug=course.slug, title=course.title,
         subtitle=course.subtitle, description=course.description, published=course.published,
         publish_state=course.publish_state.value,
+        cover_image_url=cover_image_url,
         modules=[
             ModuleOut(
                 id=str(m.id), title=m.title, description=m.description, sort_order=m.sort_order,
@@ -254,6 +273,106 @@ async def get_course(course_id: uuid.UUID, session: AsyncSession = Depends(get_s
             for m in modules
         ],
     )
+
+
+@router.post("/admin/courses/{course_id}/create-product", response_model=CourseDetailOut)
+async def create_course_product(
+    course_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Create a product associated with this course, making it purchasable.
+
+    Phase 8 (8A): Creates a real Stripe Price and Product, removing the placeholder.
+    Stripe is called first; if it fails, no database row is created.
+    Transaction safety ensures a half-success state cannot exist.
+
+    Uses sensible defaults:
+    - Price: A$99 (9900 cents)
+    - Slug: derived from course title
+    - Licence: standard
+    """
+    from app.db.models.product import Licence
+    from app.integrations.stripe_client import create_price
+    from .common import slugify
+    import stripe
+
+    course = await get_or_404(session, Course, course_id, "Course")
+
+    # Check if product already exists for this course
+    existing = (
+        await session.execute(
+            select(ProductContent).where(
+                ProductContent.content_type == "course",
+                ProductContent.content_id == course.id
+            )
+        )
+    ).scalar_one_or_none()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": {
+                    "code": "product_already_exists",
+                    "message": "A product already exists for this course.",
+                }
+            },
+        )
+
+    # Step 1: Create Stripe Price and Product FIRST (8A-4: Stripe first, DB second)
+    try:
+        stripe_price_id, stripe_product_id = create_price(
+            unit_amount=9900,  # A$99 in cents
+            currency="AUD",
+            product_name=f"{course.title} (Course)",
+        )
+    except stripe.StripeError as e:
+        # Stripe failed: return 502 with Stripe's message, no DB row created
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "error": {
+                    "code": "stripe_error",
+                    "message": str(e),
+                }
+            },
+        )
+
+    # Step 2: Create database row only after Stripe succeeds
+    product = Product(
+        slug=await ensure_unique_slug(session, Product, slugify(f"{course.title}-course")),
+        name=f"{course.title} (Course)",
+        description=course.description,
+        stripe_price_id=stripe_price_id,  # Real Stripe Price ID, not placeholder
+        price_amount=9900,  # A$99 in cents
+        currency="AUD",
+        licence=Licence.STANDARD,
+        published=False,  # Start unpublished, admin must publish after review
+    )
+    session.add(product)
+    await session.flush()
+
+    # Associate product with course
+    product_content = ProductContent(
+        product_id=product.id,
+        content_type="course",
+        content_id=course.id,
+    )
+    session.add(product_content)
+
+    await record_audit(
+        session, actor=admin, action="create_course_product", target_type="product",
+        target_id=product.id, context={
+            "course_id": str(course_id),
+            "course_title": course.title,
+            "stripe_price_id": stripe_price_id,
+            "stripe_product_id": stripe_product_id,
+        },
+    )
+    await session.commit()
+
+    return await get_course(course_id, session)
 
 
 @router.post("/admin/courses", response_model=CourseDetailOut, status_code=status.HTTP_201_CREATED)
@@ -326,6 +445,135 @@ async def set_course_published(
         context={"from": was, "to": payload.published, "state_from": was_state, "state_to": new_state.value},
     )
     await session.commit()
+    return await get_course(course_id, session)
+
+
+# ── Cover image upload ───────────────────────────────────────────────────────────
+# week4_plan.md Phase 3 step 6 — courses need preview images like Coursera/edX/Udemy.
+# Same presigned-upload pattern as templates: validate type/size, issue a URL, let
+# the browser write directly, confirm via HEAD, update the row.
+
+ALLOWED_COVER_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
+MAX_COVER_UPLOAD_BYTES = 8 * 1024 * 1024  # 8 MB — a cover image, not a document
+
+
+class CoverUploadUrlIn(BaseModel):
+    file_name: str = Field(min_length=1, max_length=255)
+    content_type: str
+    file_size_bytes: int = Field(gt=0)
+
+
+class CoverUploadUrlOut(BaseModel):
+    upload_url: str
+    storage_key: str
+    expires_in: int
+
+
+@router.post("/admin/courses/{course_id}/cover/upload-url", response_model=CoverUploadUrlOut)
+async def create_cover_upload_url(
+    course_id: uuid.UUID,
+    payload: CoverUploadUrlIn,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Presigned Storage PUT URL for a course cover image. Validated before the URL
+    is issued — type and size checked server-side, not discovered after a failed upload.
+    """
+    await get_or_404(session, Course, course_id, "Course")
+
+    if payload.content_type not in ALLOWED_COVER_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail={"error": {"code": "unsupported_type", "message": f"{payload.content_type} isn't an accepted image format. Use PNG, JPEG or WebP."}},
+        )
+    if payload.file_size_bytes > MAX_COVER_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={"error": {"code": "file_too_large", "message": f"That file is {payload.file_size_bytes / (1024 * 1024):.0f}MB. The ceiling is {MAX_COVER_UPLOAD_BYTES // (1024 * 1024)}MB."}},
+        )
+
+    safe_name = slugify(payload.file_name) or "cover"
+    storage_key = f"courses/{course_id}/cover/{uuid.uuid4().hex}-{safe_name}"
+    expiry_seconds = 300
+    upload_url = generate_presigned_upload_url(key=storage_key, content_type=payload.content_type, expiry_seconds=expiry_seconds)
+    return CoverUploadUrlOut(upload_url=upload_url, storage_key=storage_key, expires_in=expiry_seconds)
+
+
+class CoverUploadConfirmIn(BaseModel):
+    storage_key: str
+    file_name: str = Field(min_length=1, max_length=255)
+
+
+@router.post("/admin/courses/{course_id}/cover/upload-url/confirm", response_model=CourseDetailOut)
+async def confirm_cover_upload(
+    course_id: uuid.UUID,
+    payload: CoverUploadConfirmIn,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Called after the browser's direct PUT to storage_key completes. Verifies the
+    object landed via a real HEAD, then updates the course row."""
+    course = await get_or_404(session, Course, course_id, "Course")
+
+    meta = await asyncio.to_thread(head_object, payload.storage_key)
+    if meta is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error": {"code": "upload_not_found", "message": "That upload hasn't landed in storage yet — try again in a moment."}},
+        )
+    content_length = meta.get("content_length") or 0
+    if content_length > MAX_COVER_UPLOAD_BYTES:
+        await asyncio.to_thread(delete_file, payload.storage_key)
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={"error": {"code": "file_too_large", "message": f"That file is {content_length / (1024 * 1024):.0f}MB. The ceiling is {MAX_COVER_UPLOAD_BYTES // (1024 * 1024)}MB."}},
+        )
+
+    previous_key = course.cover_image_key
+    course.cover_image_key = payload.storage_key
+    await record_audit(
+        session, actor=admin, action="upload_course_cover", target_type="course",
+        target_id=course.id,
+        context={"file_name": payload.file_name, "bytes": content_length, "replaced": bool(previous_key), "via": "presigned"},
+    )
+    await session.commit()
+
+    if previous_key and previous_key != payload.storage_key:
+        try:
+            await asyncio.to_thread(delete_file, previous_key)
+        except Exception:  # noqa: BLE001 — best-effort, row is already committed
+            pass
+
+    return await get_course(course_id, session)
+
+
+@router.post("/admin/courses/{course_id}/cover/remove", response_model=CourseDetailOut)
+async def remove_cover_image(
+    course_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Remove the cover image. Deletes the Storage object; the row update commits first
+    (row is truth, Storage cleanup is best-effort)."""
+    course = await get_or_404(session, Course, course_id, "Course")
+    if not course.cover_image_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": {"code": "no_cover_image", "message": "This course has no cover image."}},
+        )
+    previous_key = course.cover_image_key
+    course.cover_image_key = None
+    await record_audit(
+        session, actor=admin, action="remove_course_cover", target_type="course",
+        target_id=course.id, context={"storage_key": previous_key},
+    )
+    await session.commit()
+
+    try:
+        await asyncio.to_thread(delete_file, previous_key)
+    except Exception:  # noqa: BLE001 — best-effort, row is already committed
+        pass
+
     return await get_course(course_id, session)
 
 
@@ -402,7 +650,10 @@ class LessonWriteIn(BaseModel):
 
 
 async def _course_id_for_lesson(session: AsyncSession, lesson: Lesson) -> uuid.UUID:
-    module = await session.get(Module, lesson.module_id)
+    # module_id is nullable at the schema level, but every lesson reachable through
+    # these admin routes was created under a module and always has one set.
+    assert lesson.module_id is not None
+    module = await get_or_404(session, Module, lesson.module_id, "Module")
     return module.course_id
 
 

@@ -1,16 +1,19 @@
-import { useState, type FormEvent } from 'react'
+import { useCallback, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ArrowLeft,
   ChevronDown,
   ChevronUp,
+  CircleCheck,
   Download,
+  Image,
   Loader2,
   MessageSquareQuote,
   Plus,
   Trash2,
   Type,
+  UploadCloud,
   Video,
 } from 'lucide-react'
 import { api } from '@/lib/api/client'
@@ -23,6 +26,8 @@ import { PageTitle } from '@/components/ui/PageTitle'
 import { FieldError } from '@/components/ui/FieldError'
 import { AutosaveIndicator } from '@/components/admin/AutosaveIndicator'
 import { UploadField } from '@/components/admin/UploadField'
+import { VideoPreview } from '@/components/admin/VideoPreview'
+import { RichTextEditor } from '@/components/admin/RichTextEditor'
 import { PublishStateChip, type PublishStateValue } from '@/components/admin/PublishStateChip'
 import { useAutosave } from '@/lib/useAutosave'
 import { required, requiredSelect, useFieldValidation } from '@/lib/useFieldValidation'
@@ -95,6 +100,7 @@ interface CourseDetail {
   description: string
   published: boolean
   publish_state: PublishStateValue
+  cover_image_url?: string | null
   modules: AdminModule[]
 }
 
@@ -112,6 +118,173 @@ const readError = (e: unknown): string => {
   const detail = (e as { response?: { data?: { detail?: { error?: { message?: string } } } } })?.response?.data
     ?.detail
   return detail?.error?.message ?? 'Something went wrong. Please try again.'
+}
+
+/** Course cover image upload — same presigned-URL pattern as templates, but talks
+ * to the course-specific endpoints. A single image, not a gallery, so no alt text
+ * prompt (it's a marketing cover, not a document page).
+ */
+function CoverImageUpload({
+  courseId,
+  coverImageUrl,
+  onUploadComplete,
+  onRemove,
+}: {
+  courseId: string
+  coverImageUrl: string | null
+  onUploadComplete: (url: string) => void
+  onRemove: () => void
+}) {
+  const [phase, setPhase] = useState<'idle' | 'uploading' | 'error'>('idle')
+  const [progress, setProgress] = useState(0)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const putWithProgress = useCallback((url: string, file: File): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('PUT', url)
+      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream')
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100))
+      }
+      xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`)))
+      xhr.onerror = () => reject(new Error('Upload failed — check your connection and try again.'))
+      xhr.send(file)
+    })
+  }, [])
+
+  const handleFile = useCallback(async (file: File) => {
+    if (file.size > 8 * 1024 * 1024) {
+      setPhase('error')
+      setErrorMessage(`That file is ${(file.size / (1024 * 1024)).toFixed(0)}MB. The ceiling is 8MB.`)
+      return
+    }
+    setProgress(0)
+    setErrorMessage('')
+    setPhase('uploading')
+    try {
+      const { data: target } = await api.post<{
+        upload_url: string
+        storage_key: string
+      }>(`/admin/courses/${courseId}/cover/upload-url`, {
+        file_name: file.name,
+        content_type: file.type || 'application/octet-stream',
+        file_size_bytes: file.size,
+      })
+      await putWithProgress(target.upload_url, file)
+      const { data } = await api.post<{ cover_image_url: string | null }>(
+        `/admin/courses/${courseId}/cover/upload-url/confirm`,
+        { storage_key: target.storage_key, file_name: file.name },
+      )
+      setPhase('idle')
+      if (data.cover_image_url) onUploadComplete(data.cover_image_url)
+    } catch (err) {
+      setPhase('error')
+      const message = (err as { response?: { data?: { detail?: { error?: { message?: string } } | string } } })?.response
+        ?.data?.detail
+      const readable = typeof message === 'object' ? message?.error?.message : typeof message === 'string' ? message : undefined
+      setErrorMessage(readable ?? 'Something went wrong. Please try again.')
+    }
+  }, [courseId, putWithProgress, onUploadComplete])
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) void handleFile(file)
+  }
+
+  if (coverImageUrl) {
+    return (
+      <div className="relative">
+        <img
+          src={coverImageUrl}
+          alt="Course cover"
+          className="h-40 w-full rounded-lg object-cover"
+        />
+        <div className="mt-2 flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
+            Replace
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onRemove}>
+            <Trash2 className="size-3.5" aria-hidden="true" /> Remove
+          </Button>
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="sr-only"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            if (file) void handleFile(file)
+          }}
+        />
+      </div>
+    )
+  }
+
+  if (phase === 'uploading') {
+    return (
+      <div className="rounded-md border border-border bg-muted/30 p-4">
+        <p className="flex items-center gap-2 text-sm text-foreground">
+          <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />
+          Uploading cover image…
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-accent transition-[width] duration-[400ms] ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="tabular-nums text-xs text-muted-foreground">{progress}%</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <label
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        className={cn(
+          'flex flex-col items-center gap-2 rounded-md border-2 border-dashed border-border p-6 text-center transition-colors duration-150',
+          'cursor-pointer',
+          dragOver && 'border-border-strong bg-muted',
+          phase === 'error' && 'border-destructive',
+        )}
+      >
+        <Image className="size-6 text-muted-foreground" aria-hidden="true" />
+        <span className="text-sm font-medium text-foreground">Drop an image, or choose one</span>
+        <span className="text-xs text-muted-foreground">PNG, JPEG or WebP — up to 8 MB</span>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="sr-only"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            if (file) void handleFile(file)
+          }}
+        />
+      </label>
+      {phase === 'error' && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-destructive/10 px-3 py-2">
+          <p role="alert" className="text-sm text-destructive">{errorMessage}</p>
+          <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
+            Try again
+          </Button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 /** The ordered content-block list for one `mixed` lesson — add, reorder (up/down
@@ -174,6 +347,11 @@ function BlockEditor({
                         : 'No video attached yet'
                       : block.template_file_name || 'No file attached yet'}
                 </p>
+                {block.block_type === 'video' && block.mux_playback_id && (
+                  <div className="mt-2">
+                    <VideoPreview playbackId={block.mux_playback_id} className="max-h-32" />
+                  </div>
+                )}
               </div>
               {!attached && <AlertTriangle className="size-3.5 shrink-0 text-warning" aria-hidden="true" />}
               <div className="flex shrink-0 items-center gap-1">
@@ -426,6 +604,12 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
   const deleteBlock = useMutation(
     mutate((v: { blockId: string }) => api.delete<CourseDetail>(`/admin/lesson-blocks/${v.blockId}`)),
   )
+  const createCourseProduct = useMutation(
+    mutate((courseId: string) => api.post<CourseDetail>(`/admin/courses/${courseId}/create-product`)),
+  )
+  const removeCoverImage = useMutation(
+    mutate(() => api.post<CourseDetail>(`/admin/courses/${courseId}/cover/remove`)),
+  )
 
   if (isLoading || !course) {
     return (
@@ -447,11 +631,22 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
         <PageTitle eyebrow="Course" title={course.title} description={course.subtitle ?? undefined} />
-        <PublishStateChip
-          value={course.publish_state}
-          disabled={setCoursePublishState.isPending}
-          onChange={(state) => setCoursePublishState.mutate({ state })}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => createCourseProduct.mutate(course.id)}
+            loading={createCourseProduct.isPending}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+            Create Product
+          </Button>
+          <PublishStateChip
+            value={course.publish_state}
+            disabled={setCoursePublishState.isPending}
+            onChange={(state) => setCoursePublishState.mutate({ state })}
+          />
+        </div>
       </div>
 
       {error && (
@@ -459,6 +654,25 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
           {error}
         </p>
       )}
+
+      {/* Cover image upload — §16.2's course artwork, like Coursera/edX/Udemy */}
+      <div className="mt-6">
+        <p className="text-sm font-medium text-foreground">Cover image</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Shown on the course catalogue and detail page. PNG, JPEG or WebP, up to 8 MB.
+        </p>
+        <div className="mt-3">
+          <CoverImageUpload
+            courseId={courseId}
+            coverImageUrl={course.cover_image_url ?? null}
+            onUploadComplete={() => {
+              void queryClient.invalidateQueries({ queryKey: queryKeys.admin.course(courseId) })
+              void queryClient.invalidateQueries({ queryKey: queryKeys.courses.list() })
+            }}
+            onRemove={() => removeCoverImage.mutate(undefined as never)}
+          />
+        </div>
+      </div>
 
       <div className="mt-8 flex flex-col gap-6">
         {course.modules.map((module) => (
@@ -492,6 +706,11 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                               ? 'Needs at least one block, fully attached'
                               : 'Needs a video attached'}
                       </p>
+                    )}
+                    {lesson.lesson_type === 'video' && lesson.mux_playback_id && (
+                      <div className="mt-2">
+                        <VideoPreview playbackId={lesson.mux_playback_id} className="max-h-32" />
+                      </div>
                     )}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
@@ -704,14 +923,12 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
               <h3 className="font-sans text-lg font-semibold">{bodyDraft.lesson.title}</h3>
               <AutosaveIndicator status={bodyAutosave.status} savedAt={bodyAutosave.savedAt} />
             </div>
-            <textarea
-              autoFocus
-              rows={16}
-              className={cn(inputClass, 'mt-4 font-serif leading-relaxed')}
-              value={bodyDraft.text}
-              onChange={(e) => setBodyDraft({ ...bodyDraft, text: e.target.value })}
-              onBlur={() => void bodyAutosave.saveNow()}
-            />
+            <div className="mt-4">
+              <RichTextEditor
+                content={bodyDraft.text}
+                onChange={(text) => setBodyDraft({ ...bodyDraft, text })}
+              />
+            </div>
             <div className="mt-5 flex gap-2">
               <Button type="submit" loading={saveBody.isPending}>
                 Save

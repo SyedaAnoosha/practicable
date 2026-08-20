@@ -60,6 +60,7 @@ interface CourseDetailData {
   owned: boolean
   lesson_count: number
   first_lesson_slug: string | null
+  cover_image_url?: string | null
   modules: ModuleOut[]
   related_products: RelatedProduct[]
 }
@@ -144,6 +145,16 @@ export function CourseDetail() {
           ) : undefined
         }
       />
+
+      {course.cover_image_url && (
+        <div className="mt-6">
+          <img
+            src={course.cover_image_url}
+            alt={`Cover image for ${course.title}`}
+            className="w-full rounded-xl object-cover sm:h-64"
+          />
+        </div>
+      )}
 
       <p className="mt-6 max-w-2xl font-serif text-lead text-muted-foreground">{course.description}</p>
       <p className="mt-4 text-sm text-muted-foreground">

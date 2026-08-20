@@ -25,6 +25,7 @@ from app.db.models import (
     Section,
 )
 from app.db.session import get_session
+from app.integrations.storage_client import generate_presigned_url
 
 router = APIRouter()
 
@@ -50,6 +51,7 @@ class CourseSummaryOut(BaseModel):
     module_count: int
     lesson_count: int
     owned: bool
+    cover_image_url: Optional[str] = None
     # week2_plan.md Phase 4 (`/store`'s ContentTypeCard needs a real price for every
     # type, W2-R5's "every price shown is real"). `/courses` never carried one before —
     # CoursesCatalogue.tsx simply didn't show one — so this mirrors TemplateSummaryOut's
@@ -97,6 +99,7 @@ class CourseDetailOut(BaseModel):
     owned: bool
     lesson_count: int
     first_lesson_slug: Optional[str]
+    cover_image_url: Optional[str] = None
     modules: list[ModuleOut]
     related_products: list[RelatedProductOut]
 
@@ -127,9 +130,12 @@ async def list_courses(
     course_ids = [c.id for c in courses]
     section_ids = [c.section_id for c in courses]
 
-    sections_by_id = dict(
-        (await session.execute(select(Section.id, Section.name).where(Section.id.in_(section_ids)))).all()
-    )
+    sections_by_id = {
+        section_id: name
+        for section_id, name in (
+            await session.execute(select(Section.id, Section.name).where(Section.id.in_(section_ids)))
+        ).all()
+    }
 
     modules = (
         (await session.execute(select(Module).where(Module.course_id.in_(course_ids)))).scalars().all()
@@ -141,7 +147,7 @@ async def list_courses(
 
     lessons: list[Lesson] = []
     if module_ids:
-        lessons = (
+        lessons = list(
             (
                 await session.execute(
                     select(Lesson).where(Lesson.module_id.in_(module_ids), Lesson.published.is_(True))
@@ -153,6 +159,8 @@ async def list_courses(
     module_to_course = {m.id: m.course_id for m in modules}
     lessons_by_course: dict = {}
     for lesson in lessons:
+        # Query above filters on Lesson.module_id.in_(module_ids), so this is never None.
+        assert lesson.module_id is not None
         course_id = module_to_course.get(lesson.module_id)
         if course_id:
             lessons_by_course.setdefault(course_id, []).append(lesson)
@@ -203,10 +211,17 @@ async def list_courses(
                 price_amount=product.price_amount, currency=product.currency,
             )
 
+        # Resolve cover image URL (best-effort)
+        cover_url = None
+        if course.cover_image_key:
+            try:
+                cover_url = generate_presigned_url(course.cover_image_key, expiry_seconds=3600)
+            except Exception:  # noqa: BLE001
+                pass
+
         out.append(
             CourseSummaryOut(
-                id=str(course.id),
-                slug=course.slug,
+                id=str(course.id), slug=course.slug,
                 title=course.title,
                 subtitle=course.subtitle,
                 description=course.description,
@@ -214,6 +229,7 @@ async def list_courses(
                 module_count=len(course_modules),
                 lesson_count=len(course_lessons),
                 owned=owned,
+                cover_image_url=cover_url,
                 product=product_out,
             )
         )
@@ -269,7 +285,7 @@ async def get_course(
     # All lessons across every module, once — then bucketed by module_id in Python.
     all_lessons: list[Lesson] = []
     if module_ids:
-        all_lessons = (
+        all_lessons = list(
             (
                 await session.execute(
                     select(Lesson)
@@ -294,7 +310,7 @@ async def get_course(
         media_rows = await session.execute(
             select(Media.lesson_id, Media.duration_seconds).where(Media.lesson_id.in_(media_lesson_ids))
         )
-        duration_by_lesson = dict(media_rows.all())
+        duration_by_lesson = {lesson_id: duration for lesson_id, duration in media_rows.all()}
 
     # One bulk ownership check for every lesson in the course, rather than one
     # `has_access_to` round trip per lesson.
@@ -384,6 +400,14 @@ async def get_course(
             for p in related_result.scalars().all()
         ]
 
+    # Resolve cover image URL (best-effort)
+    cover_url = None
+    if course.cover_image_key:
+        try:
+            cover_url = generate_presigned_url(course.cover_image_key, expiry_seconds=3600)
+        except Exception:  # noqa: BLE001
+            pass
+
     return CourseDetailOut(
         id=str(course.id),
         slug=course.slug,
@@ -395,6 +419,7 @@ async def get_course(
         owned=owned,
         lesson_count=lesson_count,
         first_lesson_slug=first_lesson_slug,
+        cover_image_url=cover_url,
         modules=module_outs,
         related_products=related_products,
     )

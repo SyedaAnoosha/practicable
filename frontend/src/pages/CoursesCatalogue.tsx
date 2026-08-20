@@ -18,6 +18,7 @@ interface CourseSummary {
   module_count: number
   lesson_count: number
   owned: boolean
+  cover_image_url?: string | null
 }
 
 // The course catalogue (DESIGN.md §41's /courses route) — the piece that was
@@ -72,6 +73,13 @@ export function CoursesCatalogue() {
         {courses?.map((course) => (
           <Link key={course.slug} to={`/courses/${course.slug}`} className="group">
             <Card className="flex h-full flex-col transition-[transform,box-shadow] duration-150 group-hover:-translate-y-0.5 group-hover:shadow-md">
+              {course.cover_image_url && (
+                <img
+                  src={course.cover_image_url}
+                  alt={`Cover image for ${course.title}`}
+                  className="w-full rounded-t-xl object-cover sm:h-36"
+                />
+              )}
               <CardHeader>
                 <p className="eyebrow">{course.section}</p>
                 <CardTitle className="mt-1.5">{course.title}</CardTitle>
