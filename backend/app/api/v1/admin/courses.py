@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import require_admin
+from app.core.html_sanitizer import sanitize_html
 from app.db.models import (
     Author,
     Course,
@@ -52,9 +53,14 @@ class LessonBlockOut(BaseModel):
     # text / callout only.
     heading: Optional[str]
     text_body: Optional[str]
+    prose_sanitized: Optional[str] = None  # Phase 8 (8E): sanitized HTML, null for plain text
     # video only — the underlying Mux id, so the editor can show whether it's attached.
     media_id: Optional[str]
     mux_playback_id: Optional[str]
+    # Phase 8 (8D-3): lets the preview check the asset's *live* Mux encoding status —
+    # Media.status in the DB is set optimistically at attach time and isn't kept in
+    # sync with Mux afterward, so it can't answer "is this still encoding?" on its own.
+    mux_asset_id: Optional[str]
     # file only.
     template_id: Optional[str]
     template_file_name: Optional[str]
@@ -72,6 +78,8 @@ class LessonOut(BaseModel):
     publish_state: str
     download_template_id: Optional[str]
     mux_playback_id: Optional[str]
+    # Phase 8 (8D-3): see LessonBlockOut.mux_asset_id — same reasoning.
+    mux_asset_id: Optional[str]
     # A video lesson with no Mux asset renders an empty player after purchase — surfaced
     # so the editor can block publishing it.
     is_ready: bool
@@ -97,6 +105,12 @@ class CourseRowOut(BaseModel):
     publish_state: str
     module_count: int
     lesson_count: int
+    # Found 2026-08-21 (Phase 9A re-verification, owner-flagged usability gap): the
+    # list view showed no price at all — an admin had to open every course to see
+    # what it charges. Same fields CourseDetailOut already carries; None until
+    # "Make purchasable" has been called, same as the detail page.
+    price_amount: Optional[int] = None
+    currency: Optional[str] = None
 
 
 class CourseDetailOut(BaseModel):
@@ -109,6 +123,17 @@ class CourseDetailOut(BaseModel):
     publish_state: str
     cover_image_url: Optional[str] = None
     modules: list[ModuleOut]
+    # Phase 8 (8A-6): server-derived readiness, same states/messages a bare product
+    # would carry — computed here from the course's linked product (if any), via
+    # `compute_readiness` (publish_guard.py), so the editor can show why a course
+    # isn't purchasable without a second round trip to /admin/products.
+    readiness: Literal["no_product", "price_unset", "stripe_price_unresolved", "unpublished", "ready"]
+    readiness_message: str
+    product_id: Optional[str] = None
+    # Phase 8 (8B-7): the price-change confirmation step needs the *current* price to
+    # compute the ±50%/zero delta — it cannot be inferred client-side without this.
+    price_amount: Optional[int] = None
+    currency: Optional[str] = None
 
 
 def _enum_value(v) -> str:
@@ -119,8 +144,10 @@ def _block_out(b: LessonBlock) -> LessonBlockOut:
     return LessonBlockOut(
         id=str(b.id), block_type=_enum_value(b.block_type), sort_order=b.sort_order,
         heading=b.heading, text_body=b.text_body,
+        prose_sanitized=b.prose_sanitized,
         media_id=str(b.media_id) if b.media_id else None,
         mux_playback_id=b.media.mux_playback_id if b.media else None,
+        mux_asset_id=b.media.mux_asset_id if b.media else None,
         template_id=str(b.template_id) if b.template_id else None,
         template_file_name=b.template.file_name if b.template else None,
     )
@@ -129,6 +156,7 @@ def _block_out(b: LessonBlock) -> LessonBlockOut:
 def _lesson_out(lesson: Lesson, media: Optional[Media], blocks: Optional[Sequence[LessonBlock]] = None) -> LessonOut:
     blocks = blocks or []
     playback_id = media.mux_playback_id if media else None
+    asset_id = media.mux_asset_id if media else None
     if lesson.lesson_type == LessonType.MIXED:
         # A MIXED lesson is authored entirely through blocks, not the legacy fields, and
         # may hold more than one video block, which the single-`media` lookup above can't
@@ -155,7 +183,7 @@ def _lesson_out(lesson: Lesson, media: Optional[Media], blocks: Optional[Sequenc
         body=lesson.body, sort_order=lesson.sort_order, published=lesson.published,
         publish_state=lesson.publish_state.value,
         download_template_id=str(lesson.download_template_id) if lesson.download_template_id else None,
-        mux_playback_id=playback_id, is_ready=is_ready,
+        mux_playback_id=playback_id, mux_asset_id=asset_id, is_ready=is_ready,
         blocks=[_block_out(b) for b in (blocks or [])],
     )
 
@@ -184,12 +212,26 @@ async def list_courses(session: AsyncSession = Depends(get_session)):
             )
         ).all()
     }
+    # Batched price lookup — same N+1-avoidance discipline as the counts above.
+    # ProductContent -> Product, one join, keyed by course id.
+    prices = {
+        content_id: (price_amount, currency)
+        for content_id, price_amount, currency in (
+            await session.execute(
+                select(ProductContent.content_id, Product.price_amount, Product.currency)
+                .join(Product, Product.id == ProductContent.product_id)
+                .where(ProductContent.content_type == "course")
+            )
+        ).all()
+    }
     return [
         CourseRowOut(
             id=str(c.id), slug=c.slug, title=c.title, subtitle=c.subtitle,
             published=c.published, publish_state=c.publish_state.value,
             module_count=module_counts.get(c.id, 0),
             lesson_count=lesson_counts.get(c.id, 0),
+            price_amount=prices.get(c.id, (None, None))[0],
+            currency=prices.get(c.id, (None, None))[1],
         )
         for c in courses
     ]
@@ -257,11 +299,35 @@ async def get_course(course_id: uuid.UUID, session: AsyncSession = Depends(get_s
         except Exception:  # noqa: BLE001
             pass
 
+    # Phase 8 (8A-6): resolve the course's linked product (None until "Make
+    # purchasable" has been called) and derive readiness from it.
+    from app.core.publish_guard import compute_readiness
+
+    product_content = (
+        await session.execute(
+            select(ProductContent).where(
+                ProductContent.content_type == "course",
+                ProductContent.content_id == course.id,
+            )
+        )
+    ).scalar_one_or_none()
+    product = None
+    if product_content is not None:
+        product = (
+            await session.execute(select(Product).where(Product.id == product_content.product_id))
+        ).scalar_one_or_none()
+    readiness_result = compute_readiness(product)
+
     return CourseDetailOut(
         id=str(course.id), slug=course.slug, title=course.title,
         subtitle=course.subtitle, description=course.description, published=course.published,
         publish_state=course.publish_state.value,
         cover_image_url=cover_image_url,
+        readiness=readiness_result.state,
+        readiness_message=readiness_result.message,
+        product_id=str(product.id) if product else None,
+        price_amount=product.price_amount if product else None,
+        currency=product.currency if product else None,
         modules=[
             ModuleOut(
                 id=str(m.id), title=m.title, description=m.description, sort_order=m.sort_order,
@@ -275,9 +341,83 @@ async def get_course(course_id: uuid.UUID, session: AsyncSession = Depends(get_s
     )
 
 
+async def grant_course_lessons(
+    session: AsyncSession, *, product_id: uuid.UUID, course_id: uuid.UUID, dry_run: bool = False
+) -> int:
+    """Grant every lesson in a course to the course's own product.
+
+    Found live 2026-08-21: a lesson added to an already-published, already-purchased
+    course showed locked to a buyer who owned the course. Root cause traced end to
+    end — `_lesson_entitled` (content/lessons.py) and `require_entitlement`
+    (core/entitlements.py) both gate lesson access on a per-lesson `ProductContent`
+    row (`content_type="lesson"`, `content_id=<lesson.id>`), never on the course-level
+    `content_type="course"` row `create_course_product` writes below. Grepped the
+    entire backend: no production code path — not `create_course_product`, not
+    `create_lesson`, not any migration — had ever written a `content_type="lesson"`
+    row; only test fixtures did. So this wasn't specific to a newly-added lesson —
+    every lesson in every course only ever unlocked if someone created that row by
+    hand outside this code. This function is the fix, called from both
+    `create_course_product` (grants every lesson that exists when the course becomes
+    purchasable) and `create_lesson` (grants a lesson added afterward, if the course
+    already has a product) — see the calls at each site for which gap each one closes.
+
+    Idempotent by construction: checks which of this course's lessons this exact
+    product has already granted, in one query, and only inserts the ones missing — safe
+    to call again (a retried request, a backfill re-run) without creating duplicate
+    `product_contents` rows, since there is no unique constraint on
+    `(product_id, content_type, content_id)` to rely on for that instead.
+
+    `dry_run=True` (backfill_lesson_entitlements.py's dry-run mode) runs the exact same
+    lookup and returns the same count, but skips the `session.add()` calls — so the
+    reported number is guaranteed to match what --apply would actually create, rather
+    than a second, separately-maintained query that could drift from this one.
+
+    Returns the number of new grants actually created (0 on a repeat call, or always
+    in dry-run mode).
+    """
+    lesson_ids = (
+        await session.execute(
+            select(Lesson.id).join(Module, Module.id == Lesson.module_id).where(Module.course_id == course_id)
+        )
+    ).scalars().all()
+    if not lesson_ids:
+        return 0
+
+    already_granted = (
+        await session.execute(
+            select(ProductContent.content_id).where(
+                ProductContent.product_id == product_id,
+                ProductContent.content_type == "lesson",
+                ProductContent.content_id.in_(lesson_ids),
+            )
+        )
+    ).scalars().all()
+    already_granted_set = set(already_granted)
+
+    missing = [lid for lid in lesson_ids if lid not in already_granted_set]
+    if not dry_run:
+        for lesson_id in missing:
+            session.add(ProductContent(product_id=product_id, content_type="lesson", content_id=lesson_id))
+    return len(missing)
+
+
+class CreateProductIn(BaseModel):
+    # Found 2026-08-21 (owner-flagged): "Create Product" was a separate, unnecessary
+    # step before a course could be priced at all — the admin clicked one button to
+    # get a product, then a second control to actually set its price. Removed from
+    # the UI; this endpoint now takes the admin's own price directly (the frontend's
+    # price control calls this first, transparently, the first time a price is set
+    # on a course with no product yet — see AdminCourses.tsx). Both fields optional
+    # so any other caller of this endpoint keeps working unchanged at the old A$99
+    # default.
+    price_amount: Optional[int] = Field(default=None, gt=0)
+    currency: str = Field(default="AUD", min_length=3, max_length=3)
+
+
 @router.post("/admin/courses/{course_id}/create-product", response_model=CourseDetailOut)
 async def create_course_product(
     course_id: uuid.UUID,
+    payload: CreateProductIn = CreateProductIn(),
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
@@ -287,8 +427,9 @@ async def create_course_product(
     Stripe is called first; if it fails, no database row is created.
     Transaction safety ensures a half-success state cannot exist.
 
-    Uses sensible defaults:
-    - Price: A$99 (9900 cents)
+    Price: the caller's own `price_amount`/`currency` if given (Phase 9A
+    re-verification: the admin sets this directly now, no separate step), else the
+    A$99 default this endpoint has always had.
     - Slug: derived from course title
     - Licence: standard
     """
@@ -320,11 +461,14 @@ async def create_course_product(
             },
         )
 
+    price_amount = payload.price_amount if payload.price_amount is not None else 9900
+    currency = payload.currency
+
     # Step 1: Create Stripe Price and Product FIRST (8A-4: Stripe first, DB second)
     try:
         stripe_price_id, stripe_product_id = create_price(
-            unit_amount=9900,  # A$99 in cents
-            currency="AUD",
+            unit_amount=price_amount,
+            currency=currency,
             product_name=f"{course.title} (Course)",
         )
     except stripe.StripeError as e:
@@ -345,8 +489,9 @@ async def create_course_product(
         name=f"{course.title} (Course)",
         description=course.description,
         stripe_price_id=stripe_price_id,  # Real Stripe Price ID, not placeholder
-        price_amount=9900,  # A$99 in cents
-        currency="AUD",
+        stripe_product_id=stripe_product_id,  # Phase 8B: so a later price change reuses this Product
+        price_amount=price_amount,
+        currency=currency,
         licence=Licence.STANDARD,
         published=False,  # Start unpublished, admin must publish after review
     )
@@ -361,6 +506,11 @@ async def create_course_product(
     )
     session.add(product_content)
 
+    # Grant every lesson that exists right now — see grant_course_lessons' own
+    # docstring for the bug this closes. A lesson added later is granted by
+    # create_lesson below instead, at the moment it's created.
+    lessons_granted = await grant_course_lessons(session, product_id=product.id, course_id=course.id)
+
     await record_audit(
         session, actor=admin, action="create_course_product", target_type="product",
         target_id=product.id, context={
@@ -368,6 +518,9 @@ async def create_course_product(
             "course_title": course.title,
             "stripe_price_id": stripe_price_id,
             "stripe_product_id": stripe_product_id,
+            "price_amount": price_amount,
+            "currency": currency,
+            "lessons_granted": lessons_granted,
         },
     )
     await session.commit()
@@ -681,11 +834,31 @@ async def create_lesson(
         slug=await ensure_unique_slug(session, Lesson, slugify(payload.title)),
         title=payload.title, description=payload.description,
         lesson_type=payload.lesson_type, body=payload.body,
+        prose_sanitized=sanitize_html(payload.body),  # Phase 8 (8E)
         download_template_id=payload.download_template_id,
         module_id=module.id, sort_order=sort_order, published=False,
     )
     session.add(lesson)
     await session.flush()
+
+    # Found live 2026-08-21: a lesson added to a course that's already purchasable
+    # showed locked to a buyer who owned the course — grant_course_lessons' docstring
+    # has the full root cause. If this course already has a product, grant the new
+    # lesson to it now rather than leaving it stranded until someone thinks to run the
+    # backfill script again. A course with no product yet has nothing to grant against
+    # — create_course_product's own call to grant_course_lessons covers it once one
+    # exists.
+    course_product = (
+        await session.execute(
+            select(ProductContent.product_id).where(
+                ProductContent.content_type == "course",
+                ProductContent.content_id == module.course_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if course_product is not None:
+        session.add(ProductContent(product_id=course_product, content_type="lesson", content_id=lesson.id))
+
     await record_audit(
         session, actor=admin, action="create_lesson", target_type="lesson",
         target_id=lesson.id, context={"module": str(module.id), "title": lesson.title},
@@ -708,6 +881,7 @@ async def update_lesson(
     lesson.description = payload.description
     lesson.lesson_type = payload.lesson_type
     lesson.body = payload.body
+    lesson.prose_sanitized = sanitize_html(payload.body)  # Phase 8 (8E)
     lesson.download_template_id = payload.download_template_id
     if payload.sort_order is not None:
         lesson.sort_order = payload.sort_order
@@ -854,7 +1028,9 @@ async def create_lesson_block(
 
     block = LessonBlock(
         lesson_id=lesson.id, sort_order=sort_order, block_type=payload.block_type,
-        heading=payload.heading, text_body=payload.text_body, template_id=payload.template_id,
+        heading=payload.heading, text_body=payload.text_body,
+        prose_sanitized=sanitize_html(payload.text_body),  # Phase 8 (8E)
+        template_id=payload.template_id,
     )
     session.add(block)
     await session.flush()
@@ -879,6 +1055,7 @@ async def update_lesson_block(
     block.block_type = payload.block_type
     block.heading = payload.heading
     block.text_body = payload.text_body
+    block.prose_sanitized = sanitize_html(payload.text_body)  # Phase 8 (8E)
     block.template_id = payload.template_id
     await record_audit(
         session, actor=admin, action="update_lesson_block", target_type="lesson_block",

@@ -1,11 +1,11 @@
 import { useCallback, useRef, useState, type FormEvent } from 'react'
+import { useNavigate, useSearchParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ArrowLeft,
   ChevronDown,
   ChevronUp,
-  CircleCheck,
   Download,
   Image,
   Loader2,
@@ -13,26 +13,28 @@ import {
   Plus,
   Trash2,
   Type,
-  UploadCloud,
   Video,
 } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
+import { priceChangeConfirmMessage, priceChangeNeedsConfirm } from '@/lib/utils/priceChangeConfirm'
+import { formatCurrency } from '@/lib/utils/formatCurrency'
+import { dollarsToCents } from '@/lib/utils/dollarsToCents'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { FieldError } from '@/components/ui/FieldError'
-import { AutosaveIndicator } from '@/components/admin/AutosaveIndicator'
 import { UploadField } from '@/components/admin/UploadField'
-import { VideoPreview } from '@/components/admin/VideoPreview'
-import { RichTextEditor } from '@/components/admin/RichTextEditor'
+import { TokenizedVideoPreview } from '@/components/admin/TokenizedVideoPreview'
 import { PublishStateChip, type PublishStateValue } from '@/components/admin/PublishStateChip'
-import { useAutosave } from '@/lib/useAutosave'
+import { InlineEditableTitle } from '@/components/admin/InlineEditableTitle'
 import { required, requiredSelect, useFieldValidation } from '@/lib/useFieldValidation'
 
-interface CourseRow {
+// Exported for LessonWriteScreen.tsx (the full-screen "Write" route) — same course
+// shape, same admin API, so it reuses these rather than a second copy that could drift.
+export interface CourseRow {
   id: string
   slug: string
   title: string
@@ -41,32 +43,48 @@ interface CourseRow {
   publish_state: PublishStateValue
   module_count: number
   lesson_count: number
+  // Found 2026-08-21 (owner-flagged): the list showed no price at all — an admin had
+  // to open every course to see what it charges. None until "Make purchasable" has
+  // been called, same as the detail page's course.price_amount.
+  price_amount?: number | null
+  currency?: string | null
 }
 
-interface AdminLessonBlock {
+export interface AdminLessonBlock {
   id: string
   block_type: 'text' | 'video' | 'file' | 'callout'
   sort_order: number
   heading?: string | null
   text_body?: string | null
+  // Found 2026-08-21 (8E editor round-trip bug): the API always returned this, but the
+  // admin type never carried it, so RichTextEditor was initialized from text_body on
+  // every open — the plain-text fallback field — even for a block already saved with
+  // real formatting. Reopening a formatted block showed the wall-of-text plain
+  // fallback, and any un-noticed re-save from there would have overwritten the
+  // formatted version with it.
+  prose_sanitized?: string | null
   media_id?: string | null
   mux_playback_id?: string | null
+  mux_asset_id?: string | null
   template_id?: string | null
   template_file_name?: string | null
 }
 
-interface AdminLesson {
+export interface AdminLesson {
   id: string
   slug: string
   title: string
   description?: string | null
   lesson_type: string
   body?: string | null
+  // See AdminLessonBlock.prose_sanitized — same bug, same fix, lesson-body modal.
+  prose_sanitized?: string | null
   sort_order: number
   published: boolean
   publish_state: PublishStateValue
   download_template_id?: string | null
   mux_playback_id?: string | null
+  mux_asset_id?: string | null
   is_ready: boolean
   blocks: AdminLessonBlock[]
 }
@@ -84,7 +102,7 @@ const BLOCK_ICON: Record<AdminLessonBlock['block_type'], typeof Type> = {
   file: Download,
 }
 
-interface AdminModule {
+export interface AdminModule {
   id: string
   title: string
   description?: string | null
@@ -92,7 +110,9 @@ interface AdminModule {
   lessons: AdminLesson[]
 }
 
-interface CourseDetail {
+export type ReadinessState = 'no_product' | 'price_unset' | 'stripe_price_unresolved' | 'unpublished' | 'ready'
+
+export interface CourseDetail {
   id: string
   slug: string
   title: string
@@ -102,6 +122,12 @@ interface CourseDetail {
   publish_state: PublishStateValue
   cover_image_url?: string | null
   modules: AdminModule[]
+  // Phase 8 (8A-6): server-derived — never inferred client-side from published/price.
+  readiness: ReadinessState
+  readiness_message: string
+  product_id: string | null
+  price_amount: number | null
+  currency: string | null
 }
 
 const LESSON_TYPES = [
@@ -114,7 +140,7 @@ const LESSON_TYPES = [
 const inputClass =
   'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
 
-const readError = (e: unknown): string => {
+export const readError = (e: unknown): string => {
   const detail = (e as { response?: { data?: { detail?: { error?: { message?: string } } } } })?.response?.data
     ?.detail
   return detail?.error?.message ?? 'Something went wrong. Please try again.'
@@ -349,7 +375,11 @@ function BlockEditor({
                 </p>
                 {block.block_type === 'video' && block.mux_playback_id && (
                   <div className="mt-2">
-                    <VideoPreview playbackId={block.mux_playback_id} className="max-h-32" />
+                    <TokenizedVideoPreview
+                      playbackId={block.mux_playback_id}
+                      assetId={block.mux_asset_id}
+                      className="max-h-32"
+                    />
                   </div>
                 )}
               </div>
@@ -426,19 +456,20 @@ function BlockEditor({
 /** Builds a course: modules, then lessons inside them, then video/body on each. */
 function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => void }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [error, setError] = useState<string | null>(null)
   const [newModuleTitle, setNewModuleTitle] = useState('')
   const [lessonDraft, setLessonDraft] = useState<{ moduleId: string; title: string; type: string } | null>(null)
   const [videoDraft, setVideoDraft] = useState<{ lessonId: string; assetId: string; playbackId: string } | null>(
     null,
   )
-  const [bodyDraft, setBodyDraft] = useState<{ lesson: AdminLesson; text: string } | null>(null)
+  // Lesson-body and block-text/callout prose editing moved to a full-screen route
+  // (LessonWriteScreen.tsx, week4_plan.md Phase 8 "8E-continued",
+  // `[OWNER INSTRUCTION 2026-08-21]`) — no more bodyDraft/blockTextDraft modal state
+  // here; the "Write" buttons below navigate instead.
 
   // Block-editor drafts — one lesson (mixed-content, week2_plan.md Phase 2) can hold
   // several of each, so these key off the block's own id rather than the lesson's.
-  const [blockTextDraft, setBlockTextDraft] = useState<{ block: AdminLessonBlock; heading: string; text: string } | null>(
-    null,
-  )
   const [blockVideoDraft, setBlockVideoDraft] = useState<{ blockId: string; assetId: string; playbackId: string } | null>(
     null,
   )
@@ -515,17 +546,6 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
       }),
     ),
   )
-  const saveBody = useMutation(
-    mutate(() =>
-      api.put<CourseDetail>(`/admin/lessons/${bodyDraft?.lesson.id}`, {
-        title: bodyDraft?.lesson.title,
-        lesson_type: bodyDraft?.lesson.lesson_type,
-        description: bodyDraft?.lesson.description ?? null,
-        body: bodyDraft?.text,
-        download_template_id: bodyDraft?.lesson.download_template_id ?? null,
-      }),
-    ),
-  )
   const setLessonPublishState = useMutation(
     mutate((v: { id: string; state: PublishStateValue }) =>
       api.post<CourseDetail>(`/admin/lessons/${v.id}/publish`, {
@@ -543,40 +563,48 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
     ),
   )
 
+  // Title editing (extends 8E's rich-text work — course/module/lesson titles had no
+  // edit path in the UI at all before this). Each PUT carries the endpoint's full
+  // required payload, not just the title — these routes replace the row's writable
+  // fields wholesale, so the other fields are read back off the current course data
+  // to avoid clobbering them.
+  const saveCourseTitle = useMutation(
+    mutate((title: string) =>
+      api.put<CourseDetail>(`/admin/courses/${courseId}`, {
+        title,
+        subtitle: course?.subtitle ?? null,
+        description: course?.description ?? null,
+      }),
+    ),
+  )
+  const saveModuleTitle = useMutation(
+    mutate((v: { moduleId: string; title: string; description: string | null }) =>
+      api.put<CourseDetail>(`/admin/modules/${v.moduleId}`, {
+        title: v.title,
+        description: v.description,
+      }),
+    ),
+  )
+  const saveLessonTitle = useMutation(
+    mutate((v: { lesson: AdminLesson; title: string }) =>
+      api.put<CourseDetail>(`/admin/lessons/${v.lesson.id}`, {
+        title: v.title,
+        lesson_type: v.lesson.lesson_type,
+        description: v.lesson.description ?? null,
+        body: v.lesson.body ?? null,
+        download_template_id: v.lesson.download_template_id ?? null,
+      }),
+    ),
+  )
+
   // ── Block editor mutations (week2_plan.md Phase 2) ─────────────────────────────
   const addBlock = useMutation(
     mutate((v: { lessonId: string; blockType: AdminLessonBlock['block_type'] }) =>
       api.post<CourseDetail>(`/admin/lessons/${v.lessonId}/blocks`, { block_type: v.blockType }),
     ),
   )
-  const saveBlockText = useMutation(
-    mutate(() =>
-      api.put<CourseDetail>(`/admin/lesson-blocks/${blockTextDraft?.block.id}`, {
-        block_type: blockTextDraft?.block.block_type,
-        heading: blockTextDraft?.heading || null,
-        text_body: blockTextDraft?.text,
-      }),
-    ),
-  )
-
-  // week2_plan.md Phase 6 / §20.8's autosave, on the two rich-text drafts — "losing
-  // 40 minutes of typed guidance" is the exact failure mode this closes, and typed
-  // prose is what these two modals hold (video/file attachment below stay on their
-  // existing explicit-save flow: a single picked id has nothing to lose mid-typing).
-  // Called unconditionally (rules of hooks) even while the modal is closed;
-  // `enabled` gates whether the interval actually runs.
-  const bodyAutosave = useAutosave({
-    value: bodyDraft?.text ?? '',
-    onSave: () => saveBody.mutateAsync(undefined as never),
-    enabled: bodyDraft !== null,
-  })
-  const blockTextAutosave = useAutosave({
-    // Both fields watched — a heading-only edit with no body change still counts as
-    // dirty.
-    value: blockTextDraft ? `${blockTextDraft.heading} ${blockTextDraft.text}` : '',
-    onSave: () => saveBlockText.mutateAsync(undefined as never),
-    enabled: blockTextDraft !== null,
-  })
+  // Autosave for block-text/callout prose now lives in LessonWriteScreen.tsx, next
+  // to the mutation it saves — see the note above bodyDraft's removal.
   const setBlockVideo = useMutation(
     // Same stale-closure fix as `setVideo` above — UploadField's onComplete fires this
     // mutation with explicit variables rather than relying on `blockVideoDraft` state,
@@ -604,9 +632,36 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
   const deleteBlock = useMutation(
     mutate((v: { blockId: string }) => api.delete<CourseDetail>(`/admin/lesson-blocks/${v.blockId}`)),
   )
+  // Phase 9A re-verification (2026-08-21): now takes the admin's own price directly
+  // — "Create Product" as a separate button is gone; the price control below calls
+  // this transparently the first time a price is set on a course with no product yet.
   const createCourseProduct = useMutation(
-    mutate((courseId: string) => api.post<CourseDetail>(`/admin/courses/${courseId}/create-product`)),
+    mutate((v: { courseId: string; priceAmount: number }) =>
+      api.post<CourseDetail>(`/admin/courses/${v.courseId}/create-product`, {
+        price_amount: v.priceAmount,
+        currency: 'AUD',
+      }),
+    ),
   )
+  // Phase 9A: price control — POST /admin/products/{id}/price (one endpoint, three
+  // surfaces). Fixed 2026-08-21: this previously went through the shared `mutate()`
+  // helper, which unconditionally calls `applyCourse(r.data)` on success — but this
+  // endpoint returns ProductOut (a flat product record, no `modules`), not
+  // CourseDetail. `applyCourse` overwrote the course-detail cache with a ProductOut,
+  // and the next render crashed on `course.modules.map(...)` (`modules` is undefined
+  // on a ProductOut). Kept off `mutate()` on purpose — the explicit
+  // invalidateQueries below is what actually refreshes the course with its real
+  // shape, by refetching CourseDetail rather than trusting this response's shape.
+  const [priceAmount, setPriceAmount] = useState('')
+  const changePrice = useMutation({
+    mutationFn: (v: { productId: string; priceAmount: number }) =>
+      api.post(`/admin/products/${v.productId}/price`, {
+        price_amount: v.priceAmount,
+        currency: 'AUD',
+        reason: 'Price set from course editor',
+      }),
+    onError: (e: unknown) => setError(readError(e)),
+  })
   const removeCoverImage = useMutation(
     mutate(() => api.post<CourseDetail>(`/admin/courses/${courseId}/cover/remove`)),
   )
@@ -630,22 +685,109 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
       </button>
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-        <PageTitle eyebrow="Course" title={course.title} description={course.subtitle ?? undefined} />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-start gap-2">
+          {/* PageTitle renders the page's one <h1> and is shared by every route in the
+              app; editing lives beside it rather than inside it so this control
+              changes nothing about that component. hideText avoids showing the title
+              twice — the edit affordance is just the pencil until clicked, then an
+              input takes the same visual slot. */}
+          <PageTitle eyebrow="Course" title={course.title} description={course.subtitle ?? undefined} />
+          <InlineEditableTitle
+            value={course.title}
+            onSave={(title) => saveCourseTitle.mutateAsync(title)}
+            hideText
+            inputClassName="text-h1 font-semibold px-2 py-1"
+            editLabel="Edit course title"
+          />
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <PublishStateChip
+              value={course.publish_state}
+              disabled={setCoursePublishState.isPending}
+              onChange={(state) => setCoursePublishState.mutate({ state })}
+            />
+          </div>
+          {/* Phase 8 (8A-6): server-derived readiness — never inferred client-side,
+              since only the server knows whether the Stripe price actually resolves. */}
+          {course.readiness !== 'ready' && (
+            <span className="flex items-center gap-1 text-xs text-amber-600">
+              <AlertTriangle className="size-3" aria-hidden="true" /> {course.readiness_message}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Phase 9A re-verification (2026-08-21, owner-flagged): "Create Product" used
+          to be a separate button before a price could be set at all — removed. This
+          control now always shows, and creates the product transparently (via
+          create-product, passing the admin's own price) the first time a price is
+          set on a course that doesn't have one yet. */}
+      <div className="mt-4 rounded-lg border border-border bg-card p-4">
+        <p className="text-sm font-medium text-foreground">Price</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {course.price_amount != null
+            ? `Currently ${formatCurrency(course.price_amount, course.currency ?? 'AUD')}. `
+            : ''}
+          Set in dollars. This updates the Stripe Price that charges buyers.
+        </p>
+        <div className="mt-3 flex items-end gap-3">
+          <label className="flex-1">
+            <span className="sr-only">Price in dollars</span>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="e.g. 99.00"
+              value={priceAmount}
+              onChange={(e) => setPriceAmount(e.target.value)}
+            />
+          </label>
           <Button
             size="sm"
-            variant="outline"
-            onClick={() => createCourseProduct.mutate(course.id)}
-            loading={createCourseProduct.isPending}
+            onClick={() => {
+              const cents = dollarsToCents(priceAmount)
+              if (!Number.isFinite(cents) || cents <= 0) return
+
+              const onDone = () => {
+                setPriceAmount('')
+                void queryClient.invalidateQueries({ queryKey: queryKeys.admin.courses() })
+                // The list invalidation above doesn't touch this page's own
+                // CourseDetail query — without this, the price shown here
+                // stays stale until a manual reload.
+                void queryClient.invalidateQueries({ queryKey: queryKeys.admin.course(courseId) })
+              }
+
+              if (!course.product_id) {
+                // First price ever set on this course — create-product now takes
+                // the price directly, one action instead of two.
+                createCourseProduct.mutate(
+                  { courseId: course.id, priceAmount: cents },
+                  { onSuccess: onDone },
+                )
+                return
+              }
+
+              // Phase 8 (8B-7): fat-finger protection — a ±50% swing or a drop to
+              // zero (not reachable via this positive-only field, but the helper
+              // covers it) is confirmed before it charges a real card.
+              const oldCents = course.price_amount ?? 0
+              if (
+                priceChangeNeedsConfirm(oldCents, cents) &&
+                !window.confirm(priceChangeConfirmMessage(oldCents, cents, course.currency ?? 'AUD'))
+              ) {
+                return
+              }
+              changePrice.mutate(
+                { productId: course.product_id, priceAmount: cents },
+                { onSuccess: onDone },
+              )
+            }}
+            loading={changePrice.isPending || createCourseProduct.isPending}
+            disabled={!priceAmount}
           >
-            <Plus className="size-4" aria-hidden="true" />
-            Create Product
+            Set price
           </Button>
-          <PublishStateChip
-            value={course.publish_state}
-            disabled={setCoursePublishState.isPending}
-            onChange={(state) => setCoursePublishState.mutate({ state })}
-          />
         </div>
       </div>
 
@@ -677,7 +819,16 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
       <div className="mt-8 flex flex-col gap-6">
         {course.modules.map((module) => (
           <section key={module.id} className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <h3 className="font-sans font-semibold text-foreground">{module.title}</h3>
+            <InlineEditableTitle
+              value={module.title}
+              onSave={(title) =>
+                saveModuleTitle.mutateAsync({ moduleId: module.id, title, description: module.description ?? null })
+              }
+              as="h3"
+              className="font-sans font-semibold text-foreground"
+              inputClassName="font-sans font-semibold"
+              editLabel="Edit module title"
+            />
 
             <ul className="mt-4 flex flex-col divide-y divide-border border-t border-border">
               {module.lessons.map((lesson) => (
@@ -685,7 +836,13 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">{lesson.title}</p>
+                      <InlineEditableTitle
+                        value={lesson.title}
+                        onSave={(title) => saveLessonTitle.mutateAsync({ lesson, title })}
+                        as="p"
+                        className="text-sm font-medium text-foreground"
+                        editLabel="Edit lesson title"
+                      />
                       <Badge variant="muted">{lesson.lesson_type}</Badge>
                       <PublishStateChip
                         value={lesson.publish_state}
@@ -709,7 +866,11 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                     )}
                     {lesson.lesson_type === 'video' && lesson.mux_playback_id && (
                       <div className="mt-2">
-                        <VideoPreview playbackId={lesson.mux_playback_id} className="max-h-32" />
+                        <TokenizedVideoPreview
+                          playbackId={lesson.mux_playback_id}
+                          assetId={lesson.mux_asset_id}
+                          className="max-h-32"
+                        />
                       </div>
                     )}
                   </div>
@@ -736,7 +897,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setBodyDraft({ lesson, text: lesson.body ?? '' })}
+                        onClick={() => navigate(`/admin/courses/${courseId}/lessons/${lesson.id}/write`)}
                       >
                         Write
                       </Button>
@@ -751,7 +912,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                     onAddBlock={(blockType) => addBlock.mutate({ lessonId: lesson.id, blockType })}
                     addBlockPending={addBlock.isPending}
                     onEditText={(block) =>
-                      setBlockTextDraft({ block, heading: block.heading ?? '', text: block.text_body ?? '' })
+                      navigate(`/admin/courses/${courseId}/blocks/${block.id}/write`)
                     }
                     onEditVideo={(blockId) => {
                       blockVideoV.reset()
@@ -907,90 +1068,11 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
         </div>
       )}
 
-      {bodyDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-5">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setBodyDraft(null)} aria-hidden="true" />
-          <form
-            className="relative flex w-full max-w-2xl flex-col rounded-xl border border-border bg-card p-6 shadow-xl"
-            onSubmit={(e) => {
-              e.preventDefault()
-              saveBody.mutate(undefined as never, { onSuccess: () => setBodyDraft(null) })
-            }}
-          >
-            {/* Sticky-in-header per §20.8; this modal has no separate scroll region so
-                "sticky" here just means "always in the same visible spot," top of form. */}
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="font-sans text-lg font-semibold">{bodyDraft.lesson.title}</h3>
-              <AutosaveIndicator status={bodyAutosave.status} savedAt={bodyAutosave.savedAt} />
-            </div>
-            <div className="mt-4">
-              <RichTextEditor
-                content={bodyDraft.text}
-                onChange={(text) => setBodyDraft({ ...bodyDraft, text })}
-              />
-            </div>
-            <div className="mt-5 flex gap-2">
-              <Button type="submit" loading={saveBody.isPending}>
-                Save
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setBodyDraft(null)}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Block editor's three modals — text/callout, video, file — same pattern as
-          videoDraft/bodyDraft above, keyed by block id instead of lesson id. */}
-      {blockTextDraft && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-5">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setBlockTextDraft(null)}
-            aria-hidden="true"
-          />
-          <form
-            className="relative flex w-full max-w-2xl flex-col rounded-xl border border-border bg-card p-6 shadow-xl"
-            onSubmit={(e) => {
-              e.preventDefault()
-              saveBlockText.mutate(undefined as never, { onSuccess: () => setBlockTextDraft(null) })
-            }}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="font-sans text-lg font-semibold">
-                {blockTextDraft.block.block_type === 'callout' ? 'Callout block' : 'Text block'}
-              </h3>
-              <AutosaveIndicator status={blockTextAutosave.status} savedAt={blockTextAutosave.savedAt} />
-            </div>
-            <label className="mt-4 block">
-              <span className="text-sm font-medium">Heading (optional)</span>
-              <Input
-                autoFocus
-                className="mt-1.5"
-                value={blockTextDraft.heading}
-                onChange={(e) => setBlockTextDraft({ ...blockTextDraft, heading: e.target.value })}
-                onBlur={() => void blockTextAutosave.saveNow()}
-              />
-            </label>
-            <textarea
-              rows={12}
-              className={cn(inputClass, 'mt-4 font-serif leading-relaxed')}
-              value={blockTextDraft.text}
-              onChange={(e) => setBlockTextDraft({ ...blockTextDraft, text: e.target.value })}
-              onBlur={() => void blockTextAutosave.saveNow()}
-            />
-            <div className="mt-5 flex gap-2">
-              <Button type="submit" loading={saveBlockText.isPending}>
-                Save
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setBlockTextDraft(null)}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* Lesson-body and block-text/callout "Write" modals removed 2026-08-21 — both
+          now navigate to LessonWriteScreen.tsx's full-screen route instead (see the
+          "Write" button onClick handlers above). Block editor's remaining two modals
+          — video, file — keep the modal pattern; a single picked id has nothing to
+          lose mid-typing, so a full screen buys nothing there. */}
 
       {blockVideoDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-5">
@@ -1094,7 +1176,12 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
 
 export function AdminCourses() {
   const queryClient = useQueryClient()
-  const [openCourseId, setOpenCourseId] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
+  // LessonWriteScreen.tsx's Back/Cancel/Save all return here as
+  // `/admin/courses?open={courseId}` (week4_plan.md Phase 8 "8E-continued") — course
+  // selection itself is otherwise local state, not a URL param, so this is the one
+  // place that state needs seeding from the URL rather than always starting at null.
+  const [openCourseId, setOpenCourseId] = useState<string | null>(() => searchParams.get('open'))
   const [isCreating, setIsCreating] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -1231,6 +1318,9 @@ export function AdminCourses() {
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {c.module_count} module{c.module_count === 1 ? '' : 's'} · {c.lesson_count} lesson
                       {c.lesson_count === 1 ? '' : 's'}
+                      {c.price_amount != null && (
+                        <> · {formatCurrency(c.price_amount, c.currency ?? 'AUD')}</>
+                      )}
                     </p>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => setOpenCourseId(c.id)}>

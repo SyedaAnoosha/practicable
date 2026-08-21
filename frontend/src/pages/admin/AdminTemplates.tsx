@@ -5,6 +5,8 @@ import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
 import { priceChangeConfirmMessage, priceChangeNeedsConfirm } from '@/lib/utils/priceChangeConfirm'
+import { formatCurrency } from '@/lib/utils/formatCurrency'
+import { dollarsToCents } from '@/lib/utils/dollarsToCents'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
@@ -180,8 +182,16 @@ export function AdminTemplates() {
   })
 
   // Phase 8 (8A-5): the same "make purchasable" path courses have.
+  // Phase 9A re-verification (2026-08-21, owner-flagged): "Create Product" as a
+  // separate button is gone — this now takes the admin's own price and is called
+  // transparently by the price control below, the first time a price is set on a
+  // template with no product yet.
   const createTemplateProduct = useMutation({
-    mutationFn: (id: string) => api.post(`/admin/templates/${id}/create-product`),
+    mutationFn: (v: { id: string; priceAmount: number }) =>
+      api.post(`/admin/templates/${v.id}/create-product`, {
+        price_amount: v.priceAmount,
+        currency: 'AUD',
+      }),
     onSuccess: invalidate,
     onError: (e) => setError(readError(e)),
   })
@@ -410,6 +420,9 @@ export function AdminTemplates() {
                     {t.has_file ? (
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {t.file_name} · {formatBytes(t.file_size_bytes)}
+                        {!t.is_free && t.price_amount != null && (
+                          <> · {formatCurrency(t.price_amount, t.currency ?? 'AUD')}</>
+                        )}
                       </p>
                     ) : (
                       // Stated plainly rather than left to be discovered at publish
@@ -429,56 +442,65 @@ export function AdminTemplates() {
                         {t.readiness_message}
                       </p>
                     )}
-                    {/* Phase 9A: price control — appears after product is created */}
-                    {!t.is_free && t.product_id && (
-                      <div className="mt-2 flex items-end gap-2">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="100"
-                          placeholder="Price (cents, e.g. 4900)"
-                          className="w-40"
-                          value={priceAmount}
-                          onChange={(e) => setPriceAmount(e.target.value)}
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            const cents = parseInt(priceAmount, 10)
-                            if (!cents || cents <= 0) return
-                            // Phase 8 (8B-7): fat-finger protection — a ±50% swing
-                            // is confirmed before it charges a real card.
-                            const oldCents = t.price_amount ?? 0
-                            if (
-                              priceChangeNeedsConfirm(oldCents, cents) &&
-                              !window.confirm(priceChangeConfirmMessage(oldCents, cents, t.currency ?? 'AUD'))
-                            ) {
-                              return
-                            }
-                            changePrice.mutate({ productId: t.product_id!, priceAmount: cents })
-                          }}
-                          loading={changePrice.isPending}
-                          disabled={!priceAmount}
-                        >
-                          Set price
-                        </Button>
-                      </div>
+                    {/* Phase 9A re-verification (2026-08-21, owner-flagged): "Create
+                        Product" as a separate button is gone. This control now
+                        always shows for a paid template, and creates the product
+                        transparently (via create-product, passing the admin's own
+                        price) the first time a price is set. */}
+                    {!t.is_free && (
+                      <>
+                        {t.price_amount != null && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Currently {formatCurrency(t.price_amount, t.currency ?? 'AUD')}
+                          </p>
+                        )}
+                        <div className="mt-2 flex items-end gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Price in dollars, e.g. 49.00"
+                            className="w-40"
+                            value={priceAmount}
+                            onChange={(e) => setPriceAmount(e.target.value)}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const cents = dollarsToCents(priceAmount)
+                              if (!Number.isFinite(cents) || cents <= 0) return
+
+                              if (!t.product_id) {
+                                // First price ever set on this template — one action
+                                // instead of two.
+                                createTemplateProduct.mutate({ id: t.id, priceAmount: cents })
+                                setPriceAmount('')
+                                return
+                              }
+
+                              // Phase 8 (8B-7): fat-finger protection — a ±50% swing
+                              // is confirmed before it charges a real card.
+                              const oldCents = t.price_amount ?? 0
+                              if (
+                                priceChangeNeedsConfirm(oldCents, cents) &&
+                                !window.confirm(priceChangeConfirmMessage(oldCents, cents, t.currency ?? 'AUD'))
+                              ) {
+                                return
+                              }
+                              changePrice.mutate({ productId: t.product_id, priceAmount: cents })
+                            }}
+                            loading={changePrice.isPending || (createTemplateProduct.isPending && createTemplateProduct.variables?.id === t.id)}
+                            disabled={!priceAmount}
+                          >
+                            Set price
+                          </Button>
+                        </div>
+                      </>
                     )}
                   </div>
 
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    {!t.is_free && !t.product_id && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => createTemplateProduct.mutate(t.id)}
-                        loading={createTemplateProduct.isPending && createTemplateProduct.variables === t.id}
-                      >
-                        <Plus className="size-4" aria-hidden="true" />
-                        Create Product
-                      </Button>
-                    )}
                     <Button
                       size="sm"
                       variant="outline"

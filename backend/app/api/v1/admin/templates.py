@@ -104,6 +104,37 @@ class TemplateOut(BaseModel):
     currency: Optional[str] = None
 
 
+async def _standalone_template_product(session: AsyncSession, template_id: uuid.UUID) -> Optional[Product]:
+    """The template's own standalone product — created via this file's own
+    create-product endpoint — as distinct from a pack (admin/packs.py) that merely
+    includes the template alongside a question_set. A template can be referenced by
+    both kinds of ProductContent row at once; this picks the standalone one
+    specifically, the only one this file's readiness/price display concerns itself
+    with. See the 2026-08-21 comment at this function's call site for how the
+    MultipleResultsFound crash this replaces was found.
+    """
+    # Products that carry a question_set content row are packs, never standalone
+    # template products — excluding them up front is what makes the remaining
+    # ProductContent row (if any) safe to fetch with scalar_one_or_none().
+    pack_product_ids = select(ProductContent.product_id).where(
+        ProductContent.content_type == "question_set"
+    )
+    product_content = (
+        await session.execute(
+            select(ProductContent).where(
+                ProductContent.content_type == "template",
+                ProductContent.content_id == template_id,
+                ProductContent.product_id.not_in(pack_product_ids),
+            )
+        )
+    ).scalar_one_or_none()
+    if product_content is None:
+        return None
+    return (
+        await session.execute(select(Product).where(Product.id == product_content.product_id))
+    ).scalar_one_or_none()
+
+
 async def _to_out(t: Template, session: AsyncSession) -> TemplateOut:
     previews = []
     for item in t.preview_image_keys or []:
@@ -118,19 +149,15 @@ async def _to_out(t: Template, session: AsyncSession) -> TemplateOut:
     # derive readiness from it — same helper courses use, so the two agree.
     from app.core.publish_guard import compute_readiness
 
-    product_content = (
-        await session.execute(
-            select(ProductContent).where(
-                ProductContent.content_type == "template",
-                ProductContent.content_id == t.id,
-            )
-        )
-    ).scalar_one_or_none()
-    product = None
-    if product_content is not None:
-        product = (
-            await session.execute(select(Product).where(Product.id == product_content.product_id))
-        ).scalar_one_or_none()
+    # Found 2026-08-21 (Phase 9A re-verification): a template can legitimately be
+    # referenced by TWO ProductContent rows now — its own standalone product (this
+    # endpoint's create-product) AND a pack that includes it (POST /admin/packs) —
+    # `scalar_one_or_none()` here crashed with MultipleResultsFound the moment a
+    # template was in a pack, 500ing the whole list. This is the standalone
+    # template's own product specifically: the one ProductContent row whose product
+    # has no sibling question_set row (a pack's product always has one; a standalone
+    # template product never does).
+    product = await _standalone_template_product(session, t.id)
     readiness_result = compute_readiness(product)
 
     return TemplateOut(
@@ -506,9 +533,20 @@ async def remove_template_preview(
     return await _to_out(template, session)
 
 
+class CreateTemplateProductIn(BaseModel):
+    # Found 2026-08-21 (owner-flagged): same fix as courses.py's CreateProductIn —
+    # "Create Product" was a separate, unnecessary step before a price could be set
+    # at all. Removed from the UI; the price control now calls this first,
+    # transparently, on a template with no product yet. Both optional so any other
+    # caller keeps working at the old A$49 default.
+    price_amount: Optional[int] = Field(default=None, gt=0)
+    currency: str = Field(default="AUD", min_length=3, max_length=3)
+
+
 @router.post("/admin/templates/{template_id}/create-product", response_model=TemplateOut)
 async def create_template_product(
     template_id: uuid.UUID,
+    payload: CreateTemplateProductIn = CreateTemplateProductIn(),
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
@@ -518,8 +556,8 @@ async def create_template_product(
     Stripe is called first; if it fails, no database row is created.
     Transaction safety ensures a half-success state cannot exist.
 
-    Uses sensible defaults:
-    - Price: A$49 (4900 cents) - templates are priced lower than courses
+    Price: the caller's own `price_amount`/`currency` if given (Phase 9A
+    re-verification), else the A$49 default this endpoint has always had.
     - Slug: derived from template title
     - Licence: standard
     """
@@ -529,15 +567,12 @@ async def create_template_product(
 
     template = await get_or_404(session, Template, template_id, "Template")
 
-    # Check if product already exists for this template
-    existing = (
-        await session.execute(
-            select(ProductContent).where(
-                ProductContent.content_type == "template",
-                ProductContent.content_id == template.id
-            )
-        )
-    ).scalar_one_or_none()
+    # Check if a standalone product already exists for this template — NOT the same
+    # query as "any ProductContent row referencing this template", which also matches
+    # a pack that includes it and crashed here with MultipleResultsFound once a
+    # template could be in both at once (found 2026-08-21, same root cause as
+    # _to_out's identical fix above).
+    existing = await _standalone_template_product(session, template.id)
 
     if existing:
         raise HTTPException(
@@ -550,11 +585,14 @@ async def create_template_product(
             },
         )
 
+    price_amount = payload.price_amount if payload.price_amount is not None else 4900
+    currency = payload.currency
+
     # Step 1: Create Stripe Price and Product FIRST (8A-4: Stripe first, DB second)
     try:
         stripe_price_id, stripe_product_id = create_price(
-            unit_amount=4900,  # A$49 in cents
-            currency="AUD",
+            unit_amount=price_amount,
+            currency=currency,
             product_name=template.title,
         )
     except stripe.StripeError as e:
@@ -576,8 +614,8 @@ async def create_template_product(
         description=template.description,
         stripe_price_id=stripe_price_id,  # Real Stripe Price ID, not placeholder
         stripe_product_id=stripe_product_id,  # Phase 8B: so a later price change reuses this Product
-        price_amount=4900,  # A$49 in cents
-        currency="AUD",
+        price_amount=price_amount,
+        currency=currency,
         licence=Licence.STANDARD,
         published=False,  # Start unpublished, admin must publish after review
     )
@@ -599,6 +637,8 @@ async def create_template_product(
             "template_title": template.title,
             "stripe_price_id": stripe_price_id,
             "stripe_product_id": stripe_product_id,
+            "price_amount": price_amount,
+            "currency": currency,
         },
     )
     await session.commit()

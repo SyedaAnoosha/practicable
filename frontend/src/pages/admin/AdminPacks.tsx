@@ -12,6 +12,7 @@ import { PublishStateChip, type PublishStateValue } from '@/components/admin/Pub
 import { required, useFieldValidation } from '@/lib/useFieldValidation'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { dollarsToCents } from '@/lib/utils/dollarsToCents'
+import { priceChangeConfirmMessage, priceChangeNeedsConfirm } from '@/lib/utils/priceChangeConfirm'
 
 const inputClass =
   'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
@@ -129,6 +130,27 @@ export function AdminPacks() {
     mutationFn: ({ id, state }: { id: string; state: PublishStateValue }) =>
       api.post(`/admin/packs/${id}/publish`, { published: state === 'published', publish_state: state }),
     onSuccess: invalidate,
+    onError: (e) => setError(readError(e)),
+  })
+
+  // Phase 9A re-verification (2026-08-21): the create form set a price, but nothing
+  // let an existing pack's price be *changed* afterward — courses and templates both
+  // had this via POST /admin/products/{id}/price (one endpoint, three surfaces per
+  // §9A step 3); packs was the one editor missing it. Same endpoint, same pattern.
+  const [changePriceId, setChangePriceId] = useState<string | null>(null)
+  const [changePriceAmount, setChangePriceAmount] = useState('')
+  const changePrice = useMutation({
+    mutationFn: (v: { productId: string; priceAmount: number }) =>
+      api.post(`/admin/products/${v.productId}/price`, {
+        price_amount: v.priceAmount,
+        currency: 'AUD',
+        reason: 'Price set from pack editor',
+      }),
+    onSuccess: () => {
+      setChangePriceId(null)
+      setChangePriceAmount('')
+      invalidate()
+    },
     onError: (e) => setError(readError(e)),
   })
 
@@ -277,8 +299,52 @@ export function AdminPacks() {
                           </span>
                         )}
                       </div>
+                      {/* Phase 9A: price control — stripe_price_id stays read-only
+                          everywhere; this is the one endpoint that writes it. */}
+                      {changePriceId === p.id && (
+                        <div className="mt-2 flex items-end gap-2">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Price in dollars, e.g. 49.00"
+                            className="w-40"
+                            value={changePriceAmount}
+                            onChange={(e) => setChangePriceAmount(e.target.value)}
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const cents = dollarsToCents(changePriceAmount)
+                              if (!Number.isFinite(cents) || cents <= 0) return
+                              // Phase 8 (8B-7): fat-finger protection — a ±50% swing
+                              // is confirmed before it charges a real card.
+                              if (
+                                priceChangeNeedsConfirm(p.price_amount, cents) &&
+                                !window.confirm(priceChangeConfirmMessage(p.price_amount, cents, p.currency))
+                              ) {
+                                return
+                              }
+                              changePrice.mutate({ productId: p.id, priceAmount: cents })
+                            }}
+                            loading={changePrice.isPending && changePrice.variables?.productId === p.id}
+                            disabled={!changePriceAmount}
+                          >
+                            Set price
+                          </Button>
+                          <Button size="sm" variant="ghost" type="button" onClick={() => { setChangePriceId(null); setChangePriceAmount('') }}>
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
+                      {changePriceId !== p.id && (
+                        <Button size="sm" variant="outline" onClick={() => { setChangePriceId(p.id); setChangePriceAmount('') }}>
+                          Change price
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => {
                         setName(p.name)
                         setDescription(p.description)
