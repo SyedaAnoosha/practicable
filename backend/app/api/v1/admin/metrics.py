@@ -56,10 +56,12 @@ class MetricsOut(BaseModel):
     revenue_net_cents: int
     # Enrollment splits by granted_via (W4-R10)
     enrollment_splits: dict  # {"purchase": n, "manual": n, "free": n}
-    # Product rankings by revenue (W4-R10)
-    product_rankings: list  # [{id, name, revenue_cents, revenue_dollars}]
+    # Product rankings by units and revenue (W4-R10)
+    product_rankings: list  # [{id, name, units, revenue_cents, revenue_dollars}]
     # Download links issued (W4-R10)
     download_links_issued: int
+    # Courses ranked by enrollment, started and completed (W4-R10 8C-2)
+    course_enrollment_rankings: list  # [{id, title, enrolled, started, completed}]
 
 
 class RevenueSeriesPoint(BaseModel):
@@ -277,13 +279,20 @@ async def _get_enrollment_splits(session: AsyncSession) -> dict:
 
 
 async def _get_product_rankings(session: AsyncSession, limit: int = 10) -> list:
-    """Products ranked by revenue (W4-R10). Joins through OrderItem, not Order.total."""
+    """Products ranked by revenue (W4-R10). Joins through OrderItem, not Order.total.
+
+    8C-2: "top products by units and revenue, refunds excluded" — units is the count
+    of OrderItem rows (one per unit sold), not a separate query; a completed order's
+    line item is a unit, so counting rows and summing price_amount_cents in the same
+    grouped query costs nothing extra.
+    """
     from app.db.models import OrderItem
-    
+
     result = await session.execute(
         select(
             Product.id,
             Product.name,
+            func.count(OrderItem.id).label("units"),
             func.coalesce(func.sum(OrderItem.price_amount_cents), 0).label("revenue"),
         )
         .join(OrderItem, Product.id == OrderItem.product_id)
@@ -294,7 +303,67 @@ async def _get_product_rankings(session: AsyncSession, limit: int = 10) -> list:
         .limit(limit)
     )
     return [
-        {"id": str(r[0]), "name": r[1], "revenue_cents": r[2], "revenue_dollars": r[2] / 100}
+        {"id": str(r[0]), "name": r[1], "units": r[2], "revenue_cents": r[3], "revenue_dollars": r[3] / 100}
+        for r in result.all()
+    ]
+
+
+async def _get_course_enrollment_rankings(session: AsyncSession, limit: int = 10) -> list:
+    """Courses ranked by enrollment, started and completed (W4-R10 8C-2).
+
+    "Enrolled" is an active (non-revoked) entitlement whose linked content is this
+    course, via ProductContent — the same purchasability graph 8A's readiness check
+    walks. "Started" is a CourseProgress row existing at all (Lesson.tsx writes one
+    on first open); "completed" is that row's `completed` flag. A course can be
+    started and not completed, but not completed without having started — the query
+    reports both counts independently rather than implying that ordering.
+    """
+    from app.db.models import Course, CourseProgress, ProductContent
+
+    enrolled_subq = (
+        select(
+            ProductContent.content_id.label("course_id"),
+            func.count(func.distinct(Entitlement.user_id)).label("enrolled"),
+        )
+        .join(Entitlement, Entitlement.product_id == ProductContent.product_id)
+        .where(
+            ProductContent.content_type == "course",
+            Entitlement.revoked_at.is_(None),
+        )
+        .group_by(ProductContent.content_id)
+        .subquery()
+    )
+    started_subq = (
+        select(
+            CourseProgress.course_id.label("course_id"),
+            func.count(func.distinct(CourseProgress.user_id)).label("started"),
+            func.count(func.distinct(CourseProgress.user_id)).filter(CourseProgress.completed.is_(True)).label("completed"),
+        )
+        .group_by(CourseProgress.course_id)
+        .subquery()
+    )
+
+    result = await session.execute(
+        select(
+            Course.id,
+            Course.title,
+            func.coalesce(enrolled_subq.c.enrolled, 0),
+            func.coalesce(started_subq.c.started, 0),
+            func.coalesce(started_subq.c.completed, 0),
+        )
+        .outerjoin(enrolled_subq, enrolled_subq.c.course_id == Course.id)
+        .outerjoin(started_subq, started_subq.c.course_id == Course.id)
+        .order_by(func.coalesce(enrolled_subq.c.enrolled, 0).desc())
+        .limit(limit)
+    )
+    return [
+        {
+            "id": str(r[0]),
+            "title": r[1],
+            "enrolled": r[2],
+            "started": r[3],
+            "completed": r[4],
+        }
         for r in result.all()
     ]
 
@@ -378,6 +447,7 @@ async def get_metrics(
     enrollment_splits = await _get_enrollment_splits(session)
     product_rankings = await _get_product_rankings(session)
     downloads = await _get_download_links_issued(session)
+    course_enrollment_rankings = await _get_course_enrollment_rankings(session)
 
     metrics = [
         second_purchase,
@@ -413,6 +483,7 @@ async def get_metrics(
         enrollment_splits=enrollment_splits,
         product_rankings=product_rankings,
         download_links_issued=downloads,
+        course_enrollment_rankings=course_enrollment_rankings,
     )
 
 

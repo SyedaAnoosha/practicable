@@ -398,3 +398,167 @@ bug. `handover.md`'s own record of the bundle's construction already names this 
 one question both parts grant. **Left as a named finding, not resolved here** — whether
 one shared question between two non-bundle products is acceptable overlap or should have
 its grant removed from one side is a catalogue-content decision, not an engineering one.
+
+# Phase 8C — the metrics queries (week4_plan.md Phase 8, verified 2026-08-21)
+
+**Not previously done.** 8C-6 calls for "EXPLAIN every query against a synthetic
+dataset built and rolled back in one transaction," but the only evidence in this file
+before this pass covered migrations `010` and `013` — none of `/admin/metrics`'s own
+five queries had ever been EXPLAINed. Same method as above: one transaction, synthetic
+rows inserted via bulk `executemany` (not one `INSERT` per row — the first attempt at
+this took 9+ minutes over the network and was abandoned), `EXPLAIN (ANALYZE, BUFFERS)`
+run, then rolled back. Row counts confirmed identical before and after
+(`orders=4, order_items=4, entitlements=4, course_progress=1, products=9, courses=2`).
+
+**Synthetic volume**: 2,000 users · 200 products · 50 courses (25 linked to a product
+via `product_contents`, matching the real ratio of purchasable to free courses) · 5,000
+orders/order_items (~92% completed, ~8% refunded) · 3,627 entitlements · 2,529
+`course_progress` rows. The script is not kept in the repo, same reasoning as `010`'s
+note above.
+
+## Query 1 — revenue breakdown (`metrics.py:_get_revenue_breakdown`)
+
+```sql
+SELECT coalesce(sum(total_amount_cents), 0) FROM orders WHERE status = 'completed';
+```
+
+```
+Aggregate  (cost=217.04..217.05 rows=1 width=8) (actual time=1.105..1.107 rows=1 loops=1)
+  ->  Seq Scan on orders  (cost=0.00..205.55 rows=4596 width=4) (actual time=0.012..0.807 rows=4596 loops=1)
+        Filter: (status = 'completed'::order_status)
+        Rows Removed by Filter: 408
+Execution Time: 1.139 ms
+```
+
+**A sequential scan, and correctly so.** `status` isn't selective enough at any
+realistic ratio (roughly 90%+ of rows match) for an index on it to beat scanning the
+table — this is textbook "the planner is right to skip the index," not a gap. 1.1ms at
+5,000 rows; **no index warranted**.
+
+## Query 2 — product rankings by units and revenue (`metrics.py:_get_product_rankings`)
+
+```sql
+SELECT p.id, p.name, count(oi.id), coalesce(sum(oi.price_amount_cents), 0)
+FROM products p JOIN order_items oi ON p.id = oi.product_id
+JOIN orders o ON oi.order_id = o.id
+WHERE o.status = 'completed'
+GROUP BY p.id, p.name ORDER BY sum(oi.price_amount_cents) DESC NULLS LAST LIMIT 10;
+```
+
+```
+Limit  (cost=517.27..517.30 rows=10 width=61) (actual time=5.046..5.050 rows=10 loops=1)
+  ->  Sort ... Sort Method: top-N heapsort  Memory: 27kB
+        ->  HashAggregate (rows=203 loops=1)
+              ->  Hash Join (oi.product_id = p.id) (rows=4596 loops=1)
+                    ->  Hash Join (oi.order_id = o.id) (rows=4596 loops=1)
+                          ->  Seq Scan on order_items oi (rows=5004 loops=1)
+                          ->  Hash ->  Seq Scan on orders o (rows=4596 loops=1)
+                    ->  Hash ->  Seq Scan on products p (rows=209 loops=1)
+Execution Time: 5.116 ms
+```
+
+Two hash joins over full (small) table scans, then a top-N sort. 5.1ms at 5,000 orders /
+209 products. `order_items.product_id` and `order_items.order_id` have no dedicated
+index, but a hash join over a full scan is the correct plan at this row count regardless
+— a lookup index only pays for itself once the driving side gets large enough that a
+nested-loop-with-index-lookup beats a single sequential pass, and this table is nowhere
+near that. **No index warranted at current or near-term scale.**
+
+## Query 3 — enrollment splits (`metrics.py:_get_enrollment_splits`)
+
+```sql
+SELECT granted_via, count(id) FROM entitlements WHERE revoked_at IS NULL GROUP BY granted_via;
+```
+
+```
+HashAggregate  (cost=104.46..104.47 rows=1 width=12) (actual time=1.032..1.092 rows=1 loops=1)
+  ->  Seq Scan on entitlements  (rows=3630 loops=1)
+        Filter: (revoked_at IS NULL)
+        Rows Removed by Filter: 1
+Execution Time: 1.129 ms
+```
+
+Nearly every synthetic entitlement is unrevoked (1 of 3,631 filtered), so `revoked_at`
+is the wrong kind of column for an index — nothing to skip. 1.1ms. **No index
+warranted.**
+
+## Query 4 — course enrollment rankings (`metrics.py:_get_course_enrollment_rankings`, new in 8C)
+
+```sql
+SELECT c.id, c.title, coalesce(e.enrolled,0), coalesce(s.started,0), coalesce(s.completed,0)
+FROM courses c
+LEFT JOIN (SELECT pc.content_id, count(DISTINCT ent.user_id) FROM product_contents pc
+           JOIN entitlements ent ON ent.product_id = pc.product_id
+           WHERE pc.content_type='course' AND ent.revoked_at IS NULL GROUP BY pc.content_id) e ON e.course_id = c.id
+LEFT JOIN (SELECT course_id, count(DISTINCT user_id), count(DISTINCT user_id) FILTER (WHERE completed)
+           FROM course_progress GROUP BY course_id) s ON s.course_id = c.id
+ORDER BY coalesce(e.enrolled,0) DESC LIMIT 10;
+```
+
+```
+Limit (actual time=5.724..5.730 rows=10 loops=1)
+  ->  Sort  Sort Method: top-N heapsort  Memory: 26kB
+        ->  Merge Left Join (c.id = course_progress.course_id) (rows=52 loops=1)
+              ->  Merge Left Join (c.id = pc.content_id) (rows=52 loops=1)
+                    ->  Index Scan using courses_pkey on courses c (rows=52 loops=1)
+                    ->  GroupAggregate (Group Key: pc.content_id) (rows=25 loops=1)
+                          ->  Sort (Sort Key: pc.content_id, ent.user_id) (rows=3627 loops=1)
+                                ->  Hash Join (pc.product_id = ent.product_id) (rows=3627 loops=1)
+                                      ->  Seq Scan on product_contents pc (rows=25 loops=1)
+                                            Filter: content_type = 'course'  Rows Removed by Filter: 139
+                                      ->  Hash ->  Seq Scan on entitlements ent (rows=3630 loops=1)
+              ->  GroupAggregate (Group Key: course_progress.course_id) (rows=26 loops=1)
+                    ->  Sort (Sort Key: course_id, user_id) (rows=2530 loops=1)
+                          ->  Seq Scan on course_progress (rows=2530 loops=1)
+Execution Time: 5.799 ms
+```
+
+The two-subquery shape (enrolled via `product_contents`+`entitlements`, started/
+completed via `course_progress`) costs 5.8ms — both subqueries scan their whole table
+once, correctly, since `courses` (52 synthetic rows) is the smallest table in the join
+and everything else fans out from it. `product_contents.content_type` removes 139 of
+164 rows via a filter rather than an index — at today's real row count (139 total per
+`013`'s own evidence above) that filter is cheaper than building and maintaining an
+index would be. **No index warranted; re-measure if `product_contents` reaches the
+scale where `010`'s or `013`'s indexes started mattering (thousands of rows, not
+hundreds).**
+
+## Query 5 — revenue-series daily bucketing (`metrics.py:_get_revenue_series`)
+
+```sql
+SELECT date_trunc('day', created_at), sum(total_amount_cents), count(id) FROM orders
+WHERE status = 'completed' AND created_at >= now() - interval '90 days'
+GROUP BY date_trunc('day', created_at) ORDER BY date_trunc('day', created_at);
+```
+
+```
+Sort (actual time=1.128..1.134 rows=91 loops=1)
+  ->  HashAggregate (rows=91 loops=1)
+        ->  Bitmap Heap Scan on orders (rows=1160 loops=1)
+              Recheck Cond: (created_at >= (now() - '90 days'::interval))
+              Filter: (status = 'completed'::order_status)
+              Rows Removed by Filter: 99
+              ->  Bitmap Index Scan on ix_orders_created  (rows=2475 loops=1)
+                    Index Cond: (created_at >= (now() - '90 days'::interval))
+Execution Time: 1.189 ms
+```
+
+**This is the one query that actually uses an index** — `ix_orders_created` (pre-
+existing, not added for 8C) correctly narrows 5,004 rows to the 90-day window before
+the `status` filter and aggregation run. 1.2ms.
+
+## Summary — Phase 8C
+
+| Query | Verdict |
+|---|---|
+| Revenue breakdown | Seq scan correct — `status` not selective enough to index |
+| Product rankings (units + revenue) | Hash joins over full scans correct at this scale |
+| Enrollment splits | Seq scan correct — `revoked_at IS NULL` matches nearly every row |
+| Course enrollment rankings | Two-subquery merge join correct; re-measure if `product_contents` grows into the thousands |
+| Revenue-series | Already indexed (`ix_orders_created`); the one query where it matters |
+
+**No new index is warranted by this pass.** Every query is single-digit milliseconds at
+5,000 synthetic orders — an order of magnitude past what the real catalogue holds today
+— and every seq scan present is the plan a selective-enough index would produce anyway
+at this row count. Non-negotiable #11's rule ("any index that does not change the plan
+is not created") is the reason nothing was added here, not an oversight.

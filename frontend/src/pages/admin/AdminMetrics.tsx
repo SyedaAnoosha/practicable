@@ -17,8 +17,17 @@ interface Metric {
 interface ProductRanking {
   id: string
   name: string
+  units: number
   revenue_cents: number
   revenue_dollars: number
+}
+
+interface CourseEnrollmentRanking {
+  id: string
+  title: string
+  enrolled: number
+  started: number
+  completed: number
 }
 
 interface MetricsResponse {
@@ -30,6 +39,7 @@ interface MetricsResponse {
   enrollment_splits: Record<string, number>
   product_rankings: ProductRanking[]
   download_links_issued: number
+  course_enrollment_rankings: CourseEnrollmentRanking[]
 }
 
 /** §20.7a: Fetches revenue-series data and renders the TrendChart.
@@ -218,6 +228,7 @@ export function AdminMetrics() {
                 <thead className="bg-muted/60 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th scope="col" className="px-4 py-2.5 text-left">Product</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Units</th>
                     <th scope="col" className="px-4 py-2.5 text-right">Revenue</th>
                   </tr>
                 </thead>
@@ -225,9 +236,39 @@ export function AdminMetrics() {
                   {metricsData.product_rankings.map((p) => (
                     <tr key={p.id} className="border-t border-border">
                       <td className="px-4 py-2.5 text-foreground">{p.name}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{p.units}</td>
                       <td className="px-4 py-2.5 text-right font-medium tabular-nums text-foreground">
                         ${p.revenue_dollars.toFixed(2)}
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* Course Enrollment Rankings — 8C-2 */}
+        {metricsData.course_enrollment_rankings.length > 0 && (
+          <section>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">Courses by enrollment</h3>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-2.5 text-left">Course</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Enrolled</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Started</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Completed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metricsData.course_enrollment_rankings.map((c) => (
+                    <tr key={c.id} className="border-t border-border">
+                      <td className="px-4 py-2.5 text-foreground">{c.title}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-foreground">{c.enrolled}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{c.started}</td>
+                      <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{c.completed}</td>
                     </tr>
                   ))}
                 </tbody>
