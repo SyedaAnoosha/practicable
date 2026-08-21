@@ -85,35 +85,25 @@ export function AdminProducts() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
+      // Phase 8 (8B-9): price is deliberately NOT sent from this form when editing —
+      // it goes through the dedicated "Change price" control below, via the one
+      // /price endpoint, from all three surfaces. stripe_price_id/price_amount are
+      // still required by the schema (it also serves create), so the existing values
+      // round-trip unchanged; the backend ignores them on PUT.
       const editing = products?.find((p) => p.id === editingId)
-      return editingId
-        ? // Phase 8 (8B-9): price is deliberately NOT sent from this form when editing —
-          // it goes through the dedicated "Change price" control below, via the one
-          // /price endpoint, from all three surfaces. stripe_price_id/price_amount are
-          // still required by the schema (it also serves create), so the existing
-          // values round-trip unchanged; the backend ignores them on PUT.
-          api.put(`/admin/products/${editingId}`, {
-            name,
-            description,
-            stripe_price_id: editing?.stripe_price_id ?? 'unused',
-            price_amount: editing?.price_amount ?? 1,
-            currency,
-            licence: licence || null,
-            search_title: searchTitle || null,
-            version: version || null,
-            is_bundle: isBundle,
-          })
-        : api.post('/admin/products', {
-            name,
-            description,
-            price_amount: dollarsToCents(priceAmount),
-            currency,
-            licence: licence || null,
-            search_title: searchTitle || null,
-            version: version || null,
-            is_bundle: isBundle,
-          })
+      const body = {
+        name,
+        description,
+        stripe_price_id: editing?.stripe_price_id ?? 'unused',
+        price_amount: editingId ? editing?.price_amount ?? 1 : dollarsToCents(priceAmount),
+        currency,
+        licence: licence || null,
+        search_title: searchTitle || null,
+        version: version || null,
+        is_bundle: isBundle,
+      }
+      return editingId ? api.put(`/admin/products/${editingId}`, body) : api.post('/admin/products', body)
     },
     onSuccess: () => {
       reset()
