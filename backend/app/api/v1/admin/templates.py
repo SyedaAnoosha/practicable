@@ -93,9 +93,18 @@ class TemplateOut(BaseModel):
     version: Optional[str] = None
     last_reviewed_at: Optional[datetime] = None
     format: Optional[str] = None
+    # Phase 8 (8A-6): server-derived readiness, same states a bare ProductOut would
+    # carry — None/no_product for a free template, which has no product at all.
+    readiness: Literal["no_product", "price_unset", "stripe_price_unresolved", "unpublished", "ready"]
+    readiness_message: str
+    product_id: Optional[str] = None
+    # Phase 8 (8B-7): the price-change confirmation step needs the *current* price to
+    # compute the ±50%/zero delta — it cannot be inferred client-side without this.
+    price_amount: Optional[int] = None
+    currency: Optional[str] = None
 
 
-def _to_out(t: Template) -> TemplateOut:
+async def _to_out(t: Template, session: AsyncSession) -> TemplateOut:
     previews = []
     for item in t.preview_image_keys or []:
         key = item if isinstance(item, str) else item.get("key", "")
@@ -103,6 +112,27 @@ def _to_out(t: Template) -> TemplateOut:
         if not key:
             continue
         previews.append(PreviewImageOut(storage_key=key, url=resolve_previews([{"key": key, "alt": alt}])[0].url, alt=alt))
+
+    # Phase 8 (8A-6): resolve the template's linked product (None until "Make
+    # purchasable" has been called, and always None for a free template) and
+    # derive readiness from it — same helper courses use, so the two agree.
+    from app.core.publish_guard import compute_readiness
+
+    product_content = (
+        await session.execute(
+            select(ProductContent).where(
+                ProductContent.content_type == "template",
+                ProductContent.content_id == t.id,
+            )
+        )
+    ).scalar_one_or_none()
+    product = None
+    if product_content is not None:
+        product = (
+            await session.execute(select(Product).where(Product.id == product_content.product_id))
+        ).scalar_one_or_none()
+    readiness_result = compute_readiness(product)
+
     return TemplateOut(
         id=str(t.id), slug=t.slug, title=t.title, description=t.description,
         file_name=t.file_name, file_size_bytes=t.file_size_bytes,
@@ -114,18 +144,23 @@ def _to_out(t: Template) -> TemplateOut:
         version=t.version,
         last_reviewed_at=t.last_reviewed_at,
         format=format_line(t.file_name) if t.storage_key else None,
+        readiness=readiness_result.state,
+        readiness_message=readiness_result.message,
+        product_id=str(product.id) if product else None,
+        price_amount=product.price_amount if product else None,
+        currency=product.currency if product else None,
     )
 
 
 @router.get("/admin/templates", response_model=list[TemplateOut])
 async def list_templates(session: AsyncSession = Depends(get_session)):
     rows = (await session.execute(select(Template).order_by(Template.title))).scalars().all()
-    return [_to_out(t) for t in rows]
+    return [await _to_out(t, session) for t in rows]
 
 
 @router.get("/admin/templates/{template_id}", response_model=TemplateOut)
 async def get_template(template_id: uuid.UUID, session: AsyncSession = Depends(get_session)):
-    return _to_out(await get_or_404(session, Template, template_id, "Template"))
+    return await _to_out(await get_or_404(session, Template, template_id, "Template"), session)
 
 
 @router.post("/admin/templates", response_model=TemplateOut, status_code=status.HTTP_201_CREATED)
@@ -171,7 +206,7 @@ async def create_template(
         target_id=template.id, context={"title": template.title},
     )
     await session.commit()
-    return _to_out(template)
+    return await _to_out(template, session)
 
 
 @router.put("/admin/templates/{template_id}", response_model=TemplateOut)
@@ -204,7 +239,7 @@ async def update_template(
         target_id=template.id, context={"title": template.title, "is_free": template.is_free},
     )
     await session.commit()
-    return _to_out(template)
+    return await _to_out(template, session)
 
 
 @router.post("/admin/templates/{template_id}/file", response_model=TemplateOut)
@@ -274,7 +309,7 @@ async def upload_template_file(
         except Exception:  # noqa: BLE001 — deliberately swallowed, see above
             pass
 
-    return _to_out(template)
+    return await _to_out(template, session)
 
 
 class UploadUrlIn(BaseModel):
@@ -405,7 +440,7 @@ async def confirm_template_upload(
             context={"file_name": payload.file_name, "bytes": content_length, "via": "presigned", "count": len(existing)},
         )
         await session.commit()
-        return _to_out(template)
+        return await _to_out(template, session)
 
     previous_key = template.storage_key
     template.storage_key = payload.storage_key
@@ -425,7 +460,7 @@ async def confirm_template_upload(
         except Exception:  # noqa: BLE001 — best-effort, row is already committed
             pass
 
-    return _to_out(template)
+    return await _to_out(template, session)
 
 
 class RemovePreviewIn(BaseModel):
@@ -468,7 +503,7 @@ async def remove_template_preview(
     except Exception:  # noqa: BLE001 — best-effort, row is already committed
         pass
 
-    return _to_out(template)
+    return await _to_out(template, session)
 
 
 @router.post("/admin/templates/{template_id}/create-product", response_model=TemplateOut)
@@ -540,6 +575,7 @@ async def create_template_product(
         name=template.title,
         description=template.description,
         stripe_price_id=stripe_price_id,  # Real Stripe Price ID, not placeholder
+        stripe_product_id=stripe_product_id,  # Phase 8B: so a later price change reuses this Product
         price_amount=4900,  # A$49 in cents
         currency="AUD",
         licence=Licence.STANDARD,
@@ -567,7 +603,7 @@ async def create_template_product(
     )
     await session.commit()
 
-    return _to_out(template)
+    return await _to_out(template, session)
 
 
 @router.post("/admin/templates/{template_id}/publish", response_model=TemplateOut)
@@ -623,4 +659,4 @@ async def set_published(
         context={"from": was, "to": payload.published, "state_from": was_state, "state_to": new_state.value},
     )
     await session.commit()
-    return _to_out(template)
+    return await _to_out(template, session)

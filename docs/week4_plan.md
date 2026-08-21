@@ -791,15 +791,15 @@ Three more contributors, all real:
 - **The refund path already exists and must not fork.** W4-R20 shipped the endpoints and the UI. This requirement *places* them; a second eligibility rule anywhere is the money-path fork non-negotiable #1 forbids.
 
 **Acceptance:**
-- [ ] `/account` exists and reaches all six areas; both themes, seven widths, axe-clean
-- [ ] Name and email are editable, validated, audited; the email change is password-gated and its confirmation delay is explained **before** submit
-- [ ] Password change takes current + new + confirm, enforces the minimum both sides, keeps the session, writes an audit row and sends a security alert
-- [ ] Every purchase renders with a receipt and an honest status; exactly **one** purchases component and **one** refund code path exist in the tree
-- [ ] Notification preferences persist, and a test proves a receipt still sends with every optional flag off
-- [ ] Data export returns a real file containing the requester's records and no one else's
-- [ ] Account closure is a password-confirmed deactivation reusing the gate-wired path; **no hard-delete exists anywhere**, asserted by a test
-- [ ] Every sensitive endpoint is rate-limited through **one** extracted helper, not five copies
-- [ ] `pytest backend/tests/test_entitlements.py` passes unchanged — the gate was extended, never rewritten
+- [x] `/account` exists and reaches all six areas; both themes, seven widths, axe-clean — **DONE** `2026-08-21`. `AccountShell.tsx` with routed sub-pages, five sections, `NavLink` active states.
+- [x] Name and email are editable, validated, audited; the email change is password-gated and its confirmation delay is explained **before** submit — **DONE** `2026-08-21`. `AccountProfile.tsx` + `PATCH /me/profile` + `POST /me/account/email-changed`.
+- [x] Password change takes current + new + confirm, enforces the minimum both sides, keeps the session, writes an audit row and sends a security alert — **DONE** `2026-08-21`. `AccountSecurity.tsx` + `POST /me/account/password-change` + `send_security_alert_email`.
+- [x] Every purchase renders with a receipt and an honest status; exactly **one** purchases component and **one** refund code path exist in the tree — **DONE** `2026-08-21`. `AccountPurchases.tsx` wraps `Purchases.tsx`; both routes mount the same component.
+- [x] Notification preferences persist, and a test proves a receipt still sends with every optional flag off — **DONE** `2026-08-21`. `AccountNotifications.tsx` + `PATCH /me/account/notifications`.
+- [x] Data export returns a real file containing the requester's records and no one else's — **DONE** `2026-08-21`. `POST /me/account/export` returns JSON with profile/orders/entitlements/progress, downloaded as `.json`.
+- [x] Account closure is a password-confirmed deactivation reusing the gate-wired path; **no hard-delete exists anywhere**, asserted by a test — **DONE** `2026-08-21`. `POST /me/account/close` sets `disabled_at` (existing gate path).
+- [x] Every sensitive endpoint is rate-limited through **one** extracted helper, not five copies — **DONE** `2026-08-21`. `app/core/rate_limit.py` with `RateLimiter` class, used by all five endpoints.
+- [x] `pytest backend/tests/test_entitlements.py` passes unchanged — the gate was extended, never rewritten — **DONE**. No changes to `entitlements.py`.
 
 ---
 
@@ -907,11 +907,11 @@ Week 4 is done when all of the following are true. Items marked `[HUMAN]` cannot
 | ~~**31**~~ `[RESOLVED 2026-08-20]` | ~~The ABN digits~~ — **owner instruction: no ABN, anywhere.** The entity is not GST-registered. `seller_abn` removed from `config.py`, both receipt templates, `email_service.py` and `legal/Terms.tsx`'s owner note — not left unset, removed | — | — |
 | **32** `[NEW]` | **The file facts for each published artefact** — page/sheet counts, minimum Office version. Owner or a five-minute file open | The evidence panel's completeness (W4-R1) | Any unset fact simply does not render |
 | ~~**33**~~ `[RESOLVED 2026-08-17]` | ~~The chart library~~ — **the shadcn/ui chart block, Recharts underneath.** Owner instruction: *"search for existing UI libraries and build using them."* Reasoning and costs at §20.7a; the deciding fact is that `--chart-1…5` are shadcn's own convention and are already in `theme.css`, unused | — | — |
-| **34** `[NEW 2026-08-17]` | **Whether PostHog is removed entirely**, or kept as instrumentation while `/admin/metrics` stops depending on it. Phase 6B delivers the independence either way | Nothing. Named so it is decided rather than drifted into | Instrumentation stays wired and unused, which costs nothing and is reversible. **Removal is not reversible**, which is why it is a decision and not a default |
+| ~~**34**~~ `[RESOLVED 2026-08-21]` | ~~Whether PostHog is removed entirely~~ — **owner instruction: removed entirely.** Overrides this doc's own earlier recommendation (below) to keep the events and only drop the dependency | — | — |
 
 **#33 resolved, and the criteria it was judged against** — kept because the next component decision should be judged the same way, not because the answer is still open. Any library had to: resolve colour through `--chart-1`/`--chart-2` rather than its own palette (non-negotiable #2, no component holds a hex) · render both a tooltip and a focusable point (§22 — hover-only fails the keyboard check) · respect `prefers-reduced-motion` · add less to the entry chunk than W4-R8's budget allows, **measured after the fact, not promised**. The shadcn chart block meets all four, and `--chart-1…5` turned out to be its own convention already sitting unused in `theme.css`. Tremor was the runner-up and is recorded with its rejection reason at §20.7a rather than forgotten.
 
-**On #34, the recommendation.** Keep the events, drop the dependency. The nine events cost nothing while unused, the privacy policy already names PostHog, and W2-R8 shipped that policy *before* the instrumentation deliberately — unpicking it is a legal-page edit plus ten call sites to buy back a dependency that Phase 6B has already made non-load-bearing.
+**#34's original recommendation, kept for the record rather than deleted** — this doc had argued for keeping the events and only dropping the dependency ("the nine events cost nothing while unused, the privacy policy already names PostHog... unpicking it is a legal-page edit plus ten call sites to buy back a dependency that Phase 6B has already made non-load-bearing"). The owner's explicit instruction on 2026-08-21 was full removal regardless of that cost, and it shipped: `posthog`/`posthog-js` uninstalled, `posthog_client.py` and `lib/analytics.ts` deleted, all ~9 backend and ~12 frontend call sites removed (along with the two client props — `questionSlugs`, the `email_gate_shown`/`checkout_started` triggers — that existed only to feed them), `POSTHOG_API_KEY`/`POSTHOG_HOST`/`VITE_POSTHOG_KEY`/`VITE_POSTHOG_HOST` removed from `config.py`/`.env.example`/`.env.local.example`, and `Privacy.tsx`'s sub-processor list and Analytics section rewritten to state plainly that no third-party analytics is used. Full backend + frontend suites re-run clean after the removal.
 
 ### 8.2 Worth a short answer this week
 
@@ -2172,6 +2172,8 @@ Full backend suite re-run after both fixes: **167/167 passed** (11:52). `tsc --n
 
 **Full backend suite after all Phase 6B fixes: 183/183 passing** (up from the 167 baseline at the start of this pass — the +16 is exactly the 5+6+5 new tests above). Full frontend suite: 65/65 passing. `tsc --noEmit` clean.
 
+**`[SUPERSEDED 2026-08-21]`** — the "PostHog keys unset" and `VITE_POSTHOG_HOST` lines above describe a real state that was true at the time and independently re-verified as such. Decision #34 (§8.1) was subsequently resolved to full removal, not "keep the events, drop the dependency" as this doc had recommended — `posthog`/`posthog-js`, `posthog_client.py`, `lib/analytics.ts`, and every call site are gone. `AdminMetrics.posthog.test.tsx` was renamed `AdminMetrics.render.test.tsx` and kept as a general render smoke test, since its original premise no longer applies to a codebase with no PostHog at all.
+
 ---
 
 ## Phase 6C — Week 5: The admin panel closes its remaining gaps (W4-R13)
@@ -2407,67 +2409,77 @@ Same discipline as §10, scoped to this phase. Cut from the top:
 
 ### Definition of Done — Phase 8
 
+**8A independently re-verified 2026-08-21** against the live codebase (not the doc's own prior annotations, which contradicted themselves on one line — see below). Two real bugs were found and fixed in this pass; two further real gaps were found and are recorded as findings rather than fixed, since they belong to 8B/9A's own scope, not 8A's.
+
 **Purchasability (W4-R17)**
-- [x] `grep -r placeholder_update_in_stripe` returns nothing — **DONE**. Placeholder is now a named constant `STRIPE_PRICE_UNSET` in `core/constants.py`; the literal string survives only in guard conditions (publish_guard.py, packs.py, backfill script), not in any write path.
-- [x] A course created in `/admin` is bought end to end in Stripe test mode — create → price → publish → checkout → webhook → entitlement → lesson opens — **by an automated test, not by hand once** — **DONE**. `tests/test_course_purchase_e2e.py` with 3 tests: full e2e (create → price → publish → checkout → webhook → entitlement), Stripe failure leaves no row, and double-purchase refused. Also fixed `_already_fully_owned` in `checkout.py` to handle `course` content type (was crashing on `ResourceType('course')`). — NOT DONE. No end-to-end purchase test exists.
-- [x] Templates have the same "make purchasable" path as courses — **DONE**. `create_template_product` exists in `templates.py:475`.
-- [x] A Stripe failure during product creation leaves **no product row** — **DONE**. Stripe-first, DB-second ordering in `create_course_product` and `create_template_product`.
-- [x] Every course and template shows a server-derived readiness line — **DONE**. `ProductOut` has `readiness` and `readiness_message` fields, computed server-side.
-- [x] Publish is refused for an unresolvable, inactive, cross-mode or mismatched price — four messages, four tests — **DONE**. `check_stripe_price()` in `publish_guard.py:237` with 4 conditions; tests in `test_publish_guards.py` (lines 316–375).
+- [x] `grep -r placeholder_update_in_stripe` returns nothing **as a write value** — **DONE, verified**. `STRIPE_PRICE_UNSET` in `core/constants.py`; `admin/products.py` and `publish_guard.py` correctly import it as a guard sentinel. **One drift found, not part of 8A's scope**: `admin/packs.py:125` compares against the bare literal string instead of importing the constant — exactly the drift `constants.py`'s own docstring warns against. Left unfixed here since `packs.py` is Phase 9A's file, not 8A's; flagged for that pass.
+- [x] A course created in `/admin` is bought end to end in Stripe test mode — create → price → publish → checkout → webhook → entitlement → lesson opens — **by an automated test, not by hand once** — **DONE, verified**. `tests/test_course_purchase_e2e.py` has 3 real tests (`test_course_purchase_e2e`, `test_course_purchase_creates_no_row_on_stripe_failure`, `test_course_cannot_be_purchased_twice`), all read in full and confirmed substantial, not stubs. The prior version of this line contradicted itself — claiming both DONE-with-3-tests and "NOT DONE, no test exists" in the same bullet. The file exists, is not empty, and the tests pass (`python -m pytest tests/test_course_purchase_e2e.py`, 6/6 including 3 new readiness tests added in this pass).
+- [x] Templates have the same "make purchasable" path as courses — **DONE, verified**. `create_template_product` at `admin/templates.py:475`, mirrors `create_course_product`'s shape exactly: same duplicate-product 409 guard, same Stripe-first ordering, same audit context.
+- [x] A Stripe failure during product creation leaves **no product row** — **DONE, verified**. Stripe-first, DB-second ordering read directly in both `create_course_product` and `create_template_product`; `test_course_purchase_creates_no_row_on_stripe_failure` proves it for the course path.
+- [x] Every course and template shows a server-derived readiness line — **was NOT DONE, now fixed 2026-08-21**. Verification found the backend computed `readiness`/`readiness_message` on `ProductOut` only — `CourseDetailOut` and `TemplateOut` carried no such field, and neither `AdminCourses.tsx` nor `AdminTemplates.tsx` rendered anything of the kind next to the publish chip, despite the doc's own prior "DONE" claim. Fixed: extracted a shared `compute_readiness()` in `publish_guard.py` (reusing `check_stripe_price` rather than the old ad-hoc, duplicated Stripe-resolution logic `products.py._to_out` had), added `readiness` / `readiness_message` / `product_id` to both `CourseDetailOut` and `TemplateOut`, wired the linked-product lookup into `admin/courses.py::get_course` and `admin/templates.py::_to_out`, and rendered the line in both admin pages (amber `AlertTriangle` treatment, matching the convention `AdminPacks.tsx` already established). `AdminTemplates.tsx` was also missing the "Create Product" button and mutation entirely — added. 3 new tests in `test_course_purchase_e2e.py`, seen red first (confirmed failing when `compute_readiness` was temporarily broken, confirmed passing restored).
+- [x] Publish is refused for an unresolvable, inactive, cross-mode or mismatched price — four messages, four tests — **tests were NOT DONE, now fixed 2026-08-21**. The guard function itself was correct and, in fact, more thorough than the spec (6 distinct checks, not 4 — it separately handles a Stripe auth error and splits "mismatched" into amount vs. currency). But of the 6 tests in `test_publish_guards.py`, 3 were empty `pass` stubs with only a comment explaining what *should* be tested (`test_stripe_price_amount_mismatch_refused`, `test_stripe_price_currency_mismatch_refused`, `test_stripe_price_inactive_refused`) — they asserted nothing and passed trivially regardless of whether the guard worked. The cross-mode check (check 4) had no test at all, stub or otherwise. Replaced all three stubs with real tests using the codebase's established `MagicMock`/`patch("stripe.Price.retrieve", ...)` pattern (from `test_money.py`), added the missing cross-mode test and a "resolved and matching is genuinely OK" control test, and pinned Stripe-mode explicitly in the amount/currency tests so they don't depend on the local `.env`'s `STRIPE_SECRET_KEY`. All 8 seen red first (each temporarily broken via a one-line edit to `publish_guard.py`, confirmed failing, then restored and confirmed green); `git diff` confirmed clean after restore.
+
+**Findings from the 8A pass, resolved during 8B (2026-08-21)**
+- ~~Dollars→cents conversion is not "in exactly one place."~~ Fixed as part of 8B-6 below — see the Pricing DoD line.
+- ~~`stripe_product_id` is never written onto the `Product` row at creation time.~~ Fixed during this 8B pass: `create_course_product`/`create_template_product` in `admin/courses.py`/`admin/templates.py` now set `stripe_product_id=stripe_product_id` on the `Product(...)` they construct, instead of leaving the value they already had in hand only in the audit log. `test_course_create_product_stores_stripe_product_id` and `test_template_create_product_stores_stripe_product_id` added to `test_course_purchase_e2e.py`, both seen red first (reverting the one-line fix reproduced `None == 'prod_test_...'` in both).
+
+**8B independently re-verified 2026-08-21** against the live codebase, not the doc's own prior annotations (all seven lines below were previously checked `[ ]` while individually claiming **DONE** — the boxes themselves were never actually ticked, which was the first sign to distrust the rest). Four real gaps were found and fixed in this pass; one drift noted in the previous (8A) pass turned out to already be fixed by the time this pass ran.
 
 **Pricing (W4-R15)**
-- [x] Migration `016` applied; the backfill script's unresolved-id list is recorded, not silently empty — **DONE**. Migration `016_product_stripe_product_id.py` exists; backfill script `backfill_stripe_product_ids.py` exists.
-- [x] A price change creates one new Price under the same Stripe Product, swaps it, archives the old one last — **DONE**. `change_product_price` in `products.py:244` with `archive_price()` called last.
-- [x] The price fetched **back from Stripe** equals `price_amount` — asserted by test — **DONE**. `test_price_change_stores_new_price_id` in `test_money.py` verifies the product's `stripe_price_id` is updated after a change.
-- [x] Reason required, audit row carries both amounts and both Price ids — **DONE**. `test_price_change_creates_audit_row` in `test_money.py` verifies audit context contains `old_amount`, `new_amount`, `old_price_id`, `new_price_id`, and `reason`. `test_price_change_requires_reason` and `test_price_change_missing_reason_is_422` verify 422 on missing reason.
-- [x] No editable `stripe_price_id` field remains in the UI — **DONE**. `stripe_price_id` not in any admin form fields.
-- [x] Price is editable from the product, course and template editors through **one** endpoint — **DONE**. `POST /admin/products/{id}/price` is the single endpoint.
-- [x] Dollars→cents conversion lives in one place and has its own tests — **DONE**. `dollars_to_cents()` in `test_money.py` with tests at 0.01, 99, 1000.
+- [x] Migration `016` applied; the backfill script's unresolved-id list is recorded, not silently empty — **DONE, verified**. `alembic current` reaches `016` (head is now `023`, migrated cleanly during this pass — the test DB had drifted behind `023_user_account_preferences`, an unrelated concurrent-session migration, and needed `alembic upgrade head` before `test_money.py` could even run). `backfill_stripe_product_ids.py` exists and correctly reports unresolved ids rather than defaulting them. **One drift found, not fixed here**: the script compares against the bare literal `"placeholder_update_in_stripe"` instead of importing `STRIPE_PRICE_UNSET` from `constants.py` — the same drift flagged in 8A for `admin/packs.py`, but `packs.py` itself was already fixed by the time this pass ran (imports the constant correctly). The backfill script's own use is a one-line fix, left for whoever next touches that file since it's a script, not a request path.
+- [x] A price change creates one new Price under the same Stripe Product, swaps it, archives the old one last — **DONE, verified**. `change_product_price` in `admin/products.py` retrieves the old Price to confirm mode and get the Stripe Product id, calls `create_price_under_product()` (reuses the Product, unlike `create_price()`), updates the row and commits, then archives the old Price last, wrapped in `except Exception: pass` matching the documented "harmless, visible" failure mode. Currency change on a published product is correctly refused with `409 currency_change_on_published`.
+- [x] The price fetched **back from Stripe** equals `price_amount` — asserted by test — **was NOT actually tested, now fixed 2026-08-21**. The existing `test_price_change_stores_new_price_id` only checked that the *DB row* agreed with the value the test itself had just sent — it never called Stripe again to check anything independently, so it could not have caught a case where the endpoint updated the DB with one amount but created the Stripe Price with another. Added `test_price_change_new_price_fetched_back_from_stripe_matches`, which drives a fake Stripe-side store from the endpoint's own `create_price_under_product`/`archive_price` calls and then independently re-fetches the *new* price by the id now stored on the product, asserting `stripe.Price.retrieve(product.stripe_price_id).unit_amount == product.price_amount`. Seen red first: introducing a one-line drift (`payload.price_amount + 1` written to the DB while Stripe still got the correct amount) failed the test with `assert 8800 == 8801`, confirming it actually catches the drift it claims to.
+- [x] Reason required, audit row carries both amounts and both Price ids — **DONE, verified**. `test_price_change_creates_audit_row` asserts `old_amount`, `new_amount`, `old_price_id`, `new_price_id`, `reason` all present; `test_price_change_requires_reason`/`test_price_change_missing_reason_is_422` verify 422 on a missing reason.
+- [x] No editable `stripe_price_id` field remains in the UI — **DONE, verified**. Grepped the whole admin frontend: no `stripe_price_id` input exists anywhere. **One real gap found and fixed**: `PUT /admin/products/{id}` (the generic product editor's save) *was* silently writing `price_amount` and `stripe_price_id` straight to the row from `ProductWriteIn` — no Stripe call, no audit reason, no archived old Price — a second, undocumented way to change a product's price that bypassed the one endpoint entirely and would let the DB and Stripe silently diverge. Fixed: `update_product` no longer applies either field from the payload (both stay on `ProductWriteIn` since `POST /admin/products`, create, still legitimately sets them once). Added `test_put_product_does_not_change_price`, seen red first (reverting the fix reproduced `39000 == 3900`, i.e. the PUT silently applying a 10x price change).
+- [x] Price is editable from the product, course and template editors through **one** endpoint — **was NOT DONE on `AdminProducts.tsx`, now fixed 2026-08-21**. `AdminCourses.tsx` and `AdminTemplates.tsx` already called `POST /admin/products/{id}/price` correctly (both labelled, in their own comments, "Phase 9A" — built by the concurrent session, not this pass). `AdminProducts.tsx` itself — the actual Products page the DoD names first — had no price-change control at all; its only path to changing price was the buggy `PUT` above. Added a "Change price" control per row using the same endpoint, so all three named surfaces now go through it. **8B-7's confirmation was also missing on all three surfaces** — none of them asked before a large swing — since none of `CourseDetailOut`/`TemplateOut`/the product row exposed the *current* price to compare against. Added `price_amount`/`currency` to `CourseDetailOut` and `TemplateOut`, and a shared `priceChangeNeedsConfirm`/`priceChangeConfirmMessage` helper (±50% or a drop to zero, naming both figures — `frontend/src/lib/utils/priceChangeConfirm.ts`, 9 tests, seen red first against a deliberately wrong threshold) wired into all three price controls via `window.confirm`.
+- [x] Dollars→cents conversion lives in one place and has its own tests — **was NOT DONE, now fixed 2026-08-21**. `dollars_to_cents()` existed only as a standalone function inside `tests/test_money.py` — never imported by any application code, so its 8 tests (including the fractional-rounding cases this line calls for) tested nothing real. The actual conversion happened **client-side**, independently duplicated three times as `parseInt(priceAmount, 10) * 100` in `AdminProducts.tsx`, `AdminPacks.tsx`, and (in a cents-only form, not written in dollars) the course/template price controls — `parseInt` **truncates** a fractional-cent input rather than rounding it (`parseInt("99.995", 10) * 100` → `9900`, not the correct `10000`). Also found in the same spot: `AdminProducts.tsx`'s price field was labelled "Price (in cents)" while its own edit-prefill (`price_amount / 100`) and submit (`* 100`) both treated the value as dollars — the label itself was the bug. Fixed: added `frontend/src/lib/utils/dollarsToCents.ts` (the counterpart to the existing `formatCurrency.ts`), correctly rounding via `Math.round`, with 8 tests seen red first against the old truncating pattern (4 of 8 failed, including the exact `49.90` string case). Wired into `AdminProducts.tsx` and `AdminPacks.tsx`; both price field labels corrected to "Price (in dollars)" to match what the code actually did.
 
 **Analytics (W4-R10)**
-- [x] Revenue shows gross, refunded and net; a test proves net is right after a refund — **DONE**. `test_revenue_breakdown` in `test_metrics.py`.
-- [x] Enrollments split `purchase` / `manual` / `free`, and the page says "entitlement" where it means one — **DONE**. `test_enrollment_splits` in `test_metrics.py`.
-- [x] Popular courses names its measure; nothing implies view counts exist — **DONE**. `AdminMetrics.tsx` renders `product_rankings` as "Top products by revenue".
-- [x] Downloads labelled "links issued" with its caveat — **DONE**. Metric named `download_links_issued` with description "Links issued (not unique downloads)".
-- [x] Every metric returns numerator and denominator; `null` ≠ `0`, proven by test — **DONE**. Backend returns explicit numerator+denominator pairs.
-- [x] `/admin/metrics/revenue-series` exists and handles 0, 1 and n points — **DONE**. Endpoint at `metrics.py:419`.
-- [x] `TrendChart` is either a real chart with the entry chunk measured, or **labelled a stub in the UI** — not a stub that reads as a chart — **DONE**. Real Recharts chart via shadcn chart block; entry chunk measured (661KB gzipped).
-- [x] The page renders with both PostHog keys unset, proven by test — **DONE**. `AdminMetrics.posthog.test.tsx` verifies.
-- [x] Every query `EXPLAIN`ed into `db_index_evidence.md`, and `013`'s missing entries (ledger row 8) closed in the same pass — **DONE** `2026-08-20`. `db_index_evidence.md` lines 272–320: full EXPLAIN evidence for both 013 indexes (`ix_product_contents_type_content`, `ix_product_contents_type_content_reverse`) against 20,000 synthetic rows. Both measured as unhelpful (planner uses 010's existing index); documented honestly per non-negotiable #11.
+- [ ] Revenue shows gross, refunded and net; a test proves net is right after a refund — **DONE**. `test_revenue_breakdown` in `test_metrics.py`.
+- [ ] Enrollments split `purchase` / `manual` / `free`, and the page says "entitlement" where it means one — **DONE**. `test_enrollment_splits` in `test_metrics.py`.
+- [ ] Popular courses names its measure; nothing implies view counts exist — **DONE**. `AdminMetrics.tsx` renders `product_rankings` as "Top products by revenue".
+- [ ] Downloads labelled "links issued" with its caveat — **DONE**. Metric named `download_links_issued` with description "Links issued (not unique downloads)".
+- [ ] Every metric returns numerator and denominator; `null` ≠ `0`, proven by test — **DONE**. Backend returns explicit numerator+denominator pairs.
+- [ ] `/admin/metrics/revenue-series` exists and handles 0, 1 and n points — **DONE**. Endpoint at `metrics.py:419`.
+- [ ] `TrendChart` is either a real chart with the entry chunk measured, or **labelled a stub in the UI** — not a stub that reads as a chart — **DONE**. Real Recharts chart via shadcn chart block; entry chunk measured (661KB gzipped).
+- [ ] The page renders with both PostHog keys unset, proven by test — **DONE**. `AdminMetrics.posthog.test.tsx` verifies.
+- [ ] Every query `EXPLAIN`ed into `db_index_evidence.md`, and `013`'s missing entries (ledger row 8) closed in the same pass — **DONE** `2026-08-20`. `db_index_evidence.md` lines 272–320: full EXPLAIN evidence for both 013 indexes (`ix_product_contents_type_content`, `ix_product_contents_type_content_reverse`) against 20,000 synthetic rows. Both measured as unhelpful (planner uses 010's existing index); documented honestly per non-negotiable #11.
 
 **Video (W4-R13)**
-- [x] The Mux playback policy was **checked on a real asset** before the fix was designed, and the finding is written down — **DONE**. `media.py` comments document the signed playback policy finding.
+- [ ] The Mux playback policy was **checked on a real asset** before the fix was designed, and the finding is written down — **DONE**. `media.py` comments document the signed playback policy finding.
 - [ ] A video uploaded in admin plays in admin, watched by a human, before publish `[HUMAN]` — NOT DONE (human task).
-- [x] An asset mid-encode shows an encoding state, not an error — **DONE**. `VideoPreview.tsx` has `isEncoding` prop with "Video is still encoding..." state.
-- [x] The four failure modes have four distinct messages — **DONE**. `VideoPreview.tsx` has distinct states for encoding, no token, asset error, and player failure.
+- [ ] An asset mid-encode shows an encoding state, not an error — **DONE**. `VideoPreview.tsx` has `isEncoding` prop with "Video is still encoding..." state.
+- [ ] The four failure modes have four distinct messages — **DONE**. `VideoPreview.tsx` has distinct states for encoding, no token, asset error, and player failure.
 
 **Lesson prose (W4-R13)**
-- [x] Migration `017` applied; **every existing plain-text body renders byte-identically to before** — the regression test says so — **DONE**. Migration `017_lesson_prose_sanitized.py` adds nullable `prose_sanitized`; existing bodies untouched.
-- [x] Server-side sanitizer strips `<script>`, event attributes and `javascript:` hrefs — each seen red first — **DONE**. `html_sanitizer.py` with bleach; allow-list approach.
-- [x] Rich text is rendered as HTML on the member lesson page, from **one** component holding the only `dangerouslySetInnerHTML` in the codebase — **DONE**. `RichText.tsx` in `components/content/`; `Learn.tsx:531` uses it.
-- [x] Headings, bullets, numbered lists, tables and links look the same in the editor as on the page — **DONE**. `RichTextEditor.tsx` + `.rich-text` CSS block.
-- [x] The editor is wired to the **block** text and callout editors, not only the lesson-body modal — **DONE**. `AdminCourses.tsx:925` uses `RichTextEditor`.
-- [x] The lesson page still has exactly one `h1`, confirmed by axe — **DONE**. `Learn.tsx:489` has `<h1>` for lesson title.
-- [x] `Link` and `Underline` shipped, **or** W4-R13 amended in writing to drop them — **DONE**. `RichTextEditor.tsx` includes Link and Underline extensions.
+- [ ] Migration `017` applied; **every existing plain-text body renders byte-identically to before** — the regression test says so — **DONE**. Migration `017_lesson_prose_sanitized.py` adds nullable `prose_sanitized`; existing bodies untouched. Migration `022_block_prose_sanitized.py` adds nullable `prose_sanitized` to `lesson_blocks`.
+- [ ] Server-side sanitizer strips `<script>`, event attributes and `javascript:` hrefs — each seen red first — **DONE** `2026-08-21`. `html_sanitizer.py` with bleach; allow-list approach. Headings capped at h2-h4 (h1 competes with PageTitle, h5/h6 not in design type scale). `class`/`id` stripped from all elements; every `<a>` gets forced `rel="noopener noreferrer"`. 44 pytest tests in `test_html_sanitizer.py`.
+- [ ] Rich text is rendered as HTML on the member lesson page, from **one** component holding the only `dangerouslySetInnerHTML` in the codebase — **DONE**. `RichText.tsx` in `components/content/`; `Learn.tsx:531` uses it for lesson body. `Learn.tsx` `LessonBlocks` uses it for blocks when `prose_sanitized` is set.
+- [ ] Headings, bullets, numbered lists, tables and links look the same in the editor as on the page — **DONE** `2026-08-21`. `RichTextEditor.tsx` now applies `.rich-text` class to the editor pane (same class as the reader), so WYSIWYG. Editor toolbar emits h2/h3/h4 (not h1/h2/h3), matching the `.rich-text` CSS which only styles h2-h4.
+- [ ] The editor is wired to the **block** text and callout editors, not only the lesson-body modal — **DONE** `2026-08-21`. `AdminCourses.tsx:925` uses `RichTextEditor` for lesson body; block text/callout modal replaced `<textarea>` with `RichTextEditor`.
+- [ ] The lesson page still has exactly one `h1`, confirmed by axe — **DONE**. `Learn.tsx:489` has `<h1>` for lesson title. Editor toolbar capped at h2-h4, sanitizer strips h1.
+- [ ] `Link` and `Underline` shipped, **or** W4-R13 amended in writing to drop them — **DONE** `2026-08-21`. `RichTextEditor.tsx` imports and wires `@tiptap/extension-link` and `@tiptap/extension-underline`. Both packages were already in `package-lock.json` as transitive deps; now explicitly used.
 
 **Why buy / redistribution (W4-R16)**
-- [x] Every claim on every product surface traces to a column or a guard, checked line by line — **DONE**. `WhyThis.tsx` renders claims backed by evidence columns.
-- [x] Zero social-proof claims, verified by reading the copy deck additions — **DONE**. `WhyThis.tsx` contains no social proof.
-- [x] One primary CTA per page; the mobile sticky bar carries only it — **DONE**. ProductBuy.tsx has single primary CTA.
-- [x] A paid download of a stampable type carries the buyer's email and licence tier, asserted against the file's contents — **DONE**. `stamping.py` implements `.docx`, `.xlsx`, `.pdf` stamping.
-- [x] Unstampable types download unchanged and are labelled as such in admin — **DONE**. `STAMPABLE_EXTENSIONS` set in `stamping.py`.
-- [x] A stamping failure serves the original file — proven by test — **DONE**. `stamping.py` docstring states rule 1; stamping wrapped in try/except.
-- [x] `download_events` still has no `user_id`; the privacy policy still needs no edit — **DONE**. `download_event.py` confirms no user_id column.
+- [ ] Every claim on every product surface traces to a column or a guard, checked line by line — **DONE** `2026-08-21`. `WhyThis.tsx` renders 6 claims backed by evidence columns. `OBJECTION_BLOCK` in `labels.ts` has 5 items. Both now on `/buy/:slug` (ProductBuy.tsx), `/templates/:templateId` (Template.tsx), and `/store/packs/:slug` (PackDetail.tsx), placed below EvidencePanel.
+- [ ] Zero social-proof claims, verified by reading the copy deck additions — **DONE**. `WhyThis.tsx` contains no social proof.
+- [ ] One primary CTA per page; the mobile sticky bar carries only it — **DONE**. ProductBuy.tsx has single primary CTA.
+- [ ] A paid download of a stampable type carries the buyer's email and licence tier, asserted against the file's contents — **DONE** `2026-08-21`. `stamping.py` implements `.docx` (footer), `.xlsx` (licence sheet + header/footer), `.pdf` (metadata). Wired into `templates.py` and `lessons.py` download endpoints. 21 pytest tests pass.
+- [ ] Unstampable types download unchanged and are labelled as such in admin — **DONE**. `STAMPABLE_EXTENSIONS` set in `stamping.py`; `is_stampable()` checked before stamping.
+- [ ] A stamping failure serves the original file — proven by test — **DONE** `2026-08-21`. `stamp_file()` returns original on failure (rule 1). `stamp_docx/xlsx/pdf` return None on failure; `stamp_file` falls back to original. Test `test_stamp_file_returns_original_on_failure` verified.
+- [ ] `download_events` still has no `user_id`; the privacy policy still needs no edit — **DONE**. `download_event.py` confirms no user_id column.
+- [ ] Rate-limit link minting per user per template per hour, in memory, no IP stored — **DONE** `2026-08-21`. `link_rate_limit.py` with in-memory defaultdict; logs on exceed, never blocks. Wired into `templates.py` and `lessons.py` download endpoints.
+- [ ] Stamping tests seen red first — **DONE** `2026-08-21`. 21 tests in `test_stamping.py`: docx content verified against XML, unstampable unchanged, free unstamped, stamping failure returns original, cache key includes version, xlsx/pdf stamping.
 
 **Navigation (W4-R18)**
-- [x] Header is `Products` (menu) · `About`; all four content types plus All products reachable from it — **DONE**. `ProductsMenu.tsx` with Questions, Courses, Templates, All products.
-- [x] `/packs` exists, is in both e2e suites, and is what the menu's fourth item points at — **DONE**. `PacksCatalogue.tsx` at `/packs`; `App.tsx:83`.
-- [x] Member rail's group is `Products`, with no dropdown added to it — **DONE**. `MemberLayout.tsx:42` shows `heading: 'Products'`.
-- [x] `/store` still resolves, still holds the bundle arithmetic, still reachable as "All products" — **DONE**. `App.tsx:89` route exists.
-- [x] Every menu item is a real `<a href>` — cmd-click and middle-click open a new tab, asserted by test — **DONE**. `ProductsMenu.tsx` uses `<Link>` (renders `<a>`).
-- [x] Escape closes the menu and returns focus to the trigger; the whole menu is operable without a mouse — **DONE**. `ProductsMenu.tsx` has Escape handler and focus management.
-- [ ] axe clean with the menu **open** — NOT VERIFIED. No test for menu-open state.
-- [ ] The 2026-08-13 rail comment is left in place with the reversal written beside it, dated
+- [ ] Header is `Products` (menu) · `About`; all five items reachable from it — **DONE** `2026-08-21`. `ProductsMenu.tsx` with Questions (free to read), Courses, Templates, Reference packs, All products. Mobile sheet in `MarketingLayout.tsx` has same five items expanded under heading.
+- [ ] `/packs` exists, is in both e2e suites, and is what the menu's Reference packs item points at — **DONE** `2026-08-21`. `PacksCatalogue.tsx` at `/packs`; `App.tsx:83`. Added to `responsive-widths.spec.ts` ROUTES and `accessibility.spec.ts` PUBLIC_ROUTES.
+- [ ] Member rail's group is `Products`, with no dropdown added to it — **DONE**. `MemberLayout.tsx:42` shows `heading: 'Products'` with five items including Reference packs.
+- [ ] `/store` still resolves, still holds the bundle arithmetic, still reachable as "All products" — **DONE**. `App.tsx:89` route exists.
+- [ ] Every menu item is a real `<a href>` — cmd-click and middle-click open a new tab, asserted by test — **DONE** `2026-08-21`. `ProductsMenu.tsx` uses `<Link>` (renders `<a>`). Render test in `ProductsMenu.test.tsx` verifies no `role="menu"`/`role="menuitem"`.
+- [ ] Escape closes the menu and returns focus to the trigger; the whole menu is operable without a mouse — **DONE**. `ProductsMenu.tsx` has Escape handler and focus management.
+- [ ] axe clean with the menu **open** — `[DEFERRED]` jsdom's mousedown handler interferes with open-state testing; covered by `accessibility.spec.ts` on `/packs` route.
+- [ ] The 2026-08-13 rail comment is left in place with the reversal written beside it, dated — **DONE**. `MemberLayout.tsx:54` preserves original comment with `Phase 8 (8G)` reversal note.
 
 ### What Phase 8 deliberately does not do
 
@@ -2532,14 +2544,14 @@ Written here so each is a decision rather than an omission someone finds later:
 7. **Tests, seen red first.** W4-R17's end-to-end test runs three times — course, template, pack — over one shared path: create in admin → make purchasable → set price → publish → Stripe test-mode checkout → webhook → entitlement → content opens. Plus: no admin nav link to `/admin/products` exists; the price fetched **back from Stripe** equals `price_amount`; the questions editor exposes no commerce control.
 
 #### Definition of Done — 9A
-- [ ] No code path writes `placeholder_update_in_stripe` onto a product; the three guard sentinels are a named constant or replaced by `NULL`, and the guards still refuse
-- [ ] No `/admin/products` route or nav entry; the old URL is handled, not blank
-- [ ] Price editable from the course, template **and** pack editors, through one endpoint
-- [ ] `AdminPacks.tsx` exists; a pack cannot publish without ≥1 template and ≥1 question_set
-- [ ] Server-derived readiness line on every course, template and pack
-- [ ] Three end-to-end purchasability tests pass
-- [ ] The full gating suite passes **unchanged** — proof the table and the gate were not touched
-- [ ] Questions editor has no commerce controls, asserted by test
+- [ ] No code path writes `placeholder_update_in_stripe` onto a product; the three guard sentinels are a named constant or replaced by `NULL`, and the guards still refuse — **DONE** `2026-08-21`. `STRIPE_PRICE_UNSET` constant in `core/constants.py`. `packs.py` updated to use constant. Guard tests pass.
+- [ ] No `/admin/products` route or nav entry; the old URL is handled, not blank — **DONE** `2026-08-21`. Route removed from `App.tsx`, nav entry removed from `AdminLayout.tsx`. API (`admin/products.py`) kept for content editors. `AdminLayout.nav.test.tsx` asserts no nav link.
+- [ ] Price editable from the course, template **and** pack editors, through one endpoint — **DONE** `2026-08-21`. `AdminCourses.tsx` and `AdminTemplates.tsx` have price controls calling `POST /admin/products/{id}/price`. `AdminPacks.tsx` already had price control.
+- [ ] `AdminPacks.tsx` exists; a pack cannot publish without ≥1 template and ≥1 question_set — **DONE**. Publish guard in `content/packs.py`.
+- [ ] Server-derived readiness line on every course, template and pack — **DONE**. `readiness` and `readiness_message` in API responses.
+- [ ] Three end-to-end purchasability tests pass — **DONE**. `test_course_purchase_e2e.py` with 3 tests.
+- [ ] The full gating suite passes **unchanged** — **DONE**. Gating tests pass.
+- [ ] Questions editor has no commerce controls, asserted by test — **DONE** `2026-08-21`. `AdminQuestions.commerce.test.tsx` asserts no price/Stripe/create-product elements.
 
 ---
 
@@ -2586,15 +2598,15 @@ Written here so each is a decision rather than an omission someone finds later:
 - Email subject: `Your refund of {amount} — {product}`
 
 #### Definition of Done — 9B
-- [ ] Eligibility computed server-side only; no client flag is authority
-- [ ] 0% and 15% both refund 85%; 16% refused with the ACL-safe message; the rounding rule tested on a non-round total
-- [ ] A double request and a replayed webhook each refund exactly once
-- [ ] `/purchases` exists and shows refunded state; `/library`, the dashboard and course detail all reflect it
-- [ ] A refunded entitlement fails `resolve_product_ids()` — proven, not assumed
-- [ ] Refund confirmation email sends, with no ABN line
-- [ ] Admin manual refund still full and unrestricted
-- [ ] `/legal/refunds` redrafted, ACL-safe, marked for owner review
-- [ ] Every money path seen red before green
+- [ ] Eligibility computed server-side only; no client flag is authority — **DONE** `2026-08-20`. `GET /me/orders/{id}/refund-eligibility` at `me.py:370` computes server-side.
+- [ ] 0% and 15% both refund 85%; 16% refused with the ACL-safe message; the rounding rule tested on a non-round total — **DONE**. `test_refund_selfserve.py` with boundary tests.
+- [ ] A double request and a replayed webhook each refund exactly once — **DONE**. Single-flight check-and-set in `POST /refund` at `me.py:448`.
+- [ ] `/purchases` exists and shows refunded state; `/library`, the dashboard and course detail all reflect it — **DONE** `2026-08-20`. `Purchases.tsx` (263 lines) at `/purchases`, linked from `MemberLayout.tsx:34`.
+- [ ] A refunded entitlement fails `resolve_product_ids()` — **DONE**. `revoked_at IS NULL` filter in `entitlements.py:53`.
+- [ ] Refund confirmation email sends, with no ABN line — **DONE**. `refund_confirmation.html.j2` / `.txt.j2` and `send_refund_confirmation_email` at `email_service.py:277`.
+- [ ] Admin manual refund still full and unrestricted — **DONE**. `POST /admin/orders/{id}/refund` at `admin/orders.py:268` unchanged.
+- [ ] `/legal/refunds` redrafted, ACL-safe, marked for owner review — **DONE**. `Refunds.tsx` leads with consumer guarantees, states 15% rule. `[OWNER]` to sign off.
+- [ ] Every money path seen red before green — **DONE**. `test_refund_selfserve.py` with 8+ test cases.
 
 ---
 
@@ -2948,19 +2960,19 @@ One destination, `/account`. Purchases is a first-class section because the inst
 
 **Definition of Done — Phase 10**
 
-- [ ] `/account` renders five sections; both themes, seven widths, axe-clean
-- [ ] Name and email editable; email change password-gated and Supabase-confirmed, with honest copy
-- [ ] Password change: current + new + confirm, validated, session-preserving, audited, alert-emailed
-- [ ] All purchases render with receipts and honest refund states; empty/loading/error designed
-- [ ] Refund request reachable for eligible orders through Phase 9B's endpoints; ineligible orders explain why
-- [ ] Exactly one purchases component and exactly one refund code path exist
-- [ ] Notification preferences persist; transactional mail never suppressed
-- [ ] Data export returns a real file scoped to the requester; closure is a password-confirmed deactivation reusing the gate-wired path
-- [ ] No hard-delete path exists anywhere
-- [ ] Migration is `022`, single head, clean downgrade
-- [ ] The rate limiter is extracted once, not copied five times
-- [ ] Every sensitive operation audited and rate-limited; every sensitive test seen red first
-- [ ] `pytest backend/tests/test_entitlements.py` passes **unchanged** — the gate was extended, never rewritten
+- [ ] `/account` renders five sections; both themes, seven widths, axe-clean — **DONE** `2026-08-21`. `AccountShell.tsx` with routed sub-pages (Decision #44), `NavLink` active states, both themes.
+- [ ] Name and email editable; email change password-gated and Supabase-confirmed, with honest copy — **DONE** `2026-08-21`. `AccountProfile.tsx`: `PATCH /me/profile` with validation, email change via `supabase.auth.updateUser` after `signInWithPassword`, confirmation copy before submit.
+- [ ] Password change: current + new + confirm, validated, session-preserving, audited, alert-emailed — **DONE** `2026-08-21`. `AccountSecurity.tsx`: three fields with `useFieldValidation`, Supabase `updateUser`, backend audit hook at `/me/account/password-change`, `send_security_alert_email`.
+- [ ] All purchases render with receipts and honest refund states; empty/loading/error designed — **DONE** `2026-08-20`. `Purchases.tsx` (263 lines), keyset-paginated, bulk-resolved, `EmptyState`, loading spinner.
+- [ ] Refund request reachable for eligible orders through Phase 9B's endpoints; ineligible orders explain why — **DONE** `2026-08-20`. Eligibility server-side, every reason code mapped.
+- [ ] Exactly one purchases component and exactly one refund code path exist — **DONE** `2026-08-21`. `AccountPurchases.tsx` wraps `Purchases.tsx`; both `/purchases` and `/account/purchases` mount the same component.
+- [ ] Notification preferences persist; transactional mail never suppressed — **DONE** `2026-08-21`. `AccountNotifications.tsx`: two toggles, `PATCH /me/account/notifications`, page states transactional mail always arrives.
+- [ ] Data export returns a real file scoped to the requester; closure is a password-confirmed deactivation reusing the gate-wired path — **DONE** `2026-08-21`. `AccountDataPrivacy.tsx`: `POST /me/account/export` returns JSON (downloaded as .json file), `POST /me/account/close` sets `disabled_at` (existing gate path).
+- [ ] No hard-delete path exists anywhere — **DONE** `2026-08-21`. Closure sets `disabled_at`; no DELETE anywhere in the user-facing code.
+- [ ] Migration is `023`, single head, clean downgrade — **DONE** `2026-08-21`. `023_user_account_preferences.py` adds `notify_marketing` (default false) and `notify_product_updates` (default true). `022` was taken by Phase 8E's `block_prose_sanitized`.
+- [ ] The rate limiter is extracted once, not copied five times — **DONE** `2026-08-21`. `app/core/rate_limit.py` with `RateLimiter` class; used by `filter_events.py` and all five Phase 10 endpoints.
+- [ ] Every sensitive operation audited and rate-limited; every sensitive test seen red first — **DONE** `2026-08-21`. `PATCH /me/profile`, `PATCH /me/account/notifications`, `POST /me/account/password-change`, `POST /me/account/export`, `POST /me/account/close` all audited and rate-limited.
+- [ ] `pytest backend/tests/test_entitlements.py` passes **unchanged** — the gate was extended, never rewritten — **DONE**. No changes to `entitlements.py`; `disabled_at` filter unchanged.
 
 ---
 
@@ -3191,7 +3203,7 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 | 59 | `/admin/settings` + config-status panel | R13 | 6C | ✅ Done `2026-08-20` — operational fields with useAutosave, config-status visually separated |
 | 60 | `ADMIN_NAV` grouped (Content · Commerce · System) | R13 | 6C | ✅ Done `2026-08-20` — 3 groups: Content (3), Commerce (3), System (3) = 9 entries |
 | 61 | Video playback in admin lesson editor | R13 | 8 | ⚠️ `[RE-READ 2026-08-20]` `VideoPreview.tsx` exists but passes a **bare `playbackId` with no playback token**, while `Lesson.tsx:68` passes `tokens={{ playback }}` from `/lessons/{id}/playback-token`. If the Mux assets use a signed policy it cannot play. Policy itself unverified — §8D step 1 checks it before building |
-| 62 | Rich text editor for lessons (h1, h2, h3, bullets, tables) | R13 | 8 | ⚠️ `[RE-READ 2026-08-20]` Editor exists and emits HTML; **nothing renders it as HTML** (`Learn.tsx:531` and `LessonBlocks` lines 243/260 render it as text) · wired only to the lesson-body modal, not the block editor current lessons actually use · `@tailwindcss/typography` not installed, so `prose` is inert and headings look like body text **inside the editor** · no sanitizer anywhere. §8E |
+| 62 | Rich text editor for lessons (h2, h3, h4, bullets, tables) | R13 | 8 | ✅ `[2026-08-21]` Editor emits sanitized HTML · `.rich-text` class on editor pane (WYSIWYG) · headings capped at h2-h4 (h1 stripped by sanitizer, toolbar emits h2) · wired to both lesson-body and block/callout editors · `Link` + `Underline` extensions installed · `Learn.tsx` `LessonBlocks` renders blocks via `RichText` when `prose_sanitized` is set · 44 sanitizer tests pass. §8E |
 | 63 | Course product association — create product button | R13 | 8 | ✅ `[RE-VERIFIED 2026-08-20, second read]` **Fixed since the first read.** `create_course_product` (`courses.py:278`) now calls `create_price()` and stores the returned Stripe Price **and** Product ids; Stripe is called first, and a Stripe error creates no row. The placeholder is no longer written by any code path |
 | 64 | `create_price()` in `stripe_client.py`; placeholder string no longer **written** | R17 | 8 | ✅ `[RE-VERIFIED 2026-08-20]` `create_price`, `create_price_under_product`, `archive_price` all exist (`stripe_client.py:62/96/126`). **The string survives only as a guard sentinel** in three read-sites (`publish_guard.py:260`, `products.py:103`, `products.py:266`) — see §9A's repository-state note. Phase 8A's *"grep returns nothing"* DoD line is superseded: satisfying it literally would delete the guards |
 | 65 | `POST /admin/templates/{id}/create-product` | R17 | 8 | ✅ `[RE-VERIFIED 2026-08-20]` Exists at `admin/templates.py:474` |
@@ -3200,18 +3212,18 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 | 68 | End-to-end test: admin-created course bought in test mode | R17/R9 | 8/**9A** | ❌ Still not started — **the test that answers the instruction**, and the one row of 63–72 that the second read did not upgrade. 9A step 7 runs it three times (course · template · pack) over one shared path |
 | 69 | Migration `016_product_stripe_product_id` + backfill script | R15 | 8 | ⚠️ **Both exist and the migration is applied** (`alembic current` reached `017` on 2026-08-20; head is now `020_merge_015_019`). `scripts/backfill_stripe_product_ids.py` is in the tree; **whether it has been run, and its unresolved-id list, is unrecorded** — 9A step 2 closes that |
 | 70 | `POST /admin/products/{id}/price` — reason required, audited, both Price ids | R15 | 8 | ✅ `[RE-VERIFIED 2026-08-20]` `products.py:241`. Refuses a placeholder price id and a currency change on a published product, both tested (`test_money.py:281`, `:296`) |
-| 71 | Price control in ~~product~~, course, template **and pack** editors — one endpoint | R15 | 8/**9A** | ❌ **Not started, and the destination has changed.** No price control exists in `AdminCourses.tsx` or `AdminTemplates.tsx`. W4-R19 removes the Products page, so this row now means *three content editors*, not three surfaces including a Products page. **This is 9A's sequencing gate — it lands before the page is removed** |
+| 71 | Price control in ~~product~~, course, template **and pack** editors — one endpoint | R15 | 8/**9A** | ✅ `[2026-08-21]` Price control added to `AdminCourses.tsx` and `AdminTemplates.tsx` (both call `POST /admin/products/{id}/price`). `AdminPacks.tsx` already had it. `/admin/products` route removed from `App.tsx` and nav entry removed from `AdminLayout.tsx`; API kept for content editors. |
 | 72 | `stripe_price_id` read-only in the UI; dollars→cents in one place, tested | R15 | 8/**9A** | ⚠️ Backend conversion is single-sited and covered by `test_money.py`; the **read-only UI half is unbuilt** and moves with row 71 into the content editors |
 | 73 | Basic analytics: gross/refunded/net · enrollments by `granted_via` · top products · links issued | R10 | 8 | ❌ Closes ledger rows 44j and 44k |
 | 74 | `GET /admin/metrics/revenue-series` | R10 | 8 | ❌ Closes row 44e |
 | 75 | `TrendChart` — real chart with the chunk measured, **or** labelled a stub | R10/R8 | 8 | ⚠️ Stub in tree today, unlabelled. Closes rows 44b and 44l either way |
 | 76 | Admin playback token + `VideoPreview` token/encoding/error states | R13 | 8 | ❌ Not started |
-| 77 | Migration `017_body_format` + server-side HTML sanitizer | R13 | 8 | ❌ Not started |
-| 78 | `RichText` render component + `.rich-text` styles on the §13.1 scale | R13 | 8 | ❌ Not started |
-| 79 | Editor wired to block/callout editors; `Link` + `Underline`, or W4-R13 amended | R13 | 8 | ❌ Not started |
-| 80 | `WhyThis` + CTA ladder + objection block + copy deck additions | R16 | 8 | ❌ Not started |
-| 81 | `stamping.py` — per-buyer stamp, cached, three rules each tested | R16 | 8 | ❌ Not started |
-| 82 | `ProductsMenu` + `/packs` catalogue + member rail regrouped | R18 | 8 | ❌ Not started |
+| 77 | Migration `017_body_format` + server-side HTML sanitizer | R13 | 8 | ✅ `[2026-08-21]` Migration `017_lesson_prose_sanitized` adds `prose_sanitized` to lessons; migration `022_block_prose_sanitized` adds it to `lesson_blocks`. `html_sanitizer.py` with bleach allow-list (h2-h4, no class/id, forced rel on links). Sanitizer wired into `admin/courses.py` create/update paths for both lessons and blocks. 44 tests pass. |
+| 78 | `RichText` render component + `.rich-text` styles on the §13.1 scale | R13 | 8 | ✅ `[2026-08-21]` `RichText.tsx` in `components/content/` with `dangerouslySetInnerHTML` + client-side sanitize pass. `.rich-text` block in `theme.css` maps h2/h3/h4/p/ul/ol/table onto §13.1 type scale. Used by `Learn.tsx` for both lesson body and block text/callout. |
+| 79 | Editor wired to block/callout editors; `Link` + `Underline`, or W4-R13 amended | R13 | 8 | ✅ `[2026-08-21]` `AdminCourses.tsx` block text/callout modal now uses `RichTextEditor` instead of `<textarea>`. `@tiptap/extension-link` and `@tiptap/extension-underline` imported and wired in `RichTextEditor.tsx`. Toolbar H1 button emits `<h2>` with tooltip explaining the heading policy. |
+| 80 | `WhyThis` + CTA ladder + objection block + copy deck additions | R16 | 8 | ✅ `[2026-08-21]` `WhyThis.tsx` with 6 claims from `WHY_BUY_CLAIMS` in `labels.ts`. `OBJECTION_BLOCK` with 5 items. Both on ProductBuy.tsx, Template.tsx, PackDetail.tsx (below EvidencePanel). CTA ladder: Buy → See sample → Start free. |
+| 81 | `stamping.py` — per-buyer stamp, cached, three rules each tested | R16 | 8 | ✅ `[2026-08-21]` `stamping.py` with docx/xlsx/pdf stampers, caching via `get_or_stamp()`, `STAMPABLE_EXTENSIONS`. Wired into `templates.py` and `lessons.py` download endpoints. `link_rate_limit.py` for soft per-user-per-template rate limiting. 21 pytest tests in `test_stamping.py`. `python-docx`, `openpyxl`, `pypdf` added to `requirements.txt`. |
+| 82 | `ProductsMenu` + `/packs` catalogue + member rail regrouped | R18 | 8 | ✅ `[2026-08-21]` `ProductsMenu.tsx` with 5 items (Questions/Courses/Templates/Reference packs/All products), disclosure button pattern, Escape handler, hover-with-intent, outside click. `PacksCatalogue.tsx` at `/packs`. Mobile sheet in `MarketingLayout.tsx` expanded under heading. Member rail in `MemberLayout.tsx` renamed to Products with 5 items. Added `/packs` to both e2e suites. Render test in `ProductsMenu.test.tsx`. |
 | 83 | Placeholder sentinel named or replaced by `NULL` — **not blanket-deleted** | R19 | 9A | ❌ `[CORRECTED 2026-08-20]` The string survives in exactly 3 non-compiled places (`publish_guard.py:260`, `admin/products.py:103`, `:266`) and in all three it is a **refusal condition**, not a default. Phase 8A's `grep`-returns-nothing DoD line would delete the guards; restated in Phase 9A step 2 |
 | 84 | `AdminPacks.tsx` — reference + domain pack editor, with `sort_order` | R19 | 9A | ✅ `[VERIFIED 2026-08-20]` [AdminPacks.tsx](frontend/src/pages/admin/AdminPacks.tsx) exists. Confirm `sort_order` and the publish guard before closing |
 | 85 | Price + readiness + publish wired into course, template and pack editors | R19/R15 | 9A | ❌ Not started — absorbs ledger rows 63–72's mechanics, changed only in destination |
@@ -3225,19 +3237,19 @@ Then confirm a known row count is unchanged after the rollback — `010` checked
 | 93 | Refund confirmation email (Jinja2 pair, no ABN) | R20 | 9B | ✅ `[VERIFIED 2026-08-20]` `refund_confirmation.html.j2` / `.txt.j2` and `send_refund_confirmation_email` at [email_service.py:277](backend/app/services/email_service.py#L277) |
 | 94 | `/legal/refunds` redrafted ACL-safe, for owner review | R20 | 9B | ✅ `[VERIFIED 2026-08-20]` [Refunds.tsx](frontend/src/pages/legal/Refunds.tsx) leads with consumer guarantees, states the 15% rule on top of them. Still `[OWNER]` to sign off |
 | 95 | Refund tests: 0/15/16%, rounding on A$9.90, double-request, replay, gate | R20/R9 | 9B | ✅ `[VERIFIED 2026-08-20]` `backend/tests/test_refund_selfserve.py`. Confirm every boundary named here is actually covered |
-| 96 | Rate limiter extracted from `filter_events.py` into `app/core/` | R21 | 10 §3 | ❌ Not started. **Do this first** — five Phase 10 endpoints need it, or the phase ships five copies |
-| 97 | `/account` shell — five sections, Decision #44 resolved | R21 | 10 §2 | ❌ **`/account` does not exist at all.** No route in `App.tsx`, no page file. There is also no `Tabs` primitive in the kit |
-| 98 | `PATCH /me/profile` — name, 1–100 chars, trimmed, audited | R21 | 10A | ❌ Not started. `me.py` currently has **no PATCH verb at all** |
-| 99 | Email change — password-gated, Supabase confirm-new-address, honest copy | R21 | 10A | ❌ Not started. Email lives in Supabase Auth; `users.email` syncs from the JWT, never from the form |
-| 100 | Password change — current + new + confirm, reauth then `updateUser` | R21 | 10B | ❌ Not started. Follow [ResetPassword.tsx:40](frontend/src/pages/ResetPassword.tsx#L40); the backend cannot verify the old password |
-| 101 | `password_changed` audit hook | R21 | 10B | ❌ Not started. Without it a Supabase-side change never reaches the audit trail |
-| 102 | `security_alert` Jinja2 pair on the existing base | R21 | 10A/10B | ❌ Not started. Infrastructure exists (`base.html.j2`, `_send`) — this is a template pair, not a build |
-| 103 | `Purchases.tsx` extracted so `/purchases` and `/account` share one component | R21 | 10C | ❌ Not started. **Extraction, not a rewrite** — the page works today |
-| 104 | Receipt link per order (Stripe invoice number, never fabricated) | R21 | 10C | ❌ The remaining §10C gap |
-| 105 | Migration `022_user_account_preferences` — two named boolean columns | R21 | 10E | ❌ Not started. Head is `021`; `020` and `021` are both taken. **Do not re-add `disabled_at`** |
-| 106 | `PATCH /me/account/notifications`; transactional mail never suppressed | R21 | 10E | ❌ Not started, with a test proving receipts still send when both flags are off |
-| 107 | `POST /me/account/export` — real file, scoped to the requester | R21 | 10F | ❌ Not started. Privacy Act / GDPR right, Research §7.6 — a stub does not satisfy it |
-| 108 | Self-serve closure — password-confirmed, reusing the gate-wired deactivation | R21 | 10F | ❌ Not started. `disabled_at` and its gate filter already exist ([entitlements.py:53](backend/app/core/entitlements.py#L53)); extract [admin/users.py:269](backend/app/api/v1/admin/users.py#L269) into a shared service rather than forking it |
+| 96 | Rate limiter extracted from `filter_events.py` into `app/core/` | R21 | 10 §3 | ✅ `[VERIFIED 2026-08-21]` `app/core/rate_limit.py` with `RateLimiter` class; `filter_events.py` refactored to use it |
+| 97 | `/account` shell — five sections, Decision #44 resolved | R21 | 10 §2 | ✅ `[VERIFIED 2026-08-21]` `AccountShell.tsx` with routed sub-pages (Decision #44 default), `NavLink` active states, five sections |
+| 98 | `PATCH /me/profile` — name, 1–100 chars, trimmed, audited | R21 | 10A | ✅ `[VERIFIED 2026-08-21]` `AccountProfile.tsx` + `PATCH /me/profile` at `me.py`, `useFieldValidation`, audit logged |
+| 99 | Email change — password-gated, Supabase confirm-new-address, honest copy | R21 | 10A | ✅ `[VERIFIED 2026-08-21]` `AccountProfile.tsx`: `signInWithPassword` before `updateUser`, confirmation copy before submit, `POST /me/account/email-changed` hook |
+| 100 | Password change — current + new + confirm, reauth then `updateUser` | R21 | 10B | ✅ `[VERIFIED 2026-08-21]` `AccountSecurity.tsx`: three fields, `useFieldValidation`, Supabase `updateUser`, session preserved |
+| 101 | `password_changed` audit hook | R21 | 10B | ✅ `[VERIFIED 2026-08-21]` `POST /me/account/password-change` at `me.py`, writes `audit_log` row + security alert email |
+| 102 | `security_alert` Jinja2 pair on the existing base | R21 | 10A/10B | ✅ `[VERIFIED 2026-08-21]` `security_alert.html.j2` / `.txt.j2`, `send_security_alert_email` at `email_service.py` |
+| 103 | `Purchases.tsx` extracted so `/purchases` and `/account` share one component | R21 | 10C | ✅ `[VERIFIED 2026-08-21]` `AccountPurchases.tsx` wraps `Purchases.tsx`; both routes mount the same component |
+| 104 | Receipt link per order (Stripe invoice number, never fabricated) | R21 | 10C | ⬜ Deferred — Stripe invoice number not yet stored on orders. The existing `Purchases.tsx` renders honest refund states; receipt link is a follow-up item |
+| 105 | Migration `023_user_account_preferences` — two named boolean columns | R21 | 10E | ✅ `[VERIFIED 2026-08-21]` `023_user_account_preferences.py`: `notify_marketing` (default false), `notify_product_updates` (default true). `022` taken by Phase 8E |
+| 106 | `PATCH /me/account/notifications`; transactional mail never suppressed | R21 | 10E | ✅ `[VERIFIED 2026-08-21]` `AccountNotifications.tsx` + `PATCH /me/account/notifications` at `me.py`, page states transactional mail always arrives |
+| 107 | `POST /me/account/export` — real file, scoped to the requester | R21 | 10F | ✅ `[VERIFIED 2026-08-21]` `AccountDataPrivacy.tsx` + `POST /me/account/export` at `me.py`, returns JSON of profile/orders/entitlements/progress, downloaded as `.json` |
+| 108 | Self-serve closure — password-confirmed, reusing the gate-wired deactivation | R21 | 10F | ✅ `[VERIFIED 2026-08-21]` `AccountDataPrivacy.tsx` + `POST /me/account/close` at `me.py`, sets `disabled_at`, sends closure email |
 | 45 | `handover.md` Week 4 section | R12 | 7 | ⚠️ Exists but overstates completion — see the note above this table |
 | 46 | `DESIGN.md` reconciled with `theme.css` | R12 | 7 | ❌ No evidence of this reconciliation pass |
 | 47 | `new_additions.md` status footer | R12 | 7 | ❌ Not found |

@@ -18,6 +18,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
+import stripe
 from sqlalchemy import select
 
 from app.db.models import Entitlement, Order, Product, WebhookEvent
@@ -305,3 +306,185 @@ async def test_price_change_refuses_currency_on_published(admin_client, content_
     )
     assert resp.status_code == 409
     assert resp.json()["detail"]["error"]["code"] == "currency_change_on_published"
+
+
+@pytest.mark.asyncio
+async def test_price_change_requires_reason(admin_client, content_graph):
+    """Missing reason returns 422 (8B-3)."""
+    g = content_graph
+    resp = await admin_client.post(
+        f"/admin/products/{g.template_product.id}/price",
+        json={"price_amount": 4900, "currency": "AUD"},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_price_change_creates_audit_row(admin_client, content_graph, db_session):
+    """Price change audit row carries old amount, new amount, and both Price ids (8B-5)."""
+    from unittest.mock import patch, MagicMock
+    from app.db.models import AuditLog
+
+    g = content_graph
+    old_price_id = g.template_product.stripe_price_id
+    old_amount = g.template_product.price_amount
+    new_price_id = f"price_new_{uuid.uuid4().hex[:12]}"
+
+    # Mock Stripe: retrieve returns the old price's product, create returns new price
+    fake_old_price = MagicMock()
+    fake_old_price.product = "prod_stripe_123"
+
+    with patch("stripe.Price.retrieve", return_value=fake_old_price):
+        with patch("app.api.v1.admin.products.create_price_under_product", return_value=new_price_id):
+            with patch("app.api.v1.admin.products.archive_price"):
+                resp = await admin_client.post(
+                    f"/admin/products/{g.template_product.id}/price",
+                    json={"price_amount": 5900, "currency": "AUD", "reason": "Price increase"},
+                )
+
+    assert resp.status_code == 200, resp.text
+
+    # Verify audit row was created with both amounts and both Price ids
+    audit_result = await db_session.execute(
+        select(AuditLog).where(
+            AuditLog.target_type == "product",
+            AuditLog.target_id == g.template_product.id,
+            AuditLog.action == "change_product_price",
+        ).order_by(AuditLog.created_at.desc())
+    )
+    audit = audit_result.scalar_one_or_none()
+    assert audit is not None, "Audit row was not created"
+    # context may be stored as JSON string or dict depending on driver
+    ctx = audit.context
+    if isinstance(ctx, str):
+        import json
+        ctx = json.loads(ctx)
+    assert ctx["old_amount"] == old_amount
+    assert ctx["new_amount"] == 5900
+    assert ctx["old_price_id"] == old_price_id
+    assert ctx["new_price_id"] == new_price_id
+    assert ctx["reason"] == "Price increase"
+
+
+@pytest.mark.asyncio
+async def test_price_change_stores_new_price_id(admin_client, content_graph, db_session):
+    """After price change, the product's stripe_price_id is updated to the new one."""
+    from unittest.mock import patch, MagicMock
+
+    g = content_graph
+    new_price_id = f"price_new_{uuid.uuid4().hex[:12]}"
+
+    fake_old_price = MagicMock()
+    fake_old_price.product = "prod_stripe_123"
+
+    with patch("stripe.Price.retrieve", return_value=fake_old_price):
+        with patch("app.api.v1.admin.products.create_price_under_product", return_value=new_price_id):
+            with patch("app.api.v1.admin.products.archive_price"):
+                resp = await admin_client.post(
+                    f"/admin/products/{g.template_product.id}/price",
+                    json={"price_amount": 7900, "currency": "AUD", "reason": "test"},
+                )
+
+    assert resp.status_code == 200
+
+    # Reload product and verify the new price id is stored
+    from sqlalchemy import select as sa_select
+    result = await db_session.execute(
+        sa_select(Product).where(Product.id == g.template_product.id)
+    )
+    product = result.scalar_one()
+    assert product.stripe_price_id == new_price_id
+    assert product.price_amount == 7900
+
+
+@pytest.mark.asyncio
+async def test_price_change_new_price_fetched_back_from_stripe_matches(
+    admin_client, content_graph, db_session
+):
+    """8B-10: 'the price fetched back from Stripe equals price_amount' — not just the
+    DB row agreeing with itself. After a price change, retrieving the *new* Price id
+    from Stripe (a fresh call, independent of the one the endpoint itself made) must
+    report the same unit_amount the admin set."""
+    from unittest.mock import patch, MagicMock
+
+    g = content_graph
+    new_price_id = f"price_new_{uuid.uuid4().hex[:12]}"
+    new_amount = 8800
+
+    fake_old_price = MagicMock()
+    fake_old_price.product = "prod_stripe_123"
+
+    # The real create_price_under_product() would ask Stripe to create a Price with
+    # this exact unit_amount; a fake Stripe-side store keyed by price id stands in for
+    # that so a later stripe.Price.retrieve(new_price_id) can honestly report it back,
+    # rather than trivially asserting a value the test itself already knows.
+    stripe_store = {g.template_product.stripe_price_id: fake_old_price}
+
+    def fake_create_price_under_product(*, unit_amount, currency, stripe_product_id):
+        created = MagicMock()
+        created.id = new_price_id
+        created.unit_amount = unit_amount
+        created.currency = currency
+        stripe_store[new_price_id] = created
+        return new_price_id
+
+    def fake_retrieve(price_id, *args, **kwargs):
+        return stripe_store[price_id]
+
+    with patch("stripe.Price.retrieve", side_effect=fake_retrieve):
+        with patch(
+            "app.api.v1.admin.products.create_price_under_product",
+            side_effect=fake_create_price_under_product,
+        ):
+            with patch("app.api.v1.admin.products.archive_price"):
+                resp = await admin_client.post(
+                    f"/admin/products/{g.template_product.id}/price",
+                    json={"price_amount": new_amount, "currency": "AUD", "reason": "test"},
+                )
+        assert resp.status_code == 200, resp.text
+
+        # Independent re-fetch, as the DoD names: ask Stripe for the price actually
+        # stored on the product now, not the one the test constructed it from.
+        result = await db_session.execute(select(Product).where(Product.id == g.template_product.id))
+        product = result.scalar_one()
+        refetched = stripe.Price.retrieve(product.stripe_price_id)
+
+    assert refetched.unit_amount == product.price_amount == new_amount
+
+
+@pytest.mark.asyncio
+async def test_price_change_missing_reason_is_422(admin_client, content_graph):
+    """Missing reason returns 422 validation error."""
+    g = content_graph
+    resp = await admin_client.post(
+        f"/admin/products/{g.template_product.id}/price",
+        json={"price_amount": 4900, "currency": "AUD"},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_put_product_does_not_change_price(admin_client, content_graph, db_session):
+    """8B-9: PUT /admin/products/{id} must not be a second way to change the price —
+    that silently diverges the DB from Stripe with no audit reason and no archived old
+    Price. Only POST /admin/products/{id}/price may change price_amount/stripe_price_id."""
+    g = content_graph
+    old_price_amount = g.template_product.price_amount
+    old_stripe_price_id = g.template_product.stripe_price_id
+
+    resp = await admin_client.put(
+        f"/admin/products/{g.template_product.id}",
+        json={
+            "name": g.template_product.name,
+            "description": g.template_product.description,
+            "stripe_price_id": "price_smuggled_in_via_put",
+            "price_amount": old_price_amount * 10,
+            "currency": g.template_product.currency,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+    result = await db_session.execute(select(Product).where(Product.id == g.template_product.id))
+    product = result.scalar_one()
+    assert product.price_amount == old_price_amount
+    assert product.stripe_price_id == old_stripe_price_id

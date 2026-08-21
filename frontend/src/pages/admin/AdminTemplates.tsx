@@ -4,6 +4,7 @@ import { AlertTriangle, ImageOff, Loader2, Plus, Trash2, Upload } from 'lucide-r
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
+import { priceChangeConfirmMessage, priceChangeNeedsConfirm } from '@/lib/utils/priceChangeConfirm'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
@@ -28,6 +29,8 @@ interface PreviewImageRow {
   alt: string
 }
 
+type ReadinessState = 'no_product' | 'price_unset' | 'stripe_price_unresolved' | 'unpublished' | 'ready'
+
 interface TemplateRow {
   id: string
   slug: string
@@ -40,6 +43,14 @@ interface TemplateRow {
   publish_state: PublishStateValue
   is_free: boolean
   has_file: boolean
+  // Phase 8 (8A-6): server-derived — never inferred client-side from published/price.
+  // Free templates have no product and no readiness concept; the field is still
+  // present (backend always returns it) but the row never renders it when is_free.
+  readiness: ReadinessState
+  readiness_message: string
+  product_id: string | null
+  price_amount: number | null
+  currency: string | null
   // ── W4-R1 evidence fields ─────────────────────────────────────────────────
   page_count: number | null
   sheet_count: number | null
@@ -165,6 +176,29 @@ export function AdminTemplates() {
     mutationFn: ({ id, storageKey }: { id: string; storageKey: string }) =>
       api.post(`/admin/templates/${id}/preview/remove`, { storage_key: storageKey }),
     onSuccess: invalidate,
+    onError: (e) => setError(readError(e)),
+  })
+
+  // Phase 8 (8A-5): the same "make purchasable" path courses have.
+  const createTemplateProduct = useMutation({
+    mutationFn: (id: string) => api.post(`/admin/templates/${id}/create-product`),
+    onSuccess: invalidate,
+    onError: (e) => setError(readError(e)),
+  })
+
+  // Phase 9A: price control — POST /admin/products/{id}/price (one endpoint, three surfaces)
+  const [priceAmount, setPriceAmount] = useState('')
+  const changePrice = useMutation({
+    mutationFn: (v: { productId: string; priceAmount: number }) =>
+      api.post(`/admin/products/${v.productId}/price`, {
+        price_amount: v.priceAmount,
+        currency: 'AUD',
+        reason: 'Price set from template editor',
+      }),
+    onSuccess: () => {
+      setPriceAmount('')
+      invalidate()
+    },
     onError: (e) => setError(readError(e)),
   })
 
@@ -386,9 +420,65 @@ export function AdminTemplates() {
                         No file uploaded yet
                       </p>
                     )}
+                    {/* Phase 8 (8A-6): server-derived readiness. Free templates have no
+                        product and no price to be ready about, so the line never shows
+                        for them. */}
+                    {!t.is_free && t.readiness !== 'ready' && (
+                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-amber-600">
+                        <AlertTriangle className="size-3.5" aria-hidden="true" />
+                        {t.readiness_message}
+                      </p>
+                    )}
+                    {/* Phase 9A: price control — appears after product is created */}
+                    {!t.is_free && t.product_id && (
+                      <div className="mt-2 flex items-end gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="100"
+                          placeholder="Price (cents, e.g. 4900)"
+                          className="w-40"
+                          value={priceAmount}
+                          onChange={(e) => setPriceAmount(e.target.value)}
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const cents = parseInt(priceAmount, 10)
+                            if (!cents || cents <= 0) return
+                            // Phase 8 (8B-7): fat-finger protection — a ±50% swing
+                            // is confirmed before it charges a real card.
+                            const oldCents = t.price_amount ?? 0
+                            if (
+                              priceChangeNeedsConfirm(oldCents, cents) &&
+                              !window.confirm(priceChangeConfirmMessage(oldCents, cents, t.currency ?? 'AUD'))
+                            ) {
+                              return
+                            }
+                            changePrice.mutate({ productId: t.product_id!, priceAmount: cents })
+                          }}
+                          loading={changePrice.isPending}
+                          disabled={!priceAmount}
+                        >
+                          Set price
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex shrink-0 flex-wrap gap-2">
+                    {!t.is_free && !t.product_id && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => createTemplateProduct.mutate(t.id)}
+                        loading={createTemplateProduct.isPending && createTemplateProduct.variables === t.id}
+                      >
+                        <Plus className="size-4" aria-hidden="true" />
+                        Create Product
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
