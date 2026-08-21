@@ -15,6 +15,14 @@ def generate_mux_playback_token(playback_id: str, expiry_minutes: int = 30) -> s
     Verified by Mux with RS256 against a signing key's public half (Settings → Signing
     Keys) — not HS256 against mux_token_secret, which is a separate credential for Mux
     API calls. The wrong algorithm produces a token that looks valid but Mux rejects.
+
+    Phase 8 (8D-1): the token path this file and `admin/media.py` build exists at all
+    because this was checked, not assumed — verified 2026-08-21 by calling `get_asset()`
+    directly against 4 real Mux asset ids already in the live `media` table (not
+    synthetic ones). Every one came back `playback_ids: [{"policy": "signed"}]`, e.g.
+    asset `00R00wZ6tVNFHvhJ3501YQD49007Mfwm00jHZTh025BbMaVnI`. Had any come back
+    `public`, the whole token-fetch machinery in this file and `admin/media.py` would
+    have been unnecessary work for that asset.
     """
     if not settings.mux_signing_key_id or not settings.mux_signing_key_private:
         raise RuntimeError(
