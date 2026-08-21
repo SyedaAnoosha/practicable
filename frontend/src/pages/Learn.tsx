@@ -18,6 +18,7 @@ import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { RichText } from '@/components/content/RichText'
 import { Badge } from '@/components/ui/Badge'
 import { EmailGateForm } from '@/components/content/EmailGateForm'
 import { useEmailGate } from '@/lib/emailGate'
@@ -59,12 +60,19 @@ interface LessonNav {
 // populated too, for backfilled single-block lessons, but a new mixed lesson exists
 // only here, as a sequence. The backend has already applied entitlement/free-template
 // filtering to this list — whatever appears here is what this viewer is allowed to see.
-interface LessonBlockData {
+// Exported (Phase 8, 8E test-coverage pass, 2026-08-21): LessonBlockData and
+// LessonBlocks were file-local, which is why the prose_sanitized/plain-text branch
+// choice below had no direct test — a full Learn.tsx render test would need routing,
+// React Query and auth-store mocking just to reach code that itself needs none of
+// that. Exporting the type and the pure render component lets LessonBlocks.test.tsx
+// test the actual branch in isolation instead.
+export interface LessonBlockData {
   id: string
   block_type: 'text' | 'video' | 'file' | 'callout'
   sort_order: number
   heading: string | null
   text_body: string | null
+  prose_sanitized: string | null  // Phase 8 (8E): sanitized HTML, null for plain text
   video_ready: boolean | null
   file_name: string | null
   file_size_bytes: number | null
@@ -78,6 +86,7 @@ interface LessonDetail {
   description: string | null
   lesson_type: LessonType
   body: string | null
+  prose_sanitized: string | null  // Phase 8 (8E): sanitized HTML, null for plain-text lessons
   download: { file_name: string; file_size_bytes: number; is_free: boolean } | null
   blocks: LessonBlockData[]
   has_video: boolean
@@ -231,7 +240,7 @@ function FreeDownloadBlock({ downloadUrl, fileName }: { downloadUrl: string; fil
  * this list for the current viewer, so this component never re-checks entitlement
  * itself, only chooses how each block type renders.
  */
-function LessonBlocks({ blocks }: { blocks: LessonBlockData[] }) {
+export function LessonBlocks({ blocks }: { blocks: LessonBlockData[] }) {
   return (
     <>
       {blocks.map((block) => {
@@ -240,11 +249,13 @@ function LessonBlocks({ blocks }: { blocks: LessonBlockData[] }) {
             return (
               <div key={block.id} className="flex flex-col gap-2">
                 {block.heading && <h2 className="text-h4 font-semibold text-foreground">{block.heading}</h2>}
-                {block.text_body && (
+                {block.prose_sanitized ? (
+                  <RichText html={block.prose_sanitized} />
+                ) : block.text_body ? (
                   <p className="whitespace-pre-line font-serif text-read text-pretty text-foreground">
                     {block.text_body}
                   </p>
-                )}
+                ) : null}
               </div>
             )
           case 'callout':
@@ -256,11 +267,13 @@ function LessonBlocks({ blocks }: { blocks: LessonBlockData[] }) {
                 style={{ borderLeftColor: 'var(--accent)' }}
               >
                 {block.heading && <p className="text-sm font-semibold text-foreground">{block.heading}</p>}
-                {block.text_body && (
+                {block.prose_sanitized ? (
+                  <RichText html={block.prose_sanitized} />
+                ) : block.text_body ? (
                   <p className="whitespace-pre-line font-serif text-read text-pretty text-foreground">
                     {block.text_body}
                   </p>
-                )}
+                ) : null}
               </div>
             )
           case 'video':
@@ -526,10 +539,11 @@ export function Learn() {
                     queryKey={queryKeys.lessons.playbackToken(lesson.id)}
                   />
                 )}
-                {lesson.body && (
-                  /* text-read carries the serif rhythm (1.7 line-height). */
+                {lesson.prose_sanitized ? (
+                  <RichText html={lesson.prose_sanitized} />
+                ) : lesson.body ? (
                   <p className="whitespace-pre-line font-serif text-read text-pretty text-foreground">{lesson.body}</p>
-                )}
+                ) : null}
                 {lesson.download && (
                   <DownloadBlock downloadUrl={`/lessons/${lesson.id}/download-url`} fileName={lesson.download.file_name} />
                 )}
