@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import { hasAdminE2ECreds, adminE2ESkipReason, signInAsAdmin } from './adminAuth'
 
 /**
  * week2_plan.md Phase 1 / DESIGN.md §42.9 — axe on every public route, in CI, from
@@ -108,4 +109,34 @@ test('axe: a real template detail page has no violations', async ({ page }) => {
   await expect(page.locator('h1')).toBeVisible()
   const results = await new AxeBuilder({ page }).analyze()
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
+})
+
+// week4_plan.md Phase 6B step 13 — the chart (TrendChart, recharts) is a graphical
+// object with its own contrast/keyboard-tooltip requirements the anonymous PUBLIC_ROUTES
+// loop above can never reach, since /admin/metrics requires a real admin sign-in.
+test.describe('axe: /admin/metrics (admin-only)', () => {
+  test('light theme has no violations', async ({ page }) => {
+    test.skip(!hasAdminE2ECreds, adminE2ESkipReason)
+    await signInAsAdmin(page)
+    await page.goto('/admin/metrics')
+    await expect(page.getByRole('heading', { name: /metrics/i })).toBeVisible()
+    // The revenue tiles arrive via React Query after mount, same reasoning as the
+    // question/template detail checks above — wait past the loading skeleton.
+    await expect(page.getByText('Gross revenue')).toBeVisible()
+    const results = await new AxeBuilder({ page }).analyze()
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
+  })
+
+  test('dark theme has no violations', async ({ page }) => {
+    test.skip(!hasAdminE2ECreds, adminE2ESkipReason)
+    await page.addInitScript(() => {
+      window.localStorage.setItem('practicable:theme', 'dark')
+    })
+    await signInAsAdmin(page)
+    await page.goto('/admin/metrics')
+    await expect(page.getByRole('heading', { name: /metrics/i })).toBeVisible()
+    await expect(page.getByText('Gross revenue')).toBeVisible()
+    const results = await new AxeBuilder({ page }).analyze()
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
+  })
 })

@@ -1,0 +1,253 @@
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api/client'
+import { queryKeys } from '@/lib/query/keys'
+import { PageTitle } from '@/components/ui/PageTitle'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { MetricTile } from '@/components/admin/MetricTile'
+import { TrendChart } from '@/components/admin/TrendChart'
+import { BarChart3 } from 'lucide-react'
+
+interface Metric {
+  name: string
+  numerator: number | null
+  denominator: number | null
+  description: string
+}
+
+interface ProductRanking {
+  id: string
+  name: string
+  revenue_cents: number
+  revenue_dollars: number
+}
+
+interface MetricsResponse {
+  metrics: Metric[]
+  generated_at: string
+  revenue_gross_cents: number
+  revenue_refunded_cents: number
+  revenue_net_cents: number
+  enrollment_splits: Record<string, number>
+  product_rankings: ProductRanking[]
+  download_links_issued: number
+}
+
+/** §20.7a: Fetches revenue-series data and renders the TrendChart.
+ * Separate from the main tile grid because it has its own loading state.
+ */
+function TrendChartWrapper() {
+  const { data: seriesData, isLoading } = useQuery({
+    queryKey: queryKeys.admin.revenueSeries(90),
+    queryFn: () =>
+      api
+        .get<{ data: Array<{ date: string; revenue_cents: number; order_count: number }> }>(
+          '/admin/metrics/revenue-series?days=90'
+        )
+        .then((r) => r.data),
+  })
+
+  if (isLoading) {
+    return (
+      <div className="h-64 animate-pulse rounded-lg border border-border bg-muted/40" />
+    )
+  }
+
+  const chartData = (seriesData?.data ?? []).map((d) => ({
+    date: d.date,
+    revenue: d.revenue_cents,
+    orders: d.order_count,
+  }))
+
+  return (
+    <TrendChart
+      title="Revenue & Orders Over Time"
+      data={chartData}
+    />
+  )
+}
+
+export function AdminMetrics() {
+  const { data: metricsData, isLoading } = useQuery({
+    queryKey: queryKeys.admin.metrics(),
+    queryFn: () => api.get<MetricsResponse>('/admin/metrics').then((r) => r.data),
+  })
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-10 sm:px-6">
+        <PageTitle eyebrow="Admin" title="Metrics" description="Key performance indicators for the platform." />
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-32 animate-pulse rounded-lg border border-border bg-muted/40" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (!metricsData || metricsData.metrics.length === 0) {
+    return (
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-10 sm:px-6">
+        <PageTitle eyebrow="Admin" title="Metrics" description="Key performance indicators for the platform." />
+        <EmptyState
+          className="mt-8"
+          icon={BarChart3}
+          title="No metrics available"
+          description="Metrics will appear here once there's activity on the platform."
+        />
+      </div>
+    )
+  }
+
+  const metrics = metricsData.metrics
+
+  // Group metrics into categories
+  const userMetrics = metrics.filter((m) => m.name.includes('user'))
+  const orderMetrics = metrics.filter((m) => m.name.includes('order') || m.name.includes('revenue'))
+  const contentMetrics = metrics.filter((m) => m.name.includes('published'))
+  const otherMetrics = metrics.filter(
+    (m) => !userMetrics.includes(m) && !orderMetrics.includes(m) && !contentMetrics.includes(m)
+  )
+
+  return (
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-10 sm:px-6">
+      <PageTitle
+        eyebrow="Admin"
+        title="Metrics"
+        description="Key performance indicators for the platform."
+      />
+
+      <div className="mt-8 space-y-8">
+        {/* User Metrics */}
+        {userMetrics.length > 0 && (
+          <section>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">User Metrics</h3>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {userMetrics.map((metric) => (
+                <MetricTile key={metric.name} {...metric} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Order & Revenue Metrics */}
+        {orderMetrics.length > 0 && (
+          <section>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">Orders & Revenue</h3>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {orderMetrics.map((metric) => (
+                <MetricTile key={metric.name} {...metric} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Content Metrics */}
+        {contentMetrics.length > 0 && (
+          <section>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">Content</h3>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {contentMetrics.map((metric) => (
+                <MetricTile key={metric.name} {...metric} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Other Metrics */}
+        {otherMetrics.length > 0 && (
+          <section>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">Other</h3>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {otherMetrics.map((metric) => (
+                <MetricTile key={metric.name} {...metric} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Revenue Breakdown */}
+        <section>
+          <h3 className="mb-4 text-lg font-semibold text-foreground">Revenue</h3>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <MetricTile
+              name="Gross revenue"
+              numerator={metricsData.revenue_gross_cents}
+              denominator={1}
+              description="Total from completed orders (cents)"
+            />
+            <MetricTile
+              name="Refunded"
+              numerator={metricsData.revenue_refunded_cents}
+              denominator={1}
+              description="Total refunded (cents)"
+            />
+            <MetricTile
+              name="Net revenue"
+              numerator={metricsData.revenue_net_cents}
+              denominator={1}
+              description="Gross minus refunded (cents)"
+            />
+          </div>
+        </section>
+
+        {/* Enrollment Splits */}
+        {Object.keys(metricsData.enrollment_splits).length > 0 && (
+          <section>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">Enrollments</h3>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {Object.entries(metricsData.enrollment_splits).map(([key, count]) => (
+                <MetricTile
+                  key={key}
+                  name={`${key} enrollments`}
+                  numerator={count}
+                  denominator={1}
+                  description={`Active entitlements granted via ${key}`}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Product Rankings */}
+        {metricsData.product_rankings.length > 0 && (
+          <section>
+            <h3 className="mb-4 text-lg font-semibold text-foreground">Top products by revenue</h3>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-2.5 text-left">Product</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metricsData.product_rankings.map((p) => (
+                    <tr key={p.id} className="border-t border-border">
+                      <td className="px-4 py-2.5 text-foreground">{p.name}</td>
+                      <td className="px-4 py-2.5 text-right font-medium tabular-nums text-foreground">
+                        ${p.revenue_dollars.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* Trend Chart — Recharts via shadcn chart block.
+            §20.7a: revenue (area, --chart-1) and orders (line, --chart-2) over time.
+            Revenue-series endpoint exists and is tested (Phase 8C-4). */}
+        <section>
+          <h3 className="mb-4 text-lg font-semibold text-foreground">Trends</h3>
+          <TrendChartWrapper />
+        </section>
+
+        <p className="text-xs text-muted-foreground">
+          Last updated: {new Date(metricsData.generated_at).toLocaleString()}
+        </p>
+      </div>
+    </div>
+  )
+}

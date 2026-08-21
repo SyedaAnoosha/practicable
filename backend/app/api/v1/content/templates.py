@@ -17,6 +17,7 @@ from app.core.entitlements import (
 )
 from app.integrations.posthog_client import capture_download_failed
 from app.integrations.storage_client import generate_presigned_url
+from app.services.download_events import record_download_event
 from app.services.template_evidence import PreviewOut, format_line, resolve_previews
 import uuid
 
@@ -224,6 +225,7 @@ async def get_template_download_url(
                 resource_type="template", resource_id=str(template.id), reason=str(e),
             )
             raise
+        await record_download_event(session=session, content_type="template", content_id=template.id, content_slug=template.slug)
         return DownloadUrlOut(download_url=download_url, file_name=template.file_name, file_size_bytes=template.file_size_bytes)
 
     if user is None:
@@ -254,6 +256,7 @@ async def get_template_download_url(
         )
         raise
 
+    await record_download_event(session=session, content_type="template", content_id=template.id, content_slug=template.slug)
     return DownloadUrlOut(
         download_url=download_url,
         file_name=template.file_name,

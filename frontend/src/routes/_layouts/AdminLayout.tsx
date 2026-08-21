@@ -1,6 +1,6 @@
 import { Link, NavLink, Navigate, Outlet } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, FileText, GraduationCap, Receipt, ShieldCheck, Tags } from 'lucide-react'
+import { ArrowLeft, BarChart3, ClipboardList, DollarSign, FileText, GraduationCap, Mail, Package, Receipt, Settings, ShieldCheck, Tags, UserPlus, Users } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
@@ -17,11 +17,37 @@ export interface Profile {
   is_admin: boolean
 }
 
-const ADMIN_NAV = [
-  { to: '/admin/questions', label: 'Questions', icon: Tags },
-  { to: '/admin/courses', label: 'Courses', icon: GraduationCap },
-  { to: '/admin/templates', label: 'Templates', icon: FileText },
-  { to: '/admin/orders', label: 'Orders', icon: Receipt },
+// Phase 6C (W4-R13): grouped into Content · Commerce · System — nine entries
+// in a flat list were unreadable; three labelled groups make the admin panel's
+// structure visible at a glance.
+const ADMIN_NAV_GROUPS = [
+  {
+    label: 'Content',
+    items: [
+      { to: '/admin/questions', label: 'Questions', icon: Tags },
+      { to: '/admin/courses', label: 'Courses', icon: GraduationCap },
+      { to: '/admin/templates', label: 'Templates', icon: FileText },
+      { to: '/admin/packs', label: 'Packs', icon: Package },
+    ],
+  },
+  {
+    label: 'Commerce',
+    items: [
+      { to: '/admin/products', label: 'Products', icon: DollarSign },
+      { to: '/admin/orders', label: 'Orders', icon: Receipt },
+      { to: '/admin/contact', label: 'Contact', icon: Mail },
+      { to: '/admin/leads', label: 'Leads', icon: UserPlus },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { to: '/admin/metrics', label: 'Analytics', icon: BarChart3 },
+      { to: '/admin/users', label: 'Users', icon: Users },
+      { to: '/admin/audit', label: 'Audit', icon: ClipboardList },
+      { to: '/admin/settings', label: 'Settings', icon: Settings },
+    ],
+  },
 ] as const
 
 /**
@@ -75,23 +101,30 @@ export default function AdminLayout() {
             <ShieldCheck className="size-4" aria-hidden="true" />
             Content editor
           </p>
-          <nav className="flex items-center gap-1" aria-label="Admin">
-            {ADMIN_NAV.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors duration-150',
-                    isActive
-                      ? 'bg-primary-foreground/15 font-medium text-primary-foreground'
-                      : 'text-primary-foreground/70 hover:bg-primary-foreground/10 hover:text-primary-foreground',
-                  )
-                }
-              >
-                <Icon className="size-4" aria-hidden="true" />
-                {label}
-              </NavLink>
+          <nav className="flex items-center gap-4" aria-label="Admin">
+            {ADMIN_NAV_GROUPS.map((group) => (
+              <div key={group.label} className="flex items-center gap-1">
+                <span className="text-[10px] font-medium uppercase tracking-widest text-primary-foreground/40 mr-1">
+                  {group.label}
+                </span>
+                {group.items.map(({ to, label, icon: Icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors duration-150',
+                        isActive
+                          ? 'bg-primary-foreground/15 font-medium text-primary-foreground'
+                          : 'text-primary-foreground/70 hover:bg-primary-foreground/10 hover:text-primary-foreground',
+                      )
+                    }
+                  >
+                    <Icon className="size-4" aria-hidden="true" />
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
             ))}
           </nav>
           <Link

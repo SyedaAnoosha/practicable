@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { hasAdminE2ECreds, adminE2ESkipReason, signInAsAdmin } from './adminAuth'
 
 /**
  * week3_plan.md Phase 6 step 7 / DESIGN.md §62's "Responsive — 375 · 390 · 430 · 768 ·
@@ -65,6 +66,26 @@ for (const width of WIDTHS) {
         await expectNoHorizontalOverflow(page, route)
       })
     }
+  })
+}
+
+// week4_plan.md Phase 6B step 13 — /admin/metrics carries a seven-column-ish tile grid,
+// a ranked-products table, and the recharts TrendChart, none of which the anonymous
+// ROUTES loop above can reach (it requires a real admin sign-in). Separate describe
+// block, same gated-real-account pattern as accessibility.spec.ts's admin coverage and
+// gating.spec.ts's own signed-in test.
+for (const width of WIDTHS) {
+  test.describe(`${width}px — /admin/metrics (admin-only)`, () => {
+    test.use({ viewport: { width, height: 900 } })
+
+    test('no horizontal overflow', async ({ page }) => {
+      test.skip(!hasAdminE2ECreds, adminE2ESkipReason)
+      await signInAsAdmin(page)
+      await page.goto('/admin/metrics')
+      await expect(page.getByRole('heading', { name: /metrics/i })).toBeVisible()
+      await expect(page.getByText('Gross revenue')).toBeVisible()
+      await expectNoHorizontalOverflow(page, '/admin/metrics')
+    })
   })
 }
 

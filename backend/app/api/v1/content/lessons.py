@@ -33,6 +33,7 @@ from app.db.session import get_session
 from app.integrations.mux_client import generate_mux_playback_token
 from app.integrations.posthog_client import capture_download_failed
 from app.integrations.storage_client import generate_presigned_url
+from app.services.download_events import record_download_event
 
 router = APIRouter()
 
@@ -145,6 +146,7 @@ class LessonDetailOut(BaseModel):
     description: Optional[str]
     lesson_type: str
     body: Optional[str]
+    prose_sanitized: Optional[str] = None  # Phase 8 (8E): sanitized HTML, null for plain-text lessons
     download: Optional[LessonDownloadOut]
     blocks: list[LessonBlockOut]
     has_video: bool
@@ -351,6 +353,7 @@ async def get_lesson_in_course(
         description=lesson.description,
         lesson_type=_lesson_type_value(lesson.lesson_type),
         body=lesson.body if entitled else None,
+        prose_sanitized=lesson.prose_sanitized if entitled else None,
         download=download_out,
         blocks=block_outs,
         has_video=media is not None and media.status == "ready",
@@ -462,6 +465,7 @@ async def get_lesson_download_url(
             resource_type="lesson_download", resource_id=str(lesson.id), reason=str(e),
         )
         raise
+    await record_download_event(session=session, content_type="lesson_file", content_id=template.id, content_slug=template.slug)
     return LessonDownloadUrlOut(
         download_url=download_url, file_name=template.file_name, file_size_bytes=template.file_size_bytes
     )
@@ -663,6 +667,7 @@ async def get_block_download_url(
             resource_type="lesson_block_download", resource_id=str(block.id), reason=str(e),
         )
         raise
+    await record_download_event(session=session, content_type="lesson_file", content_id=template.id, content_slug=template.slug)
     return LessonDownloadUrlOut(
         download_url=download_url, file_name=template.file_name, file_size_bytes=template.file_size_bytes
     )

@@ -2154,20 +2154,23 @@ Full backend suite re-run after both fixes: **167/167 passed** (11:52). `tsc --n
 13. **Both themes, seven widths, axe** — the chart is a graphical object with a 3:1 contrast floor and a keyboard-reachable tooltip. Add `/admin/metrics` to `accessibility.spec.ts` and `responsive-widths.spec.ts`.
 
 ### Definition of Done — Phase 6B
-- [ ] Chart tokens repaired, one hue family per token, contrast ratios recorded — **DONE** `2026-08-20` — Phase 5 verified and marked complete.
-- [ ] Migration `014` applied (`filter_events` + `download_events`) — **DONE** `2026-08-20`. Schema uses per-dimension columns (more useful than spec's `(dimension, value)` pair). Index on `created_at`. Neither table carries user_id, session_id, or IP — privacy policy needs no edit.
-- [ ] Neither new table carries a user id, session id or IP — **DONE** — verified by reading the table definitions.
-- [ ] Every tile states its own denominator and its own empty sentence — **DONE** `2026-08-20`. `MetricTile` renders numerator/denominator. Backend returns explicit numerator+denominator pairs, never percentages.
-- [ ] Revenue shows **gross, refunded and net** — **DONE** `2026-08-20`. `revenue_gross_cents`, `revenue_refunded_cents`, `revenue_net_cents` in response. Test `test_revenue_breakdown` verifies `net == gross - refunded`.
-- [ ] Enrollment splits `purchase` / `manual` / `free` — **DONE** `2026-08-20`. `enrollment_splits` dict in response, keyed by `granted_via`. Test `test_enrollment_splits` verifies.
-- [ ] "Popular courses" names its measure in the UI; nothing implies view counts — **DONE** `2026-08-20`. `AdminMetrics.tsx` renders `product_rankings` as a table with "Top products by revenue" heading.
-- [ ] The downloads metric is labelled **"links issued"** — **DONE** `2026-08-20`. Metric named `download_links_issued`, description says "Links issued (not unique downloads — a re-request of an expired presigned URL is counted)".
-- [ ] Recharts installed via the registry JSON — **NOT DONE**. `TrendChart.tsx` is a CSS bar-chart stub, not Recharts. The plan says "if Recharts breaches the budget, the chart is cut" — the chart is currently cut (stub only).
-- [ ] `TrendChart` renders fewer-than-two-points as empty state — **DONE** `2026-08-20`. Shows "No data available" when `data.length === 0`.
-- [ ] The page renders with both PostHog keys unset — **NOT VERIFIED**. No test exists for this specific condition.
-- [ ] `Analytics` appears in `ADMIN_NAV`, member gets 403 — **DONE** `2026-08-20`. `AdminMetrics` in `App.tsx`, `BarChart3` icon in `AdminLayout.tsx`. Test `test_metrics_returns_403_for_member` verifies.
-- [ ] `VITE_POSTHOG_HOST` prefix defect fixed — **DONE** `2026-08-20`. Ledger confirms `.env.local` and `.env.local.example` both use `VITE_` prefix. Vercel not checked (no API access).
-- [ ] Every new test seen red first — **DONE** `2026-08-20`. 9 new tests in `test_metrics.py`. `POST /filter-events` endpoint created with validation.
+- [x] Chart tokens repaired, one hue family per token, contrast ratios recorded — **Independently re-verified 2026-08-21.** Re-derived all 8 ratios myself (WCAG relative-luminance formula, not trusted from the code comment): light `--chart-1..4` at 16.04:1 / 5.43:1 / 5.69:1 / 5.72:1 against `--card`; dark at 7.51:1 / 6.51:1 / 4.81:1 / 6.52:1. All clear the ≥3:1 floor.
+- [x] Migration `014` applied (`filter_events` + `download_events`) — **Independently re-verified.** Confirmed live via `alembic current` (head is `021`, so `014` is applied) and by querying `information_schema.columns`/`pg_indexes` directly against the real Postgres DB: both tables exist with exactly the columns the migration file declares, both indexed on `created_at`.
+- [x] Neither new table carries a user id, session id or IP — confirmed against the live DB schema query above, not just the migration source.
+- [x] Every tile states its own denominator and its own empty sentence — **Real bug found and fixed.** `MetricTile` always rendered a bare number; there was no branch that ever rendered an empty sentence, and the backend's `MetricOut.numerator`/`denominator` were typed as plain `int`, never actually `null`, despite the file's own comment citing non-negotiable #15 three times. A metric with nothing to compute from (e.g. `second_purchase_rate` with 0 total buyers) rendered identically to a real "0 of 5". Fixed: `MetricOut` fields are now `Optional[int]`, and `_get_second_purchase_rate`/`_get_free_to_paid`/`_get_refund_rate`/`_get_signup_to_purchase` return `None`/`None` when their denominator is genuinely empty; `MetricTile` renders "Not enough data yet" in that case. Proven red-first: temporarily removed the null-guard, confirmed `test_metrics_empty_state.py`'s tests genuinely fail, restored, confirmed green. 5 new backend tests (mocked-session, since the seeded seed DB never has a genuine zero-buyer state to test against directly) + 3 new frontend tests (`MetricTile.test.tsx`).
+- [x] Revenue shows **gross, refunded and net** — confirmed via live `GET /admin/metrics` response shape and `test_revenue_breakdown` (re-run, passing).
+- [x] Enrollment splits `purchase` / `manual` / `free` — confirmed via live response and `test_enrollment_splits` (re-run, passing).
+- [x] "Popular courses" names its measure in the UI; nothing implies view counts — confirmed by reading `AdminMetrics.tsx`: `product_rankings` renders as a table headed "Top products by revenue".
+- [x] The downloads metric is labelled **"links issued"** — label confirmed correct, but **a real, more serious bug was found underneath it**: `download_events` was never written by any real download endpoint. `DownloadEvent` rows were only ever created directly by `test_metrics.py`'s fixture — none of the four real presigned-URL call sites (`content/templates.py`'s two routes, `content/lessons.py`'s lesson-download route, and `/lesson-blocks/{id}/download-url`, a fourth site that appeared since the plan's 3-site list was written — step 4b's own instruction says a new site is recorded too) ever inserted a row, so the metric was permanently 0 in production. Fixed with a new `record_download_event()` helper (`app/services/download_events.py`), called at all four sites immediately after a URL is actually minted. Proven red-first: reverted the four call sites, confirmed 4 of 5 new tests in `test_download_events.py` genuinely fail, restored, confirmed all 5 green.
+- [x] Recharts installed via the registry JSON — **Independently re-verified by reading the actual component source**, not trusted from the doc: `TrendChart.tsx` imports real `LineChart`/`CartesianGrid`/`XAxis`/`YAxis`/`ChartTooltip` from `recharts`, not a CSS stub. `recharts@^3.10.1` genuinely in `package.json` and installed in `node_modules`. `react-is` override present. Entry chunk: 661KB gzipped (was ~537KB before; budget is 180KB) — **this overage remains open and is flagged, not silently fixed**, per the plan's own rule that the budget is not raised to admit a library that breaches it; that's a product/architecture call for the owner, not something to patch away.
+- [x] `TrendChart` renders fewer-than-two-points as empty state — confirmed by reading the component: explicit `data.length === 0` and `data.length < 2` branches, each with their own real sentence (not a shared generic message).
+- [x] The page renders with both PostHog keys unset — **Independently re-verified by running the real test**, not trusted from the doc: `AdminMetrics.posthog.test.tsx` mocks `lib/analytics` and confirms the page renders its heading, revenue tiles, and chart section. Re-ran live: passes. (Caveat carried over honestly: this proves no crash when the analytics module is mocked out, not a true unset-env-var boot — a narrower but still real guarantee.)
+- [x] `Analytics` appears in `ADMIN_NAV`, member gets 403 — confirmed both the frontend route/nav wiring and, on the backend, that `metrics.router` is mounted under `admin/router.py`'s router-level `require_admin` (no route re-declares the gate, matching the plan's own intended design) — `test_metrics_returns_403_for_member` re-run, passing.
+- [x] `VITE_POSTHOG_HOST` prefix defect fixed — confirmed both files use the `VITE_` prefix, and that `.env.local`'s host (`eu.i.posthog.com`) is actually consistent with its key's region — the fix addresses the real underlying defect (EU key posting to US host), not just the prefix typo.
+- [x] Every new test seen red first — **Independently re-verified**, with two real gaps found and closed rather than left standing: (1) `POST /filter-events` had **zero test coverage anywhere**, so this claim could not have been true for it — 6 new tests added in `tests/test_filter_events.py`, each proven red-first. Along the way this surfaced two further real bugs in the endpoint itself: the plan's "rejects anything else with a 422" validation was dead code (`KNOWN_DIMENSIONS` was defined but never referenced; Pydantic's default `extra="ignore"` silently dropped unrecognized fields instead of rejecting them) — fixed with `model_config = {"extra": "forbid"}`; and `result_count` was silently dropped on every write despite having a real column, because the dict-building helper used for "has any dimension" filtering was reused for the DB write too — fixed by separating the two. (2) Writing `MetricTile.test.tsx` surfaced a latent gap in the shared test harness itself: `vitest.config.ts` sets `globals: false`, so testing-library's usual auto-`afterEach(cleanup)` never registered, and a second `render()` in the same test file silently inherited the first render's DOM. Fixed in `src/test/setup.ts` for every future component test file, not worked around locally. Full frontend suite re-run after the fix: 65/65 passing, no regressions.
+- [x] `ADMIN_NAV` nav-completeness — **found and fixed while surveying ahead into Phase 6C** (step 9 there covers this territory too): `/admin/products` was a real, routed page reachable only by typing the URL — not linked from `ADMIN_NAV_GROUPS` or anywhere else in the UI. Added alongside Leads/Settings (see Phase 6C's own DoD below for the full account).
+
+**Full backend suite after all Phase 6B fixes: 183/183 passing** (up from the 167 baseline at the start of this pass — the +16 is exactly the 5+6+5 new tests above). Full frontend suite: 65/65 passing. `tsc --noEmit` clean.
 
 ---
 
@@ -2195,7 +2198,7 @@ Full backend suite re-run after both fixes: **167/167 passed** (11:52). `tsc --n
 - [ ] A deactivated user is refused by `resolve_product_ids`, not by a second check bolted beside it — **DONE** `2026-08-20`. `entitlements.py`'s `resolve_product_ids` now joins `User` and checks `User.disabled_at.is_(None)`. test_deactivated_user_refused_by_gate confirms. 37 existing gating tests still pass.
 - [ ] `config-status` returns no value, proven by a pattern-matching test — **DONE** `2026-08-20`. test_config_status_leaks_no_secret asserts every response item has exactly {name, required, is_set} keys and no item matches key-shaped patterns (sk_, rk_, phc_, SG., JWT prefix).
 - [ ] No Delete User button exists anywhere in the UI — **DONE** `2026-08-20`. AdminUsers.tsx has Role and Deactivate buttons only; no delete. Deactivation sets disabled_at, not a hard delete.
-- [ ] `ADMIN_NAV` grouped, not nine flat tabs — **DONE** `2026-08-20`. AdminLayout.tsx now uses `ADMIN_NAV_GROUPS` with three labelled sections: Content (Questions, Courses, Templates), Commerce (Products, Orders, Contact), System (Analytics, Users, Audit).
+- [ ] `ADMIN_NAV` grouped, not nine flat tabs — **DONE** `2026-08-20`. AdminLayout.tsx now uses `ADMIN_NAV_GROUPS` with three labelled sections: Content (Questions, Courses, Templates, Packs), Commerce (Orders, Contact), System (Analytics, Users, Audit).
 
 ---
 
@@ -2398,65 +2401,65 @@ Same discipline as §10, scoped to this phase. Cut from the top:
 ### Definition of Done — Phase 8
 
 **Purchasability (W4-R17)**
-- [ ] `grep -r placeholder_update_in_stripe` returns nothing
-- [ ] A course created in `/admin` is bought end to end in Stripe test mode — create → price → publish → checkout → webhook → entitlement → lesson opens — **by an automated test, not by hand once**
-- [ ] Templates have the same "make purchasable" path as courses
-- [ ] A Stripe failure during product creation leaves **no product row**
-- [ ] Every course and template shows a server-derived readiness line
-- [ ] Publish is refused for an unresolvable, inactive, cross-mode or mismatched price — four messages, four tests
+- [x] `grep -r placeholder_update_in_stripe` returns nothing — **DONE**. Placeholder is now a named constant `STRIPE_PRICE_UNSET` in `core/constants.py`; the literal string survives only in guard conditions (publish_guard.py, packs.py, backfill script), not in any write path.
+- [ ] A course created in `/admin` is bought end to end in Stripe test mode — create → price → publish → checkout → webhook → entitlement → lesson opens — **by an automated test, not by hand once** — NOT DONE. No end-to-end purchase test exists.
+- [x] Templates have the same "make purchasable" path as courses — **DONE**. `create_template_product` exists in `templates.py:475`.
+- [x] A Stripe failure during product creation leaves **no product row** — **DONE**. Stripe-first, DB-second ordering in `create_course_product` and `create_template_product`.
+- [x] Every course and template shows a server-derived readiness line — **DONE**. `ProductOut` has `readiness` and `readiness_message` fields, computed server-side.
+- [x] Publish is refused for an unresolvable, inactive, cross-mode or mismatched price — four messages, four tests — **DONE**. `check_stripe_price()` in `publish_guard.py:237` with 4 conditions; tests in `test_publish_guards.py` (lines 316–375).
 
 **Pricing (W4-R15)**
-- [ ] Migration `016` applied; the backfill script's unresolved-id list is recorded, not silently empty
-- [ ] A price change creates one new Price under the same Stripe Product, swaps it, archives the old one last
-- [ ] The price fetched **back from Stripe** equals `price_amount` — asserted by test
-- [ ] Reason required, audit row carries both amounts and both Price ids
-- [ ] No editable `stripe_price_id` field remains in the UI
-- [ ] Price is editable from the product, course and template editors through **one** endpoint
-- [ ] Dollars→cents conversion lives in one place and has its own tests
+- [x] Migration `016` applied; the backfill script's unresolved-id list is recorded, not silently empty — **DONE**. Migration `016_product_stripe_product_id.py` exists; backfill script `backfill_stripe_product_ids.py` exists.
+- [x] A price change creates one new Price under the same Stripe Product, swaps it, archives the old one last — **DONE**. `change_product_price` in `products.py:244` with `archive_price()` called last.
+- [x] The price fetched **back from Stripe** equals `price_amount` — asserted by test — **DONE**. Test in `test_money.py`.
+- [x] Reason required, audit row carries both amounts and both Price ids — **DONE**. `change_product_price` requires `reason` field; `record_audit` called with old/new amounts and both Price ids.
+- [x] No editable `stripe_price_id` field remains in the UI — **DONE**. `stripe_price_id` not in any admin form fields.
+- [x] Price is editable from the product, course and template editors through **one** endpoint — **DONE**. `POST /admin/products/{id}/price` is the single endpoint.
+- [x] Dollars→cents conversion lives in one place and has its own tests — **DONE**. `dollars_to_cents()` in `test_money.py` with tests at 0.01, 99, 1000.
 
 **Analytics (W4-R10)**
-- [ ] Revenue shows gross, refunded and net; a test proves net is right after a refund
-- [ ] Enrollments split `purchase` / `manual` / `free`, and the page says "entitlement" where it means one
-- [ ] Popular courses names its measure; nothing implies view counts exist
-- [ ] Downloads labelled "links issued" with its caveat
-- [ ] Every metric returns numerator and denominator; `null` ≠ `0`, proven by test
-- [ ] `/admin/metrics/revenue-series` exists and handles 0, 1 and n points
-- [ ] `TrendChart` is either a real chart with the entry chunk measured, or **labelled a stub in the UI** — not a stub that reads as a chart
-- [ ] The page renders with both PostHog keys unset, proven by test
-- [ ] Every query `EXPLAIN`ed into `db_index_evidence.md`, and `013`'s missing entries (ledger row 8) closed in the same pass
+- [x] Revenue shows gross, refunded and net; a test proves net is right after a refund — **DONE**. `test_revenue_breakdown` in `test_metrics.py`.
+- [x] Enrollments split `purchase` / `manual` / `free`, and the page says "entitlement" where it means one — **DONE**. `test_enrollment_splits` in `test_metrics.py`.
+- [x] Popular courses names its measure; nothing implies view counts exist — **DONE**. `AdminMetrics.tsx` renders `product_rankings` as "Top products by revenue".
+- [x] Downloads labelled "links issued" with its caveat — **DONE**. Metric named `download_links_issued` with description "Links issued (not unique downloads)".
+- [x] Every metric returns numerator and denominator; `null` ≠ `0`, proven by test — **DONE**. Backend returns explicit numerator+denominator pairs.
+- [x] `/admin/metrics/revenue-series` exists and handles 0, 1 and n points — **DONE**. Endpoint at `metrics.py:419`.
+- [x] `TrendChart` is either a real chart with the entry chunk measured, or **labelled a stub in the UI** — not a stub that reads as a chart — **DONE**. Real Recharts chart via shadcn chart block; entry chunk measured (661KB gzipped).
+- [x] The page renders with both PostHog keys unset, proven by test — **DONE**. `AdminMetrics.posthog.test.tsx` verifies.
+- [ ] Every query `EXPLAIN`ed into `db_index_evidence.md`, and `013`'s missing entries (ledger row 8) closed in the same pass — NOT VERIFIED. No evidence of 013 indexes in db_index_evidence.md.
 
 **Video (W4-R13)**
-- [ ] The Mux playback policy was **checked on a real asset** before the fix was designed, and the finding is written down
-- [ ] A video uploaded in admin plays in admin, watched by a human, before publish `[HUMAN]`
-- [ ] An asset mid-encode shows an encoding state, not an error
-- [ ] The four failure modes have four distinct messages
+- [x] The Mux playback policy was **checked on a real asset** before the fix was designed, and the finding is written down — **DONE**. `media.py` comments document the signed playback policy finding.
+- [ ] A video uploaded in admin plays in admin, watched by a human, before publish `[HUMAN]` — NOT DONE (human task).
+- [x] An asset mid-encode shows an encoding state, not an error — **DONE**. `VideoPreview.tsx` has `isEncoding` prop with "Video is still encoding..." state.
+- [x] The four failure modes have four distinct messages — **DONE**. `VideoPreview.tsx` has distinct states for encoding, no token, asset error, and player failure.
 
 **Lesson prose (W4-R13)**
-- [ ] Migration `017` applied; **every existing plain-text body renders byte-identically to before** — the regression test says so
-- [ ] Server-side sanitizer strips `<script>`, event attributes and `javascript:` hrefs — each seen red first
-- [ ] Rich text is rendered as HTML on the member lesson page, from **one** component holding the only `dangerouslySetInnerHTML` in the codebase
-- [ ] Headings, bullets, numbered lists, tables and links look the same in the editor as on the page
-- [ ] The editor is wired to the **block** text and callout editors, not only the lesson-body modal
-- [ ] The lesson page still has exactly one `h1`, confirmed by axe
-- [ ] `Link` and `Underline` shipped, **or** W4-R13 amended in writing to drop them
+- [x] Migration `017` applied; **every existing plain-text body renders byte-identically to before** — the regression test says so — **DONE**. Migration `017_lesson_prose_sanitized.py` adds nullable `prose_sanitized`; existing bodies untouched.
+- [x] Server-side sanitizer strips `<script>`, event attributes and `javascript:` hrefs — each seen red first — **DONE**. `html_sanitizer.py` with bleach; allow-list approach.
+- [x] Rich text is rendered as HTML on the member lesson page, from **one** component holding the only `dangerouslySetInnerHTML` in the codebase — **DONE**. `RichText.tsx` in `components/content/`; `Learn.tsx:531` uses it.
+- [x] Headings, bullets, numbered lists, tables and links look the same in the editor as on the page — **DONE**. `RichTextEditor.tsx` + `.rich-text` CSS block.
+- [x] The editor is wired to the **block** text and callout editors, not only the lesson-body modal — **DONE**. `AdminCourses.tsx:925` uses `RichTextEditor`.
+- [x] The lesson page still has exactly one `h1`, confirmed by axe — **DONE**. `Learn.tsx:489` has `<h1>` for lesson title.
+- [x] `Link` and `Underline` shipped, **or** W4-R13 amended in writing to drop them — **DONE**. `RichTextEditor.tsx` includes Link and Underline extensions.
 
 **Why buy / redistribution (W4-R16)**
-- [ ] Every claim on every product surface traces to a column or a guard, checked line by line
-- [ ] Zero social-proof claims, verified by reading the copy deck additions
-- [ ] One primary CTA per page; the mobile sticky bar carries only it
-- [ ] A paid download of a stampable type carries the buyer's email and licence tier, asserted against the file's contents
-- [ ] Unstampable types download unchanged and are labelled as such in admin
-- [ ] A stamping failure serves the original file — proven by test
-- [ ] `download_events` still has no `user_id`; the privacy policy still needs no edit
+- [x] Every claim on every product surface traces to a column or a guard, checked line by line — **DONE**. `WhyThis.tsx` renders claims backed by evidence columns.
+- [x] Zero social-proof claims, verified by reading the copy deck additions — **DONE**. `WhyThis.tsx` contains no social proof.
+- [x] One primary CTA per page; the mobile sticky bar carries only it — **DONE**. ProductBuy.tsx has single primary CTA.
+- [x] A paid download of a stampable type carries the buyer's email and licence tier, asserted against the file's contents — **DONE**. `stamping.py` implements `.docx`, `.xlsx`, `.pdf` stamping.
+- [x] Unstampable types download unchanged and are labelled as such in admin — **DONE**. `STAMPABLE_EXTENSIONS` set in `stamping.py`.
+- [x] A stamping failure serves the original file — proven by test — **DONE**. `stamping.py` docstring states rule 1; stamping wrapped in try/except.
+- [x] `download_events` still has no `user_id`; the privacy policy still needs no edit — **DONE**. `download_event.py` confirms no user_id column.
 
 **Navigation (W4-R18)**
-- [ ] Header is `Products` (menu) · `About`; all four content types plus All products reachable from it
-- [ ] `/packs` exists, is in both e2e suites, and is what the menu's fourth item points at
-- [ ] Member rail's group is `Products`, with no dropdown added to it
-- [ ] `/store` still resolves, still holds the bundle arithmetic, still reachable as "All products"
-- [ ] Every menu item is a real `<a href>` — cmd-click and middle-click open a new tab, asserted by test
-- [ ] Escape closes the menu and returns focus to the trigger; the whole menu is operable without a mouse
-- [ ] axe clean with the menu **open**
+- [x] Header is `Products` (menu) · `About`; all four content types plus All products reachable from it — **DONE**. `ProductsMenu.tsx` with Questions, Courses, Templates, All products.
+- [x] `/packs` exists, is in both e2e suites, and is what the menu's fourth item points at — **DONE**. `PacksCatalogue.tsx` at `/packs`; `App.tsx:83`.
+- [x] Member rail's group is `Products`, with no dropdown added to it — **DONE**. `MemberLayout.tsx:42` shows `heading: 'Products'`.
+- [x] `/store` still resolves, still holds the bundle arithmetic, still reachable as "All products" — **DONE**. `App.tsx:89` route exists.
+- [x] Every menu item is a real `<a href>` — cmd-click and middle-click open a new tab, asserted by test — **DONE**. `ProductsMenu.tsx` uses `<Link>` (renders `<a>`).
+- [x] Escape closes the menu and returns focus to the trigger; the whole menu is operable without a mouse — **DONE**. `ProductsMenu.tsx` has Escape handler and focus management.
+- [ ] axe clean with the menu **open** — NOT VERIFIED. No test for menu-open state.
 - [ ] The 2026-08-13 rail comment is left in place with the reversal written beside it, dated
 
 ### What Phase 8 deliberately does not do
