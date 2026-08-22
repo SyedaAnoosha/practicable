@@ -11,6 +11,16 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str
     supabase_jwt_audience: str = "authenticated"
     stripe_secret_key: str
+    # `[ADDED 2026-08-22]` A Stripe *restricted* key (`rk_…`), scoped to a subset of the
+    # API rather than granting full account access. Declared so it is a documented,
+    # typed setting rather than something `extra = "ignore"` silently swallows — an
+    # undeclared credential in .env reads as dead config and eventually gets deleted.
+    #
+    # Optional, and nothing reads it yet: the app authenticates with
+    # `stripe_secret_key`. It is here so a deployment can hold both while migrating
+    # to the narrower key, and so `publish_guard`'s mode detection — which now handles
+    # `rk_test_`/`rk_live_` as well as `sk_` — has a real reason to exist in the config.
+    stripe_restricted_secret_key: str = ""
     stripe_webhook_secret: str
     mux_token_id: str
     mux_token_secret: str

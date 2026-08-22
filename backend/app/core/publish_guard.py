@@ -288,17 +288,41 @@ def check_stripe_price(
         )
 
     # Check 4: Cross-mode (test key against live price or vice versa)
-    is_test_key = settings.stripe_secret_key.startswith("sk_test_")
-    is_live_price = not stripe_price_id.startswith("price_") or (
-        # Live prices don't have a simple prefix pattern, but we can check via the object
-        hasattr(price, "livemode") and price.livemode is True
-    )
-    if is_test_key and is_live_price:
+    #
+    # `[FIXED 2026-08-22]` This read `startswith("sk_test_")`, which is only one of the
+    # four key forms Stripe issues. A **restricted** key is `rk_test_…` / `rk_live_…`,
+    # and this project is configured with an `rk_test_` key — so `is_test_key` was False,
+    # the second branch fired, and every product with a (correct) test price reported
+    # "Mode mismatch: live API key against a test Stripe price. Use matching keys."
+    #
+    # The keys were never mismatched. The guard was telling the owner to fix a
+    # configuration that was already right, on the admin screens for courses, templates
+    # and packs at once — and a false alarm on a payment safety check is worse than no
+    # check, because it trains you to ignore the real one.
+    #
+    # Mode is now taken from the `_test_` / `_live_` infix, which is present on every
+    # Stripe key form (sk_, rk_, pk_) and is the only part that actually encodes mode.
+    key = settings.stripe_secret_key or ""
+    if "_test_" in key:
+        key_is_live = False
+    elif "_live_" in key:
+        key_is_live = True
+    else:
+        # An unrecognised key shape: say so rather than guessing a mode and reporting a
+        # mismatch that may not exist. Stripe itself will reject a genuinely bad key.
+        key_is_live = None
+
+    # `price.livemode` is authoritative and is what Stripe returns; the old
+    # `not stripe_price_id.startswith("price_")` half of this test was never meaningful
+    # (every price id starts with `price_`, in both modes).
+    price_is_live = bool(getattr(price, "livemode", False))
+
+    if key_is_live is False and price_is_live:
         return StripePriceResult(
             ok=False,
             message="Mode mismatch: test API key against a live Stripe price. Use matching keys.",
         )
-    if not is_test_key and hasattr(price, "livemode") and not price.livemode:
+    if key_is_live is True and not price_is_live:
         return StripePriceResult(
             ok=False,
             message="Mode mismatch: live API key against a test Stripe price. Use matching keys.",
