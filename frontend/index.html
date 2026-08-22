@@ -1,47 +1,46 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Matches the theme's --background token (theme.css) so the mobile browser
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Matches the theme's --background token (theme.css) so the mobile browser
          chrome and overscroll feel like part of the page, not a white frame.
          Stores/useThemeStore.ts rewrites this on toggle. -->
-    <meta name="theme-color" content="#FBF9F4" />
-    <!-- Run before first paint (head, no dependencies) so a returning dark-mode
+  <meta name="theme-color" content="#FBF9F4" />
+  <!-- Run before first paint (head, no dependencies) so a returning dark-mode
          user never sees a light flash. Mirrors the initialTheme() logic in
          stores/useThemeStore.ts — keep the storage key and colours in sync. -->
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem('practicable:theme')
-          if (t !== 'light' && t !== 'dark') {
-            t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-          }
-          if (t === 'dark') document.documentElement.classList.add('dark')
-          document
-            .querySelector('meta[name="theme-color"]')
-            ?.setAttribute('content', t === 'dark' ? '#141008' : '#FBF9F4')
-        } catch (e) {}
-      })()
-    </script>
-    <!-- DESIGN.md §44: the marketing homepage is the top of the acquisition funnel,
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('practicable:theme')
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        if (t === 'dark') document.documentElement.classList.add('dark')
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute('content', t === 'dark' ? '#141008' : '#FBF9F4')
+      } catch (e) { }
+    })()
+  </script>
+  <!-- DESIGN.md §44: the marketing homepage is the top of the acquisition funnel,
          so the title + description carry the claim, not the Vite default. Per-route
          head tags arrive with the prerendering work (§44.2); this is the static floor. -->
-    <meta
-      name="description"
-      content="Practical answers to the questions risk leaders actually have. 100 real questions from risk practitioners, tagged by effort, cost, timescale and regulator pressure."
-    />
-    <meta property="og:title" content="Practicable — Practical answers for risk leaders" />
-    <meta
-      property="og:description"
-      content="100 real questions from risk practitioners, tagged by effort, cost, timescale and regulator pressure — find the one you need in about thirty seconds."
-    />
-    <meta property="og:type" content="website" />
-    <title>Practicable — Practical answers for risk leaders</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+  <meta name="description"
+    content="Practical answers to the questions risk leaders actually have. 100 real questions from risk practitioners, tagged by effort, cost, timescale and regulator pressure." />
+  <meta property="og:title" content="Practicable — Practical answers for risk leaders" />
+  <meta property="og:description"
+    content="100 real questions from risk practitioners, tagged by effort, cost, timescale and regulator pressure — find the one you need in about thirty seconds." />
+  <meta property="og:type" content="website" />
+  <title>Practicable</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

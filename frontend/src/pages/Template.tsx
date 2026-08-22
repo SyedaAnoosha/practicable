@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
 import type { Preview } from '@/components/product/PreviewGallery'
 import { WhyThis } from '@/components/product/WhyThis'
@@ -72,7 +74,7 @@ export function Template() {
   // the gate outright.
   const signedIn = useAuthStore((s) => s.user) !== null
 
-  const { data: template, isLoading } = useQuery({
+  const { data: template, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.templates.detail(templateId ?? ''),
     queryFn: () => api.get<TemplateDetail>(`/templates/${templateId}`).then((r) => r.data),
     enabled: !!templateId,
@@ -135,6 +137,36 @@ export function Template() {
       <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Loading template">
         <div className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
         <span className="sr-only">Loading template…</span>
+      </div>
+    )
+  }
+
+  /* `[CHANGED 2026-08-22, F3 — P0]` This was `if (!template) return null` — a failed
+   * fetch rendered a literally blank page: no message, no retry, no way to tell a dead
+   * link from a dropped request. A 404 keeps the honest not-found copy; everything else
+   * gets a retry. */
+  if (isError) {
+    const notFound = isAxiosError(error) && error.response?.status === 404
+    return (
+      <div className="mx-auto w-full max-w-2xl px-5 py-11 sm:px-8">
+        {notFound ? (
+          <EmptyState
+            icon={FileSpreadsheet}
+            title="That template doesn’t exist"
+            description="It may have been renamed or withdrawn."
+            action={
+              <Link to="/templates">
+                <Button variant="outline">Browse the templates</Button>
+              </Link>
+            }
+          />
+        ) : (
+          <ErrorState
+            title="We couldn't load this template."
+            description="Check your connection and try again."
+            onRetry={() => void refetch()}
+          />
+        )}
       </div>
     )
   }

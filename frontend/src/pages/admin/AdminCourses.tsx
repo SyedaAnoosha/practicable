@@ -222,9 +222,17 @@ function CoverImageUpload({
   if (coverImageUrl) {
     return (
       <div className="relative">
+        {/* `[ADDED 2026-08-22, Redesing_decisions.md K2]` The height is pinned by
+            `h-40`, so this never shifted layout; width/height still go on for the
+            decode-time aspect ratio, and `loading="lazy"` keeps an uploaded cover off
+            the critical path of a list the editor may not scroll to. */}
         <img
           src={coverImageUrl}
           alt="Course cover"
+          width={640}
+          height={160}
+          loading="lazy"
+          decoding="async"
           className="h-40 w-full rounded-lg object-cover"
         />
         <div className="mt-2 flex gap-2">
@@ -1216,7 +1224,7 @@ export function AdminCourses() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageTitle
           eyebrow="Content editor"

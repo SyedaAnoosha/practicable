@@ -1,0 +1,198 @@
+[
+  {
+    "platform": "linkedin-learning",
+    "name": "homepage",
+    "url": "https://www.linkedin.com/learning/",
+    "status": "ok",
+    "title": "LinkedIn Learning: Online Training Courses & Skill Building"
+  },
+  {
+    "platform": "linkedin-learning",
+    "name": "topics-browse",
+    "url": "https://www.linkedin.com/learning/topics/business",
+    "status": "ok",
+    "title": "Business Online Training Courses | LinkedIn Learning, formerly Lynda.com"
+  },
+  {
+    "platform": "linkedin-learning",
+    "name": "course-detail",
+    "url": "https://www.linkedin.com/learning/project-management-foundations-4",
+    "status": "ok",
+    "title": "Project Management Foundations Online Class | LinkedIn Learning, formerly Lynda.com"
+  },
+  {
+    "platform": "masterclass",
+    "name": "homepage",
+    "url": "https://www.masterclass.com/",
+    "status": "ok",
+    "title": "MasterClass Online Classes"
+  },
+  {
+    "platform": "masterclass",
+    "name": "category-business",
+    "url": "https://www.masterclass.com/categories/business",
+    "status": "ok",
+    "title": "MasterClass Categories"
+  },
+  {
+    "platform": "masterclass",
+    "name": "class-detail",
+    "url": "https://www.masterclass.com/classes/bob-iger-teaches-business-strategy-and-leadership",
+    "status": "ok",
+    "title": "Bob Iger Teaches Business Strategy and Leadership"
+  },
+  {
+    "platform": "masterclass",
+    "name": "pricing",
+    "url": "https://www.masterclass.com/subscribe",
+    "status": "ok",
+    "title": "MasterClass"
+  },
+  {
+    "platform": "maven",
+    "name": "homepage",
+    "url": "https://maven.com/",
+    "status": "ok",
+    "title": "Maven | Unlock your career growth"
+  },
+  {
+    "platform": "maven",
+    "name": "course-browse",
+    "url": "https://maven.com/browse",
+    "status": "ok",
+    "title": ""
+  },
+  {
+    "platform": "maven",
+    "name": "course-detail",
+    "url": "https://maven.com/lennys-newsletter/product-management",
+    "status": "ok",
+    "title": ""
+  },
+  {
+    "platform": "teachable",
+    "name": "homepage",
+    "url": "https://teachable.com/",
+    "status": "ok",
+    "title": "Teachable — Build & Sell Online Courses, Coaching, Memberships & More"
+  },
+  {
+    "platform": "teachable",
+    "name": "pricing",
+    "url": "https://teachable.com/pricing",
+    "status": "ok",
+    "title": "Teachable Pricing: Compare Plans and Start Your Free Trial"
+  },
+  {
+    "platform": "teachable",
+    "name": "features",
+    "url": "https://teachable.com/features",
+    "status": "ok",
+    "title": "Teachable Features - Tools to Build & Grow Your Online Courses Business"
+  },
+  {
+    "platform": "thinkific",
+    "name": "homepage",
+    "url": "https://www.thinkific.com/",
+    "status": "ok",
+    "title": "Online Course Platform to Sell Courses and Communities | Thinkific"
+  },
+  {
+    "platform": "thinkific",
+    "name": "pricing",
+    "url": "https://www.thinkific.com/pricing/",
+    "status": "ok",
+    "title": "Thinkific Pricing | Thinkific"
+  },
+  {
+    "platform": "brilliant",
+    "name": "homepage",
+    "url": "https://brilliant.org/",
+    "status": "ok",
+    "title": "Brilliant | Learn by doing"
+  },
+  {
+    "platform": "brilliant",
+    "name": "courses-catalog",
+    "url": "https://brilliant.org/courses/",
+    "status": "ok",
+    "title": "Courses | Brilliant"
+  },
+  {
+    "platform": "brilliant",
+    "name": "pricing",
+    "url": "https://brilliant.org/premium/",
+    "status": "ok",
+    "title": "Brilliant Premium | Brilliant"
+  },
+  {
+    "platform": "oreilly",
+    "name": "homepage",
+    "url": "https://www.oreilly.com/",
+    "status": "ok",
+    "title": "O'Reilly Media - Technology and Business Training"
+  },
+  {
+    "platform": "oreilly",
+    "name": "online-learning",
+    "url": "https://www.oreilly.com/online-learning/",
+    "status": "ok",
+    "title": "Online Learning and Training - O'Reilly Media"
+  },
+  {
+    "platform": "oreilly",
+    "name": "pricing",
+    "url": "https://www.oreilly.com/online-learning/pricing.html",
+    "status": "ok",
+    "title": "Online Learning Platform Pricing - O'Reilly Media"
+  },
+  {
+    "platform": "datacamp",
+    "name": "homepage",
+    "url": "https://www.datacamp.com/",
+    "status": "ok",
+    "title": "Learn Data Science and AI Online | DataCamp"
+  },
+  {
+    "platform": "datacamp",
+    "name": "course-catalog",
+    "url": "https://www.datacamp.com/courses-all",
+    "status": "ok",
+    "title": "Data, AI, and Cloud Courses | DataCamp"
+  },
+  {
+    "platform": "datacamp",
+    "name": "course-detail",
+    "url": "https://www.datacamp.com/courses/introduction-to-python",
+    "status": "ok",
+    "title": "Learn Python for Beginners, Python Basics | DataCamp"
+  },
+  {
+    "platform": "datacamp",
+    "name": "pricing",
+    "url": "https://www.datacamp.com/pricing",
+    "status": "ok",
+    "title": "Plans and Pricing - Choose a Package | DataCamp"
+  },
+  {
+    "platform": "pluralsight",
+    "name": "homepage",
+    "url": "https://www.pluralsight.com/",
+    "status": "ok",
+    "title": "Build team skills in AI, data, cloud, and security | Pluralsight"
+  },
+  {
+    "platform": "pluralsight",
+    "name": "browse-library",
+    "url": "https://www.pluralsight.com/browse",
+    "status": "ok",
+    "title": "Browse courses by subject | Pluralsight"
+  },
+  {
+    "platform": "pluralsight",
+    "name": "pricing",
+    "url": "https://www.pluralsight.com/pricing",
+    "status": "ok",
+    "title": "Get Started with Pluralsight Online Learning | Advance Your Career | Pluralsight"
+  }
+]

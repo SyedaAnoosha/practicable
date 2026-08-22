@@ -222,7 +222,7 @@ export function AdminTemplates() {
   const showEditor = isCreating || editingId !== null
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageTitle
           eyebrow="Content editor"
@@ -579,9 +579,16 @@ export function AdminTemplates() {
                       <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                         {t.preview_images.map((p) => (
                           <li key={p.storage_key} className="relative">
+                            {/* `[ADDED 2026-08-22, K2]` `aspect-[3/4]` already reserves
+                                the box, so there is no shift; lazy/async keeps a long
+                                template list from decoding every preview at once. */}
                             <img
                               src={p.url}
                               alt={p.alt || '(no alt text set)'}
+                              width={300}
+                              height={400}
+                              loading="lazy"
+                              decoding="async"
                               className="aspect-[3/4] w-full rounded-md border border-border object-cover object-top"
                             />
                             <p className="mt-1 truncate text-xs text-muted-foreground" title={p.alt}>

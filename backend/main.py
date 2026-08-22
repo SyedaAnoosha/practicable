@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.deps import get_current_user_id
 from app.api.v1.content import questions, lessons, templates, courses, packs
 from app.api.v1.commerce import checkout, products, webhooks
-from app.api.v1 import auth, contact, leads, me
+from app.api.v1 import auth, contact, filter_events, leads, me
 from app.api.v1.admin.router import router as admin_router
 
 # Uvicorn configures only its own `uvicorn.*` loggers, leaving root at WARNING — which
@@ -42,6 +42,7 @@ app.include_router(webhooks.router, tags=["commerce"])
 app.include_router(me.router, tags=["me"])
 app.include_router(leads.router, tags=["leads"])
 app.include_router(contact.router, tags=["contact"])
+app.include_router(filter_events.router, tags=["analytics"])
 app.include_router(auth.router, tags=["auth"])
 # Every route inside is gated by require_admin at the router level.
 app.include_router(admin_router, tags=["admin"])

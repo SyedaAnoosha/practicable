@@ -22,6 +22,7 @@ import { recordFilterEvent } from '@/lib/filterEvents'
 import { domainColorVar, domainVisual } from '@/lib/domainVisuals'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -569,7 +570,11 @@ export function QuestionsCatalogue() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery])
 
-  const { data: questions, isLoading } = useQuery({
+  /* `[CHANGED 2026-08-22, Redesing_decisions.md F3 — P0]` `isError`/`refetch` were not
+   * destructured, so a failed index fetch left `questions` undefined and every render
+   * branch below false: the flagship discovery screen rendered its filter rail over a
+   * silently blank column with no error, no retry and no explanation. */
+  const { data: questions, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.questions.list(),
     queryFn: () => api.get<QuestionSummary[]>('/questions/index').then((res) => res.data),
   })
@@ -800,7 +805,18 @@ export function QuestionsCatalogue() {
             </div>
           )}
 
-          {!isLoading && questions && questions.length === 0 && (
+          {/* F3: scoped to the results column — the filter rail and the search box stay
+              usable, so a retry does not cost the user the query they had typed. */}
+          {!isLoading && isError && (
+            <ErrorState
+              className="mt-6"
+              title="We couldn't load the questions."
+              description="Check your connection and try again."
+              onRetry={() => void refetch()}
+            />
+          )}
+
+          {!isLoading && !isError && questions && questions.length === 0 && (
             <EmptyState
               className="mt-6"
               icon={FileQuestion}

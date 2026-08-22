@@ -37,9 +37,42 @@ describe('MetricTile', () => {
   })
 
   it('renders a plain count (not a ratio) when denominator is 1', () => {
+    // Was written against `total_revenue`, which is now formatted as currency — the
+    // subject of this test is the plain-count path, so it uses a genuine count.
     render(
-      <MetricTile name="total_revenue" numerator={4900} denominator={1} description="Total revenue in cents" />,
+      <MetricTile name="enrollments" numerator={4900} denominator={1} description="Active enrolments" />,
     )
     expect(screen.getByText('4,900')).toBeInTheDocument()
+  })
+
+  it('renders total_revenue as money, not as a raw cent count', () => {
+    // The regression this guards: cents printed verbatim read as dollars, so A$49.00
+    // of takings displayed as "4,900" — a 100x overstatement on the owner's dashboard.
+    render(
+      <MetricTile name="total_revenue" numerator={4900} denominator={1} description="Total revenue" />,
+    )
+    expect(screen.getByText(/49\.00/)).toBeInTheDocument()
+    expect(screen.queryByText('4,900')).not.toBeInTheDocument()
+  })
+
+  it('shows a written label rather than the machine name', () => {
+    render(
+      <MetricTile
+        name="second_purchase_rate"
+        numerator={1}
+        denominator={4}
+        description="Buyers with 2+ orders / total buyers"
+      />,
+    )
+    expect(screen.getByText('Repeat buyers')).toBeInTheDocument()
+    expect(screen.queryByText('second_purchase_rate')).not.toBeInTheDocument()
+  })
+
+  it('de-snakes an unknown metric name instead of dropping it', () => {
+    // A metric added to the backend tomorrow must still read as words, not vanish.
+    render(
+      <MetricTile name="brand_new_metric" numerator={3} denominator={1} description="Something new" />,
+    )
+    expect(screen.getByText('Brand new metric')).toBeInTheDocument()
   })
 })

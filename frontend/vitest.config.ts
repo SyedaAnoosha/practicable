@@ -1,4 +1,3 @@
-/// <reference types="vitest/config" />
 import { defineConfig, mergeConfig } from 'vitest/config'
 import viteConfig from './vite.config'
 
@@ -12,6 +11,11 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'jsdom',
+      // jsdom only implements localStorage for a real (non-opaque) origin — without an
+      // explicit url it defaults to one that leaves `window.localStorage` undefined,
+      // which broke every zustand `persist` store (useCartStore, emailGate.ts) under
+      // test with no error at import time, only a crash on first write.
+      environmentOptions: { jsdom: { url: 'http://localhost:3000' } },
       globals: false,
       setupFiles: ['./src/test/setup.ts'],
       // Playwright's *.spec.ts live under tests/e2e and run through `playwright test`,

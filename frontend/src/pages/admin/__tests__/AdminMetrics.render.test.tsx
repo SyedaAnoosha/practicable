@@ -98,7 +98,9 @@ describe('AdminMetrics', () => {
 
     expect(screen.getByText('Net revenue')).toBeInTheDocument()
     expect(screen.getByText('Refunded')).toBeInTheDocument()
-    expect(screen.getByText('purchase enrollments')).toBeInTheDocument()
+    // Sentence-cased by MetricTile's `humanise` — the tiles no longer print raw
+    // machine names at a person.
+    expect(screen.getByText('Purchase enrollments')).toBeInTheDocument()
     expect(screen.getByText('Product A')).toBeInTheDocument()
     expect(screen.getByText('Course A')).toBeInTheDocument()
 

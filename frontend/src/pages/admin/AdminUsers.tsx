@@ -223,7 +223,7 @@ export function AdminUsers() {
     : users
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-4 py-10 sm:px-6">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
       <PageTitle
         eyebrow="Admin"
         title="Users"

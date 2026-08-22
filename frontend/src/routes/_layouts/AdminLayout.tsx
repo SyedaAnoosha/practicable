@@ -214,8 +214,18 @@ function AdminSidebarBrand({ collapsed, onToggleCollapse }: { collapsed: boolean
 
 function AdminSidebarFooter({ collapsed }: { collapsed: boolean }) {
   return (
-    <div className="border-t border-border px-3 py-4">
-      <div className={cn('flex items-center gap-2 rounded-lg py-2', collapsed ? 'justify-center px-0' : 'px-3')}>
+    /* `[FIXED 2026-08-22]` `px-3` on the outer box plus three 36px controls in a row
+       exceeded the 64px collapsed rail, overlapping the icons and forcing a horizontal
+       scrollbar. Collapsed drops the horizontal padding and stacks the controls. */
+    <div className={cn('border-t border-border py-4', collapsed ? 'px-0' : 'px-3')}>
+      <div
+        className={cn(
+          'rounded-lg py-2',
+          collapsed
+            ? 'flex flex-col items-center gap-1 px-0'
+            : 'flex items-center gap-2 px-3',
+        )}
+      >
         {!collapsed && (
           <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">Admin</p>
         )}
@@ -298,7 +308,7 @@ export default function AdminLayout() {
           native chrome rather than a separate environment. */}
       <aside
         className={cn(
-          'hidden shrink-0 flex-col overflow-y-auto overscroll-y-contain border-r border-border md:sticky md:top-0 md:flex md:h-screen transition-[width] duration-200 ease-[var(--ease-standard)]',
+          'hidden shrink-0 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain border-r border-border md:sticky md:top-0 md:flex md:h-screen transition-[width] duration-200 ease-[var(--ease-standard)]',
           collapsed ? 'w-16' : 'w-60',
         )}
       >

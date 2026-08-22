@@ -413,6 +413,21 @@ function CompletionBar({
 }
 
 function OutlineList({ lesson, onNavigate }: { lesson: LessonDetail; onNavigate?: () => void }) {
+  /* `[ADDED 2026-08-22, Redesing_decisions.md C2 — P1]` Scroll the current lesson into
+   * view on load. The outline is independently scrollable and a long course pushes the
+   * current lesson below the fold, so someone resuming lesson 22 of 30 opens the page
+   * with the outline showing lesson 1 and no indication of where they are.
+   *
+   * `block: 'nearest'` deliberately: it scrolls only when the row is actually out of
+   * view, so arriving at an early lesson does not yank a correctly-positioned outline.
+   * `behavior: 'auto'` — this is a page-load correction, not a transition, and animating
+   * it would both fight reduced-motion and draw the eye to movement that means nothing. */
+  const currentRef = useRef<HTMLLIElement>(null)
+  const currentId = lesson.modules.flatMap((m) => m.lessons).find((l) => l.is_current)?.id
+  useEffect(() => {
+    currentRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [currentId])
+
   return (
     <nav className="flex flex-col gap-6 px-4 py-5" aria-label="Course outline">
       {lesson.modules.map((module) => (
@@ -425,7 +440,7 @@ function OutlineList({ lesson, onNavigate }: { lesson: LessonDetail; onNavigate?
               const stateIcon = l.completed ? (
                 <CircleCheck className="size-4 text-success" aria-hidden="true" />
               ) : l.locked ? (
-                <Lock className="size-3.5 text-muted-foreground/60" aria-hidden="true" />
+                <Lock className="size-3.5 text-muted-foreground" aria-hidden="true" />
               ) : (
                 <Icon className={cn('size-4', l.is_current ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
               )
@@ -437,7 +452,13 @@ function OutlineList({ lesson, onNavigate }: { lesson: LessonDetail; onNavigate?
                       ? 'bg-primary/10 font-medium text-foreground'
                       : reachable
                         ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        : 'text-muted-foreground/50',
+                        /* `[FIXED 2026-08-22, F4 — P0]` Was `text-muted-foreground/50`.
+                         * Halving the alpha on a locked row puts it around 2.3:1 on the
+                         * rail — below the 4.5:1 floor — and F4 is explicit that locked
+                         * is "not broken and not an error": the title must stay legible,
+                         * because reading what you don't have yet IS the persuasion.
+                         * The lock icon already carries the state. */
+                        : 'text-muted-foreground',
                   )}
                 >
                   <span className="flex size-4 shrink-0 items-center justify-center">{stateIcon}</span>
@@ -445,9 +466,17 @@ function OutlineList({ lesson, onNavigate }: { lesson: LessonDetail; onNavigate?
                 </span>
               )
               return (
-                <li key={l.id}>
+                <li key={l.id} ref={l.is_current ? currentRef : undefined}>
                   {reachable ? (
-                    <Link to={`/learn/${lesson.course_slug}/${l.slug}`} onClick={onNavigate}>
+                    /* `aria-current="page"` — the highlight at `is_current` is a
+                     * background tint and a weight change, neither of which reaches a
+                     * screen reader. Without this the outline announces thirty
+                     * identical links and "where am I" has no answer. */
+                    <Link
+                      to={`/learn/${lesson.course_slug}/${l.slug}`}
+                      onClick={onNavigate}
+                      aria-current={l.is_current ? 'page' : undefined}
+                    >
                       {row}
                     </Link>
                   ) : (

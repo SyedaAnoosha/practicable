@@ -49,6 +49,7 @@ const ROUTES = [
   '/questions',
   '/courses',
   '/templates',
+  '/packs',
   '/store',
   '/contact',
   '/templates/4935c92a-3138-4dd4-9c70-1d23beb0a8b4',

@@ -25,6 +25,7 @@ const PUBLIC_ROUTES = [
   '/questions',
   '/courses',
   '/templates',
+  '/packs',
   '/contact',
   '/store',
   '/legal/terms',
@@ -139,4 +140,29 @@ test.describe('axe: /admin/metrics (admin-only)', () => {
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
   })
+})
+
+// week4_plan.md §8G-11's own DoD line: "axe clean with the menu open" — the state a
+// closed-only audit never reaches. The PUBLIC_ROUTES loop above already scans `/` with
+// ProductsMenu closed; this is the deliberately separate open-state run that line calls
+// for. Real Playwright automation (unlike the jsdom unit suite in ProductsMenu.test.tsx)
+// has no synthetic-click limitation here, so this is a genuine click, not a workaround.
+//
+// Scoped to the trigger + open menu region, not the whole page: a full-page scan here
+// would duplicate the PUBLIC_ROUTES `/` check above and fail on an unrelated, pre-existing
+// contrast issue in Home.tsx's stat strip (`.band` / `--muted-foreground`, nothing to do
+// with the menu — confirmed failing on the *closed*-menu `/` test too, so it predates and
+// is independent of this test). What §8G-11 actually asks about is the menu's own
+// accessibility, which this scan covers precisely.
+test('axe: Products menu has no violations when open', async ({ page }) => {
+  await page.goto('/')
+  const trigger = page.getByRole('button', { name: /products/i })
+  await expect(trigger).toBeVisible()
+  await trigger.click()
+  const menu = page.getByRole('region', { name: 'Products' })
+  await expect(menu).toBeVisible()
+  const results = await new AxeBuilder({ page })
+    .include('nav[aria-label="Main"]')
+    .analyze()
+  expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
 })

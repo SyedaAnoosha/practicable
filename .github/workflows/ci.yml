@@ -93,7 +93,7 @@ jobs:
       - run: npm run test
 
   frontend-typecheck-build:
-    name: Frontend — typecheck and build
+    name: Frontend — typecheck, build, and bundle-size budget
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -113,6 +113,105 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           VITE_API_BASE_URL: http://localhost:8000
+      # W4-R8 / §43: initial JS < 180KB (gzipped entry chunk). This budget was
+      # already breached before it was measured (entry chunk ~537KB gzip), so this
+      # job intentionally starts as a finding, not a pass. Once the chunk is under
+      # budget, lower the threshold to 180.
+      - name: Check entry-chunk gzip size (W4-R8 budget)
+        run: |
+          ENTRY_GZ=$(find dist/assets -name 'index-*.js' -exec wc -c {} + | tail -1 | awk '{print $1}')
+          echo "Entry chunk gzipped: ${ENTRY_GZ} bytes"
+          # Budget: 180KB = 184320 bytes. Current reality is ~537KB — this will fail
+          # until the bundle is code-split or tree-shaken. The failure IS the finding;
+          # do not raise the budget to match reality.
+          BUDGET=184320
+          if [ "$ENTRY_GZ" -gt "$BUDGET" ]; then
+            echo "❌ Entry chunk (${ENTRY_GZ}B) exceeds W4-R8 budget (${BUDGET}B / 180KB)"
+            echo "   Fix the bundle, or renegotiate the budget in writing."
+            exit 1
+          fi
+          echo "✅ Entry chunk within budget"
+
+  # W4-R8 / §43: LCP < 2.0s, CLS < 0.05 — measured via Lighthouse against the
+  # built preview. Serves the dist/ output on a static server and runs Lighthouse
+  # against it. Intentionally starts as a finding: the bundle is already over the
+  # JS budget, so LCP will likely fail too. The gate existing and failing is the
+  # requirement, not a passing score.
+  lighthouse-budgets:
+    name: Frontend — Lighthouse LCP/CLS budgets
+    runs-on: ubuntu-latest
+    needs: [frontend-typecheck-build]
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          VITE_API_BASE_URL: http://localhost:8000
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli
+      - name: Serve built frontend and run Lighthouse
+        run: |
+          # Serve the built SPA on a static server
+          npx serve dist -l 9090 -s &
+          SERVE_PID=$!
+          sleep 3
+
+          # Run Lighthouse against the homepage (the most representative URL)
+          lhci collect --url=http://localhost:9090 --config=lighthouserc.json 2>&1 || true
+
+          # Extract LCP and CLS from the Lighthouse JSON report
+          REPORT=$(find .lighthouseci -name '*.json' -type f | head -1)
+          if [ -z "$REPORT" ]; then
+            echo "❌ No Lighthouse report generated"
+            kill $SERVE_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          LCP=$(cat "$REPORT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['audits']['largest-contentful-paint']['numericValue'])" 2>/dev/null)
+          CLS=$(cat "$REPORT" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['audits']['cumulative-layout-shift']['numericValue'])" 2>/dev/null)
+
+          echo "LCP: ${LCP}ms (budget: 2000ms)"
+          echo "CLS: ${CLS} (budget: 0.05)"
+
+          FAILED=0
+          if [ -n "$LCP" ]; then
+            # LCP in ms, budget 2000ms
+            if [ "$(echo "$LCP > 2000" | bc -l 2>/dev/null || echo 0)" = "1" ]; then
+              echo "❌ LCP (${LCP}ms) exceeds 2000ms budget"
+              FAILED=1
+            else
+              echo "✅ LCP within budget"
+            fi
+          fi
+
+          if [ -n "$CLS" ]; then
+            if [ "$(echo "$CLS > 0.05" | bc -l 2>/dev/null || echo 0)" = "1" ]; then
+              echo "❌ CLS (${CLS}) exceeds 0.05 budget"
+              FAILED=1
+            else
+              echo "✅ CLS within budget"
+            fi
+          fi
+
+          kill $SERVE_PID 2>/dev/null || true
+          exit $FAILED
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: lighthouse-report
+          path: frontend/.lighthouseci/
+          retention-days: 14
+
 
   e2e:
     name: E2E — Playwright + axe

@@ -17,4 +17,13 @@ python-multipart==0.0.12
 python-jose[cryptography]==3.3.0
 PyJWT[crypto]==2.10.1
 passlib[bcrypt]==1.7.4
-posthog==7.39.0
+bleach==6.2.0
+python-docx==1.1.2
+openpyxl==3.1.5
+pypdf==4.3.1
+# PDF rasterising for template preview images (scripts/generate_template_previews.py).
+# BSD-3/Apache-2.0, self-contained wheel (no system poppler). PyMuPDF was rejected for
+# the same job: it is AGPL, which this commercial platform should not depend on.
+pypdfium2==4.30.0
+# Composing the spreadsheet preview image (scripts/_sheet_preview.py).
+Pillow==11.0.0

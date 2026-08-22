@@ -41,15 +41,22 @@ export function InlineEditableTitle({
   hideText = false,
 }: InlineEditableTitleProps) {
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(value)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // The prop is the source of truth once not editing — a save elsewhere (or the
-  // parent refetching) should be reflected, not overwritten by a stale draft.
-  useEffect(() => {
-    if (!editing) setDraft(value)
-  }, [value, editing])
+  /* `[FIXED 2026-08-22]` The draft used to be reset from an effect
+   * (`useEffect(() => { if (!editing) setDraft(value) })`), which is a render-then-
+   * correct: for one commit after `value` changed, the field still held the previous
+   * title. It was also the repo's last outstanding lint error.
+   *
+   * The rule the effect was expressing is simply "the prop is the source of truth
+   * whenever the user is not editing", and that is a derivation, not a synchronisation.
+   * `editDraft` holds keystrokes only while editing; the displayed draft falls back to
+   * the prop the moment editing ends, so a save elsewhere or a parent refetch is
+   * reflected immediately instead of one render late. */
+  const [editDraft, setEditDraft] = useState(value)
+  const draft = editing ? editDraft : value
+  const setDraft = setEditDraft
 
   useEffect(() => {
     if (editing) inputRef.current?.focus()

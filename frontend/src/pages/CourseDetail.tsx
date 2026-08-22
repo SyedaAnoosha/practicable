@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { SectionHeading } from '@/components/ui/SectionHeading'
+import { AuthorCard } from '@/components/ui/AuthorCard'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { FactStrip, type Fact } from '@/components/ui/FactStrip'
@@ -75,6 +76,8 @@ interface CourseDetailData {
   description: string
   section: string
   author_name: string
+  /** B5: the credential line. Optional — not every author has a bio on file. */
+  author_bio?: string | null
   owned: boolean
   lesson_count: number
   first_lesson_slug: string | null
@@ -237,7 +240,7 @@ export function CourseDetail() {
             const Icon = LESSON_ICON[lesson.lesson_type]
             const duration = formatDuration(lesson.duration_seconds)
             const row = (
-              <div className="flex items-center gap-3 px-4 py-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                   {lesson.completed ? (
                     <CircleCheck className="size-4 text-success" aria-hidden="true" />
@@ -268,7 +271,24 @@ export function CourseDetail() {
                     {row}
                   </Link>
                 ) : (
-                  <div className="opacity-60">{row}</div>
+                  /* `[FIXED 2026-08-22, Redesing_decisions.md F4 — P0]` This was
+                   * `opacity-60`, which is precisely the treatment F4 forbids: "never a
+                   * greyed-out, disabled-looking title — the user should read clearly
+                   * what they're missing; that's the persuasive mechanism."
+                   *
+                   * Fading a locked lesson makes the syllabus harder to evaluate, which
+                   * is the opposite of what the docs' own rule wants ("every lesson
+                   * shown, all locked — a course whose syllabus you can't see is harder
+                   * to evaluate, not more exclusive"). Dimming also drags the title
+                   * under 4.5:1 against the card.
+                   *
+                   * The row now renders at full contrast and says WHY it is locked. */
+                  <div className="flex items-center justify-between gap-3 pr-4">
+                    {row}
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      Included with the course
+                    </span>
+                  </div>
                 )}
               </li>
             )
@@ -422,6 +442,26 @@ export function CourseDetail() {
                 defaultOpen={syllabus.length > 0 ? [syllabus[0].id] : []}
               />
             </section>
+
+            {/* `[ADDED 2026-08-22, Redesing_decisions.md B5 — P1]` The hero already
+                names the author on the stage plane, but a name alone is an assertion.
+                The credential is what makes it evidence, and `AuthorCard` — built for
+                exactly this and until now used on no page at all — carries it.
+
+                It sits here, after the syllabus and BEFORE the upsell: someone who has
+                read what the course contains is deciding whether to trust whoever wrote
+                it, and that question has to be answered before they are offered
+                something else to buy.
+
+                Rendered only when a bio exists. The absence rule (§4.5) — an author with
+                no credential on file gets the hero byline and nothing further, rather
+                than an empty card advertising the gap. */}
+            {course.author_bio && (
+              <section className="mt-8">
+                <SectionHeading>The author</SectionHeading>
+                <AuthorCard className="mt-4" name={course.author_name} bio={course.author_bio} />
+              </section>
+            )}
 
             {/* Fetched by the API since this page was written, and until now dropped on
                 the floor — the audit's finding 8. Every platform reviewed carries a

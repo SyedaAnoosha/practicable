@@ -132,6 +132,7 @@ export const PreviewGallery = ({ previews, title }: PreviewGalleryProps) => {
             <img
               src={active.url}
               alt={active.alt}
+              decoding="async"
               className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
             />
             <p className="mt-2 text-center text-xs text-muted-foreground">

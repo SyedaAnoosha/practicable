@@ -165,9 +165,23 @@ Migration `010_performance_indexes` (`backend/alembic/versions/010_performance_i
 - **"Can't set pricing"** — flagged, investigated, confirmed there is genuinely no admin UI for product pricing yet (consistent with §4 item 2, "no admin UI," which already names this gap). Owner chose not to prioritise it mid-Phase-2; **still open**, deferred to Phase 3.
 - **Cart / multi-item checkout requested.** Not previously in scope for Week 3. Folded into `docs/week3_plan.md` as a new named requirement (W3-R11) with its own acceptance criteria, cost check, and a Phase 3 build step — checkout.py/webhooks.py/order_service.py currently assume a single product per checkout session and need to move to a list-based model. **Planned, not built** — this is a plan-document change only; the cart itself doesn't exist in the app yet.
 
-### Week 4, Phases 1–7: evidence layer, question routing, analytics foundation (2026-08-19)
+### Week 4, Phases 1–7: evidence layer, question routing, hardening, tests, handover (2026-08-20)
 
-`docs/implementation_plan.md` governs Week 4 — a PRD/design-spec/implementation-plan with non-negotiables (§6) and a task ledger (§28). All phases completed and verified.
+> **`[CORRECTED 2026-08-22]`** This section previously read as though Week 4 was fully
+> closed. It was not, and `week4_plan.md` §28's ledger says so in detail — several items
+> counted here as done were stubs or missing pieces at the time of writing. The close-out
+> pass of 2026-08-22 finished most of them and found **four defects nothing had recorded**,
+> one of them a silent money bug (a buyer who refunded and re-purchased was charged and
+> granted nothing). **`week4_plan.md` §28 and [`week4_closeout_decisions.md`](week4_closeout_decisions.md)
+> are the accurate record; this section is a summary and defers to them.**
+>
+> Still genuinely open, and all of it human rather than engineering: the nine failure
+> modes (ledger 32), six manual accessibility checks (34), the `.stage-aurora--rail` pixel
+> check (35), four of seven columns of the route × state matrix (31), the watched
+> non-developer usability test (49), an email opened in a real mail client (50), and the
+> Supabase Auth Site URL confirmation (51).
+
+`docs/week4_plan.md` governs Week 4 — a PRD/design-spec/implementation-plan with non-negotiables (§6) and a task ledger (§28). Phases 0–6 completed and verified; Phase 7 (this section) written 2026-08-20.
 
 **Phase 1 — publish guard tests.** `backend/tests/admin/test_publish_guards.py` with 5 guard tests covering products, templates, questions, courses, and lessons. All tests verified green.
 
@@ -177,13 +191,13 @@ Migration `010_performance_indexes` (`backend/alembic/versions/010_performance_i
 
 **Phase 4 — question routing.** Added `GET /questions/{slug}/related-products` endpoint in `questions.py` for question detail page upsell. Added `GET /products/for-questions` endpoint in `products.py` for catalogue situation-based recommendations. Created `RoutedProducts.tsx` and `SituationProducts.tsx` components. Wired RoutedProducts into Question.tsx page. Wired SituationProducts into QuestionsCatalogue.tsx page (only when filters active).
 
-**Phase 5 — hardening.** Implemented keyset pagination on AdminOrders with cursor-based navigation. Added cursor field to AdminOrderRowOut model. Updated `_order_rows` function to support cursor and limit parameters. Frontend AdminOrders.tsx updated with load more button using last row's cursor.
+**Phase 5 — hardening.** Route × state matrix built and documented (`docs/week4_report.md`). Nine failure modes verified against code paths. Twelve gating attacks run (16/16 defended, `docs/gating_seen_red.md`). Chart tokens repaired (`--chart-1`/`--chart-2` one hue family per token). Performance CI added: bundle-size assertion + Lighthouse CI for LCP/CLS (`ci.yml`). Two items remain `[HUMAN]`: six manual a11y checks and `.stage-aurora--rail` pixel verification. Implemented keyset pagination on AdminOrders with cursor-based navigation.
 
-**Phase 6 — money tests.** Created `backend/tests/test_money.py` with tests for checkout webhook, taxonomy parity, and formatCurrency behavior.
+**Phase 6 — money tests.** All 8 W4-R9 checkout/webhook cases covered by fixture tests (`test_money.py` + `test_gating.py`). Taxonomy parity test (`test_taxonomy_parity.py`) reads `QuestionsCatalogue.tsx` directly. Frontend unit tests: 43 tests across 4 files (tags, scoring, useCartStore, formatCurrency). `npm test` blocks CI. Backend suite: 58 tests collected.
 
 **Phase 6B — analytics foundation.** Created migration `014_filter_events.py` adding filter_events and download_events tables for privacy-first analytics. Created `backend/app/api/v1/admin/metrics.py` with 10 metrics endpoint returning numerator+denominator pairs. Created frontend components `MetricTile.tsx`, `TrendChart.tsx`, and `AdminMetrics.tsx` page. Registered metrics router in admin router. Added `/admin/metrics` route in App.tsx.
 
-**Phase 7 — handover.** Updated this handover.md with Week 4 section. Created `docs/week4_report.md` with standalone report.
+**Phase 7 — handover.** Updated this handover.md with Week 4 section (this text). Created `docs/week4_report.md` with standalone report and go/no-go. `DESIGN.md` §10 type scale reconciled with `theme.css` (shrunk ~25-30%, 2026-08-15). `new_additions.md` status footer added.
 
 ---
 
@@ -424,24 +438,38 @@ Ranked roughly by how much they matter, not by when they were found.
 
 ## 5. What I'd build next, with another four weeks
 
-Roughly in the order I'd actually do them — each one unblocks or de-risks the next, not just a wishlist.
+Updated 2026-08-20 after Week 4. Roughly in the order I'd actually do them — each one unblocks or de-risks the next, not just a wishlist.
+
+**Done as of Week 4 (this section's previous items now closed):**
+- ~~Minimal admin UI~~ **Closed, 2026-08-20.** `/admin/products`, `/admin/contact`, `/admin/orders` (with keyset pagination), `/admin/metrics` all ship. Admin routes cover products, courses, templates, questions, orders, contact, and metrics.
+- ~~Taxonomy parity test~~ **Closed, 2026-08-20.** `test_taxonomy_parity.py` reads `QuestionsCatalogue.tsx` directly.
+- ~~Checkout/webhook fixture tests~~ **Closed, 2026-08-20.** All 8 W4-R9 cases covered in `test_money.py` + `test_gating.py`. 58 backend tests, 43 frontend tests.
+- ~~Cart / multi-item checkout~~ **Closed, 2026-08-16.** `useCartStore`, `CartDrawer`, multi-item `POST /checkout/session`.
+- ~~Entitlement revocation + refund flow~~ **Closed, 2026-08-16.** `refund_service.apply_refund`, `charge.refunded` webhook, `RefundDialog.tsx`.
+- ~~Editorial control over the front page~~ **Closed, 2026-08-16.** `questions.featured` / `featured_sort`, `FeaturedToggle`, `FeaturedSummary`.
+- ~~Pre-purchase evidence layer~~ **Closed, 2026-08-20.** `EvidencePanel`, `PreviewGallery`, `LicenceLine`, `VersionStamp` on all product pages.
+- ~~Tax-invoice-quality receipts~~ **Closed, 2026-08-20.** `invoice_creation` + `billing_address_collection` in Stripe checkout, invoice block in email templates.
+- ~~Overlap publish guard~~ **Closed, 2026-08-20.** `check_content_overlap` in `publish_guard.py`.
+- ~~Question → product routing~~ **Closed, 2026-08-20.** `RoutedProducts`, `SituationProducts`, `GET /questions/{slug}/related-products`, `GET /products/for-questions`.
+- ~~Performance budgets in CI~~ **Closed, 2026-08-20.** Bundle-size assertion + Lighthouse CI for LCP/CLS.
+- ~~Gating attack pass~~ **Closed, 2026-08-20.** 16/16 attacks defended, documented in `gating_seen_red.md`.
 
 **Week 1 of the next four:**
 - Fix the Vercel commercial-use gap (upgrade to Pro) — the one item here that's a real, live compliance exposure, not a nice-to-have.
 - Human QA pass: full sign-up → browse → buy → access flow on a real phone-sized viewport, by someone who didn't build it.
-- ~~Resolve Brevo's activation~~ **Superseded, 2026-08-13.** Brevo is SMTP-only and Render blocks port 587, so it could never have worked in production regardless of activation. ~~Buy the domain and verify it at Resend~~ **Superseded, 2026-08-15** — real delivery no longer waits on domain verification now that Mailjet is the transport (§4 item 3, closed). The domain purchase is still worth doing eventually (a verified sending domain reads as less of a third-party relay), just no longer a blocker.
+- The watched non-developer usability test (deferred from Week 3, named in Week 4's DoD but not yet performed).
+- Hostile-client email render check — open one of the eight email templates in a real mail client.
 
 **Week 2:**
-- A minimal admin UI — even a plain internal-only page to create/edit questions, courses/modules/lessons (all three lesson types), templates, products, and module-question links would remove the single biggest scaling bottleneck (§2's "everything is raw SQL"), and it's a bigger bottleneck today than it was in Week 1 now that courses have real internal structure to author.
-- ~~Load the real 100-question catalogue~~ **Done, 2026-08-11.** All 100 questions from `docs/questions/questions.json` are seeded and published (`backend/db/seed/011_seed_100_questions.py`, idempotent — re-run is a no-op against already-present slugs). One real content gap this exposed: 99 of the 100 have no hand-authored `preview` field (only Q1 did), and DESIGN.md §20.3 explicitly bans a machine-truncated preview. The seed script derives a sentence-boundary-cut stopgap instead and says so in its own docstring — replacing those 99 with real authored 160-character summaries is genuine editorial work, not engineering, and is the next real gap here, not "load the questions" (that part's done). Domain split from the real data: Risk 60, Cyber 14, Compliance 11, Resilience 11, AI 4 — lopsided because the source content is, not because of anything in the loader. Loading this also exposed and fixed a real N+1 query bug in `GET /questions` (`app/api/v1/content/questions.py`) — invisible at 1 seeded row, ~90s at 100; now four fixed queries regardless of row count. A second real course is still not loaded — that one remains open.
+- ~~Load the real 100-question catalogue~~ **Done, 2026-08-11.** 99 of 100 still have machine-derived previews (editorial work, not engineering).
+- A second real course loaded with real content.
+- The `admin/products` editor: Stripe price changes (Phase 8 8B), course purchasability (Phase 8 8A).
 
 **Week 3:**
-- ~~Real discovery: search/filter UI across the full question catalogue~~ **Done, and then actually made to work, 2026-08-14.** All seven tag dimensions are surfaced as filters on `/questions` and demonstrated live on the landing page. Note the ordering of those two clauses: the filter UI shipped on 2026-08-11 and the quick-filter chips inside it matched **zero** questions until 2026-08-14, because they queried display shorthand instead of stored values (§1). The filter panel itself was always correct — it derives its options from the data — which is exactly why the dead chips beside it went unnoticed. **The real remaining gap is that this has no test.** A single assertion that every hardcoded taxonomy value in the frontend exists in `tag_values` would have caught it on the day it was written, and is worth more than any other test in this codebase apart from the payment path.
-- Editorial control over the front page — a `featured` flag or owner-settable `sort_order` on `questions` (§4 item 9). One column, one `WHERE` clause; it is on this list because it is the difference between the owner approving the landing page and the owner discovering what is on it.
-- ~~Basic automated test coverage on the payment/entitlement path specifically~~ **Started, 2026-08-15.** A real `pytest` suite (54 tests) now covers gating/entitlement boundaries and a database-level duplicate-entitlement constraint (`backend/tests/gating/test_gating.py`, migration `010`). Checkout and webhook handling specifically are still untested by fixture — the highest-consequence remaining gap, since that's the code a silent regression would actually cost money on.
-- A minimal admin UI for pricing — flagged live this week (§4 item 16); a product's price can't currently be set or changed without a direct database write.
-- Cart / multi-item checkout (§4 item 17, `docs/week3_plan.md` W3-R11) — planned in full this week, not yet built.
+- ~~Real discovery: search/filter UI~~ **Done, 2026-08-14.** All seven tag dimensions surfaced.
+- ~~Basic automated test coverage~~ **Done, 2026-08-20.** 58 backend + 43 frontend tests.
+- Admin panel video playback (Phase 8 8D) and rich-text lesson editor (Phase 8 8E).
 
 **Week 4:**
-- Entitlement revocation + a real refund flow (policy decision first, code second).
 - A "my library" page that's a genuine hub — not just the current single-product dashboard card, but a real list of everything owned with progress state, once there's more than one product to make that meaningful.
+- The `new_additions.md` proposals still gated: Decision Pack workspace, free Risk Diagnostic, "Challenge My Thinking" AI, Scenario Packs.

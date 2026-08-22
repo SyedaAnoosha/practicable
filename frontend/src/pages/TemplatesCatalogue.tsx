@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { Meta, type MetaItem } from '@/components/ui/Meta'
 
 interface TemplateProduct {
@@ -46,7 +47,9 @@ function fileKind(fileName: string): string | null {
  * format badge, title underlines on hover.
  */
 export function TemplatesCatalogue() {
-  const { data: templates, isLoading } = useQuery({
+  // `[CHANGED 2026-08-22, F3 — P0]` See QuestionsCatalogue: without `isError` a failed
+  // fetch rendered nothing at all.
+  const { data: templates, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.templates.list(),
     queryFn: () => api.get<TemplateSummary[]>('/templates').then((res) => res.data),
   })
@@ -77,7 +80,16 @@ export function TemplatesCatalogue() {
         </div>
       )}
 
-      {!isLoading && templates?.length === 0 && (
+      {!isLoading && isError && (
+        <ErrorState
+          className="mt-6"
+          title="We couldn't load the templates."
+          description="Check your connection and try again."
+          onRetry={() => void refetch()}
+        />
+      )}
+
+      {!isLoading && !isError && templates?.length === 0 && (
         <EmptyState
           className="mt-6"
           icon={FileSpreadsheet}
@@ -86,17 +98,21 @@ export function TemplatesCatalogue() {
         />
       )}
 
-      {/* Divided-columns grid: broadsheet treatment, not rounded cards. */}
-      <div className="mt-6 grid overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:bg-card">
+      {/* Divided-columns grid — see CoursesCatalogue for the full note. `bg-border`
+          plus `[&>*]:bg-card` left every unfilled track in the last row painted as a
+          beige slab; `gap-px` shows the rule only between real cells. Also gated so the
+          empty frame no longer sits under the loading, error and empty states. */}
+      {!isLoading && !isError && !!templates?.length && (
+      <div className="mt-6 grid gap-px overflow-hidden rounded-md border border-border bg-card sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:bg-card [&>*]:outline [&>*]:outline-1 [&>*]:-outline-offset-[0.5px] [&>*]:outline-border">
         {templates?.map((template) => {
           const kind = fileKind(template.file_name)
           return (
             <Link
               key={template.slug}
               to={`/templates/${template.id}`}
-              className="group block border-b border-border bg-card last:border-b-0 transition-colors duration-150 hover:bg-card-2 sm:[&:nth-last-child(-n+4)]:border-b-0 sm:[&:nth-child(4n)]:border-b-0 lg:[&:nth-last-child(-n+3)]:border-b-0 lg:[&:nth-child(3n)]:border-b-0 xl:[&:nth-last-child(-n+4)]:border-b-0 xl:[&:nth-child(4n)]:border-b-0"
+              className="group flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2"
             >
-              <div className="px-4 pt-3 pb-4">
+              <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
                 <div className="flex items-center gap-2">
                   {kind && (
                     <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.625rem] font-medium tracking-wide text-muted-foreground">
@@ -128,7 +144,7 @@ export function TemplatesCatalogue() {
                   ].filter(Boolean) as MetaItem[]}
                 />
 
-                <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5">
+                <div className="mt-auto flex items-center justify-between border-t border-border pt-2.5">
                   {template.is_free ? (
                     <Badge variant="success" className="text-[0.625rem]">Free</Badge>
                   ) : template.owned ? (
@@ -151,6 +167,7 @@ export function TemplatesCatalogue() {
           )
         })}
       </div>
+      )}
     </div>
   )
 }

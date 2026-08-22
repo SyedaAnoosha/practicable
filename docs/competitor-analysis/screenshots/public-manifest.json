@@ -1,0 +1,116 @@
+[
+  {
+    "platform": "coursera",
+    "name": "01-home",
+    "url": "https://www.coursera.org/",
+    "status": "ok"
+  },
+  {
+    "platform": "coursera",
+    "name": "02-browse",
+    "url": "https://www.coursera.org/browse",
+    "status": "ok"
+  },
+  {
+    "platform": "coursera",
+    "name": "03-course-detail",
+    "url": "https://www.coursera.org/learn/machine-learning",
+    "status": "ok"
+  },
+  {
+    "platform": "coursera",
+    "name": "04-plus-pricing",
+    "url": "https://www.coursera.org/coursera-plus",
+    "status": "ok"
+  },
+  {
+    "platform": "coursera",
+    "name": "05-search-results",
+    "url": "https://www.coursera.org/search?query=data%20analysis",
+    "status": "ok"
+  },
+  {
+    "platform": "edx",
+    "name": "01-home",
+    "url": "https://www.edx.org/",
+    "status": "ok"
+  },
+  {
+    "platform": "edx",
+    "name": "02-search",
+    "url": "https://www.edx.org/search",
+    "status": "ok"
+  },
+  {
+    "platform": "edx",
+    "name": "03-course-detail",
+    "url": "https://www.edx.org/learn/computer-science/harvard-university-cs50-s-introduction-to-computer-science",
+    "status": "ok"
+  },
+  {
+    "platform": "edx",
+    "name": "04-programs",
+    "url": "https://www.edx.org/executive-education",
+    "status": "ok"
+  },
+  {
+    "platform": "udemy",
+    "name": "01-home",
+    "url": "https://www.udemy.com/",
+    "status": "ok"
+  },
+  {
+    "platform": "udemy",
+    "name": "02-category",
+    "url": "https://www.udemy.com/courses/development/",
+    "status": "ok"
+  },
+  {
+    "platform": "udemy",
+    "name": "03-course-detail",
+    "url": "https://www.udemy.com/course/the-complete-web-development-bootcamp/",
+    "status": "ok"
+  },
+  {
+    "platform": "skillshare",
+    "name": "01-home",
+    "url": "https://www.skillshare.com/en/",
+    "status": "ok"
+  },
+  {
+    "platform": "skillshare",
+    "name": "02-browse",
+    "url": "https://www.skillshare.com/en/browse",
+    "status": "ok"
+  },
+  {
+    "platform": "skillshare",
+    "name": "03-class-detail",
+    "url": "https://www.skillshare.com/en/browse/design",
+    "status": "ok"
+  },
+  {
+    "platform": "kajabi",
+    "name": "01-home",
+    "url": "https://kajabi.com/",
+    "status": "ok"
+  },
+  {
+    "platform": "kajabi",
+    "name": "02-pricing",
+    "url": "https://kajabi.com/pricing",
+    "status": "ok"
+  },
+  {
+    "platform": "kajabi",
+    "name": "03-features",
+    "url": "https://kajabi.com/features",
+    "status": "ok"
+  },
+  {
+    "platform": "kajabi",
+    "name": "04-templates",
+    "url": "https://kajabi.com/website-templates",
+    "status": "ok"
+  }
+]

@@ -76,7 +76,16 @@ def _parse_fake_token(raw: str) -> VerifiedToken:
     if len(parts) != 4 or parts[0] != _FAKE_PREFIX:
         raise ValueError("not a fake test token")
     _, user_id, email, name = parts
-    return VerifiedToken(user_id=user_id, email=email or None, name=name or None)
+    # Phase 10 (§10F re-verification, 2026-08-22): require_recent_reauth checks the
+    # JWT's `iat` claim. Every fixture-issued test token defaults to "issued right
+    # now" — the common case, matching a normal signed-in test client — so existing
+    # tests don't need to know about reauth freshness at all. A test specifically
+    # proving the stale-token rejection path constructs its own VerifiedToken with an
+    # old `issued_at` directly (see test_account_selfserve.py).
+    return VerifiedToken(
+        user_id=user_id, email=email or None, name=name or None,
+        issued_at=int(datetime.now(timezone.utc).timestamp()),
+    )
 
 
 async def _fake_verify_jwt_full(

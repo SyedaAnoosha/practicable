@@ -114,12 +114,12 @@ async def test_metrics_returns_200_for_admin(metrics_fixtures):
     assert resp.status_code == 200
     data = resp.json()
     assert "metrics" in data
-    assert "revenue_gross_cents" in data
-    assert "revenue_refunded_cents" in data
-    assert "revenue_net_cents" in data
-    assert "enrollment_splits" in data
-    assert "product_rankings" in data
-    assert "download_links_issued" in data
+    assert "revenueGrossCents" in data
+    assert "revenueRefundedCents" in data
+    assert "revenueNetCents" in data
+    assert "enrollmentSplits" in data
+    assert "productRankings" in data
+    assert "downloadLinksIssued" in data
 
 
 @pytest.mark.asyncio
@@ -178,8 +178,8 @@ async def test_revenue_series_one_order_is_one_point(db_session, admin_client):
     data = resp.json()["data"]
 
     assert len(data) == 1
-    assert data[0]["revenue_cents"] == 5500
-    assert data[0]["order_count"] == 1
+    assert data[0]["revenueCents"] == 5500
+    assert data[0]["orderCount"] == 1
 
 
 @pytest.mark.asyncio
@@ -217,9 +217,9 @@ async def test_revenue_series_multiple_orders_same_day_bucket_together(db_sessio
     data = resp.json()["data"]
 
     # Both orders fall in "today" — one bucket, summed, not two.
-    todays_bucket = [p for p in data if p["order_count"] >= 2]
+    todays_bucket = [p for p in data if p["orderCount"] >= 2]
     assert len(todays_bucket) == 1
-    assert todays_bucket[0]["revenue_cents"] >= 7000
+    assert todays_bucket[0]["revenueCents"] >= 7000
 
 
 @pytest.mark.asyncio
@@ -243,12 +243,12 @@ async def test_revenue_breakdown(metrics_fixtures):
     resp = await client.get("/admin/metrics")
     data = resp.json()
 
-    assert data["revenue_gross_cents"] >= 0
-    assert data["revenue_refunded_cents"] >= 0
-    assert data["revenue_net_cents"] == data["revenue_gross_cents"] - data["revenue_refunded_cents"]
+    assert data["revenueGrossCents"] >= 0
+    assert data["revenueRefundedCents"] >= 0
+    assert data["revenueNetCents"] == data["revenueGrossCents"] - data["revenueRefundedCents"]
     # Our fixture adds at least 4900+9900+4900 = 19700 gross, 9900 refunded
-    assert data["revenue_gross_cents"] >= 19700
-    assert data["revenue_refunded_cents"] >= 9900
+    assert data["revenueGrossCents"] >= 19700
+    assert data["revenueRefundedCents"] >= 9900
 
 
 @pytest.mark.asyncio
@@ -258,8 +258,8 @@ async def test_enrollment_splits(metrics_fixtures):
     resp = await client.get("/admin/metrics")
     data = resp.json()
 
-    assert "purchase" in data["enrollment_splits"]
-    assert data["enrollment_splits"]["purchase"] >= 3
+    assert "purchase" in data["enrollmentSplits"]
+    assert data["enrollmentSplits"]["purchase"] >= 3
 
 
 @pytest.mark.asyncio
@@ -282,11 +282,11 @@ async def test_enrollment_splits_counts_free_grant_separately_from_purchase(
     resp = await client.get("/admin/metrics")
     data = resp.json()
 
-    assert "free" in data["enrollment_splits"]
-    assert data["enrollment_splits"]["free"] >= 1
+    assert "free" in data["enrollmentSplits"]
+    assert data["enrollmentSplits"]["free"] >= 1
     # The fixture's purchase count must be unaffected by the free grant landing in a
     # different bucket — this is the assertion that would fail if the two were merged.
-    assert data["enrollment_splits"]["purchase"] >= 3
+    assert data["enrollmentSplits"]["purchase"] >= 3
 
 
 @pytest.mark.asyncio
@@ -296,11 +296,11 @@ async def test_product_rankings(metrics_fixtures):
     resp = await client.get("/admin/metrics")
     data = resp.json()
 
-    rankings = data["product_rankings"]
+    rankings = data["productRankings"]
     assert len(rankings) >= 2  # At least our 2 fixture products
     # Should be ordered by revenue descending
     for i in range(len(rankings) - 1):
-        assert rankings[i]["revenue_cents"] >= rankings[i + 1]["revenue_cents"]
+        assert rankings[i]["revenueCents"] >= rankings[i + 1]["revenueCents"]
 
 
 @pytest.mark.asyncio
@@ -310,7 +310,7 @@ async def test_download_links_issued(metrics_fixtures):
     resp = await client.get("/admin/metrics")
     data = resp.json()
 
-    assert data["download_links_issued"] == 2
+    assert data["downloadLinksIssued"] == 2
 
 
 @pytest.mark.asyncio
@@ -332,7 +332,7 @@ async def test_product_rankings_include_units(metrics_fixtures):
     resp = await client.get("/admin/metrics")
     data = resp.json()
 
-    rankings = data["product_rankings"]
+    rankings = data["productRankings"]
     assert len(rankings) >= 2
     for r in rankings:
         assert "units" in r
@@ -402,8 +402,8 @@ async def test_course_enrollment_rankings(db_session, admin_client):
     assert resp.status_code == 200, resp.text
     data = resp.json()
 
-    assert "course_enrollment_rankings" in data
-    row = next(r for r in data["course_enrollment_rankings"] if r["id"] == str(course.id))
+    assert "courseEnrollmentRankings" in data
+    row = next(r for r in data["courseEnrollmentRankings"] if r["id"] == str(course.id))
     assert row["enrolled"] == 3
     assert row["started"] == 2
     assert row["completed"] == 1
@@ -418,18 +418,18 @@ async def test_metrics_structure(admin_client, db_session):
 
     # Structure checks
     assert "metrics" in data
-    assert "revenue_gross_cents" in data
-    assert "revenue_refunded_cents" in data
-    assert "revenue_net_cents" in data
-    assert "enrollment_splits" in data
-    assert "product_rankings" in data
-    assert "download_links_issued" in data
-    assert "generated_at" in data
+    assert "revenueGrossCents" in data
+    assert "revenueRefundedCents" in data
+    assert "revenueNetCents" in data
+    assert "enrollmentSplits" in data
+    assert "productRankings" in data
+    assert "downloadLinksIssued" in data
+    assert "generatedAt" in data
 
     # Revenue consistency
-    assert data["revenue_net_cents"] == data["revenue_gross_cents"] - data["revenue_refunded_cents"]
+    assert data["revenueNetCents"] == data["revenueGrossCents"] - data["revenueRefundedCents"]
 
     # Enrollment splits is a dict
-    assert isinstance(data["enrollment_splits"], dict)
-    assert isinstance(data["product_rankings"], list)
-    assert isinstance(data["download_links_issued"], int)
+    assert isinstance(data["enrollmentSplits"], dict)
+    assert isinstance(data["productRankings"], list)
+    assert isinstance(data["downloadLinksIssued"], int)

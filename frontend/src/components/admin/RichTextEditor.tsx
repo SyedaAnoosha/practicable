@@ -12,6 +12,7 @@
  * week4_plan.md Phase 8 (8E-8): Link and Underline extensions installed
  * per W4-R13.
  */
+import { useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
@@ -84,6 +85,29 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
       },
     },
   })
+
+  /* `[ADDED 2026-08-22]` Tiptap reads `content` ONCE, when the editor instance is
+   * created. Any later value is ignored — so whenever the prop arrives or changes
+   * after mount (a query resolving, switching between two lessons without unmounting
+   * the shell, an autosave round-trip returning canonicalised markup), the editor kept
+   * showing whatever it was built with. The visible symptom was a body that appeared
+   * as literal `<p>`/`<h3>` text: the editor had been created against an empty or
+   * plain-text value and the real HTML never reached the schema parser.
+   *
+   * The `getHTML()` comparison is what keeps this from fighting the author: on every
+   * keystroke `onUpdate` lifts the HTML into the parent, which sends it straight back
+   * down as `content`. Without the guard that round-trip would call `setContent` on
+   * each character, destroying and rebuilding the document and throwing the cursor to
+   * the end of it. Re-setting only when the incoming value genuinely differs from what
+   * is on screen means typing never triggers it.
+   *
+   * `emitUpdate: false` — this is the parent's own value coming back, not an edit, and
+   * echoing it would mark a clean document dirty and wake the autosave. */
+  useEffect(() => {
+    if (!editor) return
+    if (content === editor.getHTML()) return
+    editor.commands.setContent(content, { emitUpdate: false })
+  }, [editor, content])
 
   if (!editor) {
     return null

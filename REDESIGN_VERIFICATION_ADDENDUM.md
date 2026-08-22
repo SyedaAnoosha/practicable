@@ -175,3 +175,113 @@ reliably produce an accessible name. The flyout is CSS-only on `group-hover` /
 | `WELCOME15` in Stripe | See §E — the banner advertises it regardless |
 | Lighthouse baseline (E8.4) | Not run |
 | Themes C / K / L remainder | Learning chrome partly done; performance and admin density not started |
+
+---
+
+# Part 2 — Full doc-by-doc verification, 2026-08-22
+
+Every claim in the eleven design documents was checked against the code rather
+than against the other documents. **Both prior logs overstated completion.**
+
+The pattern repeats the one in Part A: components were *built*, marked ✅, and
+never *wired up*. A component that exists but is imported nowhere is not a
+shipped feature, and nothing in `tsc`, `eslint` or 235 tests reports it.
+
+## H. Built, marked done, used nowhere
+
+| Component | Claimed | Actual | Fixed |
+|---|---|---|---|
+| `ErrorState` | "F3 ✅ three-part error state" | **0 call sites.** `/questions`, `/courses`, `/templates`, `/packs` destructured only `data` + `isLoading`; a failed fetch made every render branch false and the page rendered a **silently blank column** under the filter rail. `Template.tsx` did `if (!template) return null` — a literally blank page. | 6 pages |
+| `AuthorCard` | "B5 ✅ strongest trust asset" | **0 call sites**, and blocked: `Author.bio` exists in the DB but `CourseDetailOut` never serialised it, so the frontend had a name and no credential. | Added `author_bio` (additive, no extra query) + a "The author" section on `CourseDetail`, placed after the syllabus and **before** the upsell |
+| `LockedState` | "F4 ✅ never greyed-out" | **0 call sites** — and both real lock surfaces did the exact thing F4 forbids: `CourseDetail` wrapped locked lessons in `opacity-60`, `Learn`'s outline used `text-muted-foreground/50` (~2.3:1, under the 4.5:1 floor). | Full contrast + "Included with the course" |
+
+**F4 is worth dwelling on.** The doc's own reasoning is that *reading what you
+do not have yet is the persuasive mechanism* — "a course whose syllabus you
+can't see is harder to evaluate, not more exclusive." Dimming it did the
+opposite of the stated intent while the log recorded it as done.
+
+## I. Defects found by rendering, not reading
+
+- **The grey slab.** The catalogue grids painted `bg-border` on the container and
+  relied on `[&>*]:bg-card` to cover it — so every **unfilled track** in the last
+  row stayed border-coloured. Two courses in a four-column grid rendered a large
+  beige slab. Measured: `/courses` had 415,017px² of grid, 205,444px² filled.
+  Also, the grid rendered unconditionally, so the empty frame sat underneath the
+  loading, error and empty states.
+- **Ragged card footers.** Price and CTA sat directly after the description, so a
+  two-line title pushed its own footer lower than its neighbour's. Now `h-full`
+  flex-column with `mt-auto`.
+- **The editor showed raw `<p>` tags.** Tiptap reads `content` **once**, at
+  instance creation; every later value was ignored. Now synced, guarded by a
+  `getHTML()` comparison so typing never triggers a re-set (which would destroy
+  the document and throw the cursor to the end).
+- **A$177 of revenue displayed as "17,700".** `total_revenue` is stored in cents
+  and printed verbatim — a 100× overstatement on the owner's dashboard, in the
+  direction that flatters. Now formatted as currency.
+- **The admin read as a database dump** — `second_purchase_rate`,
+  `signup_to_purchase_days`. Machine names now map to written labels, with a
+  de-snaking fallback so a new backend metric reads as words rather than vanishing.
+- **Sidebar overflow.** Collapsed to 64px, the footer kept four ~36px controls in
+  a horizontal row (~150px), so they overlapped and forced a horizontal scrollbar
+  across the whole nav. Both member and admin rails now stack when collapsed.
+- **Two `<h1>`s on the account page.** `Purchases` renders its own page title and
+  is *also* mounted inside the Account shell, so "Your purchases" appeared at the
+  page rung **larger than the "Account" `<h1>` above it** — a J4 heading-order
+  failure that also read as the wrong page name. Added an `embedded` mode.
+- **A network failure said your pack didn't exist.** `PackDetail` fell through to
+  "That pack doesn't exist" on any error. A 404 keeps that copy; everything else
+  now offers a retry.
+- **C2 was half-built.** The outline was sticky and scrollable and tracked
+  `is_current`, but nothing scrolled it into view — resuming lesson 22 of 30
+  opened with the outline showing lesson 1. `aria-current` was also missing, so a
+  screen reader heard thirty identical links.
+
+## J. Backend tests were failing before this pass
+
+12 failures in `test_metrics.py` / `test_metrics_no_posthog.py`, all from the
+camelCase API migration: the endpoint returns `revenueGrossCents`, the tests
+asserted `revenue_gross_cents`. Fixed — **20/20 pass**.
+
+Worth knowing: the two casings are **deliberate, not drift**. Top-level JSON keys
+are camelCase (the Pydantic `alias_generator`); the metric `name` *values* inside
+`metrics` stay snake_case. A bulk rename gets this wrong in both directions.
+
+## K. Verified correct — claims that held up
+
+Checked and genuinely implemented: Theme A in full (per-value counts, two-zone
+result count, quick-goal chips, computed zero-result relaxation — the reasoning
+in the source is better than the spec asked for); B1 serif editorial headline;
+B2 seven-tag grid; D1/D6 FactStrip + sticky buy rail; D7 related rail; E1
+breadcrumbs; E2 ⌘K palette; **E4** (`ScrollToTop` correctly exempts `POP` and
+keys on `pathname` alone, so the back button restores scroll and filter taps
+don't reset it); J5 skip link; J4 route announcer + focus-to-h1; the 12px radius
+ceiling; all five re-hued domains in both themes; every `--glass-*`/`--text-*`
+token; the 24s ambient drift with `animation: none` under reduced motion.
+
+**K3 passes on substance.** The entry bundle is 197.73 kB gzipped against a
+documented <180 kB budget, but the budget's actual intent holds: no mux, no
+tiptap, no recharts in the entry chunk — `LessonWriteScreen` (448 kB) and
+`AdminMetrics` (364 kB) are correctly split out. The overage is React + router +
+query + motion, not leaked admin code.
+
+**K1 (templated OG images) remains genuinely not started.**
+
+## L. State now
+
+- **Frontend 235/235** · **backend metrics 20/20** · `tsc` clean · `vite build` clean
+- **`eslint src` is completely clean for the first time** — the pre-existing
+  `InlineEditableTitle` error is fixed properly (the draft is derived during
+  render rather than reset from an effect, which also removed a one-render lag
+  where the field showed the previous title).
+
+### Still owed
+
+| Item | Note |
+|---|---|
+| Gate 0 manual buy-flow check | Needs a human doing a real purchase, including the emailed confirmation link |
+| Gate 6 "genuinely new account" | Code path verified, not a real signup |
+| `WELCOME15` in Stripe | See §E. Coupon settings were reviewed 2026-08-22: **uncheck both "limit the number of times this can be redeemed"** boxes — Stripe's limits are global, not per-customer, so the first buyer would burn the code for everyone. Keep "Eligible for first-time order only", which is the per-customer control. |
+| Lighthouse baseline (E8.4) | Not run |
+| K1 templated OG images | Not started |
+| C3 Undo | Blocked on a backend un-complete endpoint |
+| Product-page height | Reported as too tall. The 3,213px I measured was a page in its **error state** (the API was down), so that number is not evidence — re-measure against a running backend before acting. |

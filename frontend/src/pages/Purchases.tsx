@@ -79,7 +79,34 @@ function ineligibleMessage(reasonCode: string | null, progressPercent: number | 
 }
 
 /** Phase 9B (W4-R20): Purchases page — shows order history and lets eligible orders start a refund. */
-export function Purchases() {
+/** `[ADDED 2026-08-22]` This component serves two mounts: the standalone `/purchases`
+ * route, and the Account shell's Purchases section. Rendering the page version inside
+ * the shell put a full `PageTitle` — an `<h1>` at the page rung — underneath the
+ * shell's own "Account" `<h1>`. That is two `<h1>`s on one page (a WCAG heading-order
+ * failure the docs call out as J4), and visually the section heading came out LARGER
+ * than the page title above it, so "Your purchases" read as the name of the page and
+ * "Account" as a stray label.
+ *
+ * `embedded` renders the section as a section: an `<h2>` at the same rung as every
+ * other account section, and no page container, since the shell already provides one. */
+export function Purchases({ embedded = false }: { embedded?: boolean } = {}) {
+  const Shell = ({ children }: { children: React.ReactNode }) =>
+    embedded ? (
+      <div>
+        <h2 className="mb-1 text-h4 font-semibold text-foreground">Your purchases</h2>
+        <p className="mb-6 text-sm text-muted-foreground">Order history and refund requests.</p>
+        {children}
+      </div>
+    ) : (
+      <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
+        <PageTitle title="Your purchases" description="Order history and refund requests." />
+        {children}
+      </div>
+    )
+  return <PurchasesBody Shell={Shell} />
+}
+
+function PurchasesBody({ Shell }: { Shell: (p: { children: React.ReactNode }) => React.ReactElement }) {
   const queryClient = useQueryClient()
   const [refundingOrderId, setRefundingOrderId] = useState<string | null>(null)
   const [reasonCode, setReasonCode] = useState('')
@@ -133,32 +160,28 @@ export function Purchases() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
-        <PageTitle title="Your purchases" description="Order history and refund requests." />
+      <Shell>
         <SkeletonState className="mt-8" variant="row" rows={4} />
-      </div>
+      </Shell>
     )
   }
 
   if (isError) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
-        <PageTitle title="Your purchases" description="Order history and refund requests." />
+      <Shell>
         <EmptyState
           title="We couldn't load your purchases."
           description="Check your connection and try again."
           action={<Button onClick={() => refetch()}>Try again</Button>}
         />
-      </div>
+      </Shell>
     )
   }
 
   const orders = data?.pages.flatMap((page) => page.orders) ?? []
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
-      <PageTitle title="Your purchases" description="Order history and refund requests." />
-
+    <Shell>
       {orders.length === 0 ? (
         <EmptyState
           title="No purchases yet."
@@ -340,6 +363,6 @@ export function Purchases() {
           </Button>
         </div>
       )}
-    </div>
+    </Shell>
   )
 }

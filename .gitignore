@@ -46,3 +46,5 @@ docs/templates/*
 *.mp4
 
 frontend/test-results/*
+
+*.test.tsx

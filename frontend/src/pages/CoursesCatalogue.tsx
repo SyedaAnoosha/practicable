@@ -9,6 +9,7 @@ import { domainColorVar } from '@/lib/domainVisuals'
 import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { CourseArt } from '@/components/ui/CourseArt'
 import { Meta } from '@/components/ui/Meta'
 
@@ -79,7 +80,9 @@ export function CoursesCatalogue() {
   const qs = new URLSearchParams(queryParams).toString()
   const url = `/courses${qs ? `?${qs}` : ''}`
 
-  const { data: courses, isLoading } = useQuery({
+  // `[CHANGED 2026-08-22, F3 — P0]` See QuestionsCatalogue: without `isError` a failed
+  // fetch rendered nothing at all — `courses?.length === 0` is falsy when undefined.
+  const { data: courses, isLoading, isError, refetch } = useQuery({
     queryKey: [...queryKeys.courses.list(), queryParams],
     queryFn: () => api.get<CourseSummary[]>(url).then((res) => res.data),
   })
@@ -195,7 +198,16 @@ export function CoursesCatalogue() {
         </div>
       )}
 
-      {!isLoading && courses?.length === 0 && (
+      {!isLoading && isError && (
+        <ErrorState
+          className="mt-6"
+          title="We couldn't load the courses."
+          description="Check your connection and try again."
+          onRetry={() => void refetch()}
+        />
+      )}
+
+      {!isLoading && !isError && courses?.length === 0 && (
         <EmptyState
           className="mt-6"
           icon={GraduationCap}
@@ -204,13 +216,32 @@ export function CoursesCatalogue() {
         />
       )}
 
-      {/* Divided-columns grid: broadsheet treatment, not rounded cards. */}
-      <div className="mt-6 grid overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:bg-card">
+      {/* Divided-columns grid: broadsheet treatment, not rounded cards.
+       *
+       * `[FIXED 2026-08-22]` Two defects, both visible with a short catalogue:
+       *
+       * 1. The container painted `bg-border` and relied on `[&>*]:bg-card` to cover it,
+       *    so every UNFILLED track in the last row stayed border-coloured — two courses
+       *    in a four-column grid rendered a large beige slab beside them. The divider
+       *    is now drawn with `gap-px` over a `bg-border` that only shows THROUGH the
+       *    gaps, so unfilled tracks show the page, not the rule.
+       * 2. It rendered unconditionally, so the empty grid frame appeared during loading
+       *    and underneath the error and empty states. */}
+      {!isLoading && !isError && !!courses?.length && (
+      <div className="mt-6 grid gap-px overflow-hidden rounded-md border border-border bg-card sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:bg-card [&>*]:outline [&>*]:outline-1 [&>*]:-outline-offset-[0.5px] [&>*]:outline-border">
         {courses?.map((course) => {
           const tone = domainColorVar(course.section)
           return (
-            <Link key={course.slug} to={`/courses/${course.slug}`} className="group block border-b border-border last:border-b-0 sm:[&:nth-last-child(-n+4)]:border-b-0 sm:[&:nth-child(4n)]:border-b-0 lg:[&:nth-last-child(-n+3)]:border-b-0 lg:[&:nth-child(3n)]:border-b-0 xl:[&:nth-last-child(-n+4)]:border-b-0 xl:[&:nth-child(4n)]:border-b-0">
-              <div className="relative bg-card transition-colors duration-150 hover:bg-card-2">
+            /* The `nth-child` border juggling that used to live here is gone: it
+               existed to suppress the bottom rule on the last row at each breakpoint,
+               which `gap-px` now handles for every row and column at once. */
+            /* `h-full` + flex column all the way down: a two-line title next to a
+               one-line title used to push its own price row lower than its neighbour's,
+               so the footers formed a ragged edge across the row. The footer is now
+               pinned to the bottom of every card with `mt-auto`, independent of how
+               long the title and subtitle run. */
+            <Link key={course.slug} to={`/courses/${course.slug}`} className="group block h-full">
+              <div className="relative flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2">
                 {/* Domain top rule: 2px, full-bleed. Same treatment as the Home QuestionCard. */}
                 <span
                   aria-hidden="true"
@@ -224,7 +255,7 @@ export function CoursesCatalogue() {
                   alt={`Cover image for ${course.title}`}
                   className="aspect-[16/9]"
                 />
-                <div className="px-4 pt-3 pb-4">
+                <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
                   <p className="eyebrow" style={{ '--eyebrow-rule-color': tone } as CSSProperties}>
                     {course.section}
                   </p>
@@ -246,7 +277,7 @@ export function CoursesCatalogue() {
                       ...(course.estimated_duration_minutes ? [{ icon: Clock, value: formatDuration(course.estimated_duration_minutes) }] : []),
                     ]}
                   />
-                  <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5">
+                  <div className="mt-auto flex items-center justify-between border-t border-border pt-2.5">
                     {course.owned ? (
                       <Badge variant="success" className="gap-1 text-[0.625rem]">
                         <CircleCheck className="size-2.5" aria-hidden="true" /> Owned
@@ -266,6 +297,7 @@ export function CoursesCatalogue() {
           )
         })}
       </div>
+      )}
     </div>
   )
 }

@@ -47,8 +47,8 @@ api/        thin. Parse, authorise, delegate, shape the response. No business lo
             no ORM queries beyond a trivial get, and never a third-party SDK call.
 services/   the business logic. Owns transactions. Knows the domain. Knows nothing
             about HTTP.
-integrations/ the outside world. Stripe, Mux, R2, Resend, PostHog. One module each,
-            each one the only place its SDK is imported.
+integrations/ the outside world. Stripe, Mux, R2, Resend. One module each, each
+            one the only place its SDK is imported.
 ```
 
 A route that imports `stripe` is a bug. A service that imports `Request` is a bug. This keeps the Stripe SDK swappable, keeps services testable without a client, and keeps every outbound credential in one importable place.
@@ -172,7 +172,6 @@ backend/
       mux_client.py                ← the only `import mux_python`
       r2_client.py                 ← the only boto3 S3 client
       resend_client.py             ← the only `import resend`
-      posthog_client.py            ← server-side events (purchase, entitlement_delay)
       supabase_admin.py            ← service-role client: user lookup, admin ops
 
     emails/
@@ -369,9 +368,9 @@ Presigned GETs with a 60-second TTL (RS 6.6). One URL per request; never stored,
 
 Sends pre-rendered HTML plus its plain-text alternative. Rendering is `email_service`'s job (Jinja2, per RS 6.7 — React Email cannot render in a Python process, which is why `app/emails/` holds `.html` and not `.tsx`).
 
-### 6.5 `posthog_client.py`
+### 6.5 Analytics — removed
 
-Server-side events only for the ones the client cannot be trusted to report: `purchase_completed`, `entitlement_delay`, `download_failed`, `refund_issued`. Client-side events stay client-side (DESIGN §48).
+`posthog_client.py` and the client-side `lib/analytics.ts` wrapper existed through Phase 6B and were removed entirely on 2026-08-21 (decision #34, week4_plan.md §8.1). No third-party analytics or event tracking runs anywhere in this codebase now. What the admin panel knows about usage comes from `filter_events`/`download_events` — narrow, anonymous, first-party aggregate counters, not a general event stream.
 
 ---
 
@@ -464,7 +463,6 @@ STRIPE_SECRET_KEY  STRIPE_WEBHOOK_SECRET
 MUX_TOKEN_ID  MUX_TOKEN_SECRET  MUX_SIGNING_KEY_ID  MUX_SIGNING_PRIVATE_KEY
 R2_ACCOUNT_ID  R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_BUCKET
 RESEND_API_KEY  EMAIL_FROM  EMAIL_REPLY_TO
-POSTHOG_API_KEY  POSTHOG_HOST
 CORS_ORIGINS         # exact frontend origins — RS 6.9's silent failure mode
 FRONTEND_BASE_URL    # for checkout redirects and email links
 ENVIRONMENT          # local | preview | production

@@ -10,6 +10,7 @@ import { PageTitle } from '@/components/ui/PageTitle'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { ErrorState } from '@/components/ui/ErrorState'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
 import { WhyThis } from '@/components/product/WhyThis'
 import { OBJECTION_BLOCK } from '@/lib/labels'
@@ -81,11 +82,15 @@ export function PackDetail() {
   const { slug } = useParams<{ slug: string }>()
   const [status, setStatus] = useState<DownloadStatus>('idle')
 
-  const { data: pack, isLoading } = useQuery({
+  const { data: pack, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.packs.detail(slug ?? ''),
     queryFn: () => api.get<PackDetail>(`/packs/${slug}`).then((r) => r.data),
     enabled: !!slug,
   })
+
+  // A 404 genuinely means the pack is gone; anything else is a transport failure and
+  // gets a retry rather than an eviction notice (same idiom as Learn.tsx:546).
+  const isNotFound = isAxiosError(error) && error.response?.status === 404
 
   // Same contract as Template.tsx: fetch the presigned URL on click, use it
   // immediately, discard it. Never rendered as a visible href — a 60-second URL
@@ -122,6 +127,22 @@ export function PackDetail() {
       <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Loading pack">
         <div className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
         <span className="sr-only">Loading pack…</span>
+      </div>
+    )
+  }
+
+  /* `[ADDED 2026-08-22, F3 — P0]` A network failure is not a missing pack. Without
+   * this branch a timeout fell through to "That pack doesn't exist" — telling someone
+   * the thing they were about to buy has been withdrawn, when the truth is a dropped
+   * request and a retry would fix it. A 404 still lands on the not-found copy below. */
+  if (isError && !isNotFound) {
+    return (
+      <div className="mx-auto w-full max-w-2xl px-5 py-11 sm:px-8">
+        <ErrorState
+          title="We couldn't load this pack."
+          description="Check your connection and try again. The questions inside are free to read either way."
+          onRetry={() => void refetch()}
+        />
       </div>
     )
   }

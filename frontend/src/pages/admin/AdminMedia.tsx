@@ -51,7 +51,7 @@ export function AdminMedia() {
   })
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
       <PageTitle
         eyebrow="Admin"
         title="Media"

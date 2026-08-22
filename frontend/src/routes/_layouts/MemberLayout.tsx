@@ -260,8 +260,21 @@ function SidebarAccount({ collapsed }: { collapsed: boolean }) {
         )}
       </div>
 
-      {/* Identity + controls row */}
-      <div className={cn('flex items-center gap-2 rounded-lg py-2', collapsed ? 'justify-center px-0' : 'px-3')}>
+      {/* Identity + controls.
+       *
+       * `[FIXED 2026-08-22]` Collapsed, this stayed a horizontal row: avatar + cart +
+       * theme + sign-out is roughly 150px of controls inside a 64px rail, so they
+       * overlapped each other and forced a horizontal scrollbar across the whole
+       * sidebar. Collapsed now stacks them into a single 64px-wide column, which is the
+       * only arrangement four controls fit in at this width. */}
+      <div
+        className={cn(
+          'rounded-lg py-2',
+          collapsed
+            ? 'flex flex-col items-center gap-1 px-0'
+            : 'flex items-center gap-2 px-3',
+        )}
+      >
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-stage-foreground/12 text-xs font-semibold text-stage-foreground">
           {(name ?? '?').slice(0, 1).toUpperCase()}
         </span>
@@ -335,7 +348,11 @@ export function MemberChrome() {
           hover. When expanded: 256px, full labels. Width transitions smoothly. */}
       <aside
         className={cn(
-          'relative isolate hidden shrink-0 flex-col overflow-y-auto overscroll-y-contain border-r border-stage-foreground/15 bg-stage md:sticky md:top-0 md:flex md:h-screen transition-[width] duration-200 ease-[var(--ease-standard)]',
+          /* `overflow-x-hidden` — the rail scrolls vertically by design, but a child
+             that momentarily exceeds 64px (mid-transition, or a long label before
+             `sr-only` applies) must never produce a horizontal scrollbar across the
+             navigation. */
+          'relative isolate hidden shrink-0 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain border-r border-stage-foreground/15 bg-stage md:sticky md:top-0 md:flex md:h-screen transition-[width] duration-200 ease-[var(--ease-standard)]',
           collapsed ? 'w-16' : 'w-64',
         )}
       >

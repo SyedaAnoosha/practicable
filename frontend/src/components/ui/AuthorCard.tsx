@@ -84,10 +84,19 @@ function Avatar({
   const textColor = `hsl(${hue}, 45%, 35%)`
 
   if (url) {
+    // `[ADDED 2026-08-22, Redesigning_decisions.md K2]` Intrinsic width/height, not just
+    // the Tailwind size class. The class already reserves the box, so this is not about
+    // CLS here — it is so the browser knows the aspect ratio before the bytes arrive and
+    // does not have to re-rasterise once they do. 36px / 48px match `size-9` / `size-12`.
+    const px = size === 'sm' ? 36 : 48
     return (
       <img
         src={url}
         alt={name}
+        width={px}
+        height={px}
+        loading="lazy"
+        decoding="async"
         className={cn(sizeClasses, 'shrink-0 rounded-full object-cover')}
       />
     )

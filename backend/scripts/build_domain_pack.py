@@ -57,6 +57,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     BaseDocTemplate,
+    Flowable,
     Frame,
     KeepTogether,
     NextPageTemplate,
@@ -292,7 +293,10 @@ def build_pack(domain: str, questions: list[dict], out_path: Path) -> Path:
 
     # ── The questions ────────────────────────────────────────────────────────────
     for i, q in enumerate(ordered, start=1):
-        block = [
+        # Typed as list[Flowable], not the inferred list[Paragraph] — KeepTogether
+        # wants list[Flowable] and list's type parameter is invariant, so a narrower
+        # element type is rejected even though every Paragraph IS a Flowable.
+        block: list[Flowable] = [
             Paragraph(f"{i} OF {len(ordered)}", styles["q_num"]),
             Paragraph(esc(q["question"]), styles["q_title"]),
         ]

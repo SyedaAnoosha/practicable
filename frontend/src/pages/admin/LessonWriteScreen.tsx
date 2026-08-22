@@ -155,11 +155,11 @@ function LessonWriteMode({ courseId, lessonId }: { courseId: string; lessonId: s
   const [text, setText] = useState(initialText)
   // Reset state when the lesson loads asynchronously — "adjust state when a prop
   // changes" pattern. Fires once per load, not per render.
-  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setText(initialText)
   }, [initialText])
-  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const [error, setError] = useState<string | null>(null)
   const saveBody = useMutation({
@@ -238,12 +238,12 @@ function BlockWriteMode({ courseId, blockId }: { courseId: string; blockId: stri
   const [heading, setHeading] = useState(found?.block.heading ?? '')
   // Reset state when the block loads asynchronously — same pattern, fires once
   // per block load.
-  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     setText(initialText)
     setHeading(found?.block.heading ?? '')
   }, [found?.block.id, initialText, found?.block.heading])
-  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const [error, setError] = useState<string | null>(null)
   const saveBlockText = useMutation({

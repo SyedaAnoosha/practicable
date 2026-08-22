@@ -1,0 +1,24 @@
+{
+  /* Test files, typechecked as their own project.
+   *
+   * They belong in a separate project from `tsconfig.app.json` because they need two
+   * things app code must never be given: Node's globals (several suites read a source
+   * file off disk with `fs`/`path`/`__dirname` to assert on what actually ships) and
+   * Vitest's ambient types. Handing those to the app project would let a component
+   * import `fs` and still typecheck, which is exactly the mistake this split prevents.
+   *
+   * Before this file existed, `tsconfig.app.json` included `src` wholesale, so the test
+   * files were typechecked with only `vite/client` types and `tsc -b` failed on every
+   * `fs`/`path`/`__dirname` reference — the CI typecheck job was red on a pre-existing
+   * fault unrelated to any one change.
+   */
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    "types": ["vite/client", "node", "vitest/globals"]
+  },
+  /* `extends` inherits tsconfig.app.json's exclude, which lists exactly these files —
+     so it has to be cleared here or this project would include nothing. */
+  "exclude": [],
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/__tests__/**/*", "src/test"]
+}

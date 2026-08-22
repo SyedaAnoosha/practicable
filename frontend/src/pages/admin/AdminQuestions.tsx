@@ -404,7 +404,7 @@ export function AdminQuestions() {
   const showEditor = isCreating || editingId !== null
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageTitle
           eyebrow="Content editor"

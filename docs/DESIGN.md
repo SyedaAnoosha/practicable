@@ -421,6 +421,24 @@ Every foreground/background pair in the supplied token set was measured against 
 
 ### 7.4 Light theme `[DECIDED]`
 
+> **`[SUPERSEDED — DO NOT COPY VALUES FROM THIS BLOCK. RECONCILED 2026-08-22]`**
+>
+> Every hex below predates §5.3's final palette revision (2026-08-11: *"use ivory, blue
+> (primary) and champagne gold (secondary)"*). A token-by-token diff against
+> `frontend/src/styles/theme.css` on 2026-08-22 found **all 55 light-plane colour tokens
+> diverge** — this block still describes the earlier violet/blue-on-white palette, where
+> the product ships ivory ground (`--background: #FBF9F4`), navy primary
+> (`--primary: #10213E`) and champagne gold secondary.
+>
+> `week4_plan.md` §0.3 rule 5 governs: **`theme.css` is the single source of truth for
+> every design *value*, and where this document disagrees, this document is wrong.**
+>
+> The blocks are kept rather than deleted because §7.3 and §7.5.1's contrast audits
+> reason *about* these values, and deleting them would orphan that reasoning — the audits
+> are a record of how the palette was arrived at. **Read them as history. For any value
+> you intend to use, read `theme.css`.** The current palette's own contrast measurements
+> live in §7.5.2 (gold), §7.5.3 (the stage plane) and `week4_plan.md` §12.5.
+
 ```css
 :root {
   /* Surfaces */
@@ -496,6 +514,24 @@ Every foreground/background pair in the supplied token set was measured against 
 ```
 
 ### 7.5 Dark theme `[DECIDED]`
+
+> **`[SUPERSEDED — DO NOT COPY VALUES FROM THIS BLOCK. RECONCILED 2026-08-22]`**
+>
+> Every hex below predates §5.3's final palette revision (2026-08-11: *"use ivory, blue
+> (primary) and champagne gold (secondary)"*). A token-by-token diff against
+> `frontend/src/styles/theme.css` on 2026-08-22 found **all 55 light-plane colour tokens
+> diverge** — this block still describes the earlier violet/blue-on-white palette, where
+> the product ships ivory ground (`--background: #FBF9F4`), navy primary
+> (`--primary: #10213E`) and champagne gold secondary.
+>
+> `week4_plan.md` §0.3 rule 5 governs: **`theme.css` is the single source of truth for
+> every design *value*, and where this document disagrees, this document is wrong.**
+>
+> The blocks are kept rather than deleted because §7.3 and §7.5.1's contrast audits
+> reason *about* these values, and deleting them would orphan that reasoning — the audits
+> are a record of how the palette was arrived at. **Read them as history. For any value
+> you intend to use, read `theme.css`.** The current palette's own contrast measurements
+> live in §7.5.2 (gold), §7.5.3 (the stage plane) and `week4_plan.md` §12.5.
 
 ```css
 .dark {
@@ -895,14 +931,42 @@ Self-hosting is preferred for three reasons, in this order of importance here:
 
 A 1.25 (major third) ratio at the base, loosening at display sizes, expressed as fluid `clamp()` tokens so headings do not need per-breakpoint classes.
 
+> **`[RECONCILED 2026-08-22]`** Against `frontend/src/styles/theme.css`, which is the
+> single source of truth for every design *value* (`week4_plan.md` §0.3 rule 5 — where
+> this document and `theme.css` state different numbers, **`theme.css` is right and this
+> document is stale**). Two divergences were found and are corrected below; both are
+> `theme.css` changes this document had not caught up with, not decisions taken here.
+>
+> 1. **The top three rungs were returned toward hero scale on 2026-08-20**
+>    (`design-research/PLATFORM_UI_UX_RESEARCH.md` M1, "restore the voice"). The
+>    2026-08-15 pass had shrunk *every* rung 25–30%, which was right for the reading
+>    rungs — and they keep those values — but left `--text-display` topping out at 44px,
+>    supporting-player size for a desktop marketing headline next to the competitor
+>    capture (Coursera 36px H1 in a 1340px column, Udemy 32px in 1180px, MasterClass
+>    60px+). `display`, `h1` and `h2` moved; `h3`, `h4`, `lead`, `body`, `read`, `sm` and
+>    `xs` deliberately did not.
+> 2. **`--text-stat` was added on 2026-08-20** (M5, "metadata richness") and was missing
+>    from this document entirely.
+>
+> Line-height and letter-spacing ratios are unchanged throughout — only the size roots
+> moved — so the vertical-rhythm rules elsewhere still hold at the new sizes.
+
 ```css
 @theme inline {
-  --text-display: clamp(2.75rem, 1.6rem + 4.6vw, 4.5rem);   /* 44 → 72px */
-  --text-h1:      clamp(2.25rem, 1.6rem + 2.6vw, 3.25rem);  /* 36 → 52px */
-  --text-h2:      clamp(1.75rem, 1.4rem + 1.4vw, 2.375rem); /* 28 → 38px */
-  --text-h3:      clamp(1.375rem, 1.2rem + 0.7vw, 1.75rem); /* 22 → 28px */
-  --text-h4:      1.25rem;    /* 20px */
-  --text-lead:    1.1875rem;  /* 19px — lead paragraphs, serif */
+  /* Top three rungs: shrunk 2026-08-15, then partly restored 2026-08-20 (see note above) */
+  --text-display: clamp(2.625rem, 1.9rem + 3.4vw, 4.25rem);    /* 42 → 68px */
+  --text-h1:      clamp(2rem, 1.55rem + 2vw, 3rem);            /* 32 → 48px */
+  --text-h2:      clamp(1.5rem, 1.3rem + 0.9vw, 2.125rem);     /* 24 → 34px */
+
+  /* The fact-strip and stat-tile figure. Always paired with `tabular-nums` and, by
+     house rule, the mono face — a number carrying a decision is data. `[ADDED 2026-08-20]` */
+  --text-stat:    clamp(1.5rem, 1.2rem + 1vw, 2rem);           /* 24 → 32px */
+
+  /* Reading rungs: the 2026-08-15 reduction stands. The reference-document register
+     lives here, and the 08-20 audit found the blandness in composition, not in size. */
+  --text-h3:      clamp(1.125rem, 1.02rem + 0.4vw, 1.3125rem); /* 18 → 21px */
+  --text-h4:      1.0625rem;  /* 17px — shrunk from 1.25rem */
+  --text-lead:    1.0625rem;  /* 17px — shrunk from 1.1875rem — lead paragraphs, serif */
   --text-body:    1rem;       /* 16px */
   --text-read:    1.125rem;   /* 18px — serif reading body, optically matched to 16px sans.
                                  17px until 2026-08-13; Newsreader's smaller x-height made
@@ -914,16 +978,17 @@ A 1.25 (major third) ratio at the base, loosening at display sizes, expressed as
 
 | Token | Use | Line height | Tracking |
 |---|---|---|---|
-| `display` | Homepage hero only. Once per site. | 1.0 | -0.03em |
-| `h1` | Page title, the question on a question page | 1.08 | -0.02em |
-| `h2` | Section heading | 1.15 | -0.015em |
-| `h3` | Card title, lesson title | 1.25 | -0.01em |
-| `h4` | Subsection, form group heading | 1.35 | -0.01em |
-| `lead` | Lead paragraph, short answer | 1.55 | 0 |
+| `display` | Homepage hero only. Once per site. | 1.04 | -0.03em |
+| `h1` | Page title, the question on a question page | 1.12 | -0.02em |
+| `h2` | Section heading | 1.2 | -0.015em |
+| `stat` | Fact-strip / stat-tile figure. Mono face + `tabular-nums`, always | 1.1 | -0.02em |
+| `h3` | Card title, lesson title, **the price** | 1.3 | -0.01em |
+| `h4` | Subsection, form group heading | 1.4 | -0.01em |
+| `lead` | Lead paragraph, short answer | 1.5 | 0 |
 | `read` | Serif reading body — **18px** since 2026-08-13 (§9.2) | **1.7** | 0 |
 | `body` | Sans body, UI text | 1.55 | 0 |
 | `sm` | Metadata, form labels, helper text | 1.5 | 0 |
-| `xs` | Eyebrows, badges, table meta | 1.4 | **+0.06em** (uppercase eyebrows only) |
+| `xs` | Eyebrows, badges, table meta | 1.4 | **+0.16em** (uppercase eyebrows only — widened from 0.06em 2026-08-13 when Azeret Mono replaced JetBrains Mono, which sets wider by default) |
 
 **Rules**
 
@@ -2853,7 +2918,7 @@ A JWT will expire while someone is reading. Design for it:
 
 ### 45.4 Analytics and privacy
 
-PostHog session replay must mask or exclude: the checkout pages, every password field, the account page and the admin area (Research 6.10). Configure this before the first recording, not after.
+`[REMOVED 2026-08-21]` PostHog (and session replay along with it) was removed from the project entirely — decision #34, week4_plan.md §8.1. This section's guidance no longer applies to anything in the running app; kept here as a record of what the masking rule would have been, had replay shipped.
 
 ### 45.5 Customer data in the interface
 
@@ -3109,7 +3174,6 @@ Versions are those current at the time of writing (August 2026). Verify at insta
 | `date-fns` | Dates. Tree-shakeable; do not add moment. |
 | `@unhead/react` | Per-route metadata (§44.3) |
 | `vite-react-ssg` | Build-time prerender of public routes (§44.2) |
-| `posthog-js` | Product analytics, with replay masking (§45.4) |
 | `@tiptap/react` | Admin rich text. Admin bundle only. |
 | `@dnd-kit/core` | Reordering modules and lessons in admin |
 
@@ -3220,7 +3284,6 @@ src/
     labels.ts                 ← §50.3
     format.ts                 ← currency, date, duration, file size
     scoring.ts                ← §57
-    analytics.ts              ← PostHog wrapper, typed against §48
 
   stores/
     use-auth-store.ts
@@ -3546,8 +3609,6 @@ Two hosts means CORS (Research 6.9). FastAPI must allow the deployed frontend or
 VITE_API_BASE_URL=https://api.example.com
 VITE_SUPABASE_URL=https://xxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ…
-VITE_POSTHOG_KEY=phc_…
-VITE_POSTHOG_HOST=https://eu.posthog.com
 ```
 
 **Anything prefixed `VITE_` is compiled into the bundle and is public.** The Mux signing key, the Stripe secret key, the R2 access key and the Resend key belong only in the FastAPI environment. A secret in a `VITE_` variable is a published secret, and this is the single most common way a build like this leaks.

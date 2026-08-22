@@ -26,5 +26,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* Tests live in tsconfig.test.json: they need Node + Vitest types that app code must
+     not be given. Excluding them here is what keeps that separation real. */
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/**/__tests__/**/*", "src/test"]
 }

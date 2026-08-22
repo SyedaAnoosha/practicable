@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import uuid
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -349,33 +350,99 @@ def test_stripe_price_none_refused():
     assert "not set" in result.message.lower()
 
 
+def _fake_stripe_price(*, active=True, unit_amount=9900, currency="aud", livemode=False):
+    """A MagicMock standing in for a `stripe.Price` object, same shape check_stripe_price reads."""
+    price = MagicMock()
+    price.active = active
+    price.unit_amount = unit_amount
+    price.currency = currency
+    price.livemode = livemode
+    return price
+
+
 def test_stripe_price_amount_mismatch_refused():
     """check_stripe_price refuses when Stripe amount differs from database.
 
-    This test uses a mock to simulate Stripe returning a different amount.
-    In a real scenario, this would require mocking stripe.Price.retrieve.
-    For now, we test the logic path that would trigger if the mismatch occurred.
+    Seen red: before this test existed, the three stub tests below it asserted
+    nothing (`pass`), so a broken amount check would still show green.
+
+    Mode pinned to test/test explicitly — otherwise this test's result depends on
+    whatever STRIPE_SECRET_KEY happens to be in the local .env, and it would be
+    testing the cross-mode check by accident instead of the amount check.
     """
-    # Note: This test would require mocking stripe.Price.retrieve to return
-    # a price with a different unit_amount. The actual Stripe call is tested
-    # in integration tests. Here we document the expected behavior.
-    # The implementation checks: if price.unit_amount != price_amount
-    pass
+    fake_price = _fake_stripe_price(unit_amount=4900, livemode=False)  # Stripe says A$49
+    with patch("stripe.Price.retrieve", return_value=fake_price):
+        with patch("app.core.config.settings.stripe_secret_key", "sk_test_abc123"):
+            result = check_stripe_price(
+                stripe_price_id="price_real_123",
+                price_amount=9900,  # DB says A$99
+                currency="AUD",
+            )
+    assert not result.ok
+    assert "mismatch" in result.message.lower()
+    assert "49" in result.message and "99" in result.message
 
 
 def test_stripe_price_currency_mismatch_refused():
     """check_stripe_price refuses when Stripe currency differs from database.
 
-    Similar to amount mismatch, this requires mocking Stripe API response.
+    Mode pinned to test/test — see the amount-mismatch test above for why.
     """
-    # Note: Requires mocking stripe.Price.retrieve to return different currency
-    pass
+    fake_price = _fake_stripe_price(unit_amount=9900, currency="usd", livemode=False)
+    with patch("stripe.Price.retrieve", return_value=fake_price):
+        with patch("app.core.config.settings.stripe_secret_key", "sk_test_abc123"):
+            result = check_stripe_price(
+                stripe_price_id="price_real_123",
+                price_amount=9900,
+                currency="AUD",
+            )
+    assert not result.ok
+    assert "currency" in result.message.lower()
 
 
 def test_stripe_price_inactive_refused():
-    """check_stripe_price refuses an inactive Stripe price.
+    """check_stripe_price refuses an inactive Stripe price."""
+    fake_price = _fake_stripe_price(active=False)
+    with patch("stripe.Price.retrieve", return_value=fake_price):
+        result = check_stripe_price(
+            stripe_price_id="price_real_123",
+            price_amount=9900,
+            currency="AUD",
+        )
+    assert not result.ok
+    assert "inactive" in result.message.lower()
 
-    Requires mocking stripe.Price.retrieve to return active=False.
+
+def test_stripe_price_cross_mode_test_key_live_price_refused():
+    """A test-mode API key against a live-mode Stripe price is refused (8A-7 check 4).
+
+    This is, per the plan's own words, "the single most confusing failure available
+    here" — a live price silently 404ing (or, worse, resolving) against a test key.
     """
-    # Note: Requires mocking stripe.Price.retrieve
-    pass
+    fake_price = _fake_stripe_price(livemode=True)
+    with patch("stripe.Price.retrieve", return_value=fake_price):
+        with patch("app.core.config.settings.stripe_secret_key", "sk_test_abc123"):
+            result = check_stripe_price(
+                stripe_price_id="price_real_123",
+                price_amount=9900,
+                currency="AUD",
+            )
+    assert not result.ok
+    assert "mode mismatch" in result.message.lower()
+
+
+def test_stripe_price_resolved_active_matching_is_ok():
+    """The one case that must NOT be refused: a real, active, matching, same-mode price.
+
+    Without this, a fix to any of the five refusal checks above could accidentally
+    refuse everything and still show green.
+    """
+    fake_price = _fake_stripe_price(active=True, unit_amount=9900, currency="aud", livemode=False)
+    with patch("stripe.Price.retrieve", return_value=fake_price):
+        with patch("app.core.config.settings.stripe_secret_key", "sk_test_abc123"):
+            result = check_stripe_price(
+                stripe_price_id="price_real_123",
+                price_amount=9900,
+                currency="AUD",
+            )
+    assert result.ok

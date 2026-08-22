@@ -95,6 +95,12 @@ class CourseDetailOut(BaseModel):
     description: str
     section: str
     author_name: str
+    # `[ADDED 2026-08-22, Redesing_decisions.md B5]` The bio has existed on the Author
+    # model since the schema was written but was never serialised, so the frontend had
+    # a name and nothing to establish WHY that name should be trusted — which is the
+    # entire point of naming them. Additive and optional: existing clients ignore it,
+    # and the author row is already loaded, so this costs no extra query.
+    author_bio: Optional[str] = None
     owned: bool
     lesson_count: int
     first_lesson_slug: Optional[str]
@@ -498,6 +504,7 @@ async def get_course(
         description=course.description,
         section=section.name,
         author_name=author.name,
+        author_bio=author.bio,
         owned=owned,
         lesson_count=lesson_count,
         first_lesson_slug=first_lesson_slug,

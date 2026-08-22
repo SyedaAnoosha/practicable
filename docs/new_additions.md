@@ -1150,3 +1150,41 @@ For anyone who read the previous version.
 | AI "early V2" | **After editorial backlog + privacy position** | 99/100 questions lack hand-written previews |
 | AI confidentiality unmentioned | **§24.2 — a product requirement** | Users type their org's real risk position into a box |
 | Two sets of §1–26 | One numbering, one position | It was four documents stapled together |
+
+---
+
+## Status footer — updated 2026-08-20 after Week 4
+
+What shipped, what is gated, and on what. An addition, not a rewrite.
+
+### Shipped in Week 4
+
+| § | Proposal | Status | Notes |
+|---|---|---|---|
+| §2, §2.1, §3, §16, §20, §33, §34 | **Pre-purchase evidence layer** | ✅ Shipped | `EvidencePanel`, `PreviewGallery`, `LicenceLine`, `VersionStamp` on all product pages. Admin write path via `/admin/products`. |
+| §4, §34 item 1 | **Tax-invoice-quality receipts** | ✅ Shipped | `invoice_creation` + `billing_address_collection` in Stripe checkout. Invoice block in email templates. No ABN (decision #31). |
+| §11, §34 item 4 | **Overlap publish guard** | ✅ Shipped | `check_content_overlap` in `publish_guard.py`. Bundle escape hatch. |
+| §8, §19, §22, §34 item 5 | **Question → product routing** | ✅ Shipped | `RoutedProducts`, `SituationProducts`, `GET /questions/{slug}/related-products`, `GET /products/for-questions`. |
+| §35 (five metrics) | **Metrics from the database** | ✅ Shipped | `/admin/metrics` with numerator/denominator pairs, revenue gross/refunded/net, enrollment splits, revenue series chart. |
+| §3 (corporate-laptop constraints) | **Format guarantee on product pages** | ✅ Shipped | Rendered from columns (`is_editable`, `has_macros`, `min_office_version`), never typed per product. |
+| §34 item 6, §16 | **Real preview assets** | ✅ Shipped | Two preview images minimum per paid template, uploaded through presigned path. |
+| §7 | **Search title / outcome name** | ✅ Shipped | `search_title` column on products, renders as `<title>`/`og:title`, falls back to `name`. |
+
+### Still gated
+
+| § | Proposal | Gate | |
+|---|---|---|---|
+| §13–14 | **Decision Pack workspace** | Schema + editor + autosave + generator + review scheduler. Weeks, not days. Prerequisites (overlap guard, evidence layer) now ship. |
+| §23–25 | **"Challenge My Thinking" AI** | 100 questions × editorial guardrails + confidentiality position (decision #29). Not engineering-blocked. |
+| §28 | **Free Risk Diagnostic** | Scoring model, result page, recommendation output. W4-R4's routing model is its output layer. |
+| §15 | **Scenario Packs** | Content. Ship one, not five. |
+| §20 | **Consultant licence tiers** | Decision #25 (may buyers use artefacts with clients). `client_delivery` / `multi_client` defined-but-unused. |
+| §31 | **Question of the Week** | Decision #30 (editorial capacity). 52/year is a real commitment. |
+| §60.1 | **Semantic search** | First in DESIGN.md's cut order. |
+
+### Deliberately not taken
+
+| § | Proposal | Why not |
+|---|---|---|
+| §18 pricing change | Price ceiling removal | `pricing.md` is the price authority; W4-R2 and W4-R1 remove the ceiling. Changing prices is the owner's call afterwards. |
+| §33 point 2 | Narrowing lifetime-update promise | Decision #26, owner's call. `version` + `last_reviewed_at` machinery now ships. |

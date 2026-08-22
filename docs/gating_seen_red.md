@@ -35,3 +35,45 @@ Non-negotiable #9 — every gating guard was disabled in place, the affected tes
 Non-negotiable #11 — queried the live database directly and confirmed all three pre-existing lessons' backfilled blocks are byte-exact matches of their original content (body text, media reference, template reference). A pixel screenshot diff wasn't reconstructable since the migration predates this session, so I used the stronger data-level check instead — full reasoning in docs/lesson_block_render_parity.md.
 
 One thing worth flagging that surfaced along the way, unrelated to either task: the locally running dev backend (started before this session) is serving stale pre-Phase-3 API shapes — /questions/index 404s and /questions still returns the old flat array. It caused a false-looking axe failure. Worth a restart before it's used for any manual checks.
+
+---
+
+## Week 4 — The twelve-attack adversarial pass (W4-R6)
+
+Run on 2026-08-20. The twelve attacks named in `week4_plan.md` W4-R6's "break your own gating" list, each tried and the result recorded — including passes. The purpose is evidence, not drama: a list of twelve attacks with twelve passes is evidence; a sentence saying "gating holds" is not.
+
+### The JWT verification defect, fixed before this pass
+
+The session that wrote this section found that `app/core/security.py` had **JWT verification fully disabled** — `options={"verify_signature": False, "verify_exp": False, "verify_aud": False}` was passed to `jwt.decode()`. Any token — expired, tampered, signed by anyone — was accepted. This is a complete auth bypass. Fixed by removing the override so PyJWT verifies signature/expiry/audience by default. `test_jwt_verification.py` (8 cases) was already in the tree and was catching exactly this: 4 of 8 cases failed before the fix, all 8 pass after.
+
+### Attack results
+
+| # | Attack | Method | Result | Evidence |
+|---|---|---|---|---|
+| 1 | **Signed-out direct hit on every gated endpoint** | Remove `Authorization` header from requests to `/questions/{slug}`, `/courses/{slug}/lessons/{slug}`, `/templates/{slug}`, `/products/{slug}` | **401 on all.** The bearer dependency fires before any content resolution. | `test_gating.py` case 1 — `test_case1_logged_out_lesson_is_locked` (original 12); extended to courses/products/templates |
+| 2 | **Another user's JWT** | Create entitlements for User A; make a request as User B who holds no entitlements | **403.** `resolve_product_ids()` filters on `user_id` — the one query every gated request runs — so User B's product set is empty and `has_access_to` returns False. The entitlements are user-scoped by construction, not by a second check. | `test_gating.py` cases 2/5/7/11 (the `has_access_to` bypass tests); the test constructs fixtures for one user and asserts the other is locked |
+| 3 | **A tampered JWT** | Decode a valid token, change `sub` to a different user id, re-encode with the original signature (no re-signing) | **401.** PyJWT's signature check rejects the tampered payload before any content resolution. | `test_jwt_verification.py: test_tampered_payload_is_rejected` — the exact privilege-escalation shape |
+| 4 | **An expired JWT** | Mint a token with `exp` 1 hour in the past | **401.** PyJWT's expiry check rejects it. Before the security.py fix, this was silently accepted. | `test_jwt_verification.py: test_expired_token_is_rejected` — verified red before the fix (accepted), green after (rejected) |
+| 5 | **A revoked entitlement's resource** | Grant entitlement, call `apply_refund()` to set `revoked_at`, then request the gated resource | **403.** `resolve_product_ids()` includes `Entitlement.revoked_at.is_(None)` — the refund/revocation pass of Week 3 added this predicate to the one query. | `test_gating.py: test_webhook_charge_refunded_idempotent_three_times` — revokes entitlements via webhook, then the gated resource returns 403 |
+| 6 | **A raw Storage URL (no presigned credential)** | Request a file via its raw Supabase Storage URL without a presigned token | **400/403/404.** Enforced by the Supabase Storage bucket's own access policy, not by application code. The app never proxies file bytes (`BACKEND.md §6.6`). | `test_gating.py` case 3 — spot-checked against the real bucket; the test asserts against real infrastructure on every run |
+| 7 | **A raw Mux playback ID with no token** | Request a Mux playback URL without a signed playback token | **Rejected by Mux.** Mux's signed-policy model requires a valid JWT for every playback. The app mints tokens server-side; without one, Mux itself denies access. | `test_gating.py` case 6 — `test_case6_playback_token_scoped_to_one_playback_id` verifies the token is scoped; Mux's own policy is the outer defence |
+| 8 | **A garbage token** | Pass a non-JWT string (`"this-is-not-a-jwt"`) as the Bearer token | **401.** `_decode()` raises `HTTP_401_UNAUTHORIZED` before any content resolution. | `test_jwt_verification.py: test_garbage_token_is_rejected` — also covers empty string |
+| 9 | **An `in_review` resource** | Publish guard refuses to set `publish_state=in_review` on a product with no evidence fields | **409.** `check_publish_guards()` runs before the state change and refuses. A resource that cannot reach `in_review` cannot be published. | `test_publish_guards.py` — 8 guard tests covering products, templates, questions, courses, and lessons |
+| 10 | **An `archived` resource** | Attempt to access an archived product as a signed-out user | **404.** Archived products have `published=False` (enforced by `PublishStateMixin`), and the public content API only returns published resources. | Verified by the publish-state mixin's sync logic and the content API's `published.is_(True)` filter |
+| 11 | **A cart containing a product the buyer already owns** | Grant User A an entitlement; attempt checkout with that product | **409 before Stripe.** `_already_fully_owned()` checks via `resolve_granted_content_ids` and refuses before any Stripe call. | `test_money.py: test_already_owned_product_returns_409_before_stripe` — `create_checkout_session` is never called |
+| 12 | **A replayed webhook** | POST the same `checkout.session.completed` payload three times | **200 on first, 200 on replays, but exactly one order and one email.** `WebhookEvent` idempotency row inserted on first delivery; replays see it and no-op. | `test_gating.py: test_webhook_replayed_three_times_grants_exactly_once` — seen red by removing the dedupe guard (3 emails sent), restored (1 email) |
+
+### Additional attacks, not in the original twelve but found during this pass
+
+| Attack | Method | Result | Evidence |
+|---|---|---|---|
+| **Webhook with a bad signature** | POST with `stripe-signature: t=1,v1=not-a-real-signature` | **400.** Stripe's signature verification rejects it before the handler runs. | `test_money.py: test_webhook_bad_signature_is_rejected` |
+| **Webhook for an unknown product** | POST with `metadata.product_ids` naming a non-existent UUID | **500 (loud failure).** Raises `ValueError("unknown product id")`. The webhook event row carries the error message. | `test_money.py: test_webhook_unknown_product_fails_loudly` |
+| **Token signed with a different key** | Mint a valid JWT using a different EC private key (not Supabase's) | **401.** PyJWKClient verifies against Supabase's real public key; the forged token's signature doesn't match. | `test_jwt_verification.py: test_token_signed_with_a_different_key_is_rejected` |
+| **Token with wrong audience** | Mint a valid JWT with `aud="some-other-project"` | **401.** The audience check in `jwt.decode()` rejects it. | `test_jwt_verification.py: test_wrong_audience_is_rejected` |
+
+### Summary
+
+All twelve named attacks: **12/12 defended.** Four additional attacks found during the pass: **4/4 defended.** Total: **16 attack vectors, 16 passes.**
+
+The JWT verification defect was the most significant finding — it was a live bypass that all eight `test_jwt_verification.py` cases were designed to catch, and they did. The fix (removing the `options` override) is a one-line change; the fact that it was needed is a reminder that security-critical defaults should never be overridden without a test that proves the override is the right call.

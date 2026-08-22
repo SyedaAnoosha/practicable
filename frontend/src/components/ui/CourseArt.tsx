@@ -50,11 +50,21 @@ export function CourseArt({
 }) {
   if (src) {
     return (
+      /* `[CHANGED 2026-08-22, K2]` The generative branch below is a <div> that takes its
+         height from the caller's aspect class; this <img> took its height from the
+         DECODED IMAGE, so a course with an uploaded cover reserved no space and the card
+         grew when the bytes landed — the layout-shift failure K2 names, and only on the
+         uploaded path, which is why it survived review.
+         `aspect-[16/9]` is the default every caller already passes; an explicit
+         `className` still wins because it is merged last. */
       <img
         src={src}
         alt={alt ?? ''}
-        className={cn('w-full object-cover', className)}
+        width={640}
+        height={360}
+        className={cn('aspect-[16/9] w-full object-cover', className)}
         loading="lazy"
+        decoding="async"
       />
     )
   }
