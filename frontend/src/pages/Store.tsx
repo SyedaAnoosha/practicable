@@ -179,7 +179,7 @@ export function Store() {
           explainer="Look something up. All 100 questions are free to read; a pack is the formatted artefact and the working order."
         >
           {packsLoading && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {[0, 1].map((i) => (
                 <div key={i} className="h-56 animate-pulse rounded-lg border border-border bg-muted/40" />
               ))}
@@ -194,7 +194,7 @@ export function Store() {
             />
           )}
           {!packsLoading && packs && packs.length > 0 && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {packs.map((pack) => (
                 <ContentTypeCard
                   key={pack.slug}
@@ -217,7 +217,7 @@ export function Store() {
           explainer="Learn a domain properly — modules, lessons, and a progress bar that remembers where you stopped."
         >
           {coursesLoading && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="h-56 animate-pulse rounded-lg border border-border bg-muted/40" />
               ))}
@@ -232,7 +232,7 @@ export function Store() {
             />
           )}
           {!coursesLoading && courses && courses.length > 0 && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {courses.map((course) => (
                 <ContentTypeCard
                   key={course.slug}
@@ -256,7 +256,7 @@ export function Store() {
           explainer="One thing you need right now. Preview it, buy it, use it this week."
         >
           {templatesLoading && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {[0, 1].map((i) => (
                 <div key={i} className="h-56 animate-pulse rounded-lg border border-border bg-muted/40" />
               ))}
@@ -271,7 +271,7 @@ export function Store() {
             />
           )}
           {!templatesLoading && templates && templates.length > 0 && (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {templates.map((template) => {
                 const actionLabel = template.is_free
                   ? 'Get it free'

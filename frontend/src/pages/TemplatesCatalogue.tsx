@@ -85,7 +85,7 @@ export function TemplatesCatalogue() {
       <h2 className="sr-only">Template list</h2>
 
       {isLoading && (
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-52 animate-pulse rounded-xl border border-border bg-muted/40" />
           ))}
@@ -101,7 +101,7 @@ export function TemplatesCatalogue() {
         />
       )}
 
-      <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {templates?.map((template) => {
           const kind = fileKind(template.file_name)
           return (

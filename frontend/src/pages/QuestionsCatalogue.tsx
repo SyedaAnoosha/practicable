@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils/cn'
+import { cardTags } from '@/lib/tags'
 import { SituationProducts } from '@/components/content/SituationProducts'
 import {
   MULTI_DIMENSIONS,
@@ -225,6 +226,26 @@ function ZeroResults({
   )
 }
 
+/**
+ * The count beside a filter option (A1).
+ *
+ * `tabular-nums` because these sit in a vertical column and must align; mono because
+ * a number read character-by-character is data (H1). Muted and small — the count
+ * informs the choice, it is not the choice.
+ *
+ * Marked `aria-hidden`: the button's accessible name is the option label, and
+ * appending a bare numeral to it ("Weeks 34") makes every option in the rail read as
+ * a two-part phrase with no stated relationship. Screen-reader users get the real
+ * count from the live result total, which IS announced.
+ */
+function FilterCount({ n }: { n: number }) {
+  return (
+    <span aria-hidden="true" className="shrink-0 font-mono text-[0.6875rem] tabular-nums text-muted-foreground/70">
+      {n}
+    </span>
+  )
+}
+
 function FilterPanel({
   questions,
   searchParams,
@@ -241,6 +262,48 @@ function FilterPanel({
     for (const q of questions) map.set(q.domain, q.domain_slug)
     return map
   }, [questions])
+  /**
+   * `[ADDED 2026-08-22, Redesing_decisions.md A1 — P0]` Per-value counts.
+   *
+   * Every filter option shows how many questions it admits BEFORE the user commits to
+   * a click. This is the taxonomy proving it is real, and it is the difference between
+   * a filter rail you explore and one you probe blindly until something returns
+   * nothing.
+   *
+   * Counted from the already-cached question index (~40 KB at 100 questions), so there
+   * is no extra request and the numbers cannot disagree with the results below them.
+   *
+   * ⚠ Scaling threshold, per A1's caveat: this is O(questions x tags) on every render
+   * of the panel. At 100 questions that is ~700 operations and free. Past roughly 500
+   * questions / 250 KB the index stops being worth shipping to the client at all and
+   * the counting moves server-side behind a debounced endpoint — the UI does not
+   * change, the data source does.
+   *
+   * These are UNCONDITIONAL counts (how many questions carry this value at all), not
+   * counts conditioned on the other active filters. Conditional counts sound better and
+   * behave worse: every count in the rail changes on every tap, so the numbers a user
+   * just read are wrong by the time they reach for the next one.
+   */
+  const valueCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    const bump = (key: string) => counts.set(key, (counts.get(key) ?? 0) + 1)
+    for (const q of questions) {
+      bump(`domain:${q.domain_slug}`)
+      // A question can carry the same dimension more than once (the multi-select
+      // dimensions do), so each (dimension, value) pair is counted at most once per
+      // question — otherwise a question with two leadership traits would count twice
+      // against its own total and the rail would exceed the result count.
+      const seen = new Set<string>()
+      for (const tag of q.tags) {
+        const key = `${tag.dimension}:${tag.value}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        bump(key)
+      }
+    }
+    return counts
+  }, [questions])
+
   const dimensionOptions = useMemo(() => {
     const byDimension = new Map<string, Map<string, { label: string; sortOrder: number }>>()
     for (const q of questions) {
@@ -311,7 +374,8 @@ function FilterPanel({
                   }
                 >
                   <Icon className="size-3.5 shrink-0" aria-hidden="true" style={{ color: active ? color : undefined }} />
-                  {d}
+                  <span className="min-w-0 flex-1 truncate">{d}</span>
+                  <FilterCount n={valueCounts.get(`domain:${slug}`) ?? 0} />
                 </button>
               )
             })}
@@ -354,7 +418,7 @@ function FilterPanel({
                       onClick={() => (multi ? toggleMulti(dim, value) : toggle(dim, value))}
                       aria-pressed={active}
                       className={cn(
-                        'rounded-md border-l-2 px-2.5 py-1.5 text-left text-sm transition-colors duration-150',
+                        'flex w-full items-center gap-2 rounded-md border-l-2 px-2.5 py-1.5 text-left text-sm transition-colors duration-150',
                         active
                           ? isUrgent
                             ? 'border-l-accent bg-accent/10 font-medium text-accent'
@@ -366,7 +430,8 @@ function FilterPanel({
                           groups — the semantics really are "any of these", and the
                           UI should say so without needing a legend. */}
                       {multi && <span aria-hidden="true">{active ? '☑ ' : '☐ '}</span>}
-                      {label}
+                      <span className="min-w-0 flex-1 truncate">{label}</span>
+                      <FilterCount n={valueCounts.get(`${dim}:${value}`) ?? 0} />
                     </button>
                   )
                 })}
@@ -396,12 +461,21 @@ function QuestionRow({
   const question = scored.question
   const color = domainColorVar(question.domain)
   const DomainIcon = domainVisual(question.domain).icon
+  // The three decision dimensions, in a fixed order so the same fact sits in the same
+  // position on every row and the column can be scanned vertically. `cardTags` caps at
+  // three by house rule (§20.2); this keeps that cap and pins the order.
+  const rowFacts = cardTags(question.tags)
   return (
     <li>
       <Link
         to={`/questions/${question.slug}`}
         className={cn(
-          'group -mx-4 block rounded-lg border-l-2 px-4 py-6 transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--card))] focus-visible:bg-[color-mix(in_srgb,var(--accent)_6%,var(--card))] focus-visible:outline-none',
+          /* `[TIGHTENED 2026-08-22]` py-6 -> py-4. At py-6 with a trailing "Read the
+             answer" line each row cost ~135px and only four results fitted a 1440x1000
+             viewport — the low-density failure the research names (§4: "more
+             information in the same or less vertical space"). The row now carries MORE
+             information (its tag line) in LESS height. */
+          'group -mx-4 block rounded-lg border-l-2 px-4 py-4 transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--accent)_6%,var(--card))] focus-visible:bg-[color-mix(in_srgb,var(--accent)_6%,var(--card))] focus-visible:outline-none',
           // Close rows carry a lighter left rule than exact rows — the only
           // structural difference besides the badge.
           showBadges
@@ -414,8 +488,8 @@ function QuestionRow({
           <DomainIcon className="size-3" aria-hidden="true" />
           {question.domain}
         </p>
-        <h3 className="mt-1.5 text-h4 font-semibold text-foreground group-hover:text-primary">{question.title}</h3>
-        {question.subtitle && <p className="mt-1 text-sm text-muted-foreground">{question.subtitle}</p>}
+        <h3 className="mt-1.5 text-h4 font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">{question.title}</h3>
+        {question.subtitle && <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{question.subtitle}</p>}
 
         {showBadges && scored.misses.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -437,7 +511,22 @@ function QuestionRow({
           </ul>
         )}
 
-        <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary">Read the answer →</span>
+        {/* `[CHANGED 2026-08-22]` Was "Read the answer →" on every row — a fake inline
+            button inside a link that is already the whole row, costing ~28px per result
+            to repeat what the row already affords. Replaced with the row's actual
+            decision facts (duration / cost / regulator pressure), which is the same
+            vertical cost carrying real information. The title underlines on hover; that
+            is the affordance. */}
+        {rowFacts.length > 0 && (
+          <p className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[0.6875rem] uppercase tracking-wide text-muted-foreground">
+            {rowFacts.map((f, i) => (
+              <span key={f.dimension} className="flex items-center gap-2.5">
+                {i > 0 && <span aria-hidden="true" className="text-border-strong">&middot;</span>}
+                {f.display_label}
+              </span>
+            ))}
+          </p>
+        )}
       </Link>
     </li>
   )

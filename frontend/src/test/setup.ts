@@ -73,7 +73,7 @@ if (!window.matchMedia) {
 // state that can be meaningfully asserted, and it means countUp resolves to its final
 // value rather than hanging at its start.
 if (typeof globalThis.IntersectionObserver === 'undefined') {
-  class StubIntersectionObserver implements IntersectionObserver {
+  class StubIntersectionObserver {
     readonly root: Element | Document | null = null
     readonly rootMargin: string = '0px'
     readonly thresholds: ReadonlyArray<number> = [0]
@@ -86,13 +86,15 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
     observe(target: Element) {
       this.callback(
         [{ isIntersecting: true, intersectionRatio: 1, target } as IntersectionObserverEntry],
-        this,
+        this as unknown as IntersectionObserver,
       )
     }
 
     unobserve() {}
     disconnect() {}
-    takeRecords(): IntersectionObserverEntry[] { return [] }
+    takeRecords(): IntersectionObserverEntry[] {
+      return []
+    }
   }
 
   globalThis.IntersectionObserver =

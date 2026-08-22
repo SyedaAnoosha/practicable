@@ -81,7 +81,7 @@ export function CoursesCatalogue() {
       <h2 className="sr-only">Course list</h2>
 
       {isLoading && (
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-72 animate-pulse rounded-xl border border-border bg-muted/40" />
           ))}
@@ -97,7 +97,7 @@ export function CoursesCatalogue() {
         />
       )}
 
-      <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {courses?.map((course) => {
           const tone = domainColorVar(course.section)
           return (

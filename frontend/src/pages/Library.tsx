@@ -55,7 +55,7 @@ function ContinueRail({ courses }: { courses: LibraryCourse[] }) {
   return (
     <section className="mt-6">
       <SectionHeading>Continue where you left off</SectionHeading>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {inProgress.map((course) => (
           <div
             key={course.slug}
