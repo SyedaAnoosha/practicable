@@ -32,7 +32,11 @@ describe('MetricTile', () => {
       />,
     )
     expect(screen.getByText('0.0%')).toBeInTheDocument()
-    expect(screen.getByText('(0 / 5)')).toBeInTheDocument()
+    // `[UPDATED 2026-08-22]` Was `'(0 / 5)'`. The redesign drops the parentheses — the
+    // counts now sit beside the percentage as their own muted element rather than as a
+    // parenthetical. What this test is actually for is that a genuine 0-of-5 shows the
+    // underlying counts and is not confused with "no data", and that still holds.
+    expect(screen.getByText('0 / 5')).toBeInTheDocument()
     expect(screen.queryByText('Not enough data yet')).not.toBeInTheDocument()
   })
 
@@ -53,6 +57,33 @@ describe('MetricTile', () => {
     )
     expect(screen.getByText(/49\.00/)).toBeInTheDocument()
     expect(screen.queryByText('4,900')).not.toBeInTheDocument()
+  })
+
+  it('renders any money-flagged tile in dollars, whatever its label', () => {
+    /* `[ADDED 2026-08-22]` The regression this guards is the one the owner actually
+       hit: money-ness was inferred from `name === 'total_revenue'`, so the Revenue
+       Breakdown tiles — which pass display strings like "Gross revenue" — fell through
+       to the integer branch and printed raw cents. A$177.00 showed as "17700" under a
+       heading that says Revenue. The unit is now declared by the caller. */
+    render(
+      <MetricTile
+        name="Gross revenue"
+        money
+        numerator={17700}
+        denominator={1}
+        description="Total from completed orders."
+      />,
+    )
+    expect(screen.getByText(/177\.00/)).toBeInTheDocument()
+    expect(screen.queryByText('17,700')).not.toBeInTheDocument()
+  })
+
+  it('does not treat an ordinary count as money just because it is large', () => {
+    render(
+      <MetricTile name="download_links_issued" numerator={17700} denominator={1} description="Links" />,
+    )
+    expect(screen.getByText('17,700')).toBeInTheDocument()
+    expect(screen.queryByText(/177\.00/)).not.toBeInTheDocument()
   })
 
   it('shows a written label rather than the machine name', () => {
