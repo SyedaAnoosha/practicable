@@ -98,24 +98,38 @@ export function PacksCatalogue() {
           >
             <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
               <p className="eyebrow">{pack.domain_name ?? 'Reference'}</p>
-              <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
-                {pack.name}
-              </h3>
-              {pack.description && (
-                <p className="mt-1 line-clamp-2 font-serif text-xs leading-relaxed text-muted-foreground">
-                  {pack.description}
-                </p>
-              )}
+              {/* `[ADDED 2026-08-22, owner direction]` "the card title and description must
+                  never affect the metadata and pricing + view/see-what's-included row".
+                  `mt-auto` already pins the metadata+CTA pair to the card's bottom, but cards in
+                  a CSS grid row stretch to the tallest, so one two-line title changed the height
+                  of every card beside it. Both title and description are clamped to two lines and
+                  the block reserves that height whether or not the text fills it — so the text
+                  region is identical on every card, the cards sit a little taller (as asked), and
+                  the bottom rows line up across the whole grid. */}
+              <div className="min-h-[5.25rem]">
+                <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline line-clamp-2">
+                  {pack.name}
+                </h3>
+                {pack.description && (
+                  <p className="mt-1 line-clamp-2 font-serif text-xs leading-relaxed text-muted-foreground">
+                    {pack.description}
+                  </p>
+                )}
+              </div>
 
+              {/* `[FIXED 2026-08-22]` `mt-auto` moved from the footer up to here, so the
+                  metadata and the price/CTA row form one bottom-anchored block and line up
+                  across a row of cards regardless of title/description length. See
+                  CoursesCatalogue for the full note. */}
               <Meta
-                className="mt-2"
+                className="mt-auto pt-2"
                 items={[
                   { icon: HelpCircle, value: String(pack.question_count), label: pack.question_count === 1 ? 'question' : 'questions' },
                   { icon: FileText, value: 'PDF', label: 'reference document', numeric: false },
                 ]}
               />
 
-              <div className="mt-auto flex items-center justify-between border-t border-border pt-2.5">
+              <div className="flex items-center justify-between border-t border-border pt-2.5">
                 {pack.owned ? (
                   <Badge variant="success" className="gap-1 text-[0.625rem]">
                     <CircleCheck className="size-2.5" aria-hidden="true" /> Owned

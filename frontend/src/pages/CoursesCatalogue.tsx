@@ -259,16 +259,35 @@ export function CoursesCatalogue() {
                   <p className="eyebrow" style={{ '--eyebrow-rule-color': tone } as CSSProperties}>
                     {course.section}
                   </p>
-                  <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
-                    {course.title}
-                  </h3>
-                  {course.subtitle && (
-                    <p className="mt-1 line-clamp-2 font-serif text-xs leading-relaxed text-muted-foreground">
-                      {course.subtitle}
-                    </p>
-                  )}
+                  {/* `[ADDED 2026-08-22, owner direction]` "the card title and description must
+                      never affect the metadata and pricing + view/see-what's-included row".
+                      `mt-auto` already pins the metadata+CTA pair to the card's bottom, but cards in
+                      a CSS grid row stretch to the tallest, so one two-line title changed the height
+                      of every card beside it. Both title and description are clamped to two lines and
+                      the block reserves that height whether or not the text fills it — so the text
+                      region is identical on every card, the cards sit a little taller (as asked), and
+                      the bottom rows line up across the whole grid. */}
+                  <div className="min-h-[5.25rem]">
+                    <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline line-clamp-2">
+                      {course.title}
+                    </h3>
+                    {course.subtitle && (
+                      <p className="mt-1 line-clamp-2 font-serif text-xs leading-relaxed text-muted-foreground">
+                        {course.subtitle}
+                      </p>
+                    )}
+                  </div>
+                  {/* `[FIXED 2026-08-22]` The metadata row sat directly under the
+                      description with the `mt-auto` on the footer below it, so on a
+                      card with a short title the metadata floated in the middle of the
+                      card while the price row sat at the bottom — the two halves of the
+                      same summary, separated by a variable gap. Owner direction: the
+                      metadata belongs immediately above the price/CTA row on every
+                      card. Moving `mt-auto` up to the metadata makes those two a single
+                      bottom-anchored block, so they line up across a row of cards
+                      whatever the title and description lengths are. */}
                   <Meta
-                    className="mt-2"
+                    className="mt-auto pt-2"
                     tone={tone}
                     items={[
                       { icon: Layers, value: String(course.module_count), label: course.module_count === 1 ? 'module' : 'modules' },
@@ -277,7 +296,7 @@ export function CoursesCatalogue() {
                       ...(course.estimated_duration_minutes ? [{ icon: Clock, value: formatDuration(course.estimated_duration_minutes) }] : []),
                     ]}
                   />
-                  <div className="mt-auto flex items-center justify-between border-t border-border pt-2.5">
+                  <div className="flex items-center justify-between border-t border-border pt-2.5">
                     {course.owned ? (
                       <Badge variant="success" className="gap-1 text-[0.625rem]">
                         <CircleCheck className="size-2.5" aria-hidden="true" /> Owned
@@ -286,7 +305,14 @@ export function CoursesCatalogue() {
                       <span className="font-mono text-xs tabular-nums text-foreground">
                         {formatCurrency(course.product.price_amount, course.product.currency)}
                       </span>
-                    ) : <span />}
+                    ) : (
+                      /* `[ADDED 2026-08-22]` This was a bare `<span />`: a card for a
+                         course with no published product showed a blank where every
+                         other card shows a price, which reads as a rendering fault
+                         rather than a fact about the course. Saying it plainly costs
+                         one line and is the same answer the detail page now gives. */
+                      <span className="text-xs text-muted-foreground">Not on sale yet</span>
+                    )}
                     <span className="text-xs font-medium text-accent">
                       {course.owned ? 'Open' : 'View course'}
                     </span>

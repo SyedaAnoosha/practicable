@@ -120,19 +120,33 @@ export function TemplatesCatalogue() {
                     </span>
                   )}
                   {template.version && (
-                    <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground/70">
+                    <span className="shrink-0 font-mono text-[0.625rem] text-muted-foreground">
                       v{template.version}
                     </span>
                   )}
                 </div>
 
-                <h3 className="mt-2 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
-                  {template.title}
-                </h3>
-                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{template.description}</p>
+                {/* `[ADDED 2026-08-22, owner direction]` "the card title and description must
+                    never affect the metadata and pricing + view/see-what's-included row".
+                    `mt-auto` already pins the metadata+CTA pair to the card's bottom, but cards in
+                    a CSS grid row stretch to the tallest, so one two-line title changed the height
+                    of every card beside it. Both title and description are clamped to two lines and
+                    the block reserves that height whether or not the text fills it — so the text
+                    region is identical on every card, the cards sit a little taller (as asked), and
+                    the bottom rows line up across the whole grid. */}
+                <div className="min-h-[5.25rem]">
+                  <h3 className="mt-2 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline line-clamp-2">
+                    {template.title}
+                  </h3>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{template.description}</p>
+                </div>
 
+                {/* `[FIXED 2026-08-22]` `mt-auto` moved from the footer up to here, so the
+                    metadata and the price/CTA row form one bottom-anchored block and line up
+                    across a row of cards regardless of title/description length. See
+                    CoursesCatalogue for the full note. */}
                 <Meta
-                  className="mt-2"
+                  className="mt-auto pt-2"
                   items={[
                     template.format && { icon: Layers, value: template.format },
                     (template.page_count || template.sheet_count) && {
@@ -144,7 +158,7 @@ export function TemplatesCatalogue() {
                   ].filter(Boolean) as MetaItem[]}
                 />
 
-                <div className="mt-auto flex items-center justify-between border-t border-border pt-2.5">
+                <div className="flex items-center justify-between border-t border-border pt-2.5">
                   {template.is_free ? (
                     <Badge variant="success" className="text-[0.625rem]">Free</Badge>
                   ) : template.owned ? (

@@ -495,6 +495,33 @@ export function CourseDetail() {
               which the audit noted was the best-built page in the app while this one had
               no rail at all. Hidden entirely once owned, per §23.2's "never show a price
               on something the user already owns". */}
+          {/* `[ADDED 2026-08-22]` A published course with no published product rendered
+              *nothing* here — no price, no CTA, no explanation — and the mobile buy bar
+              disappeared with it. A visitor reached a full syllabus and had no way to
+              tell whether they had missed a button, whether the page was broken, or
+              whether the course simply wasn't for sale. Six of the seven courses
+              currently in the database are in exactly that state.
+              The honest answer is the one the templates page already gives: say it
+              isn't on sale, and offer the way back. */}
+          {!course.owned && !primaryProduct && (
+            <aside className="lg:sticky lg:top-6 lg:self-start">
+              <Card className="shadow-sm">
+                <CardContent className="flex flex-col gap-3 pt-6">
+                  <p className="text-sm font-medium text-foreground">Not on sale yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    This course is published so you can read the syllabus, but it
+                    isn&rsquo;t available to buy at the moment.
+                  </p>
+                  <Link to="/courses" className="block">
+                    <Button variant="outline" className="w-full">
+                      Browse the other courses
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </aside>
+          )}
+
           {!course.owned && primaryProduct && (
             <aside className="lg:sticky lg:top-6 lg:self-start">
               <Card
