@@ -6,14 +6,19 @@ interface MetricTileProps {
   // `null` means "nothing to compute a rate from yet" (e.g. zero total buyers) — a
   // distinct state from a real `0`, which is a fact, not an absence. Non-negotiable
   // #15: unknown is null, zero is 0, and the two must not render the same way.
-  numerator: number | null
-  denominator: number | null
+  numerator: number | null | undefined
+  denominator: number | null | undefined
   description: string
   className?: string
 }
 
 export function MetricTile({ name, numerator, denominator, description, className }: MetricTileProps) {
-  const hasData = numerator !== null && denominator !== null
+  /* `[FIXED 2026-08-22]` Was `!== null`, which `undefined` walks straight past — and
+     an absent field from a partial API response arrives as `undefined`, not `null`.
+     The tile then called `.toLocaleString()` on it and threw, crashing the entire
+     admin metrics page rather than rendering one tile as unknown.
+     `== null` catches both, which is the behaviour the comment above always described. */
+  const hasData = numerator != null && denominator != null
 
   // Calculate percentage if denominator > 1
   const isRatio = hasData && denominator > 1

@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { signInUrlFor } from '@/lib/utils/nextPath'
 import { useCartStore } from '@/stores/useCartStore'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
+import { getActivePromoCode } from '@/lib/promo'
 import { Button } from '@/components/ui/Button'
 
 // week3_plan.md W3-R11 — a drawer, same slide-over pattern MarketingLayout's mobile
@@ -55,6 +56,7 @@ export function CartDrawer() {
     try {
       const { data } = await api.post<{ checkout_url: string }>('/checkout/session', {
         product_ids: items.map((i) => i.id),
+        discount_code: getActivePromoCode(),
       })
       window.location.assign(data.checkout_url)
       // Deliberately NOT clearing the cart here — it drains only once the webhook

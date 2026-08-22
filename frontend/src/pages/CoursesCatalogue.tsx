@@ -1,12 +1,11 @@
-import type { CSSProperties } from 'react'
-import { Link } from 'react-router'
+import { type CSSProperties } from 'react'
+import { Link, useSearchParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { CircleCheck, GraduationCap, Layers, PlayCircle } from 'lucide-react'
+import { CircleCheck, Clock, GraduationCap, Layers, PlayCircle, SlidersHorizontal } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { domainColorVar } from '@/lib/domainVisuals'
-import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -31,8 +30,8 @@ interface CourseSummary {
   lesson_count: number
   owned: boolean
   cover_image_url?: string | null
-  // Present on the list response for the store; used here so a catalogue card can show
-  // a price the way every comparable platform's card does.
+  level?: string | null
+  estimated_duration_minutes?: number | null
   product?: RelatedProduct | null
 }
 
@@ -46,11 +45,64 @@ interface CourseSummary {
 // artwork, no duration and no price, so a course was indistinguishable from a template
 // at a glance and could not be compared against another course at all. DataCamp fits
 // seven facts into ~150px of card; this was carrying three.
+const LEVELS = ['Beginner', 'Intermediate', 'Advanced'] as const
+const DURATION_BUCKETS = [
+  { label: 'Under 30 min', min: 0, max: 30 },
+  { label: '30–60 min', min: 30, max: 60 },
+  { label: '1–2 hours', min: 60, max: 120 },
+  { label: 'Over 2 hours', min: 120, max: undefined },
+] as const
+
+function formatDuration(minutes: number | null | undefined): string {
+  if (minutes == null) return ''
+  if (minutes < 60) return `${minutes} min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
 export function CoursesCatalogue() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeLevel = searchParams.get('level') ?? ''
+  const activeDuration = searchParams.get('duration') ?? ''
+
+  const queryParams: Record<string, string> = {}
+  if (activeLevel) queryParams.level = activeLevel
+  if (activeDuration) {
+    const bucket = DURATION_BUCKETS.find((b) => b.label === activeDuration)
+    if (bucket) {
+      if (bucket.min > 0) queryParams.min_duration = String(bucket.min)
+      if (bucket.max != null) queryParams.max_duration = String(bucket.max)
+    }
+  }
+
+  const qs = new URLSearchParams(queryParams).toString()
+  const url = `/courses${qs ? `?${qs}` : ''}`
+
   const { data: courses, isLoading } = useQuery({
-    queryKey: queryKeys.courses.list(),
-    queryFn: () => api.get<CourseSummary[]>('/courses').then((res) => res.data),
+    queryKey: [...queryKeys.courses.list(), queryParams],
+    queryFn: () => api.get<CourseSummary[]>(url).then((res) => res.data),
   })
+
+  const toggleLevel = (level: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (next.get('level') === level) next.delete('level')
+      else next.set('level', level)
+      return next
+    })
+  }
+
+  const toggleDuration = (label: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (next.get('duration') === label) next.delete('duration')
+      else next.set('duration', label)
+      return next
+    })
+  }
+
+  const clearFilters = () => setSearchParams(new URLSearchParams())
 
   return (
     <div className="relative isolate mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
@@ -73,11 +125,66 @@ export function CoursesCatalogue() {
         }
       />
 
-      {/* week3_plan.md Phase 6 step 7 / DESIGN.md §42's "headings in order, no skipped
-          levels" — the card grid's titles are h3 (§10's "cards inside need h3, that is
-          the whole hierarchy"), so the section between the h1 and those h3s needs an h2
-          to not skip a level. Visually nothing changes; this is purely the missing rung
-          for screen-reader heading navigation. */}
+      {/* Filter controls — level and duration. Chips toggle URL params so the
+          filter state survives page refreshes and back-navigation. */}
+      {(LEVELS.length > 0 || DURATION_BUCKETS.length > 0) && (
+        <div className="mt-6 flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="size-4 text-muted-foreground" aria-hidden="true" />
+            <p className="text-sm font-medium text-foreground">Filter</p>
+            {(activeLevel || activeDuration) && (
+              <button type="button" onClick={clearFilters} className="ml-auto text-xs font-medium text-primary hover:underline">
+                Clear all
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Level</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {LEVELS.map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => toggleLevel(l)}
+                    aria-pressed={activeLevel === l}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      activeLevel === l
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border text-muted-foreground hover:border-primary hover:text-primary'
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Duration</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {DURATION_BUCKETS.map((b) => (
+                  <button
+                    key={b.label}
+                    type="button"
+                    onClick={() => toggleDuration(b.label)}
+                    aria-pressed={activeDuration === b.label}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      activeDuration === b.label
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border text-muted-foreground hover:border-primary hover:text-primary'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <h2 className="sr-only">Course list</h2>
 
       {isLoading && (
@@ -97,23 +204,19 @@ export function CoursesCatalogue() {
         />
       )}
 
-      <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* Divided-columns grid: broadsheet treatment, not rounded cards. */}
+      <div className="mt-6 grid overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:bg-card">
         {courses?.map((course) => {
           const tone = domainColorVar(course.section)
           return (
-            <Link key={course.slug} to={`/courses/${course.slug}`} className="group">
-              {/* The domain colour as a left rule — the same treatment question cards
-                  already use, extended to the content type that had none. This is M3
-                  ("domain identity") applied where the audit found it stopped. */}
-              <Card
-                className="hover-lift hover-lift-domain flex h-full flex-col overflow-hidden border-l-4"
-                style={
-                  {
-                    borderLeftColor: tone,
-                    '--card-domain-color': tone,
-                  } as CSSProperties
-                }
-              >
+            <Link key={course.slug} to={`/courses/${course.slug}`} className="group block border-b border-border last:border-b-0 sm:[&:nth-last-child(-n+4)]:border-b-0 sm:[&:nth-child(4n)]:border-b-0 lg:[&:nth-last-child(-n+3)]:border-b-0 lg:[&:nth-child(3n)]:border-b-0 xl:[&:nth-last-child(-n+4)]:border-b-0 xl:[&:nth-child(4n)]:border-b-0">
+              <div className="relative bg-card transition-colors duration-150 hover:bg-card-2">
+                {/* Domain top rule: 2px, full-bleed. Same treatment as the Home QuestionCard. */}
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-x-0 top-0 h-0.5 transition-[height] duration-150 group-hover:h-[3px]"
+                  style={{ backgroundColor: tone }}
+                />
                 <CourseArt
                   slug={course.slug}
                   domain={course.section}
@@ -121,57 +224,44 @@ export function CoursesCatalogue() {
                   alt={`Cover image for ${course.title}`}
                   className="aspect-[16/9]"
                 />
-
-                <div className="flex flex-1 flex-col p-5">
+                <div className="px-4 pt-3 pb-4">
                   <p className="eyebrow" style={{ '--eyebrow-rule-color': tone } as CSSProperties}>
                     {course.section}
                   </p>
-                  <h3 className="mt-2 text-h4 font-semibold text-foreground">{course.title}</h3>
+                  <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
+                    {course.title}
+                  </h3>
                   {course.subtitle && (
-                    <p className="mt-1.5 line-clamp-2 font-serif text-sm text-muted-foreground">
+                    <p className="mt-1 line-clamp-2 font-serif text-xs leading-relaxed text-muted-foreground">
                       {course.subtitle}
                     </p>
                   )}
-
                   <Meta
-                    className="mt-3"
+                    className="mt-2"
                     tone={tone}
                     items={[
-                      {
-                        icon: Layers,
-                        value: String(course.module_count),
-                        label: course.module_count === 1 ? 'module' : 'modules',
-                      },
-                      {
-                        icon: PlayCircle,
-                        value: String(course.lesson_count),
-                        label: course.lesson_count === 1 ? 'lesson' : 'lessons',
-                      },
+                      { icon: Layers, value: String(course.module_count), label: course.module_count === 1 ? 'module' : 'modules' },
+                      { icon: PlayCircle, value: String(course.lesson_count), label: course.lesson_count === 1 ? 'lesson' : 'lessons' },
+                      ...(course.level ? [{ icon: GraduationCap, value: course.level }] : []),
+                      ...(course.estimated_duration_minutes ? [{ icon: Clock, value: formatDuration(course.estimated_duration_minutes) }] : []),
                     ]}
                   />
-
-                  {/* Access state and price, pinned to the card's foot so every card in
-                      the row aligns regardless of title length. Never a price on
-                      something already owned (§23.2). */}
-                  <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+                  <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5">
                     {course.owned ? (
-                      <Badge variant="success" className="gap-1">
-                        <CircleCheck className="size-3" aria-hidden="true" />
-                        In your library
+                      <Badge variant="success" className="gap-1 text-[0.625rem]">
+                        <CircleCheck className="size-2.5" aria-hidden="true" /> Owned
                       </Badge>
                     ) : course.product ? (
-                      <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                      <span className="font-mono text-xs tabular-nums text-foreground">
                         {formatCurrency(course.product.price_amount, course.product.currency)}
-                      </p>
-                    ) : (
-                      <span />
-                    )}
-                    <span className="shrink-0 text-sm font-medium text-accent group-hover:underline">
+                      </span>
+                    ) : <span />}
+                    <span className="text-xs font-medium text-accent">
                       {course.owned ? 'Open' : 'View course'}
                     </span>
                   </div>
                 </div>
-              </Card>
+              </div>
             </Link>
           )
         })}

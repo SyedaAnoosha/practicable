@@ -26,12 +26,8 @@ import { Button } from '@/components/ui/Button'
 import { AutosaveIndicator } from '@/components/admin/AutosaveIndicator'
 import { RichTextEditor } from '@/components/admin/RichTextEditor'
 import { useAutosave } from '@/lib/useAutosave'
-import {
-  readError,
-  type AdminLesson,
-  type AdminLessonBlock,
-  type CourseDetail,
-} from '@/pages/admin/AdminCourses'
+import { type AdminLesson, type AdminLessonBlock, type CourseDetail } from '@/pages/admin/AdminCourses'
+import { readError } from '@/lib/utils/readError'
 
 function findLesson(course: CourseDetail | undefined, lessonId: string | undefined): AdminLesson | null {
   if (!course || !lessonId) return null
@@ -157,7 +153,13 @@ function LessonWriteMode({ courseId, lessonId }: { courseId: string; lessonId: s
     [lesson?.id], // eslint-disable-line react-hooks/exhaustive-deps
   )
   const [text, setText] = useState(initialText)
-  useEffect(() => setText(initialText), [initialText])
+  // Reset state when the lesson loads asynchronously — "adjust state when a prop
+  // changes" pattern. Fires once per load, not per render.
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  useEffect(() => {
+    setText(initialText)
+  }, [initialText])
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   const [error, setError] = useState<string | null>(null)
   const saveBody = useMutation({
@@ -234,10 +236,14 @@ function BlockWriteMode({ courseId, blockId }: { courseId: string; blockId: stri
   )
   const [text, setText] = useState(initialText)
   const [heading, setHeading] = useState(found?.block.heading ?? '')
+  // Reset state when the block loads asynchronously — same pattern, fires once
+  // per block load.
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     setText(initialText)
     setHeading(found?.block.heading ?? '')
-  }, [initialText, found?.block.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [found?.block.id, initialText, found?.block.heading])
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   const [error, setError] = useState<string | null>(null)
   const saveBlockText = useMutation({
@@ -307,11 +313,11 @@ function BlockWriteMode({ courseId, blockId }: { courseId: string; blockId: stri
 export function LessonBodyWriteScreen() {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>()
   if (!courseId || !lessonId) return null
-  return <LessonWriteMode courseId={courseId} lessonId={lessonId} />
+  return <LessonWriteMode key={lessonId} courseId={courseId} lessonId={lessonId} />
 }
 
 export function BlockTextWriteScreen() {
   const { courseId, blockId } = useParams<{ courseId: string; blockId: string }>()
   if (!courseId || !blockId) return null
-  return <BlockWriteMode courseId={courseId} blockId={blockId} />
+  return <BlockWriteMode key={blockId} courseId={courseId} blockId={blockId} />
 }

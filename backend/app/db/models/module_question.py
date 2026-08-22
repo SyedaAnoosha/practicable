@@ -1,7 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, TimestampMixin
 import uuid
+
+if TYPE_CHECKING:
+    from app.db.models.course import Module
+    from app.db.models.question import Question
 
 class ModuleQuestion(Base, IdMixin, TimestampMixin):
     """Attaches a question to a module as a syllabus item alongside its lessons.

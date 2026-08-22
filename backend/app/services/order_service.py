@@ -35,6 +35,18 @@ async def create_order_from_checkout(
     result = await session.execute(select(Product).where(Product.id.in_(product_uuids)))
     products_by_id = {p.id: p for p in result.scalars().all()}
 
+    # week4_plan.md W4-R9: a product id in webhook metadata that no product row backs —
+    # a stale id, a bad write, a tampered session — must fail loudly before any write
+    # is attempted. Checked here, before `order`/`OrderItem`/`Entitlement` are even
+    # constructed: letting this reach a flush instead raises a FK-violation
+    # IntegrityError mid-transaction, which leaves the session unable to even commit
+    # the `error_message` this same handler tries to record on the way out
+    # (PendingRollbackError) — silently losing the one trace that the event ever
+    # arrived, and leaving Stripe's retry to fail the same way forever.
+    missing = [pid for pid in product_uuids if pid not in products_by_id]
+    if missing:
+        raise ValueError(f"checkout webhook named unknown product id(s): {[str(m) for m in missing]}")
+
     order = Order(
         user_id=uid,
         stripe_session_id=stripe_session_id,
@@ -46,45 +58,79 @@ async def create_order_from_checkout(
     session.add(order)
     await session.flush()
 
-    # Which products this user already holds — resolved once, up front, so a race
-    # (two tabs, a retried webhook reaching here before the pre-checkout 409 could
-    # apply) skips only the duplicate entitlement, not the whole order. The DB itself
-    # backstops this too (uq_entitlements_user_product, migration 010), but checking
-    # first means never touching the constraint in the common case.
+    # Every entitlement row this user already has for these products, live or revoked —
+    # resolved once, up front, so a race (two tabs, a retried webhook reaching here
+    # before the pre-checkout 409 could apply) skips only the duplicate entitlement, not
+    # the whole order. The DB itself backstops this too
+    # (uq_entitlements_user_product, migration 010), but checking first means never
+    # touching the constraint in the common case.
+    #
+    # The whole ROW is loaded, not just the product_id, and revoked rows are kept rather
+    # than filtered out — both deliberate, and both load-bearing after the bug found on
+    # 2026-08-22 (`tests/test_repurchase_after_refund.py`):
+    #
+    #   A refund sets `revoked_at`; it never deletes the row, because the audit trail has
+    #   to survive. The unique constraint then means a re-purchase CANNOT insert a second
+    #   row. So a query that skipped on "a row exists" charged a returning buyer and
+    #   granted them nothing, while one that ignored revoked rows and inserted would have
+    #   raised an IntegrityError after Stripe already took the money.
+    #
+    #   Reinstating the existing row is the only shape that is correct on both counts.
     existing = await session.execute(
-        select(Entitlement.product_id).where(
+        select(Entitlement).where(
             Entitlement.user_id == uid, Entitlement.product_id.in_(product_uuids)
         )
     )
-    already_owned = set(existing.scalars().all())
+    entitlement_by_product = {e.product_id: e for e in existing.scalars().all()}
 
     for product_id in product_uuids:
-        product = products_by_id.get(product_id)
+        # Every id in product_uuids is guaranteed present in products_by_id by the
+        # "missing" check above — no `if product else 0` fallback needed or wanted;
+        # a silent $0 order_item for a real product would be its own money bug.
+        product = products_by_id[product_id]
         order_item = OrderItem(
             order_id=order.id,
             product_id=product_id,
-            price_amount_cents=product.price_amount if product else 0,
+            price_amount_cents=product.price_amount,
         )
         session.add(order_item)
 
-        if product_id in already_owned:
+        prior = entitlement_by_product.get(product_id)
+
+        if prior is not None and prior.revoked_at is None:
+            # Genuinely already owned — the original duplicate guard, unchanged.
             continue
 
-        entitlement = Entitlement(
-            user_id=uid,
-            product_id=product_id,
-            granted_via=GrantedVia.PURCHASE,
-        )
-        session.add(entitlement)
+        if prior is not None:
+            # Bought before, refunded, now bought again. Reinstate the row the unique
+            # constraint forces us to reuse. `revoked_reason` is cleared alongside
+            # `revoked_at`: a live entitlement still labelled "refund" is a contradiction
+            # that misleads the audit trail and the admin user-detail page.
+            prior.revoked_at = None
+            prior.revoked_reason = None
+            prior.granted_via = GrantedVia.PURCHASE
+            entitlement = prior
+            audit_action = "reinstate_entitlement"
+            audit_reason = "repurchase_after_refund"
+        else:
+            entitlement = Entitlement(
+                user_id=uid,
+                product_id=product_id,
+                granted_via=GrantedVia.PURCHASE,
+            )
+            session.add(entitlement)
+            audit_action = "grant_entitlement"
+            audit_reason = "purchase"
+
         await session.flush()  # entitlement.id populated for the audit context below
 
         audit_entry = AuditLog(
             actor_user_id=uid,
-            action="grant_entitlement",
+            action=audit_action,
             target_type="product",
             target_id=product_id,
             context=json.dumps({
-                "reason": "purchase", "order_id": str(order.id), "entitlement_id": str(entitlement.id),
+                "reason": audit_reason, "order_id": str(order.id), "entitlement_id": str(entitlement.id),
             }),
         )
         session.add(audit_entry)

@@ -3,6 +3,7 @@ the whole course outline, so /learn/:courseSlug/:lessonSlug renders its sidebar 
 second round trip. Video and download URLs stay on separate short-lived endpoints, minted
 only after the entitlement check rather than embedded in this payload.
 """
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -31,9 +32,10 @@ from app.db.models import (
 )
 from app.db.session import get_session
 from app.integrations.mux_client import generate_mux_playback_token
-from app.integrations.posthog_client import capture_download_failed
-from app.integrations.storage_client import generate_presigned_url
+from app.integrations.storage_client import download_file, generate_presigned_url, upload_file
 from app.services.download_events import record_download_event
+from app.services.stamping import get_or_stamp, is_stampable
+from app.services.link_rate_limit import check_and_record as check_link_rate
 
 router = APIRouter()
 
@@ -131,6 +133,7 @@ class LessonBlockOut(BaseModel):
     # text / callout only.
     heading: Optional[str] = None
     text_body: Optional[str] = None
+    prose_sanitized: Optional[str] = None  # Phase 8 (8E): sanitized HTML, null for plain text
     # video only — readiness, nothing else; the token comes from its own endpoint.
     video_ready: Optional[bool] = None
     # file only — mirrors LessonDownloadOut; the URL comes from its own endpoint.
@@ -307,7 +310,9 @@ async def get_lesson_in_course(
                 continue
             block_outs.append(
                 LessonBlockOut(
-                    id=str(b.id), block_type=b_type, sort_order=b.sort_order, heading=b.heading, text_body=b.text_body
+                    id=str(b.id), block_type=b_type, sort_order=b.sort_order,
+                    heading=b.heading, text_body=b.text_body,
+                    prose_sanitized=b.prose_sanitized,
                 )
             )
         elif b_type == "video":
@@ -457,14 +462,60 @@ async def get_lesson_download_url(
                 },
             )
 
-    try:
+    # Phase 8F step 11: soft rate-limit on link minting. Logs, never blocks.
+    if user is not None:
+        check_link_rate(str(user.id), str(template.id))
+
+    # Phase 8F (W4-R16): Stamp paid downloads with buyer info.
+    # Free templates are never stamped (rule 3); unstampable types served unchanged (rule 2).
+    if not template.is_free and user is not None and is_stampable(template.file_name):
+        original_bytes = await asyncio.to_thread(download_file, template.storage_key)
+        if original_bytes:
+            # Find licence tier from the product that grants this template
+            from app.db.models import Product, ProductContent
+            product_result = await session.execute(
+                select(Product).join(ProductContent).where(
+                    ProductContent.content_id == template.id,
+                    ProductContent.content_type == "template",
+                )
+            )
+            product = product_result.scalar_one_or_none()
+            licence_tier = product.licence if product else "standard"
+
+            stamped_bytes = await asyncio.to_thread(
+                get_or_stamp,
+                original_bytes,
+                template_id=str(template.id),
+                file_name=template.file_name,
+                version=template.version,
+                buyer_email=user.email,
+                buyer_name=user.name or user.email,
+                licence_tier=licence_tier,
+                user_id=str(user.id),
+            )
+            ext = "." + template.file_name.rsplit(".", 1)[-1].lower() if "." in template.file_name else ""
+            stamped_key = f"stamped/{template.id}/{template.version or 'unversioned'}/{user.id}{ext}"
+            content_type_map = {
+                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".pdf": "application/pdf",
+            }
+            try:
+                await asyncio.to_thread(
+                    upload_file,
+                    key=stamped_key,
+                    body=stamped_bytes,
+                    content_type=content_type_map.get(ext, "application/octet-stream"),
+                )
+                download_url = generate_presigned_url(stamped_key)
+            except Exception:
+                # Rule 1: stamping failure serves the original file
+                download_url = generate_presigned_url(template.storage_key)
+        else:
+            download_url = generate_presigned_url(template.storage_key)
+    else:
         download_url = generate_presigned_url(template.storage_key)
-    except Exception as e:
-        capture_download_failed(
-            user_id=str(user.id) if user else "anonymous",
-            resource_type="lesson_download", resource_id=str(lesson.id), reason=str(e),
-        )
-        raise
+
     await record_download_event(session=session, content_type="lesson_file", content_id=template.id, content_slug=template.slug)
     return LessonDownloadUrlOut(
         download_url=download_url, file_name=template.file_name, file_size_bytes=template.file_size_bytes
@@ -659,14 +710,7 @@ async def get_block_download_url(
                 },
             )
 
-    try:
-        download_url = generate_presigned_url(template.storage_key)
-    except Exception as e:
-        capture_download_failed(
-            user_id=str(user.id) if user else "anonymous",
-            resource_type="lesson_block_download", resource_id=str(block.id), reason=str(e),
-        )
-        raise
+    download_url = generate_presigned_url(template.storage_key)
     await record_download_event(session=session, content_type="lesson_file", content_id=template.id, content_slug=template.slug)
     return LessonDownloadUrlOut(
         download_url=download_url, file_name=template.file_name, file_size_bytes=template.file_size_bytes

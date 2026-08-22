@@ -1,7 +1,14 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String, Text, ForeignKey, Integer, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, PublishStateMixin, TimestampMixin
 import uuid
+
+if TYPE_CHECKING:
+    from app.db.models.section import Section
+    from app.db.models.author import Author
+    from app.db.models.lesson import Lesson
 
 class Course(Base, IdMixin, TimestampMixin, PublishStateMixin):
     __tablename__ = "courses"
@@ -21,6 +28,12 @@ class Course(Base, IdMixin, TimestampMixin, PublishStateMixin):
     # Cover image for the course catalogue and detail page (migration 018).
     # Nullable — null means no image yet; public pages degrade gracefully.
     cover_image_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Level and duration for catalogue filtering (migration 025).
+    # Level is set by the admin; duration is computed from lesson media and
+    # stored denormalized for fast reads.
+    level: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    estimated_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Relationships
     section: Mapped["Section"] = relationship("Section")

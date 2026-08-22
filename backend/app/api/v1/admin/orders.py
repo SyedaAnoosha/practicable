@@ -13,14 +13,13 @@ from typing import Optional
 import stripe as stripe_sdk
 from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.commerce.products import _resolve_contents_bulk
 from app.core.deps import require_admin
 from app.db.models import Entitlement, Order, OrderStatus, OrderItem, Product, User
 from app.db.session import get_session
-from app.integrations.posthog_client import capture_refund_issued
 from app.integrations.stripe_client import create_refund
 from app.services.audit_service import record_audit
 from app.services.email_service import send_refund_confirmation_email
@@ -70,14 +69,31 @@ async def _order_rows(session: AsyncSession, cursor: Optional[str] = None, limit
         # crashing with an unhandled 500 (`operator does not exist: timestamp with
         # time zone < character varying`). Parsing the cursor here, before it ever
         # reaches the query, is what actually makes the except clause reachable.
+        #
+        # Phase 10 (§10C re-verification, 2026-08-22): that fix only addressed the
+        # crash, not DESIGN.md §26.3's own documented rule — a created_at-only
+        # cursor silently drops rows tied on the same timestamp, rather than
+        # skipping or repeating cleanly, because `<` excludes the whole tied batch.
+        # Proven live on /me/orders (test_purchases_receipt.py) using the identical
+        # query shape. `OrderItem.id` is this endpoint's real tiebreak — the page is
+        # one row per (order, item), so `Order.id` alone can still tie when an order
+        # has more than one item.
+        cursor_created_at, _, cursor_item_id = cursor.partition("|")
         try:
-            cursor_date = datetime.fromisoformat(cursor)
-            query = query.where(Order.created_at < cursor_date)
+            cursor_date = datetime.fromisoformat(cursor_created_at)
+            cursor_item_uuid = uuid.UUID(cursor_item_id) if cursor_item_id else None
         except ValueError:
             # Invalid cursor format - ignore and return from start
-            pass
-    
-    query = query.order_by(Order.created_at.desc()).limit(limit)
+            cursor_date = None
+            cursor_item_uuid = None
+        if cursor_date is not None and cursor_item_uuid is not None:
+            query = query.where(tuple_(Order.created_at, OrderItem.id) < (cursor_date, cursor_item_uuid))
+        elif cursor_date is not None:
+            # A legacy (pre-fix) cursor with no item id — degrade to the old
+            # created_at-only comparison rather than discard a page mid-scroll.
+            query = query.where(Order.created_at < cursor_date)
+
+    query = query.order_by(Order.created_at.desc(), OrderItem.id.desc()).limit(limit)
     
     result = await session.execute(query)
     rows = result.all()
@@ -114,7 +130,7 @@ async def _order_rows(session: AsyncSession, cursor: Optional[str] = None, limit
                 user_id=str(order.user_id),
                 order_status=order.status.value,
                 order_total_amount_cents=order.total_amount_cents,
-                cursor=order.created_at.isoformat(),
+                cursor=f"{order.created_at.isoformat()}|{item.id}",
             )
         )
     return out
@@ -267,10 +283,6 @@ async def refund_order(
 
     result = await apply_refund(session, order=order, reason=reason, actor=admin)
     await session.commit()
-
-    # After commit, never inside the transaction — same ordering rule as the purchase
-    # path (webhooks.py): a failed send must not undo a refund that already happened.
-    capture_refund_issued(user_id=str(order.user_id), order_id=str(order.id))
 
     user = (await session.execute(select(User).where(User.id == order.user_id))).scalar_one_or_none()
     if user:

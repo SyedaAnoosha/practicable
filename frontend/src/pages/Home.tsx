@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -11,7 +11,11 @@ import {
   Landmark,
   Layers,
   Library,
+  ChevronLeft,
+  ChevronRight,
+  Download,
   Search,
+  Sparkles,
   TrendingUp,
 } from 'lucide-react'
 import { motion } from 'motion/react'
@@ -22,6 +26,7 @@ import { cardTags } from '@/lib/tags'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/Button'
+import { CourseArt } from '@/components/ui/CourseArt'
 import { Input } from '@/components/ui/Input'
 import {
   staggerContainer,
@@ -34,6 +39,7 @@ import {
 } from '@/lib/motion'
 import { TrustStrip } from '@/components/ui/TrustStrip'
 import { PillEyebrow } from '@/components/ui/PillEyebrow'
+import { TaxonomyCanvas } from '@/components/ui/TaxonomyCanvas'
 
 const DOMAINS = [
   { name: 'Risk (Enterprise & op.)', label: 'Risk', description: 'How do we make risk useful to the people actually deciding?' },
@@ -104,8 +110,9 @@ const FINDER_GROUPS = [
 const STEPS = [
   { step: 'Question', body: 'Start with the problem in the words you would actually use at work.' },
   { step: 'Answer', body: 'Read a practical answer written by a practising risk professional, not a vendor.' },
-  { step: 'Action', body: 'Every answer ends with what to do next, sized to the effort and budget you have.' },
-  { step: 'Resource', body: 'Where a course or a working template exists for that answer, it is linked from it.' },
+  { step: 'Learn', body: 'Where a problem needs more than a page, take a course that teaches the domain properly.' },
+  { step: 'Template', body: 'Every answer links to the working file you need — the register, the framework, the checklist.' },
+  { step: 'Apply', body: 'Use it at work this week. Every answer ends with what to do next, sized to the effort you have.' },
 ] as const
 
 interface QuestionTag { dimension: string; value: string; display_label: string; sort_order: number }
@@ -256,6 +263,19 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1.4, ease: 'easeOut' }}
         className="stage-aurora ambient-drift -z-10"
+      />
+
+      {/* The TaxonomyCanvas — the hero graphic that makes this page unmistakably
+          Practicable's (REDESIGN_SUMMARY.md §6.3). 99 nodes in 5 domain clusters,
+          gold connective lines, ambient drift. Driven by the real API count, never
+          hardcoded. Degrades to a static SVG under reduced motion.
+
+          Positioned as a full-bleed layer between the aurora and the content, at
+          low opacity so it reads as atmosphere rather than data. The copy column
+          sits on top; the canvas fills the empty stage to the right and below. */}
+      <TaxonomyCanvas
+        questions={questions}
+        className="absolute inset-0 -z-[5] opacity-30"
       />
 
       {/* Utomic's outline word, bottom-left where the copy column has already ended.
@@ -688,7 +708,7 @@ function HowItWorks() {
     <motion.section variants={staggerContainer} initial="hidden" whileInView="visible" viewport={inViewOnce} className="py-10 sm:py-12">
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener eyebrow="How it works" title="From the problem to the thing you hand over." />
-        <ol className="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+        <ol className="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
           {STEPS.map((item, i) => (
             <motion.li key={item.step} variants={riseItemSm} className="flex flex-col bg-card p-6">
               <span className="font-mono text-xs font-medium tabular-nums text-gold-strong">{String(i + 1).padStart(2, '0')}</span>
@@ -706,29 +726,234 @@ function HowItWorks() {
 // 6. Products — band, courses/templates/packs
 // ─────────────────────────────────────────────────────────────────────────────
 
-function GoFurtherColumn({ icon: Icon, eyebrow, title, body, seeAllHref, seeAllLabel, children }: { icon: typeof Library; eyebrow: string; title: string; body: string; seeAllHref: string; seeAllLabel: string; children: ReactNode }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Horizontal scroll row — hidden scrollbar, snap, fade edges
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ProductScrollRow({ children }: { children: ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(true)
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setCanScrollLeft(el.scrollLeft > 4)
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4)
+  }, [])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    checkScroll()
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    window.addEventListener('resize', checkScroll)
+    return () => {
+      el.removeEventListener('scroll', checkScroll)
+      window.removeEventListener('resize', checkScroll)
+    }
+  }, [checkScroll])
+
+  const scroll = (direction: 'left' | 'right') => {
+    const el = scrollRef.current
+    if (!el) return
+    const amount = el.clientWidth * 0.75
+    el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' })
+  }
+
   return (
-    <motion.div variants={riseItemSm} className="flex flex-col rounded-xl border border-border bg-card p-6">
-      <p className="eyebrow"><Icon className="size-3.5" aria-hidden="true" />{eyebrow}</p>
-      <h3 className="mt-3 text-h4 font-semibold text-foreground">{title}</h3>
-      <p className="mt-1.5 text-sm text-muted-foreground">{body}</p>
-      <ul className="mt-5 flex flex-1 flex-col divide-y divide-border border-t border-border">{children}</ul>
-      <Link to={seeAllHref} className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline">{seeAllLabel} <ArrowRight className="size-3.5" aria-hidden="true" /></Link>
-    </motion.div>
+    <div className="group/scroll relative">
+      {/* Left arrow */}
+      {canScrollLeft && (
+        <button
+          type="button"
+          onClick={() => scroll('left')}
+          className="absolute -left-1 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-sm opacity-0 transition-opacity duration-150 group-hover/scroll:opacity-100 focus-visible:opacity-100 backdrop-blur-sm"
+          aria-label="Scroll left"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+      )}
+
+      {/* Right arrow */}
+      {canScrollRight && (
+        <button
+          type="button"
+          onClick={() => scroll('right')}
+          className="absolute -right-1 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-sm opacity-0 transition-opacity duration-150 group-hover/scroll:opacity-100 focus-visible:opacity-100 backdrop-blur-sm"
+          aria-label="Scroll right"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      )}
+
+      {/* Fade edges */}
+      {canScrollLeft && (
+        <div className="pointer-events-none absolute left-0 top-0 z-[5] h-full w-8 bg-gradient-to-r from-card to-transparent" />
+      )}
+      {canScrollRight && (
+        <div className="pointer-events-none absolute right-0 top-0 z-[5] h-full w-8 bg-gradient-to-l from-card to-transparent" />
+      )}
+
+      {/* Scrollable track */}
+      <div
+        ref={scrollRef}
+        className="flex gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      >
+        {children}
+      </div>
+    </div>
   )
 }
 
-function GoFurtherRow({ href, title, subtitle, meta }: { href: string; title: string; subtitle?: string | null; meta?: string | null }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Mini product cards for the bento carousels
+// ─────────────────────────────────────────────────────────────────────────────
+
+function MiniCourseCard({ course }: { course: CourseSummary }) {
+  const tone = domainColorVar(course.section)
   return (
-    <li>
-      <Link to={href} className="group flex items-baseline justify-between gap-4 py-3.5 transition-colors duration-150">
-        <span>
-          <span className="block font-medium text-foreground group-hover:text-primary">{title}</span>
-          {subtitle && <span className="mt-0.5 block text-sm text-muted-foreground">{subtitle}</span>}
-        </span>
-        {meta && <span className="shrink-0 whitespace-nowrap text-xs font-medium text-muted-foreground">{meta}</span>}
+    <Link
+      to={`/courses/${course.slug}`}
+      className="group snap-start shrink-0 w-48 sm:w-56 rounded-lg border border-border bg-background transition-colors hover:bg-card-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      <CourseArt slug={course.slug} domain={course.section} className="aspect-[16/9] rounded-t-lg" />
+      <div className="px-3 pb-3 pt-2.5">
+        <p className="eyebrow" style={{ '--eyebrow-rule-color': tone } as CSSProperties}>{course.section}</p>
+        <h4 className="mt-1 text-sm font-semibold text-foreground line-clamp-2 decoration-1 underline-offset-4 group-hover:underline">
+          {course.title}
+        </h4>
+        <p className="mt-1 font-mono text-xs text-muted-foreground">
+          {course.lesson_count} {course.lesson_count === 1 ? 'lesson' : 'lessons'}
+        </p>
+      </div>
+    </Link>
+  )
+}
+
+function MiniPackCard({ pack }: { pack: PackSummary }) {
+  return (
+    <Link
+      to={`/store/packs/${pack.slug}`}
+      className="group snap-start shrink-0 w-48 sm:w-56 rounded-lg border border-border bg-background transition-colors hover:bg-card-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      <div className="flex aspect-[16/9] items-center justify-center rounded-t-lg bg-gradient-to-br from-accent/12 to-accent/4">
+        <Library className="size-8 text-accent/30" aria-hidden="true" />
+      </div>
+      <div className="px-3 pb-3 pt-2.5">
+        <p className="eyebrow">Reference pack</p>
+        <h4 className="mt-1 text-sm font-semibold text-foreground line-clamp-2 decoration-1 underline-offset-4 group-hover:underline">
+          {pack.name}
+        </h4>
+        {pack.description && (
+          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{pack.description}</p>
+        )}
+        <p className="mt-1 font-mono text-xs text-muted-foreground">
+          {pack.question_count} {pack.question_count === 1 ? 'question' : 'questions'}
+        </p>
+      </div>
+    </Link>
+  )
+}
+
+function MiniTemplateCard({ template }: { template: TemplateSummary }) {
+  const ext = template.file_name.split('.').pop()?.toUpperCase()
+  return (
+    <Link
+      to={`/templates/${template.id}`}
+      className="group snap-start shrink-0 w-48 sm:w-56 rounded-lg border border-border bg-background transition-colors hover:bg-card-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+    >
+      <div className="flex aspect-[16/9] items-center justify-center rounded-t-lg bg-gradient-to-br from-gold-soft to-gold/5">
+        {ext ? (
+          <span className="rounded-md bg-gold/15 px-2.5 py-1 font-mono text-xs font-semibold text-gold-strong">
+            {ext}
+          </span>
+        ) : (
+          <FileSpreadsheet className="size-8 text-gold/30" aria-hidden="true" />
+        )}
+      </div>
+      <div className="px-3 pb-3 pt-2.5">
+        <p className="eyebrow">Template</p>
+        <h4 className="mt-1 text-sm font-semibold text-foreground line-clamp-2 decoration-1 underline-offset-4 group-hover:underline">
+          {template.title}
+        </h4>
+        {template.description && (
+          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+            {template.description}
+          </p>
+        )}
+        <p className="mt-1 font-mono text-xs text-foreground">
+          {template.is_free ? 'Free' : template.product ? formatCurrency(template.product.price_amount, template.product.currency) : null}
+        </p>
+      </div>
+    </Link>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bento tile — header + horizontal scroll + see-all link
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. Products — editorial rows, no boxes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A single product row — editorial treatment, not a card.
+ *  Large type label on the left, description, scrollable items, see-all link.
+ *  Each row is separated by a hairline, not a box boundary. */
+function ProductRow({
+  icon: Icon,
+  label,
+  description,
+  accentColor,
+  seeAllHref,
+  seeAllLabel,
+  children,
+}: {
+  icon: typeof Library
+  label: string
+  description: string
+  accentColor: string
+  seeAllHref: string
+  seeAllLabel: string
+  children: ReactNode
+}) {
+  return (
+    <motion.div variants={riseItemSm} className="border-t border-border pt-6">
+      <div className="flex items-baseline justify-between gap-4">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg"
+            style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)`, color: accentColor }}
+          >
+            <Icon className="size-4" aria-hidden="true" />
+          </span>
+          <h3 className="text-h3 font-semibold text-foreground">{label}</h3>
+        </div>
+        <Link
+          to={seeAllHref}
+          className="group hidden items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline sm:inline-flex"
+        >
+          {seeAllLabel}
+          <ArrowRight className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
+        </Link>
+      </div>
+      <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">{description}</p>
+
+      {/* Horizontal scroll of items — full width, no card wrapper */}
+      <div className="mt-4">
+        <ProductScrollRow>{children}</ProductScrollRow>
+      </div>
+
+      {/* Mobile see-all — hidden on desktop where it sits in the header row */}
+      <Link
+        to={seeAllHref}
+        className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline sm:hidden"
+      >
+        {seeAllLabel}
+        <ArrowRight className="size-3.5" aria-hidden="true" />
       </Link>
-    </li>
+    </motion.div>
   )
 }
 
@@ -737,6 +962,8 @@ function ProductSection({ courses, templates, packs }: { courses: CourseSummary[
   const hasTemplates = (templates?.length ?? 0) > 0
   const hasPacks = (packs?.length ?? 0) > 0
   if (!hasCourses && !hasTemplates && !hasPacks) return null
+
+  const freeTemplate = templates?.find((t) => t.is_free)
 
   return (
     <motion.section variants={staggerContainer} initial="hidden" whileInView="visible" viewport={inViewOnce} className="band py-10 sm:py-12">
@@ -747,30 +974,82 @@ function ProductSection({ courses, templates, packs }: { courses: CourseSummary[
           lead="The questions and answers are free. Where a problem needs more than a page, that is what the packs, courses and templates below are."
         />
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-3">
-          {hasPacks && (
-            <GoFurtherColumn icon={Library} eyebrow="Look it up" title="Reference packs" body="Every question in a domain, formatted as one PDF in a working order." seeAllHref="/store" seeAllLabel="All reference packs">
-              {packs!.slice(0, 2).map((pack) => (
-                <GoFurtherRow key={pack.slug} href={`/store/packs/${pack.slug}`} title={pack.name} subtitle={pack.description} meta={pack.owned ? 'Owned' : formatCurrency(pack.price_amount, pack.currency)} />
-              ))}
-            </GoFurtherColumn>
-          )}
+        {/* Editorial rows — each product type is a full-width section, not a box */}
+        <div className="mt-6 space-y-2">
           {hasCourses && (
-            <GoFurtherColumn icon={GraduationCap} eyebrow="Learn it" title="Courses" body="Video, reading and downloadable working files in one guided path." seeAllHref="/courses" seeAllLabel="All courses">
-              {courses!.slice(0, 2).map((course) => (
-                <GoFurtherRow key={course.slug} href={`/courses/${course.slug}`} title={course.title} subtitle={course.subtitle} meta={`${course.lesson_count} ${course.lesson_count === 1 ? 'lesson' : 'lessons'}`} />
+            <ProductRow
+              icon={GraduationCap}
+              label="Courses"
+              description="Video, reading and downloadable working files in one guided path."
+              accentColor="var(--color-primary)"
+              seeAllHref="/courses"
+              seeAllLabel="All courses"
+            >
+              {courses!.map((course) => (
+                <MiniCourseCard key={course.slug} course={course} />
               ))}
-            </GoFurtherColumn>
+            </ProductRow>
           )}
-          {hasTemplates && (
-            <GoFurtherColumn icon={FileSpreadsheet} eyebrow="Use it" title="Templates" body="Ready-to-use working files — the practical companion to the guidance." seeAllHref="/templates" seeAllLabel="All templates">
-              {templates!.slice(0, 2).map((template) => (
-                <GoFurtherRow key={template.id} href={`/templates/${template.id}`} title={template.title} subtitle={template.description}
-                  meta={template.is_free ? 'Free' : template.product ? formatCurrency(template.product.price_amount, template.product.currency) : null} />
+
+          {hasPacks && (
+            <ProductRow
+              icon={Library}
+              label="Reference packs"
+              description="Every question in a domain, formatted as one PDF in a working order."
+              accentColor="var(--color-accent)"
+              seeAllHref="/store"
+              seeAllLabel="All reference packs"
+            >
+              {packs!.map((pack) => (
+                <MiniPackCard key={pack.slug} pack={pack} />
               ))}
-            </GoFurtherColumn>
+            </ProductRow>
+          )}
+
+          {hasTemplates && (
+            <ProductRow
+              icon={FileSpreadsheet}
+              label="Templates"
+              description="Ready-to-use working files — the practical companion to the guidance."
+              accentColor="var(--color-gold-strong)"
+              seeAllHref="/templates"
+              seeAllLabel="All templates"
+            >
+              {templates!.map((template) => (
+                <MiniTemplateCard key={template.id} template={template} />
+              ))}
+            </ProductRow>
           )}
         </div>
+
+        {/* Free template CTA */}
+        {freeTemplate && (
+          <motion.div variants={riseItemSm} className="mt-6 border-t border-border pt-6">
+            <Link
+              to={`/templates/${freeTemplate.id}`}
+              className="group flex items-center gap-4 rounded-xl border border-gold/30 bg-gold/5 px-5 py-4 transition-colors hover:bg-gold/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold sm:items-center sm:gap-5 sm:px-6 sm:py-5"
+            >
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold-strong">
+                <Download className="size-5" aria-hidden="true" />
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-semibold text-foreground">Try a free template</h4>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-2 py-0.5 text-[0.625rem] font-medium text-gold-strong">
+                    <Sparkles className="size-2.5" aria-hidden="true" /> Free
+                  </span>
+                </div>
+                <p className="mt-0.5 text-sm text-muted-foreground line-clamp-1">
+                  {freeTemplate.description || freeTemplate.title} — no account needed.
+                </p>
+              </div>
+              <span className="hidden shrink-0 text-sm font-medium text-gold-strong transition-transform duration-150 group-hover:translate-x-0.5 sm:inline">
+                Get it free
+              </span>
+              <ArrowRight className="size-4 shrink-0 text-gold-strong transition-transform duration-150 group-hover:translate-x-0.5 sm:hidden" aria-hidden="true" />
+            </Link>
+          </motion.div>
+        )}
       </div>
     </motion.section>
   )

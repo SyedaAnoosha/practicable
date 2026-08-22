@@ -32,19 +32,25 @@ class ResourceType(str, enum.Enum):
 
 async def resolve_product_ids(*, user_id: UUID, session: AsyncSession) -> set[UUID]:
     """Every product_id this user currently holds a live entitlement for — not expired,
-    and not revoked.
+    and not revoked, and the user is not deactivated.
 
     week3_plan.md W3-R5 / non-negotiable #3: revocation is enforced HERE, in the query
     every gated request already runs, not in a second check bolted on beside it —
     `Entitlement.revoked_at.is_(None)` is the entire diff a refund makes to the gate.
     Migration 011's `ix_entitlements_user_live` is a partial index over exactly this
-    predicate, so this added filter costs nothing extra at the database level."""
+    predicate, so this added filter costs nothing extra at the database level.
+
+    Phase 6C (W4-R13): deactivated users (disabled_at IS NOT NULL) are refused here,
+    in the same choke point, not by a second check bolted beside it."""
     now = datetime.now(timezone.utc)
     result = await session.execute(
-        select(Entitlement.product_id).where(
+        select(Entitlement.product_id)
+        .join(User, User.id == Entitlement.user_id)
+        .where(
             Entitlement.user_id == user_id,
             (Entitlement.expires_at.is_(None)) | (Entitlement.expires_at > now),
             Entitlement.revoked_at.is_(None),
+            User.disabled_at.is_(None),
         )
     )
     return set(result.scalars().all())

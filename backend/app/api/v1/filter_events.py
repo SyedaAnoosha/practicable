@@ -5,13 +5,12 @@ Validates dimension against the seven known dimensions, rejects anything else wi
 Rate-limited per IP without storing the IP — a counter in memory, not a row.
 """
 import logging
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import RateLimiter
 from app.db.session import get_session
 
 router = APIRouter()
@@ -19,9 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Rate limit: max 30 filter-events per IP per 60-second window.
 # A counter in memory, not a row — no IP is stored anywhere.
-_RATE_LIMIT_WINDOW = timedelta(seconds=60)
-_RATE_LIMIT_MAX = 30
-_rate_counters: dict[str, tuple[datetime, int]] = defaultdict(lambda: (datetime.now(timezone.utc), 0))
+_rate_limiter = RateLimiter(window_seconds=60, max_requests=30)
 
 
 class FilterEventIn(BaseModel):
@@ -75,19 +72,6 @@ def _get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _check_rate_limit(ip: str) -> bool:
-    """Returns True if the request is within the rate limit."""
-    now = datetime.now(timezone.utc)
-    window_start, count = _rate_counters[ip]
-    if now - window_start > _RATE_LIMIT_WINDOW:
-        _rate_counters[ip] = (now, 1)
-        return True
-    if count >= _RATE_LIMIT_MAX:
-        return False
-    _rate_counters[ip] = (window_start, count + 1)
-    return True
-
-
 @router.post("/filter-events", response_model=FilterEventOut, status_code=202)
 async def record_filter_event(
     body: FilterEventIn,
@@ -107,7 +91,7 @@ async def record_filter_event(
         )
 
     ip = _get_client_ip(request)
-    if not _check_rate_limit(ip):
+    if not _rate_limiter.allow(ip, action="filter_event"):
         # Silently drop — the contract is fire-and-forget, never blocks a filter tap.
         return FilterEventOut()
 
@@ -119,7 +103,94 @@ async def record_filter_event(
         session.add(event)
         await session.commit()
     except Exception:
-        # Wrap and swallow — writes must not fail the request (posthog_client.py contract).
+        # Wrap and swallow — writes must not fail the request.
         logger.warning("Failed to record filter event: %s", body.model_dump())
+
+    return FilterEventOut()
+
+
+# ── Recommendation clicks (W4-R4 item 6, ledger row 29) ──────────────────────────────
+# The routing twin of the filter counter above, and it lives in this module for one
+# reason: it is the same contract end to end — public, anonymous, fire-and-forget,
+# rate-limited per IP without storing an IP, and a write that must never fail the
+# navigation the reader actually asked for. A second module would duplicate all five
+# properties and let them drift.
+
+# Deliberately separate from _rate_limiter: a reader who filters heavily should not
+# spend the budget that records their one recommendation click, and vice versa.
+# Recommendation clicks are rarer by nature, so the ceiling is lower.
+_recommendation_limiter = RateLimiter(window_seconds=60, max_requests=15)
+
+# The two routing surfaces §20.5 and §20.6 define. Anything else is a client bug and is
+# refused rather than recorded, so the metric cannot be polluted by a typo'd constant.
+RECOMMENDATION_SURFACES = ("question", "catalogue")
+
+
+class RecommendationEventIn(BaseModel):
+    """`extra="forbid"` for the same load-bearing reason FilterEventIn carries it: an
+    unexpected field is how PII arrives by accident, and Pydantic v2 would otherwise
+    drop it silently rather than reject it."""
+
+    model_config = {"extra": "forbid"}
+
+    surface: str
+    product_slug: str
+    question_slug: str | None = None
+
+
+@router.post("/recommendation-events", response_model=FilterEventOut, status_code=202)
+async def record_recommendation_event(
+    body: RecommendationEventIn,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+):
+    """Record that a routed recommendation was followed.
+
+    Public, unauthenticated, fire-and-forget, returns 202 — identical to the filter
+    counter. Nothing identifying is stored: the row is (surface, question, product,
+    timestamp) and nothing else.
+    """
+    if body.surface not in RECOMMENDATION_SURFACES:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": {
+                    "code": "unknown_surface",
+                    "message": "surface must be one of: " + ", ".join(RECOMMENDATION_SURFACES),
+                }
+            },
+        )
+    if not body.product_slug:
+        # A recommendation click with no destination is not an event, it is a bug —
+        # refuse it rather than write a row that can never be joined to anything.
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": {
+                    "code": "missing_product",
+                    "message": "product_slug is required.",
+                }
+            },
+        )
+
+    ip = _get_client_ip(request)
+    if not _recommendation_limiter.allow(ip, action="recommendation_event"):
+        # Silently drop — the contract is fire-and-forget, never blocks a navigation.
+        return FilterEventOut()
+
+    try:
+        from app.db.models import RecommendationEvent
+
+        session.add(
+            RecommendationEvent(
+                surface=body.surface,
+                question_slug=body.question_slug,
+                product_slug=body.product_slug,
+            )
+        )
+        await session.commit()
+    except Exception:
+        # Wrap and swallow — a metrics write must not cost the reader their click.
+        logger.warning("Failed to record recommendation event: %s", body.model_dump())
 
     return FilterEventOut()

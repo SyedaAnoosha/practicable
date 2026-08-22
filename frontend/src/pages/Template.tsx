@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
-import { Download, FileSpreadsheet, Mail } from 'lucide-react'
+import { Download, FileSpreadsheet, Layers, Lock, Mail, Table2 } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -11,10 +11,13 @@ import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { PageTitle } from '@/components/ui/PageTitle'
+import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
 import type { Preview } from '@/components/product/PreviewGallery'
 import { WhyThis } from '@/components/product/WhyThis'
 import { OBJECTION_BLOCK } from '@/lib/labels'
+import { formatCurrency } from '@/lib/utils/formatCurrency'
+import { FactStrip, type Fact } from '@/components/ui/FactStrip'
 
 interface DownloadUrlResponse {
   download_url: string
@@ -163,8 +166,14 @@ export function Template() {
   )
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-5 py-8 sm:px-8">
-      <Card>
+    <div className="mx-auto w-full max-w-2xl px-5 pb-24 pt-8 sm:px-8 sm:pb-8">
+      <Breadcrumb
+        items={[
+          { label: 'Templates', to: '/templates' },
+          { label: template.title },
+        ]}
+      />
+      <Card className="mt-6">
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gold-soft text-gold-strong ring-1 ring-inset ring-gold/40">
@@ -175,6 +184,30 @@ export function Template() {
           <PageTitle className="mt-3" title={template.title} description={template.description} />
         </CardHeader>
         <CardContent>
+          {/* D1: Fact strip — the purchase-decision facts in one horizontal row.
+              For a template: format, page/sheet count, access type, price. */}
+          {(() => {
+            const facts: Fact[] = [
+              ...(template.format
+                ? [{ icon: Layers, label: 'Format', value: template.format }]
+                : []),
+              ...((template.page_count || template.sheet_count)
+                ? [{
+                    icon: Table2,
+                    label: template.sheet_count ? 'Sheets' : 'Pages',
+                    value: String(template.sheet_count ?? template.page_count),
+                    numeric: true,
+                  }]
+                : []),
+              {
+                icon: Lock,
+                label: 'Access',
+                value: template.is_free ? 'Free forever' : 'Lifetime',
+                hint: template.is_free ? 'No account needed' : 'One-time purchase, no subscription',
+              },
+            ]
+            return <FactStrip facts={facts} className="mb-4" />
+          })()}
           <p className="mb-4 font-mono text-xs text-muted-foreground">{template.file_name}</p>
 
           <EvidencePanel
@@ -289,6 +322,33 @@ export function Template() {
           )}
         </CardContent>
       </Card>
+
+      {/* E3: Sticky bottom action bar on mobile — the download/buy button
+          follows the scroll so the reader never has to hunt for it. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-5 py-3 backdrop-blur-sm lg:hidden"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          {!template.is_free && !template.owned && template.product && (
+            <p className="text-sm font-semibold tabular-nums text-foreground">
+              {formatCurrency(template.product.price_amount, template.product.currency)}
+            </p>
+          )}
+          {template.is_free && <span className="text-sm font-medium text-success">Free</span>}
+          <div className="ml-auto">
+            {canDownload ? (
+              <Button onClick={handleDownload} loading={status === 'preparing'} size="sm">
+                {status === 'idle' && <><Download className="size-4" aria-hidden="true" /> Download</>}
+                {status === 'preparing' && 'Preparing…'}
+                {status === 'downloaded' && 'Downloaded ✓'}
+                {status === 'error' && 'Download again'}
+              </Button>
+            ) : template.product ? (
+              <Link to={`/buy/${template.product.slug}`}><Button size="sm">Buy the template</Button></Link>
+            ) : null}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

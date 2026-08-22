@@ -1,8 +1,16 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String, Text, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, PublishStateMixin, TimestampMixin, str_enum
 import enum
 import uuid
+
+if TYPE_CHECKING:
+    from app.db.models.course import Module
+    from app.db.models.media import Media
+    from app.db.models.template import Template
+    from app.db.models.lesson_block import LessonBlock
 
 class LessonType(str, enum.Enum):
     VIDEO = "video"
@@ -20,6 +28,10 @@ class Lesson(Base, IdMixin, TimestampMixin, PublishStateMixin):
 
     # The reading lesson type's content. Null for video/download-only lessons.
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Phase 8 (8E): Sanitized version of prose for safe display.
+    # The original body is kept for editing; this field stores the sanitized HTML.
+    prose_sanitized: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Download-type lessons reuse the Template row's storage columns rather than
     # duplicating them. Access is still gated by LESSON entitlement (course access),

@@ -1,10 +1,15 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import String, ForeignKey, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, TimestampMixin, str_enum
 import enum
 import uuid
+
+if TYPE_CHECKING:
+    from app.db.models.user import User
+    from app.db.models.product import Product
 
 class GrantedVia(str, enum.Enum):
     PURCHASE = "purchase"

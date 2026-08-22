@@ -1,0 +1,15 @@
+{% extends "base.html.j2" %}
+{% import "_button.html.j2" as btn %}
+{% block title %}{{ product_name }} has been updated{% endblock %}
+{% block preheader %}A product you own was revised — here's what changed.{% endblock %}
+{% block content %}
+<h1 style="font-family:Georgia,'Times New Roman',serif; font-size:22px; line-height:1.3; color:#1C1712; margin:0 0 16px;">{{ product_name }} has been updated</h1>
+<p style="margin:0 0 16px;">Something you own was revised. You have full access to the new version at no extra cost.</p>
+{% if summary %}
+<p style="margin:0 0 16px;">{{ summary }}</p>
+{% endif %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+  <tr><td>{{ btn.button(primary_link, "See what's new") }}</td></tr>
+</table>
+<p style="margin:0;">You're getting this because product-update emails are on for your account. Turn them off any time in Account &gt; Notifications.</p>
+{% endblock %}

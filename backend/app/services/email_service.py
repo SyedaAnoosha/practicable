@@ -257,6 +257,38 @@ async def send_access_granted_email(
     )
 
 
+async def send_product_update_email(
+    *, to_email: str, product_name: str, primary_link: str, notify_product_updates: bool, summary: str = "",
+) -> bool:
+    """Phase 10 (§10E): the one genuinely optional email in this module — every other
+    function here is transactional (a receipt, access, a password reset, a security
+    or refund confirmation) and is never gated by a preference, per §10E step 3's own
+    rule stated plainly on the Notifications page. This is what "Tell me when a
+    template or course I own is revised" (the copy deck's own line) actually sends,
+    and it is gated on the caller's own `notify_product_updates` flag — the owner of
+    the email address, not a global setting, decides.
+
+    Found 2026-08-22 (Phase 10 re-verification): the preference toggle existed and
+    persisted correctly, but nothing in this file sent product-update mail at all, so
+    the DoD's own required test ("a marketing send is suppressed when
+    notify_marketing is false") had nothing to exercise. This is that sender. The
+    trigger — deciding *when* a revision is significant enough to notify every
+    entitled buyer — is separate, larger work this fix does not invent; this
+    function is the correctly-gated send path a future trigger calls into, matching
+    how every other send in this file is a narrow, single-purpose function the
+    caller decides when to invoke.
+    """
+    if not notify_product_updates:
+        return False
+    html, text = _render(
+        "product_update", product_name=product_name, primary_link=primary_link, summary=summary, to_email=to_email,
+    )
+    return await _send(
+        to_email=to_email, subject=f"{product_name} has been updated", html=html, text=text,
+        context="product update email",
+    )
+
+
 async def send_password_reset_email(*, to_email: str, reset_url: str, expires_in: str = "1 hour") -> bool:
     """One link, its expiry stated, and what to do if this wasn't requested."""
     html, text = _render("password_reset", reset_url=reset_url, expires_in=expires_in)
@@ -373,4 +405,41 @@ async def send_contact_notification_email(
         text=text,
         context=f"contact notification from {from_email}",
         reply_to=from_email,
+    )
+
+
+# ── Security alert (Phase 10A/10B: identity and password changes) ──
+
+
+async def send_security_alert_email(
+    *,
+    to_email: str,
+    action: str,
+    details: str | None = None,
+) -> bool:
+    """Sent on every identity-sensitive change: name, email, password.
+    The buyer must know their account changed, whether they were the one who changed it.
+    No ABN (non-negotiable). The base template footer carries the entity line."""
+    html, text = _render("security_alert", action=action, details=details)
+    return await _send(
+        to_email=to_email,
+        subject="Your account details changed",
+        html=html,
+        text=text,
+        context=f"security alert ({action})",
+    )
+
+
+# ── Account closure (Phase 10F) ──
+
+
+async def send_account_closure_email(*, to_email: str) -> bool:
+    """Confirmation that the account was deactivated, with the route to restore it."""
+    html, text = _render("security_alert", action="Account closed", details="Contact us any time to restore your account.")
+    return await _send(
+        to_email=to_email,
+        subject="Your Practicable account has been closed",
+        html=html,
+        text=text,
+        context="account closure confirmation",
     )

@@ -106,7 +106,19 @@ export function usePrefersReducedMotion(): boolean {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
     const onChange = (e: MediaQueryListEvent) => setReduced(e.matches)
     mq.addEventListener('change', onChange)
-    setReduced(mq.matches)
+    /* Re-read on mount rather than assigning unconditionally: the lazy initialiser
+       above already captured the value during the first render, so an unconditional
+       `setReduced(mq.matches)` here re-rendered every consumer on mount for nothing.
+       The read is still needed — the setting can change between the initialiser
+       running and the listener attaching — but only a genuine difference should
+       commit.
+
+       The lint rule cannot distinguish "cascading render" from "sync with an external
+       browser API on mount", which is what this is — the media query is a live source
+       outside React, and the no-op guard above means a matching value commits nothing.
+       Suppressed deliberately rather than restructured. */
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReduced((prev) => (prev === mq.matches ? prev : mq.matches))
     return () => mq.removeEventListener('change', onChange)
   }, [])
 
@@ -178,12 +190,25 @@ export const arrowNudge = {
  */
 export function useCountUp(value: number | null | undefined, durationMs = 900) {
   const reduced = usePrefersReducedMotion()
-  const [display, setDisplay] = useState<number | null>(value ?? null)
+  /* `null` means "not animating" — the resolved value is then used directly. Only a
+     run that is actually counting writes a number here.
+
+     `[FIXED 2026-08-22]` The three non-animating branches (absent value, reduced
+     motion, not yet begun) previously wrote the final value from inside the effect,
+     which renders once with the old number and again with the right one. They are
+     pure functions of the props, so they are derived below instead and the effect is
+     left with the one job that genuinely is a side effect: driving the rAF loop. */
+  const [counting, setCounting] = useState<number | null>(null)
   const [started, setStarted] = useState(false)
+  const animating = value != null && !reduced && started
+  const display = value == null ? null : animating ? (counting ?? 0) : value
 
   useEffect(() => {
-    if (value == null) { setDisplay(null); return }
-    if (reduced || !started) { setDisplay(value); return }
+    // Not animating: nothing to drive, and nothing to clean up. `counting` is only
+    // ever READ while `animating` is true (see `display` above), so a stale value
+    // left behind here is unobservable — clearing it would be a state write during
+    // an effect for no rendered difference.
+    if (!animating) return
 
     let raf = 0
     const from = 0
@@ -193,12 +218,12 @@ export function useCountUp(value: number | null | undefined, durationMs = 900) {
       // Expo-out, matching EASE_OUT_EXPO's character so the count settles like
       // everything else rather than running linear.
       const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t)
-      setDisplay(Math.round(from + (value - from) * eased))
+      setCounting(Math.round(from + (value - from) * eased))
       if (t < 1) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [value, durationMs, reduced, started])
+  }, [animating, value, durationMs])
 
   return { display, begin: () => setStarted(true) }
 }

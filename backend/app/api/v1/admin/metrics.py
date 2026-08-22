@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +31,17 @@ from app.db.session import get_session
 router = APIRouter()
 
 
+def _to_camel(s: str) -> str:
+    """Convert snake_case to camelCase for JSON serialization."""
+    parts = s.split("_")
+    return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+
+def _camel_dict(model: BaseModel) -> dict:
+    """Serialize a Pydantic model to a camelCase dict for JSON output."""
+    return model.model_dump(by_alias=True)
+
+
 class MetricOut(BaseModel):
     """A single metric with numerator and denominator for frontend calculation.
 
@@ -40,6 +51,8 @@ class MetricOut(BaseModel):
     the tile (non-negotiable #15: unknown is null, zero is 0, and the two are
     different).
     """
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True, by_alias=True)
+
     name: str
     numerator: Optional[int]
     denominator: Optional[int]
@@ -48,6 +61,8 @@ class MetricOut(BaseModel):
 
 class MetricsOut(BaseModel):
     """All metrics for the admin dashboard."""
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True, by_alias=True)
+
     metrics: list[MetricOut]
     generated_at: datetime
     # Revenue breakdown — gross, refunded, net (W4-R10)
@@ -57,15 +72,21 @@ class MetricsOut(BaseModel):
     # Enrollment splits by granted_via (W4-R10)
     enrollment_splits: dict  # {"purchase": n, "manual": n, "free": n}
     # Product rankings by units and revenue (W4-R10)
-    product_rankings: list  # [{id, name, units, revenue_cents, revenue_dollars}]
+    product_rankings: list  # [{id, name, units, revenueCents, revenueDollars}]
     # Download links issued (W4-R10)
     download_links_issued: int
     # Courses ranked by enrollment, started and completed (W4-R10 8C-2)
     course_enrollment_rankings: list  # [{id, title, enrolled, started, completed}]
+    # Recommendation clicks — W4-R4 item 6.
+    recommendation_clicks: dict  # {"question": n, "catalogue": n, "total": n}
+    # The routed products readers actually follow, most-followed first.
+    recommendation_rankings: list  # [{productSlug, clicks}]
 
 
 class RevenueSeriesPoint(BaseModel):
     """A single point in the revenue time series."""
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True, by_alias=True)
+
     date: str  # ISO date string
     revenue_cents: int
     revenue_dollars: float
@@ -74,6 +95,8 @@ class RevenueSeriesPoint(BaseModel):
 
 class RevenueSeriesOut(BaseModel):
     """Revenue time series response."""
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True, by_alias=True)
+
     period: str  # "daily", "weekly", "monthly"
     data: list[RevenueSeriesPoint]
 
@@ -303,7 +326,7 @@ async def _get_product_rankings(session: AsyncSession, limit: int = 10) -> list:
         .limit(limit)
     )
     return [
-        {"id": str(r[0]), "name": r[1], "units": r[2], "revenue_cents": r[3], "revenue_dollars": r[3] / 100}
+        {"id": str(r[0]), "name": r[1], "units": r[2], "revenueCents": r[3], "revenueDollars": r[3] / 100}
         for r in result.all()
     ]
 
@@ -378,6 +401,43 @@ async def _get_download_links_issued(session: AsyncSession) -> int:
 
 
 
+async def _get_recommendation_clicks(session: AsyncSession) -> dict:
+    """Recommendation clicks split by routing surface (W4-R4 item 6).
+
+    Both surfaces are always present in the result, at zero if unclicked, so the page
+    can render "0 of 0" honestly rather than omitting a row and implying the surface
+    does not exist — the same denominator rule W4-R10's acceptance applies to the tiles.
+    """
+    from app.db.models import RecommendationEvent
+
+    result = await session.execute(
+        select(RecommendationEvent.surface, func.count(RecommendationEvent.id)).group_by(
+            RecommendationEvent.surface
+        )
+    )
+    counts = {"question": 0, "catalogue": 0}
+    for surface, n in result.all():
+        if surface in counts:
+            counts[surface] = n
+    counts["total"] = counts["question"] + counts["catalogue"]
+    return counts
+
+
+async def _get_recommendation_rankings(session: AsyncSession, limit: int = 10) -> list:
+    """Which routed products readers actually follow. Slug rather than name because the
+    event table deliberately stores no product id — a name join would need one, and
+    adding it for a ranking is not worth coupling an anonymous counter to the catalogue."""
+    from app.db.models import RecommendationEvent
+
+    result = await session.execute(
+        select(RecommendationEvent.product_slug, func.count(RecommendationEvent.id).label("clicks"))
+        .group_by(RecommendationEvent.product_slug)
+        .order_by(func.count(RecommendationEvent.id).desc())
+        .limit(limit)
+    )
+    return [{"productSlug": slug, "clicks": clicks} for slug, clicks in result.all()]
+
+
 async def _get_revenue_series(
     session: AsyncSession,
     period: str = "daily",
@@ -420,15 +480,15 @@ async def _get_revenue_series(
     return [
         {
             "date": row[0].isoformat() if row[0] else None,
-            "revenue_cents": row[1] or 0,
-            "revenue_dollars": (row[1] or 0) / 100,
-            "order_count": row[2] or 0,
+            "revenueCents": row[1] or 0,
+            "revenueDollars": (row[1] or 0) / 100,
+            "orderCount": row[2] or 0,
         }
         for row in result.all()
     ]
 
 
-@router.get("/admin/metrics", response_model=MetricsOut)
+@router.get("/admin/metrics")
 async def get_metrics(
     session: AsyncSession = Depends(get_session),
 ):
@@ -448,6 +508,8 @@ async def get_metrics(
     product_rankings = await _get_product_rankings(session)
     downloads = await _get_download_links_issued(session)
     course_enrollment_rankings = await _get_course_enrollment_rankings(session)
+    recommendation_clicks = await _get_recommendation_clicks(session)
+    recommendation_rankings = await _get_recommendation_rankings(session)
 
     metrics = [
         second_purchase,
@@ -472,22 +534,34 @@ async def get_metrics(
             denominator=1,
             description="Links issued (not unique downloads — a re-request of an expired presigned URL is counted)",
         ),
+        MetricOut(
+            name="recommendation_clicks",
+            numerator=recommendation_clicks["total"],
+            denominator=1,
+            description=(
+                "Routed recommendations followed "
+                f"(question page: {recommendation_clicks['question']}, "
+                f"filtered catalogue: {recommendation_clicks['catalogue']})"
+            ),
+        ),
     ]
 
-    return MetricsOut(
-        metrics=metrics,
-        generated_at=datetime.now(timezone.utc),
-        revenue_gross_cents=gross,
-        revenue_refunded_cents=refunded,
-        revenue_net_cents=net,
-        enrollment_splits=enrollment_splits,
-        product_rankings=product_rankings,
-        download_links_issued=downloads,
-        course_enrollment_rankings=course_enrollment_rankings,
-    )
+    return {
+        "metrics": [_camel_dict(m) for m in metrics],
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "revenueGrossCents": gross,
+        "revenueRefundedCents": refunded,
+        "revenueNetCents": net,
+        "enrollmentSplits": enrollment_splits,
+        "productRankings": product_rankings,
+        "downloadLinksIssued": downloads,
+        "courseEnrollmentRankings": course_enrollment_rankings,
+        "recommendationClicks": recommendation_clicks,
+        "recommendationRankings": recommendation_rankings,
+    }
 
 
-@router.get("/admin/metrics/revenue-series", response_model=RevenueSeriesOut)
+@router.get("/admin/metrics/revenue-series")
 async def get_revenue_series(
     period: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
     days: int = Query(90, ge=1, le=365),
@@ -500,18 +574,7 @@ async def get_revenue_series(
     """
     data = await _get_revenue_series(session, period=period, days=days)
 
-    return RevenueSeriesOut(
-        period=period,
-        data=[
-            RevenueSeriesPoint(
-                date=point["date"],
-                revenue_cents=point["revenue_cents"],
-                revenue_dollars=point["revenue_dollars"],
-                order_count=point["order_count"],
-            )
-            for point in data
-        ],
-    )
+    return {"period": period, "data": data}
 
 
 # Keep the old operational functions available for backward compat if needed

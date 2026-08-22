@@ -1,8 +1,15 @@
-from sqlalchemy import String, ForeignKey, Integer
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import String, ForeignKey, Integer, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, TimestampMixin, str_enum
 import enum
 import uuid
+
+if TYPE_CHECKING:
+    from app.db.models.user import User
+    from app.db.models.product import Product
 
 class OrderStatus(str, enum.Enum):
     PENDING = "pending"
@@ -23,6 +30,13 @@ class Order(Base, IdMixin, TimestampMixin):
     total_amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     
+    # Phase 9B (W4-R20): buyer-initiated partial refund details.
+    # Nullable — only populated when a buyer self-serves a refund.
+    buyer_refund_amount_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    buyer_refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    buyer_refund_reason_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    buyer_refund_reason_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Relationships
     user: Mapped["User"] = relationship("User")
     items: Mapped[list["OrderItem"]] = relationship("OrderItem", back_populates="order")

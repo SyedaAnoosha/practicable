@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router'
 
 import RootLayout from '@/routes/_layouts/RootLayout'
@@ -7,6 +8,7 @@ import AuthLayout from '@/routes/_layouts/AuthLayout'
 import MemberLayout from '@/routes/_layouts/MemberLayout'
 import AdminLayout from '@/routes/_layouts/AdminLayout'
 
+// ── Eagerly loaded (core public pages, always needed) ──────────────────────
 import { Home } from '@/pages/Home'
 import { Contact } from '@/pages/Contact'
 import { Dashboard } from '@/pages/Dashboard'
@@ -18,6 +20,7 @@ import { CourseDetail } from '@/pages/CourseDetail'
 import { TemplatesCatalogue } from '@/pages/TemplatesCatalogue'
 import { Store } from '@/pages/Store'
 import { PackDetail } from '@/pages/PackDetail'
+import { PacksCatalogue } from '@/pages/PacksCatalogue'
 import { Terms } from '@/pages/legal/Terms'
 import { Privacy } from '@/pages/legal/Privacy'
 import { Refunds } from '@/pages/legal/Refunds'
@@ -25,33 +28,53 @@ import { SignIn } from '@/pages/SignIn'
 import { SignUp } from '@/pages/SignUp'
 import { ForgotPassword } from '@/pages/ForgotPassword'
 import { ResetPassword } from '@/pages/ResetPassword'
-import { Lesson } from '@/pages/Lesson'
-import { Learn } from '@/pages/Learn'
-import { Template } from '@/pages/Template'
-import { ProductBuy } from '@/pages/ProductBuy'
-import { CheckoutSuccess } from '@/pages/CheckoutSuccess'
-import { CheckoutCancel } from '@/pages/CheckoutCancel'
-import { AdminQuestions } from '@/pages/admin/AdminQuestions'
-import { AdminTemplates } from '@/pages/admin/AdminTemplates'
-import { AdminCourses } from '@/pages/admin/AdminCourses'
-import { LessonBodyWriteScreen, BlockTextWriteScreen } from '@/pages/admin/LessonWriteScreen'
-import { AdminOrders } from '@/pages/admin/AdminOrders'
-import { AdminContact } from '@/pages/admin/AdminContact'
-import { AdminMetrics } from '@/pages/admin/AdminMetrics'
-import { AdminMedia } from '@/pages/admin/AdminMedia'
-import { AdminUsers } from '@/pages/admin/AdminUsers'
-import { AdminAudit } from '@/pages/admin/AdminAudit'
-import { AdminLeads } from '@/pages/admin/AdminLeads'
-import { AdminSettings } from '@/pages/admin/AdminSettings'
-import { AdminPacks } from '@/pages/admin/AdminPacks'
-import { PacksCatalogue } from '@/pages/PacksCatalogue'
-import { Purchases } from '@/pages/Purchases'
 import { AccountShell } from '@/pages/account/AccountShell'
 import { AccountProfile } from '@/pages/account/AccountProfile'
 import { AccountSecurity } from '@/pages/account/AccountSecurity'
 import { AccountPurchases } from '@/pages/account/AccountPurchases'
 import { AccountNotifications } from '@/pages/account/AccountNotifications'
 import { AccountDataPrivacy } from '@/pages/account/AccountDataPrivacy'
+
+// ── Lazy loaded (heavy, route-specific) ────────────────────────────────────
+// §6.3 K3: every route lazy-loaded. Admin bundle never in a learner's download.
+// Mux player, rich text editor, and Stripe checkout are dynamically imported.
+const Learn = lazy(() => import('@/pages/Learn').then((m) => ({ default: m.Learn })))
+const Lesson = lazy(() => import('@/pages/Lesson').then((m) => ({ default: m.Lesson })))
+const ProductBuy = lazy(() => import('@/pages/ProductBuy').then((m) => ({ default: m.ProductBuy })))
+const CheckoutSuccess = lazy(() => import('@/pages/CheckoutSuccess').then((m) => ({ default: m.CheckoutSuccess })))
+const CheckoutCancel = lazy(() => import('@/pages/CheckoutCancel').then((m) => ({ default: m.CheckoutCancel })))
+import { Purchases } from '@/pages/Purchases' // eagerly loaded: also imported by AccountPurchases
+const Template = lazy(() => import('@/pages/Template').then((m) => ({ default: m.Template })))
+
+// Admin pages — the largest split. Never loaded for non-admin users.
+const AdminQuestions = lazy(() => import('@/pages/admin/AdminQuestions').then((m) => ({ default: m.AdminQuestions })))
+const AdminTemplates = lazy(() => import('@/pages/admin/AdminTemplates').then((m) => ({ default: m.AdminTemplates })))
+const AdminCourses = lazy(() => import('@/pages/admin/AdminCourses').then((m) => ({ default: m.AdminCourses })))
+const AdminOrders = lazy(() => import('@/pages/admin/AdminOrders').then((m) => ({ default: m.AdminOrders })))
+const AdminContact = lazy(() => import('@/pages/admin/AdminContact').then((m) => ({ default: m.AdminContact })))
+const AdminMetrics = lazy(() => import('@/pages/admin/AdminMetrics').then((m) => ({ default: m.AdminMetrics })))
+const AdminMedia = lazy(() => import('@/pages/admin/AdminMedia').then((m) => ({ default: m.AdminMedia })))
+const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers').then((m) => ({ default: m.AdminUsers })))
+const AdminAudit = lazy(() => import('@/pages/admin/AdminAudit').then((m) => ({ default: m.AdminAudit })))
+const AdminLeads = lazy(() => import('@/pages/admin/AdminLeads').then((m) => ({ default: m.AdminLeads })))
+const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings').then((m) => ({ default: m.AdminSettings })))
+const AdminPacks = lazy(() => import('@/pages/admin/AdminPacks').then((m) => ({ default: m.AdminPacks })))
+const LessonWriteScreen = lazy(() =>
+  import('@/pages/admin/LessonWriteScreen').then((m) => ({ default: m.LessonBodyWriteScreen })),
+)
+const BlockTextWriteScreen = lazy(() =>
+  import('@/pages/admin/LessonWriteScreen').then((m) => ({ default: m.BlockTextWriteScreen })),
+)
+
+/** Minimal loading indicator for lazy routes. Kept deliberately lightweight:
+ *  no skeleton, no animation, just text — the route should arrive in <200ms. */
+function RouteLoading() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center">
+      <p className="text-sm text-muted-foreground">Loading…</p>
+    </div>
+  )
+}
 
 // react-router v8, data mode.
 const router = createBrowserRouter([
@@ -90,7 +113,7 @@ const router = createBrowserRouter([
           { path: '/packs', element: <PacksCatalogue /> },
           // Public: the free lead-magnet template must be reachable with no account.
           // Paid templates here show a buy/sign-in prompt instead of a download.
-          { path: '/templates/:templateId', element: <Template /> },
+          { path: '/templates/:templateId', element: <Suspense fallback={<RouteLoading />}><Template /></Suspense> },
           // The storefront: three labelled content types. Individual catalogues above
           // stay reachable directly; /store is the index introducing all three at once.
           { path: '/store', element: <Store /> },
@@ -123,12 +146,12 @@ const router = createBrowserRouter([
           { path: '/library', element: <Library /> },
           // The full learning interface. The bare /lessons/:lessonId player stays for
           // any lesson that isn't part of a module/course.
-          { path: '/learn/:courseSlug/:lessonSlug', element: <Learn /> },
-          { path: '/lessons/:lessonId', element: <Lesson /> },
+          { path: '/learn/:courseSlug/:lessonSlug', element: <Suspense fallback={<RouteLoading />}><Learn /></Suspense> },
+          { path: '/lessons/:lessonId', element: <Suspense fallback={<RouteLoading />}><Lesson /></Suspense> },
           // Account required before purchase, so these share the gated content's guard.
-          { path: '/buy/:slug', element: <ProductBuy /> },
-          { path: '/checkout/success', element: <CheckoutSuccess /> },
-          { path: '/checkout/cancel', element: <CheckoutCancel /> },
+          { path: '/buy/:slug', element: <Suspense fallback={<RouteLoading />}><ProductBuy /></Suspense> },
+          { path: '/checkout/success', element: <Suspense fallback={<RouteLoading />}><CheckoutSuccess /></Suspense> },
+          { path: '/checkout/cancel', element: <Suspense fallback={<RouteLoading />}><CheckoutCancel /></Suspense> },
           { path: '/purchases', element: <Purchases /> },
           // Phase 10: account shell with routed sub-pages (Decision #44)
           {
@@ -148,29 +171,30 @@ const router = createBrowserRouter([
       {
         // The content editor. AdminLayout checks the role for a clean message, but the
         // real boundary is server-side require_admin on every /admin/* route.
+        // §6.3 K3: ALL admin pages are lazy — the admin bundle never ships to a learner.
         element: <AdminLayout />,
         children: [
-          { path: '/admin', element: <AdminQuestions /> },
-          { path: '/admin/questions', element: <AdminQuestions /> },
-          { path: '/admin/courses', element: <AdminCourses /> },
+          { path: '/admin', element: <Suspense fallback={<RouteLoading />}><AdminQuestions /></Suspense> },
+          { path: '/admin/questions', element: <Suspense fallback={<RouteLoading />}><AdminQuestions /></Suspense> },
+          { path: '/admin/courses', element: <Suspense fallback={<RouteLoading />}><AdminCourses /></Suspense> },
           // Full-screen "Write" editor (week4_plan.md Phase 8, 8E-continued,
           // `[OWNER INSTRUCTION 2026-08-21]`) — its own route rather than a modal, so
           // it has Back/Cancel/Save and is reachable/refreshable by URL. Still nested
           // under AdminLayout (keeps the admin nav bar and the is_admin guard, same as
           // every other /admin/* route) — "full screen" means its own routed page, not
           // escaping the admin shell entirely.
-          { path: '/admin/courses/:courseId/lessons/:lessonId/write', element: <LessonBodyWriteScreen /> },
-          { path: '/admin/courses/:courseId/blocks/:blockId/write', element: <BlockTextWriteScreen /> },
-          { path: '/admin/templates', element: <AdminTemplates /> },
-          { path: '/admin/packs', element: <AdminPacks /> },
-          { path: '/admin/media', element: <AdminMedia /> },
-          { path: '/admin/contact', element: <AdminContact /> },
-          { path: '/admin/orders', element: <AdminOrders /> },
-          { path: '/admin/metrics', element: <AdminMetrics /> },
-          { path: '/admin/users', element: <AdminUsers /> },
-          { path: '/admin/audit', element: <AdminAudit /> },
-          { path: '/admin/leads', element: <AdminLeads /> },
-          { path: '/admin/settings', element: <AdminSettings /> },
+          { path: '/admin/courses/:courseId/lessons/:lessonId/write', element: <Suspense fallback={<RouteLoading />}><LessonWriteScreen /></Suspense> },
+          { path: '/admin/courses/:courseId/blocks/:blockId/write', element: <Suspense fallback={<RouteLoading />}><BlockTextWriteScreen /></Suspense> },
+          { path: '/admin/templates', element: <Suspense fallback={<RouteLoading />}><AdminTemplates /></Suspense> },
+          { path: '/admin/packs', element: <Suspense fallback={<RouteLoading />}><AdminPacks /></Suspense> },
+          { path: '/admin/media', element: <Suspense fallback={<RouteLoading />}><AdminMedia /></Suspense> },
+          { path: '/admin/contact', element: <Suspense fallback={<RouteLoading />}><AdminContact /></Suspense> },
+          { path: '/admin/orders', element: <Suspense fallback={<RouteLoading />}><AdminOrders /></Suspense> },
+          { path: '/admin/metrics', element: <Suspense fallback={<RouteLoading />}><AdminMetrics /></Suspense> },
+          { path: '/admin/users', element: <Suspense fallback={<RouteLoading />}><AdminUsers /></Suspense> },
+          { path: '/admin/audit', element: <Suspense fallback={<RouteLoading />}><AdminAudit /></Suspense> },
+          { path: '/admin/leads', element: <Suspense fallback={<RouteLoading />}><AdminLeads /></Suspense> },
+          { path: '/admin/settings', element: <Suspense fallback={<RouteLoading />}><AdminSettings /></Suspense> },
         ],
       },
     ],

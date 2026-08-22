@@ -1,5 +1,6 @@
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
@@ -57,6 +58,21 @@ async def get_current_user_id_optional(
     return token.user_id if token else None
 
 
+# _touch_last_sign_in only writes once per this window per user, not on every request
+# — get_current_user runs on nearly every authenticated call, and a DB write each time
+# would be pure overhead for a metric (admin "active users") that only needs
+# day-granularity freshness.
+_LAST_SIGN_IN_TOUCH_WINDOW = timedelta(hours=1)
+
+
+async def _touch_last_sign_in(*, user: User, session: AsyncSession) -> None:
+    now = datetime.now(timezone.utc)
+    if user.last_sign_in_at is not None and now - user.last_sign_in_at < _LAST_SIGN_IN_TOUCH_WINDOW:
+        return
+    user.last_sign_in_at = now
+    await session.commit()
+
+
 async def _resolve_or_create_user(*, token: VerifiedToken, session: AsyncSession) -> User:
     """Shared by `get_current_user` and `get_current_user_optional` so the first-sight
     insert exists in exactly one place. Sign-up happens client-side against Supabase
@@ -68,6 +84,7 @@ async def _resolve_or_create_user(*, token: VerifiedToken, session: AsyncSession
     user = result.scalar_one_or_none()
 
     if user is not None:
+        await _touch_last_sign_in(user=user, session=session)
         return user
 
     user = User(
@@ -75,6 +92,7 @@ async def _resolve_or_create_user(*, token: VerifiedToken, session: AsyncSession
         email=token.email or f"{token.user_id}@unknown.local",
         name=token.name,
         role=Role.MEMBER,
+        last_sign_in_at=datetime.now(timezone.utc),
     )
     session.add(user)
     await session.commit()
@@ -92,6 +110,54 @@ async def get_current_user(
     """401 if absent or invalid — the version every gated route with a required actor
     should depend on."""
     return await _resolve_or_create_user(token=token, session=session)
+
+
+# Phase 10 (§10F re-verification, 2026-08-22): how long a fresh `signInWithPassword`
+# JWT counts as "just reauthenticated." Generous enough that the export-then-close
+# flow (§10F step 4: "offer the export first") doesn't force a second password entry
+# if the admin downloads their data and closes within the same couple of minutes, tight
+# enough that a token grabbed hours or days ago can never satisfy this check.
+_REAUTH_FRESHNESS_WINDOW = timedelta(minutes=5)
+
+
+async def require_recent_reauth(
+    user: User = Depends(get_current_user),
+    token: VerifiedToken = Depends(verify_jwt_full),
+) -> User:
+    """Found 2026-08-22 (Phase 10 re-verification): `/me/account/close` required only
+    a valid session — the "enter your password to close your account" gate
+    (AccountDataPrivacy.tsx) was enforced entirely client-side. A stolen or replayed
+    session token could close the account via a direct API call with no password at
+    all. Supabase has no server-side "verify this password" API (§10B's own
+    documented reason the reauth pattern is client-side everywhere else in this
+    phase), but it DOES re-sign the JWT — a fresh `iat` — every time
+    signInWithPassword succeeds, because that call opens a new session. That claim is
+    inside the cryptographically-signed token, so a stolen stale token cannot forge a
+    recent one without the real password. This checks it server-side, closing the gap
+    without inventing new client-side machinery or a second reauth endpoint.
+    """
+    if token.issued_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "reauth_required",
+                    "message": "Please re-enter your password to continue.",
+                }
+            },
+        )
+    issued_at = datetime.fromtimestamp(token.issued_at, tz=timezone.utc)
+    if datetime.now(timezone.utc) - issued_at > _REAUTH_FRESHNESS_WINDOW:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": {
+                    "code": "reauth_required",
+                    "message": "Please re-enter your password to continue.",
+                }
+            },
+        )
+    return user
 
 
 async def get_current_user_optional(

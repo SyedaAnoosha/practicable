@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
@@ -18,13 +18,18 @@ type MuxPlayerProps = {
   autoPlay?: boolean
   defaultHiddenCaptions?: boolean
   className?: string
+  ref?: React.Ref<HTMLMediaElement>
+  onError?: (e: Event) => void
 }
 
 export function Lesson() {
   const { lessonId } = useParams<{ lessonId: string }>()
   const [MuxPlayer, setMuxPlayer] = useState<ComponentType<MuxPlayerProps> | null>(null)
 
-  const { data: playbackToken, isLoading, error } = useQuery({
+  const playerRef = useRef<HTMLMediaElement>(null)
+  const [tokenExpired, setTokenExpired] = useState(false)
+
+  const { data: playbackToken, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.lessons.playbackToken(lessonId ?? ''),
     queryFn: () => api.get<PlaybackToken>(`/lessons/${lessonId}/playback-token`).then((res) => res.data),
     enabled: !!lessonId,
@@ -37,6 +42,25 @@ export function Lesson() {
       setMuxPlayer(() => mod.default as ComponentType<MuxPlayerProps>)
     })
   }, [])
+
+  // C4: Token-expiry handler — when the mux playback token expires mid-playback,
+  // detect it, preserve position, refetch token, resume.
+  // Must be declared before any early return to satisfy hooks rules.
+  const handleTokenError = useCallback(() => {
+    const position = playerRef.current?.currentTime ?? 0
+    setTokenExpired(true)
+    refetch().then(() => {
+      setTokenExpired(false)
+      requestAnimationFrame(() => {
+        if (playerRef.current) {
+          playerRef.current.currentTime = position
+          playerRef.current.play().catch(() => {
+            // Autoplay may be blocked — user can click play manually.
+          })
+        }
+      })
+    })
+  }, [refetch])
 
   if (error) {
     return (
@@ -64,14 +88,22 @@ export function Lesson() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8">
-      <div className="aspect-video overflow-hidden rounded-xl bg-black shadow-sm">
+      <div className="relative aspect-video overflow-hidden rounded-xl bg-black shadow-sm">
         <MuxPlayer
+          ref={playerRef}
           playbackId={playbackToken.playback_id}
           tokens={{ playback: playbackToken.token }}
           autoPlay={false}
           defaultHiddenCaptions={false} // captions ON by default — DESIGN.md §25.2 [DECIDED]
           className="h-full w-full"
+          onError={tokenExpired ? undefined : handleTokenError}
         />
+        {tokenExpired && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center">
+            <p className="text-sm font-medium text-white">Your session timed out.</p>
+            <p className="mt-1 text-xs text-white/70">Refreshing your access…</p>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
-import { Download, FileText, Info } from 'lucide-react'
+import { Download, FileText, FileSpreadsheet, Info, Layers, Lock } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
@@ -14,6 +14,7 @@ import { EvidencePanel } from '@/components/product/EvidencePanel'
 import { WhyThis } from '@/components/product/WhyThis'
 import { OBJECTION_BLOCK } from '@/lib/labels'
 import { Accordion, type AccordionItemData } from '@/components/ui/Accordion'
+import { FactStrip, type Fact } from '@/components/ui/FactStrip'
 import type { Preview } from '@/components/product/PreviewGallery'
 
 interface PackQuestion {
@@ -158,7 +159,7 @@ export function PackDetail() {
   }))
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-12">
+    <div className="mx-auto w-full max-w-5xl px-5 pb-24 pt-8 sm:px-8 sm:pb-8 lg:px-12">
       <Breadcrumb
         className="animate-enter mb-6"
         items={[
@@ -168,6 +169,38 @@ export function PackDetail() {
       />
 
       <PageTitle eyebrow="Reference pack" title={pack.name} description={pack.description} />
+
+      {/* D1: The fact strip — the four purchase-decision facts in one horizontal row.
+          For a pack: question count, format, file size, and access type. */}
+      {(() => {
+        const facts: Fact[] = [
+          {
+            icon: Layers,
+            label: 'Contents',
+            value: `${pack.question_count} ${pack.question_count === 1 ? 'question' : 'questions'}`,
+            hint: 'Free to read on the site',
+            numeric: true,
+          },
+          ...(pack.format
+            ? [{ icon: FileSpreadsheet, label: 'Format', value: pack.format }]
+            : []),
+          ...(pack.file_size_bytes
+            ? [{
+                icon: FileText,
+                label: 'File size',
+                value: formatBytes(pack.file_size_bytes),
+                numeric: true,
+              }]
+            : []),
+          {
+            icon: Lock,
+            label: 'Access',
+            value: 'Lifetime',
+            hint: 'One-time purchase, no subscription',
+          },
+        ]
+        return <FactStrip facts={facts} className="mt-6" />
+      })()}
 
       {/* §20.6's honesty notice — above the price, above the fold, never fine print. */}
       <div className="mt-8 flex gap-4 rounded-lg border border-border bg-secondary/40 p-5">
@@ -303,6 +336,33 @@ export function PackDetail() {
             </Button>
           </Link>
         </aside>
+      </div>
+
+      {/* E3: Sticky bottom action bar on mobile — the buy/download button
+          follows the scroll so the reader never has to hunt for it on a long page.
+          Respects env(safe-area-inset-bottom) for notched devices. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-5 py-3 backdrop-blur-sm lg:hidden"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          {!pack.owned && (
+            <p className="text-sm font-semibold tabular-nums text-foreground">
+              {formatCurrency(pack.price_amount, pack.currency)}
+            </p>
+          )}
+          <div className="ml-auto">
+            {pack.owned ? (
+              <Button onClick={handleDownload} loading={status === 'preparing'} size="sm">
+                {status === 'idle' && <><Download className="size-4" aria-hidden="true" /> Download</>}
+                {status === 'preparing' && 'Preparing…'}
+                {status === 'downloaded' && 'Downloaded ✓'}
+                {(status === 'error' || status === 'not-entitled') && 'Download again'}
+              </Button>
+            ) : (
+              <Link to={`/buy/${pack.slug}`}><Button size="sm">Buy the pack</Button></Link>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

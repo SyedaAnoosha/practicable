@@ -1,8 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, TimestampMixin, str_enum
 import enum
 import uuid
+
+if TYPE_CHECKING:
+    from app.db.models.lesson import Lesson
 
 class MediaStatus(str, enum.Enum):
     UPLOADING = "uploading"

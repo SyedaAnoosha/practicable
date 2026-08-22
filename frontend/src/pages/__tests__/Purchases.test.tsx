@@ -247,9 +247,37 @@ describe('Purchases — refund request placement (§10D)', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Request a refund' }))
 
-    expect(
-      await screen.findByText(/You've completed more than 15% of this course/),
-    ).toBeInTheDocument()
+    // `[CHANGED 2026-08-22]` Asserts the buyer's ACTUAL figure, not "more than 15%".
+    // The server sends `progress_percent`, and a refusal a reader can check against
+    // their own progress is one they can act on rather than only dispute.
+    expect(await screen.findByText(/You've completed 40% of this course/)).toBeInTheDocument()
+    expect(await screen.findByText(/past the 15% point/)).toBeInTheDocument()
+    // The consumer-guarantee sentence must survive the rewrite — it is the part that
+    // keeps the refusal lawful as well as clear.
+    expect(await screen.findByText(/consumer-guarantee rights still apply/)).toBeInTheDocument()
+  })
+
+  it('falls back to the generic sentence when the server sends no percentage', async () => {
+    // The absence rule: with no number to show, say the general thing rather than
+    // rendering "You've completed null%" or inventing a figure.
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/me/orders') {
+        return Promise.resolve({ data: { orders: [order()], has_more: false, next_cursor: null } })
+      }
+      if (url === '/me/orders/order-1/refund-eligibility') {
+        return Promise.resolve({
+          data: { eligible: false, reason_code: 'progress_exceeded', refund_amount_cents: null, kept_amount_cents: null, progress_percent: null },
+        })
+      }
+      return Promise.resolve({ data: {} })
+    })
+    renderPurchases()
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Request a refund' }))
+
+    expect(await screen.findByText(/more than 15% of this course/)).toBeInTheDocument()
+    expect(screen.queryByText(/null%/)).not.toBeInTheDocument()
   })
 
   it('an unknown reason code degrades to the fallback sentence, never a blank', async () => {

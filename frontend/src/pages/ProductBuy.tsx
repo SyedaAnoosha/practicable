@@ -5,6 +5,7 @@ import { Download, FileQuestion, PlayCircle, ShoppingCart } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
+import { getActivePromoCode } from '@/lib/promo'
 import { useCartStore } from '@/stores/useCartStore'
 import { Button } from '@/components/ui/Button'
 import { PageTitle } from '@/components/ui/PageTitle'
@@ -94,6 +95,7 @@ export function ProductBuy() {
       // just the one-item case of the same cart checkout the drawer uses.
       const { data } = await api.post<{ checkout_url: string }>('/checkout/session', {
         product_ids: [product.id],
+        discount_code: getActivePromoCode(),
       })
       window.location.href = data.checkout_url
     } catch {

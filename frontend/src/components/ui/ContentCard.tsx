@@ -1,6 +1,6 @@
 import { type CSSProperties } from 'react'
 import { Link } from 'react-router'
-import { CircleCheck, FileText, GraduationCap, Layers, Tags, type LucideIcon } from 'lucide-react'
+import { CircleCheck, FileText, Layers, Tags } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { domainColorVar, domainVisual } from '@/lib/domainVisuals'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
@@ -13,41 +13,20 @@ export type ContentKind = 'course' | 'template' | 'question' | 'pack'
 
 interface ContentCardBase {
   kind: ContentKind
-  /** Display title. */
   title: string
-  /** Short description or subtitle. */
   description?: string | null
-  /** Domain name for colour and icon. */
   domain?: string | null
-  /** Link destination. */
   href: string
-  /** Whether the current user already owns this. */
   owned?: boolean
-  /** Price in cents. Null for free items. */
   priceCents?: number | null
-  /** Currency code. */
   currency?: string
-  /** Optional metadata items to show below the description. */
   meta?: (MetaItem | null | undefined | false)[]
-  /** Course-specific: cover image URL. */
   coverImageUrl?: string | null
-  /** Course-specific: slug for generative art fallback. */
   artSlug?: string
-  /** Pack-specific: number of questions. */
   questionCount?: number
-  /** Pack-specific: number of templates. */
   templateCount?: number
-  /** Template-specific: file format string. */
   format?: string | null
-  /** Additional CSS classes. */
   className?: string
-}
-
-const KIND_ICON: Record<ContentKind, LucideIcon> = {
-  course: GraduationCap,
-  template: FileText,
-  question: Tags,
-  pack: Layers,
 }
 
 const KIND_ACTION: Record<ContentKind, { owned: string; browse: string }> = {
@@ -55,30 +34,6 @@ const KIND_ACTION: Record<ContentKind, { owned: string; browse: string }> = {
   template: { owned: 'Download', browse: 'See what\'s included' },
   question: { owned: 'Read', browse: 'Read the answer' },
   pack: { owned: 'Download', browse: 'View pack' },
-}
-
-/**
- * The domain signal: colour + icon + label, always together.
- *
- * ⚠ This is an ACCESSIBILITY REQUIREMENT, not a style choice, and it is why the
- * component exists rather than each card branch inlining its own eyebrow.
- *
- * Measured 2026-08-22 (REDESIGN_SUMMARY.md §3.2): simulating protanopia, deuteranopia
- * and tritanopia over all ten pairs of the five domain colours, the worst pair
- * separates at 1.04:1 — effectively identical. An exhaustive search over ~81,000
- * five-hue combinations inside the contrast-legal envelope could not beat 1.08:1. No
- * five-hue palette survives dichromacy on hue alone, so the re-hue alone would have
- * improved the palette for most users while leaving colour-blind users exactly where
- * they started.
- *
- * The icon here is the DOMAIN's icon (ShieldAlert / Radar / ClipboardCheck / Activity
- * / Sparkles from domainVisuals), deliberately not the content KIND's icon — the kind
- * is already conveyed by the card's shape, its artwork and its action verb, whereas
- * the domain previously had colour and nothing else.
- */
-function PackDomainIcon({ domain }: { domain: string }) {
-  const DomainIcon = domainVisual(domain).icon
-  return <DomainIcon className="size-4" aria-hidden="true" />
 }
 
 function DomainTag({ domain, tone, className }: { domain: string; tone: string; className?: string }) {
@@ -95,14 +50,18 @@ function DomainTag({ domain, tone, className }: { domain: string; tone: string; 
 }
 
 /**
- * A unified content card with domain colour treatment, metadata row, and
- * access/price state. Used across catalogues, related-rail, and home.
+ * A unified content card — editorial index entry treatment.
  *
- * Design system references:
- * - Domain left-rule: M3 (domain identity) from design-research
- * - Meta row: M5 (metadata richness) — DataCamp-style fact strip
- * - Hover lift: §39.3 (2px, no scale)
- * - Gold tile: for template artefacts (§7 finding 4)
+ * `[REDESIGNED 2026-08-22]` Was a rounded box with a coloured left bar — the single
+ * most recognisable AI-generated card pattern. Replaced with the editorial treatment
+ * from the Home QuestionCard: top rule, square corners, mono metadata, title
+ * underline on hover.
+ *
+ * The whole card is one `<Link>` (§36 — a card with a separate link inside is two
+ * tab stops for one destination). No hover-lift on the card itself; the title
+ * underlines on hover, which is what a link does.
+ *
+ * Domain identity: colour + icon + label together, never colour alone (§3.2).
  */
 export function ContentCard({
   kind,
@@ -122,17 +81,13 @@ export function ContentCard({
   className,
 }: ContentCardBase) {
   const tone = domain ? domainColorVar(domain) : undefined
-  const Icon = KIND_ICON[kind]
   const action = KIND_ACTION[kind]
 
-  // Build metadata from props if not explicitly provided
   const computedMeta: MetaItem[] = meta.length > 0
     ? (meta.filter(Boolean) as MetaItem[])
     : (() => {
         const items: (MetaItem | null | undefined | false)[] = []
-        if (kind === 'course') {
-          // Course meta is typically passed explicitly (module/lesson counts)
-        } else if (kind === 'template') {
+        if (kind === 'template') {
           if (format) items.push({ icon: Layers, value: format })
         } else if (kind === 'pack') {
           if (questionCount != null) items.push({ icon: Tags, value: `${questionCount} question${questionCount === 1 ? '' : 's'}` })
@@ -142,121 +97,161 @@ export function ContentCard({
       })()
 
   return (
-    <Link to={href} className="group">
-      <div
-        className={cn(
-          'hover-lift hover-lift-domain flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card',
-          // Domain left-rule for course/pack; plain border for template/question
-          (kind === 'course' || kind === 'pack') && 'border-l-4',
-          className,
-        )}
-        style={
-          tone
-            ? { borderLeftColor: tone, '--card-domain-color': tone } as CSSProperties
-            : undefined
-        }
-      >
-        {/* Course cover image or generative art */}
-        {kind === 'course' && (
-          <CourseArt
-            slug={artSlug ?? ''}
-            domain={domain ?? ''}
-            src={coverImageUrl}
-            alt={`Cover image for ${title}`}
-            className="aspect-[16/9]"
-          />
-        )}
+    <Link
+      to={href}
+      className={cn(
+        'group relative block bg-card transition-colors duration-150',
+        // Divided-column treatment: flat background, no border radius.
+        // The grid parent supplies the borders via gap-px + bg-border.
+        // Fallback border for when used outside a divided grid.
+        'border border-border sm:border-0',
+        className,
+      )}
+    >
+      {/* The domain rule: 2px across the top, full bleed. Same treatment as the
+          Home QuestionCard — the single most effective domain signal after re-hue.
+          Thickens slightly on hover rather than the card moving. */}
+      {tone && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 top-0 h-0.5 transition-[height] duration-150 group-hover:h-[3px]"
+          style={{ backgroundColor: tone }}
+        />
+      )}
 
-        {/* Template gold tile header */}
-        {kind === 'template' && (
-          <div className="flex items-center gap-3 border-b border-border px-5 pt-4">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-gold-soft text-gold-strong ring-1 ring-inset ring-gold/40">
-              <Icon className="size-4" aria-hidden="true" />
-            </span>
+      {/* Course: artwork + content */}
+      {kind === 'course' && (
+        <>
+          {coverImageUrl || artSlug ? (
+            <CourseArt
+              slug={artSlug ?? ''}
+              domain={domain ?? ''}
+              src={coverImageUrl}
+              alt={`Cover image for ${title}`}
+              className="aspect-[16/9]"
+            />
+          ) : null}
+          <div className="px-4 pt-3 pb-4">
+            {domain && tone && <DomainTag domain={domain} tone={tone} />}
+            <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
+              {title}
+            </h3>
+            {description && (
+              <p className="mt-1 line-clamp-2 font-serif text-xs leading-relaxed text-muted-foreground">
+                {description}
+              </p>
+            )}
+            {computedMeta.length > 0 && (
+              <Meta className="mt-2" tone={tone} items={computedMeta} />
+            )}
+            <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5">
+              {owned ? (
+                <Badge variant="success" className="gap-1 text-[0.625rem]">
+                  <CircleCheck className="size-2.5" aria-hidden="true" />
+                  Owned
+                </Badge>
+              ) : priceCents != null ? (
+                <span className="font-mono text-xs tabular-nums text-foreground">
+                  {formatCurrency(priceCents, currency)}
+                </span>
+              ) : <span />}
+              <span className="text-xs font-medium text-accent">
+                {owned ? action.owned : action.browse}
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Template: format badge + content */}
+      {kind === 'template' && (
+        <div className="px-4 pt-3 pb-4">
+          <div className="flex items-center gap-2">
             {format && (
-              <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.6875rem] font-medium tracking-wide text-muted-foreground">
+              <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.625rem] font-medium tracking-wide text-muted-foreground">
                 {format}
               </span>
             )}
           </div>
-        )}
-
-        {/* Question domain eyebrow */}
-        {kind === 'question' && domain && tone && (
-          <div className="border-b border-border px-5 pt-4">
-            <DomainTag domain={domain} tone={tone} />
-          </div>
-        )}
-
-        {/* Pack icon header */}
-        {kind === 'pack' && (
-          <div className="flex items-center gap-3 px-5 pt-4">
-            <span
-              className="flex size-9 shrink-0 items-center justify-center rounded-md"
-              style={tone ? { backgroundColor: `color-mix(in srgb, ${tone} 12%, transparent)`, color: tone } : undefined}
-            >
-              {/* Domain icon, not the pack icon: "this is a pack" is already carried by
-                  the card's action verb and its question/template counts. */}
-              {domain ? <PackDomainIcon domain={domain} /> : <Icon className="size-4" aria-hidden="true" />}
-            </span>
-            {domain && (
-              <p className="text-xs font-medium" style={{ color: tone }}>{domain}</p>
-            )}
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="flex flex-1 flex-col p-5">
-          {/* Eyebrow for course and pack (template has its own above) */}
-          {/* Courses previously showed the domain NAME with no icon and packs showed
-              their eyebrow twice. Both now use the one signal. */}
-          {kind === 'course' && domain && tone && <DomainTag domain={domain} tone={tone} />}
-
-          <h3 className={cn(
-            'text-h4 font-semibold text-foreground',
-            (kind === 'course' || kind === 'pack') && 'mt-2',
-            kind === 'template' && 'mt-3',
-            kind === 'question' && 'mt-2',
-          )}>
+          <h3 className="mt-2 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
             {title}
           </h3>
-
           {description && (
-            <p className={cn(
-              'line-clamp-2 text-sm text-muted-foreground',
-              kind === 'course' && 'mt-1.5 font-serif',
-              kind !== 'course' && 'mt-1.5',
-            )}>
+            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
               {description}
             </p>
           )}
-
-          {/* Meta row */}
           {computedMeta.length > 0 && (
-            <Meta className="mt-3" tone={tone} items={computedMeta} />
+            <Meta className="mt-2" items={computedMeta} />
           )}
-
-          {/* Footer: access state + action */}
-          <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+          <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5">
             {owned ? (
-              <Badge variant="success" className="gap-1">
-                <CircleCheck className="size-3" aria-hidden="true" />
-                In your library
+              <Badge variant="success" className="gap-1 text-[0.625rem]">
+                <CircleCheck className="size-2.5" aria-hidden="true" />
+                Owned
               </Badge>
             ) : priceCents != null ? (
-              <p className="font-mono text-sm font-semibold tabular-nums text-foreground">
+              <span className="font-mono text-xs tabular-nums text-foreground">
                 {formatCurrency(priceCents, currency)}
-              </p>
-            ) : (
-              <span />
-            )}
-
-            <span className="shrink-0 text-sm font-medium text-accent group-hover:underline">
+              </span>
+            ) : <span />}
+            <span className="text-xs font-medium text-accent">
               {owned ? action.owned : action.browse}
             </span>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Question: domain eyebrow + content */}
+      {kind === 'question' && (
+        <div className="px-4 pt-3 pb-4">
+          {domain && tone && <DomainTag domain={domain} tone={tone} />}
+          <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
+            {title}
+          </h3>
+          {description && (
+            <p className="mt-1 line-clamp-2 font-serif text-xs leading-relaxed text-muted-foreground">
+              {description}
+            </p>
+          )}
+          {computedMeta.length > 0 && (
+            <Meta className="mt-2" items={computedMeta} />
+          )}
+        </div>
+      )}
+
+      {/* Pack: domain label + content */}
+      {kind === 'pack' && (
+        <div className="px-4 pt-3 pb-4">
+          {domain && tone && <DomainTag domain={domain} tone={tone} />}
+          <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
+            {title}
+          </h3>
+          {description && (
+            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+              {description}
+            </p>
+          )}
+          {computedMeta.length > 0 && (
+            <Meta className="mt-2" items={computedMeta} />
+          )}
+          <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5">
+            {owned ? (
+              <Badge variant="success" className="gap-1 text-[0.625rem]">
+                <CircleCheck className="size-2.5" aria-hidden="true" />
+                Owned
+              </Badge>
+            ) : priceCents != null ? (
+              <span className="font-mono text-xs tabular-nums text-foreground">
+                {formatCurrency(priceCents, currency)}
+              </span>
+            ) : <span />}
+            <span className="text-xs font-medium text-accent">
+              {owned ? action.owned : action.browse}
+            </span>
+          </div>
+        </div>
+      )}
     </Link>
   )
 }

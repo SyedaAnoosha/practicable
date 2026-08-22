@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { SectionHeading } from '@/components/ui/SectionHeading'
+import { SkeletonState } from '@/components/ui/SkeletonState'
 
 interface LibraryCourse {
   kind: 'course'
@@ -129,9 +130,13 @@ export function Library() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Loading your library">
-        <div className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
-        <span className="sr-only">Loading your library…</span>
+      <div className="mx-auto w-full max-w-7xl px-5 py-10 sm:px-8">
+        <PageTitle
+          eyebrow="Your library"
+          title="Everything you've bought"
+          description="Courses, templates and reference guidance — all in one place, yours to come back to."
+        />
+        <SkeletonState className="mt-8" variant="row" rows={5} />
       </div>
     )
   }

@@ -18,8 +18,8 @@ interface ProductRanking {
   id: string
   name: string
   units: number
-  revenue_cents: number
-  revenue_dollars: number
+  revenueCents: number
+  revenueDollars: number
 }
 
 interface CourseEnrollmentRanking {
@@ -32,24 +32,22 @@ interface CourseEnrollmentRanking {
 
 interface MetricsResponse {
   metrics: Metric[]
-  generated_at: string
-  revenue_gross_cents: number
-  revenue_refunded_cents: number
-  revenue_net_cents: number
-  enrollment_splits: Record<string, number>
-  product_rankings: ProductRanking[]
-  download_links_issued: number
-  course_enrollment_rankings: CourseEnrollmentRanking[]
-  /** W4-R4 item 6 — routing clicks, split by the surface that produced them. Optional
-   *  on the type, and defaulted at the read site below: the admin page must not blank
-   *  itself out against a backend that predates this field. A metrics page is exactly
-   *  the wrong place for one absent key to take out every other number on the screen. */
-  recommendation_clicks?: { question: number; catalogue: number; total: number }
-  recommendation_rankings?: RecommendationRanking[]
+  generatedAt: string
+  revenueGrossCents: number
+  revenueRefundedCents: number
+  revenueNetCents: number
+  /* Optional in the TYPE because the component must survive their absence (see the
+     hardening note in the body). The API populates all of them today. */
+  enrollmentSplits?: Record<string, number>
+  productRankings?: ProductRanking[]
+  downloadLinksIssued: number
+  courseEnrollmentRankings?: CourseEnrollmentRanking[]
+  recommendationClicks?: { question: number; catalogue: number; total: number }
+  recommendationRankings?: RecommendationRanking[]
 }
 
 interface RecommendationRanking {
-  product_slug: string
+  productSlug: string
   clicks: number
 }
 
@@ -61,7 +59,7 @@ function TrendChartWrapper() {
     queryKey: queryKeys.admin.revenueSeries(90),
     queryFn: () =>
       api
-        .get<{ data: Array<{ date: string; revenue_cents: number; order_count: number }> }>(
+        .get<{ data: Array<{ date: string; revenueCents: number; orderCount: number }> }>(
           '/admin/metrics/revenue-series?days=90'
         )
         .then((r) => r.data),
@@ -75,8 +73,8 @@ function TrendChartWrapper() {
 
   const chartData = (seriesData?.data ?? []).map((d) => ({
     date: d.date,
-    revenue: d.revenue_cents,
-    orders: d.order_count,
+    revenue: d.revenueCents,
+    orders: d.orderCount,
   }))
 
   return (
@@ -121,6 +119,20 @@ export function AdminMetrics() {
   }
 
   const metrics = metricsData.metrics
+
+  /* `[HARDENED 2026-08-22]` These four sections each dereferenced a field the type
+     declares as required, and `AdminMetrics` crashed outright (`Cannot convert
+     undefined or null to object`) when one was absent — taking the whole admin page
+     down, including the revenue tiles above it that had loaded fine.
+
+     The backend does populate all four today, so this is defence against a partial or
+     older response rather than a known bug. But an admin dashboard is exactly where a
+     single missing aggregate must degrade to "that section is absent", not to a blank
+     screen. `recommendationClicks` below was already guarded this way; these four now
+     match it. */
+  const enrollmentSplits = metricsData.enrollmentSplits ?? {}
+  const productRankings = metricsData.productRankings ?? []
+  const courseEnrollmentRankings = metricsData.courseEnrollmentRankings ?? []
 
   // Group metrics into categories
   const userMetrics = metrics.filter((m) => m.name.includes('user'))
@@ -193,19 +205,19 @@ export function AdminMetrics() {
           <div className="grid gap-4 sm:grid-cols-3">
             <MetricTile
               name="Gross revenue"
-              numerator={metricsData.revenue_gross_cents}
+              numerator={metricsData.revenueGrossCents}
               denominator={1}
               description="Total from completed orders (cents)"
             />
             <MetricTile
               name="Refunded"
-              numerator={metricsData.revenue_refunded_cents}
+              numerator={metricsData.revenueRefundedCents}
               denominator={1}
               description="Total refunded (cents)"
             />
             <MetricTile
               name="Net revenue"
-              numerator={metricsData.revenue_net_cents}
+              numerator={metricsData.revenueNetCents}
               denominator={1}
               description="Gross minus refunded (cents)"
             />
@@ -213,11 +225,11 @@ export function AdminMetrics() {
         </section>
 
         {/* Enrollment Splits */}
-        {Object.keys(metricsData.enrollment_splits).length > 0 && (
+        {Object.keys(enrollmentSplits).length > 0 && (
           <section>
             <h3 className="mb-4 text-lg font-semibold text-foreground">Enrollments</h3>
             <div className="grid gap-4 sm:grid-cols-3">
-              {Object.entries(metricsData.enrollment_splits).map(([key, count]) => (
+              {Object.entries(enrollmentSplits).map(([key, count]) => (
                 <MetricTile
                   key={key}
                   name={`${key} enrollments`}
@@ -231,7 +243,7 @@ export function AdminMetrics() {
         )}
 
         {/* Product Rankings */}
-        {metricsData.product_rankings.length > 0 && (
+        {productRankings.length > 0 && (
           <section>
             <h3 className="mb-4 text-lg font-semibold text-foreground">Top products by revenue</h3>
             <div className="overflow-x-auto rounded-lg border border-border">
@@ -244,12 +256,12 @@ export function AdminMetrics() {
                   </tr>
                 </thead>
                 <tbody>
-                  {metricsData.product_rankings.map((p) => (
+                  {productRankings.map((p) => (
                     <tr key={p.id} className="border-t border-border">
                       <td className="px-4 py-2.5 text-foreground">{p.name}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">{p.units}</td>
                       <td className="px-4 py-2.5 text-right font-medium tabular-nums text-foreground">
-                        ${p.revenue_dollars.toFixed(2)}
+                        ${p.revenueDollars.toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -260,7 +272,7 @@ export function AdminMetrics() {
         )}
 
         {/* Course Enrollment Rankings — 8C-2 */}
-        {metricsData.course_enrollment_rankings.length > 0 && (
+        {courseEnrollmentRankings.length > 0 && (
           <section>
             <h3 className="mb-4 text-lg font-semibold text-foreground">Courses by enrollment</h3>
             <div className="overflow-x-auto rounded-lg border border-border">
@@ -274,7 +286,7 @@ export function AdminMetrics() {
                   </tr>
                 </thead>
                 <tbody>
-                  {metricsData.course_enrollment_rankings.map((c) => (
+                  {courseEnrollmentRankings.map((c) => (
                     <tr key={c.id} className="border-t border-border">
                       <td className="px-4 py-2.5 text-foreground">{c.title}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums text-foreground">{c.enrolled}</td>
@@ -295,7 +307,7 @@ export function AdminMetrics() {
             measure this" instead. */}
         <section>
           <h3 className="mb-4 text-lg font-semibold text-foreground">Recommendations followed</h3>
-          {(metricsData.recommendation_clicks?.total ?? 0) === 0 ? (
+          {(metricsData.recommendationClicks?.total ?? 0) === 0 ? (
             <p className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
               No routed recommendation has been followed yet. This fills once a reader
               opens a product from a question page or a filtered catalogue.
@@ -304,15 +316,15 @@ export function AdminMetrics() {
             <>
               <p className="mb-3 text-sm text-muted-foreground">
                 <span className="font-medium text-foreground tabular-nums">
-                  {metricsData.recommendation_clicks?.question ?? 0}
+                  {metricsData.recommendationClicks?.question ?? 0}
                 </span>{' '}
                 from a question page ·{' '}
                 <span className="font-medium text-foreground tabular-nums">
-                  {metricsData.recommendation_clicks?.catalogue ?? 0}
+                  {metricsData.recommendationClicks?.catalogue ?? 0}
                 </span>{' '}
                 from a filtered catalogue
               </p>
-              {(metricsData.recommendation_rankings?.length ?? 0) > 0 && (
+              {(metricsData.recommendationRankings?.length ?? 0) > 0 && (
                 <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/60 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -322,9 +334,9 @@ export function AdminMetrics() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(metricsData.recommendation_rankings ?? []).map((r) => (
-                        <tr key={r.product_slug} className="border-t border-border">
-                          <td className="px-4 py-2.5 text-foreground">{r.product_slug}</td>
+                      {(metricsData.recommendationRankings ?? []).map((r) => (
+                        <tr key={r.productSlug} className="border-t border-border">
+                          <td className="px-4 py-2.5 text-foreground">{r.productSlug}</td>
                           <td className="px-4 py-2.5 text-right font-medium tabular-nums text-foreground">
                             {r.clicks}
                           </td>
@@ -347,7 +359,7 @@ export function AdminMetrics() {
         </section>
 
         <p className="text-xs text-muted-foreground">
-          Last updated: {new Date(metricsData.generated_at).toLocaleString()}
+          Last updated: {new Date(metricsData.generatedAt).toLocaleString()}
         </p>
       </div>
     </div>

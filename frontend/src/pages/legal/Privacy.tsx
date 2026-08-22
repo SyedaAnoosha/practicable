@@ -47,6 +47,28 @@ export function Privacy() {
         </p>
       </LegalSection>
 
+      {/* `[ADDED 2026-08-22]` The cookie notice links here for detail, and there was no
+          section to link to. Written from the actual storage keys in the codebase
+          (grep `practicable:` under frontend/src) rather than from a template, so it
+          can be re-verified the same way when it drifts. */}
+      <LegalSection heading="Cookies and browser storage">
+        <p>
+          We use no advertising, analytics, or third-party tracking cookies. What we store is
+          limited to what the site needs to work, and it stays in your own browser:
+        </p>
+        <ul className="ml-5 list-disc space-y-2">
+          <li><strong className="font-sans font-semibold text-foreground">Signing you in</strong> — Supabase sets a session cookie so you stay signed in between pages. Signing out clears it.</li>
+          <li><strong className="font-sans font-semibold text-foreground">Your cart</strong> — items you have added are kept in your browser so they survive a reload.</li>
+          <li><strong className="font-sans font-semibold text-foreground">Your preferences</strong> — light or dark theme, whether the sidebar is collapsed, whether you have dismissed a notice, and a promotional code if you copied one.</li>
+          <li><strong className="font-sans font-semibold text-foreground">Payment</strong> — Stripe sets its own cookies on its checkout pages, which we do not control. See Stripe's privacy policy for those.</li>
+        </ul>
+        <p>
+          Everything in the first three groups is strictly necessary or a preference you set
+          yourself, so there is nothing to opt out of — but clearing your browser's site data
+          for this domain removes all of it.
+        </p>
+      </LegalSection>
+
       <LegalSection heading="How long we keep it">
         <ul className="ml-5 list-disc space-y-2">
           <li>Account details — while your account is active, plus 12 months after your last activity.</li>

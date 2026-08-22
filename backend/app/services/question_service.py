@@ -14,7 +14,7 @@ silently diverging.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Union
 
 EXACT_POINTS = 2
 CLOSE_POINTS = 1
@@ -85,8 +85,8 @@ class Miss:
     apart, only exact-vs-not does)."""
 
     dimension: str
-    requested: object  # str for ordinal/domain dimensions, tuple[str, ...] for multi-select
-    actual: object
+    requested: Union[str, tuple[str, ...]]  # str for ordinal/domain dimensions, tuple for multi-select
+    actual: Optional[Union[str, tuple[str, ...]]]
     distance: Optional[int]
 
 

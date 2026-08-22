@@ -4,16 +4,17 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import get_current_user, get_current_user_id
+from app.core.deps import get_current_user, get_current_user_id, require_recent_reauth
 from app.core.entitlements import resolve_product_ids
 from app.core.rate_limit import RateLimiter
 from app.integrations.stripe_client import create_refund
 from app.services.email_service import send_refund_confirmation_email
 from app.services.refund_service import apply_refund
+from app.services.account_service import deactivate_user
 import stripe as stripe_sdk
 from app.db.models import (
     Course,
@@ -287,6 +288,12 @@ class OrderOut(BaseModel):
 class OrdersOut(BaseModel):
     orders: list[OrderOut]
     has_more: bool
+    # Phase 10 (§10C re-verification, 2026-08-22): this was computed below and then
+    # silently dropped — has_more was returned with no way to actually request the
+    # next page. A caller could learn "there's more" but had no cursor to ask for it
+    # with short of re-deriving it from the last row's created_at itself, duplicating
+    # this endpoint's own keyset logic. Added so the contract is actually usable.
+    next_cursor: Optional[str] = None
 
 
 @router.get("/me/orders", response_model=OrdersOut)
@@ -296,7 +303,17 @@ async def get_my_orders(
     cursor: Optional[str] = None,
     limit: int = 20,
 ):
-    """Buyer's own orders, keyset-paginated. Returns items + refund fields."""
+    """Buyer's own orders, keyset-paginated. Returns items + refund fields.
+
+    Phase 10 (§10C re-verification, 2026-08-22): the cursor filter used to compare
+    created_at alone (`WHERE created_at < :cursor`), which DESIGN.md §26.3 documents
+    as the wrong shape — two orders can share a timestamp, and a created_at-only
+    cursor silently skips the rest of a tied batch rather than raising or repeating.
+    Caught by a real test: 3 orders created in the same request all landed on one
+    timestamp, and the second page came back empty. Fixed to the row-value form
+    §26.3 already specifies: `(created_at, id) < (:cursor_created_at, :cursor_id)`,
+    with `id` as the tiebreak so the ordering is total.
+    """
     uid = uuid.UUID(user_id)
     q = (
         select(Order)
@@ -306,7 +323,18 @@ async def get_my_orders(
         .limit(limit + 1)
     )
     if cursor:
-        q = q.where(Order.created_at < datetime.fromisoformat(cursor))
+        cursor_created_at, _, cursor_id = cursor.partition("|")
+        try:
+            parsed_created_at = datetime.fromisoformat(cursor_created_at)
+            parsed_id = uuid.UUID(cursor_id)
+        except ValueError:
+            # Malformed cursor — ignore and return from the start, same graceful
+            # degradation admin/orders.py uses for the same failure mode.
+            parsed_created_at = None
+        if parsed_created_at is not None:
+            q = q.where(
+                tuple_(Order.created_at, Order.id) < (parsed_created_at, parsed_id)
+            )
     result = await session.execute(q)
     rows = list(result.scalars().unique().all())
     has_more = len(rows) > limit
@@ -349,9 +377,90 @@ async def get_my_orders(
 
     next_cursor = None
     if has_more and rows:
-        next_cursor = rows[-1].created_at.isoformat()
+        last = rows[-1]
+        next_cursor = f"{last.created_at.isoformat()}|{last.id}"
 
-    return OrdersOut(orders=orders, has_more=has_more)
+    return OrdersOut(orders=orders, has_more=has_more, next_cursor=next_cursor)
+
+
+class ReceiptLineOut(BaseModel):
+    product_name: str
+    price_amount_cents: int
+
+
+class ReceiptOut(BaseModel):
+    """§10C step 2 `[GAP]`: no Stripe invoice id is ever persisted on `orders` — it's
+    fetched from the Stripe session at webhook time and only reaches the one-shot
+    receipt email (webhooks.py), never saved. So a receipt requested later has
+    nothing real to link to. Per the plan's own instruction ('if not [stored], regen
+    from order data. Never fabricate an invoice number.'), this regenerates the
+    receipt from the order row alone and omits invoice_number entirely — an absent
+    field, never a fake one."""
+
+    order_id: str
+    order_date: datetime
+    status: str
+    currency: str
+    total_amount_cents: int
+    lines: list[ReceiptLineOut]
+    buyer_refund_amount_cents: Optional[int] = None
+    buyer_refunded_at: Optional[datetime] = None
+    seller_legal_name: Optional[str] = None
+
+
+@router.get("/me/orders/{order_id}/receipt", response_model=ReceiptOut)
+async def get_order_receipt(
+    order_id: str,
+    session: AsyncSession = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),
+):
+    """§10C step 2: a receipt for one of the caller's own orders, regenerated from
+    order data — scoped strictly to the requesting user's own order, matching every
+    other /me/* row-ownership check in this file."""
+    try:
+        oid = uuid.UUID(order_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    uid = uuid.UUID(user_id)
+    result = await session.execute(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.id == oid, Order.user_id == uid)
+    )
+    order = result.scalar_one_or_none()
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    from app.db.models import Product
+
+    product_ids = {item.product_id for item in order.items}
+    product_names: dict[uuid.UUID, str] = {}
+    if product_ids:
+        name_result = await session.execute(
+            select(Product.id, Product.name).where(Product.id.in_(product_ids))
+        )
+        product_names = {row[0]: row[1] for row in name_result.all()}
+
+    from app.core.config import settings
+
+    return ReceiptOut(
+        order_id=str(order.id),
+        order_date=order.created_at,
+        status=order.status.value if hasattr(order.status, "value") else str(order.status),
+        currency=order.currency,
+        total_amount_cents=order.total_amount_cents,
+        lines=[
+            ReceiptLineOut(
+                product_name=product_names.get(item.product_id, "Unknown"),
+                price_amount_cents=item.price_amount_cents,
+            )
+            for item in order.items
+        ],
+        buyer_refund_amount_cents=order.buyer_refund_amount_cents,
+        buyer_refunded_at=order.buyer_refunded_at,
+        seller_legal_name=settings.seller_legal_name or None,
+    )
 
 
 class RefundEligibilityOut(BaseModel):
@@ -377,6 +486,60 @@ def _compute_refund_amount(total_cents: int) -> tuple[int, int]:
     keep = (total * REFUND_KEEP_PERCENT / Decimal('100')).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
     refund = total - keep
     return int(refund), int(keep)
+
+
+async def _resolve_course_ids(session: AsyncSession, product_ids: list[uuid.UUID]) -> list[uuid.UUID]:
+    """Every course reachable from these products — directly OR through their lessons.
+
+    `[FIXED 2026-08-22]` Reported by the owner against the live database: order
+    `0b29c5e4`, "Risk Register Fundamentals", A$49, plainly a course, was told
+    *"This order doesn't include a course. Contact us and we'll sort it out."*
+
+    Both refund endpoints used to ask only `content_type == 'course'`. `product_contents`
+    is polymorphic, and a course product may enumerate its **lessons** instead of the
+    course row. On the live catalogue that is the normal case, not the exception:
+
+        content_type   rows          product                        course lesson tpl qset
+        question_set    122          risk-register-fundamentals        0     3     1    1
+        template         11          risk-register-bundle              0     3     2   60
+        lesson           11          managing-cyber-risk-...-course    1     5     0    0
+        course            1   <--
+
+    One product in ten used the row the check required, so nine were told they contained
+    no course. Resolving through `lesson -> module -> course` (the real ownership chain;
+    `lessons` has no `course_id` of its own) covers both shapes.
+
+    Returns a de-duplicated list: a product carrying BOTH a direct course row and that
+    course's lessons must not count the course twice, or `func.max(progress)` would be
+    computed over a multiset and any later `count`-based rule would be wrong.
+    """
+    if not product_ids:
+        return []
+
+    direct = await session.execute(
+        select(ProductContent.content_id).where(
+            ProductContent.product_id.in_(product_ids),
+            ProductContent.content_type == "course",
+        )
+    )
+
+    # `lessons.module_id -> modules.course_id`. There is no `lessons.course_id`.
+    via_lessons = await session.execute(
+        select(Module.course_id)
+        .select_from(ProductContent)
+        .join(Lesson, Lesson.id == ProductContent.content_id)
+        .join(Module, Module.id == Lesson.module_id)
+        .where(
+            ProductContent.product_id.in_(product_ids),
+            ProductContent.content_type == "lesson",
+        )
+    )
+
+    seen: dict[uuid.UUID, None] = {}
+    for course_id in list(direct.scalars().all()) + list(via_lessons.scalars().all()):
+        if course_id is not None:
+            seen.setdefault(course_id, None)
+    return list(seen)
 
 
 @router.get("/me/orders/{order_id}/refund-eligibility", response_model=RefundEligibilityOut)
@@ -407,15 +570,11 @@ async def get_refund_eligibility(
     if order.status != OrderStatus.COMPLETED:
         return RefundEligibilityOut(eligible=False, reason_code="order_not_completed")
 
-    # Check if the order contains at least one course
+    # Check if the order contains at least one course — directly or via its lessons.
+    # See `_resolve_course_ids` for why the direct-row-only version was wrong for nine
+    # of the ten products in the live catalogue.
     product_ids = [item.product_id for item in order.items]
-    course_contents = await session.execute(
-        select(ProductContent.content_id).where(
-            ProductContent.product_id.in_(product_ids),
-            ProductContent.content_type == "course",
-        )
-    )
-    course_ids = list(course_contents.scalars().all())
+    course_ids = await _resolve_course_ids(session, product_ids)
     if not course_ids:
         return RefundEligibilityOut(eligible=False, reason_code="no_course_in_order")
 
@@ -510,15 +669,13 @@ async def request_refund(
             detail="Only completed orders can be refunded.",
         )
 
-    # Re-check eligibility server-side
+    # Re-check eligibility server-side, through the SAME resolver the GET uses. These
+    # two endpoints previously carried their own copies of this query and so were wrong
+    # in the same way — a GET saying "eligible" followed by a POST saying "this order
+    # doesn't include a course" is the worst version of that bug, because the buyer is
+    # invited to click and then refused.
     product_ids = [item.product_id for item in order.items]
-    course_contents = await session.execute(
-        select(ProductContent.content_id).where(
-            ProductContent.product_id.in_(product_ids),
-            ProductContent.content_type == "course",
-        )
-    )
-    course_ids = list(course_contents.scalars().all())
+    course_ids = await _resolve_course_ids(session, product_ids)
     if not course_ids:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -652,6 +809,7 @@ async def update_my_profile(
             detail={"error": {"code": "name_required", "message": "Name cannot be empty."}},
         )
 
+    previous_name = user.name or ""
     user.name = full_name
     await record_audit(
         session,
@@ -662,6 +820,27 @@ async def update_my_profile(
         context={"name": full_name},
     )
     await session.commit()
+
+    # §10A: the alert fires on name, email AND password change. Name was the one of the
+    # three that never sent (found 2026-08-22). Changing the display name is one of the
+    # first things an account takeover does — it is the cheapest way to make later
+    # messages look legitimate — so it is exactly the door the alert should cover.
+    #
+    # Best-effort and after commit, the same shape the password path uses: a failed
+    # side-effect email must never undo an already-committed change (BACKEND.md §6.1).
+    if previous_name != full_name:
+        try:
+            await send_security_alert_email(
+                to_email=user.email,
+                action="Name changed",
+                details=(
+                    "Your display name was changed"
+                    + (' from "' + previous_name + '"' if previous_name else "")
+                    + ' to "' + full_name + '". If this wasn\'t you, contact us immediately.'
+                ),
+            )
+        except Exception:
+            pass  # Never fail the request for a side-effect email
 
     return ProfileUpdateOut(
         id=str(user.id),
@@ -921,18 +1100,31 @@ async def export_my_data(
 
 
 class AccountCloseIn(BaseModel):
-    """Closure requires the current password verified client-side via
-    supabase.auth.signInWithPassword before calling this endpoint."""
+    """Closure requires the current password, verified client-side via
+    supabase.auth.signInWithPassword immediately before calling this endpoint —
+    require_recent_reauth then checks server-side that the JWT actually is the
+    fresh one that call produces, not an older stolen/replayed token."""
 
 
 @router.post("/me/account/close")
 async def close_my_account(
     session: AsyncSession = Depends(get_session),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_recent_reauth),
 ):
-    """Deactivate the current user's account. Reuses the existing deactivation
-    logic from admin/users.py:269 — setting disabled_at, which the entitlements
-    gate already filters on (core/entitlements.py:53).
+    """Deactivate the current user's account via the shared `deactivate_user`
+    service (app/services/account_service.py) — setting disabled_at, which the
+    entitlements gate already filters on (core/entitlements.py:53).
+
+    Found 2026-08-22 (Phase 10 re-verification), two gaps in the same endpoint:
+    (1) this previously depended on plain get_current_user — any valid session
+    could close the account, with the password gate enforced only by
+    AccountDataPrivacy.tsx choosing to call signInWithPassword first.
+    require_recent_reauth (core/deps.py) closes that gap server-side, using the
+    fresh `iat` Supabase's own reauth call produces. (2) this and
+    admin/users.py's deactivate_user each inlined `user.disabled_at =
+    datetime.now(timezone.utc)` independently, despite the plan's explicit "do not
+    add a second mechanism... extract to a service function" instruction — fixed
+    by extracting `deactivate_user` and having both call it.
 
     This is deactivation, never hard delete (Research §7.6): financial records
     must survive 7 years, and orders.user_id is a non-nullable FK."""
@@ -948,15 +1140,7 @@ async def close_my_account(
             detail={"error": {"code": "already_closed", "message": "Your account is already closed."}},
         )
 
-    user.disabled_at = datetime.now(timezone.utc)
-
-    await record_audit(
-        session,
-        actor=user,
-        action="account_closed_self",
-        target_type="user",
-        target_id=user.id,
-    )
+    await deactivate_user(session, user=user, actor=user, action="account_closed_self")
     await session.commit()
 
     # Confirmation email — best-effort

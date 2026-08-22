@@ -20,6 +20,7 @@ from app.core.deps import require_admin
 from app.db.models import Entitlement, Order, Product, Role, User
 from app.db.session import get_session
 from app.services.audit_service import record_audit
+from app.services.account_service import deactivate_user as deactivate_user_account
 
 from .common import get_or_404
 
@@ -277,7 +278,10 @@ async def deactivate_user(
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    """Deactivate a user by setting disabled_at. Wired into the entitlements gate
+    """Deactivate a user via the shared `deactivate_user` service
+    (app/services/account_service.py — also used by the self-serve
+    POST /me/account/close, per week4_plan.md §10F step 2's "do not add a second
+    mechanism" instruction). Wired into the entitlements gate
     (core/entitlements.py resolve_product_ids) rather than bolted beside it —
     non-negotiable #1.
 
@@ -304,14 +308,11 @@ async def deactivate_user(
             detail={"error": {"code": "already_deactivated", "message": "This user is already deactivated."}},
         )
 
-    user.disabled_at = datetime.now(timezone.utc)
-
-    await record_audit(
+    await deactivate_user_account(
         session,
+        user=user,
         actor=admin,
         action="deactivate_user",
-        target_type="user",
-        target_id=user.id,
         context={"reason": reason},
     )
     await session.commit()

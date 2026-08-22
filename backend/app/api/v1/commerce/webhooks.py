@@ -1,4 +1,3 @@
-import time
 import uuid
 
 import stripe
@@ -11,7 +10,6 @@ from app.api.v1.commerce.products import _resolve_contents_bulk
 from app.core.config import settings
 from app.db.models import Order, OrderStatus, Product, User, WebhookEvent
 from app.db.session import get_session
-from app.integrations.posthog_client import capture_entitlement_delay, capture_purchase_completed, capture_refund_issued
 from app.integrations.stripe_client import construct_webhook_event
 from app.services.email_service import (
     send_access_granted_email,
@@ -79,25 +77,6 @@ async def stripe_webhook(
 
                 webhook_event.processed = True
                 await session.commit()
-
-                # week2_plan.md Phase 5 / BACKEND.md §6.5 — server-side, right after the
-                # entitlement actually exists. `entitlement_delay` is timed from Stripe's
-                # own event timestamp (genuine processing latency), not from when the
-                # webhook handler started running. One purchase_completed event per
-                # product, not per order — Product Spec §9 reads conversion "by content
-                # type", which needs one row per product sold.
-                for pid in product_ids:
-                    capture_purchase_completed(
-                        user_id=user_id, order_id=str(order.id), product_id=pid,
-                        amount_cents=order.total_amount_cents, currency=order.currency,
-                    )
-                capture_entitlement_delay(
-                    user_id=user_id, order_id=str(order.id),
-                    # `.get(..., now)` rather than `event["created"]`: real Stripe events
-                    # always carry it, but a synthetic/malformed one (a test fixture, or a
-                    # future event shape) should degrade to a 0-second delay, not 500.
-                    seconds_waited=max(0.0, time.time() - event.get("created", time.time())),
-                )
 
                 # After commit, never inside the transaction — a failed send must not roll
                 # back a successful purchase.
@@ -228,7 +207,6 @@ async def stripe_webhook(
                 await session.commit()
 
                 if not result.already_refunded:
-                    capture_refund_issued(user_id=str(order.user_id), order_id=str(order.id))
                     user_result = await session.execute(select(User).where(User.id == order.user_id))
                     user = user_result.scalar_one_or_none()
                     if user:

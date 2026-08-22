@@ -19,6 +19,8 @@ class CheckoutRequest(BaseModel):
     # week3_plan.md W3-R11 — a cart is the general case a direct "Buy" is a one-item
     # list of. min_length=1 so an empty cart can't reach Stripe at all.
     product_ids: list[str] = Field(min_length=1)
+    # Optional promo code for a discount (validated server-side via Stripe).
+    discount_code: str | None = None
 
 
 async def _already_fully_owned(*, product: Product, user_id: uuid.UUID, session: AsyncSession) -> bool:
@@ -50,8 +52,15 @@ async def _already_fully_owned(*, product: Product, user_id: uuid.UUID, session:
         by_type.setdefault(content_type, set()).add(content_id)
 
     for content_type, content_ids in by_type.items():
+        try:
+            rt = ResourceType(content_type)
+        except ValueError:
+            # Phase 8A: 'course' is not a gated resource type — skip ownership check
+            # for content types that aren't in ResourceType. The course product grants
+            # access to lessons via product_contents, not directly.
+            continue
         granted = await resolve_granted_content_ids(
-            product_ids=owned_product_ids, resource_type=ResourceType(content_type), session=session
+            product_ids=owned_product_ids, resource_type=rt, session=session
         )
         if not content_ids.issubset(granted):
             return False
@@ -117,6 +126,7 @@ async def create_checkout(
             user_email=user.email,
             user_id=str(user.id),
             product_ids=[str(p.id) for p in products],
+            discount_code=request.discount_code,
         )
         return {"checkout_url": checkout_session.url}
     except Exception as e:

@@ -6,8 +6,7 @@ constraint as `filter_events` (see migration 014's docstring) — the aggregate
 count answers "how many links were issued", and anything identifying would be
 new PII the privacy policy doesn't name.
 
-Writes must not fail the download — wrap and swallow, the same contract
-`posthog_client.py` follows for its own capture calls.
+Writes must not fail the download — wrap and swallow.
 """
 import logging
 import uuid

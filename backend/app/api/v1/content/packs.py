@@ -40,11 +40,11 @@ from app.services.template_evidence import PreviewOut, format_line, resolve_prev
 router = APIRouter()
 
 # Sort keys, as `tag_values.value` codes (db/seed/001). Lower sorts first; anything
-# unrecognised sorts last rather than raising, so a new tag value degrades the order
-# instead of 500-ing the page.
-_TIER_ORDER = {"f": 0, "t": 1, "s": 2, "x": 3}
-_REG_ORDER = {"h": 0, "m": 1, "l": 2, "n": 3}
-_EFFORT_ORDER = {"quick": 0, "mod": 1, "project": 2, "trans": 3}
+# unrecognised — including a missing tag, looked up as None — sorts last rather than
+# raising, so a new tag value degrades the order instead of 500-ing the page.
+_TIER_ORDER: dict[str | None, int] = {"f": 0, "t": 1, "s": 2, "x": 3}
+_REG_ORDER: dict[str | None, int] = {"h": 0, "m": 1, "l": 2, "n": 3}
+_EFFORT_ORDER: dict[str | None, int] = {"quick": 0, "mod": 1, "project": 2, "trans": 3}
 
 HONESTY_NOTICE = (
     "Every question in this pack is free to read on this site, and always will be. "

@@ -1,4 +1,5 @@
 """Public template catalogue, detail, and presigned download routes."""
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,9 +16,10 @@ from app.core.entitlements import (
     resolve_granted_content_ids,
     resolve_product_ids,
 )
-from app.integrations.posthog_client import capture_download_failed
-from app.integrations.storage_client import generate_presigned_url
+from app.integrations.storage_client import download_file, generate_presigned_url, upload_file
 from app.services.download_events import record_download_event
+from app.services.stamping import get_or_stamp, is_stampable
+from app.services.link_rate_limit import check_and_record as check_link_rate
 from app.services.template_evidence import PreviewOut, format_line, resolve_previews
 import uuid
 
@@ -217,14 +219,7 @@ async def get_template_download_url(
     # Free means free: no entitlement, no account, no check. The email capture fronting
     # this in the UI is a conversion device, not a boundary, so it isn't enforced here.
     if template.is_free:
-        try:
-            download_url = generate_presigned_url(template.storage_key)
-        except Exception as e:
-            capture_download_failed(
-                user_id=str(user.id) if user else "anonymous",
-                resource_type="template", resource_id=str(template.id), reason=str(e),
-            )
-            raise
+        download_url = generate_presigned_url(template.storage_key)
         await record_download_event(session=session, content_type="template", content_id=template.id, content_slug=template.slug)
         return DownloadUrlOut(download_url=download_url, file_name=template.file_name, file_size_bytes=template.file_size_bytes)
 
@@ -247,14 +242,58 @@ async def get_template_download_url(
             detail={"error": {"code": "not_entitled", "message": "This template is part of a product you don't have yet."}},
         )
 
-    # Generate presigned URL
-    try:
+    # Phase 8F step 11: soft rate-limit on link minting. Logs, never blocks.
+    check_link_rate(str(user.id), str(template.id))
+
+    # Phase 8F (W4-R16): Stamp paid downloads with buyer info.
+    # Free templates are never stamped (rule 3); unstampable types served unchanged (rule 2).
+    if is_stampable(template.file_name):
+        original_bytes = await asyncio.to_thread(download_file, template.storage_key)
+        if original_bytes:
+            # Find licence tier from the product that grants this template
+            product_result = await session.execute(
+                select(Product).join(ProductContent).where(
+                    ProductContent.content_id == template.id,
+                    ProductContent.content_type == "template",
+                )
+            )
+            product = product_result.scalar_one_or_none()
+            licence_tier = product.licence if product else "standard"
+
+            stamped_bytes = await asyncio.to_thread(
+                get_or_stamp,
+                original_bytes,
+                template_id=str(template.id),
+                file_name=template.file_name,
+                version=template.version,
+                buyer_email=user.email,
+                buyer_name=user.name or user.email,
+                licence_tier=licence_tier,
+                user_id=str(user.id),
+            )
+            # Upload stamped copy and return presigned URL to it
+            ext = "." + template.file_name.rsplit(".", 1)[-1].lower() if "." in template.file_name else ""
+            stamped_key = f"stamped/{template.id}/{template.version or 'unversioned'}/{user.id}{ext}"
+            content_type_map = {
+                ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".pdf": "application/pdf",
+            }
+            try:
+                await asyncio.to_thread(
+                    upload_file,
+                    key=stamped_key,
+                    body=stamped_bytes,
+                    content_type=content_type_map.get(ext, "application/octet-stream"),
+                )
+                download_url = generate_presigned_url(stamped_key)
+            except Exception:
+                # Rule 1: stamping failure serves the original file
+                download_url = generate_presigned_url(template.storage_key)
+        else:
+            download_url = generate_presigned_url(template.storage_key)
+    else:
         download_url = generate_presigned_url(template.storage_key)
-    except Exception as e:
-        capture_download_failed(
-            user_id=str(user.id), resource_type="template", resource_id=str(template.id), reason=str(e),
-        )
-        raise
 
     await record_download_event(session=session, content_type="template", content_id=template.id, content_slug=template.slug)
     return DownloadUrlOut(

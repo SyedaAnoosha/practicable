@@ -14,6 +14,14 @@ class VerifiedToken:
     user_id: str
     email: str | None
     name: str | None
+    # Phase 10 (§10F re-verification, 2026-08-22): Supabase re-signs the JWT — a fresh
+    # `iat` — every time `signInWithPassword` succeeds, since that call opens a new
+    # session. This is the one server-checkable proof that a client actually just
+    # reauthenticated: the claim is inside the cryptographically-signed token, so a
+    # stolen stale token cannot forge a recent `iat` without the real password. Used
+    # by `require_recent_reauth` below to close the closure-without-a-password gap
+    # that a purely client-side check (§10A/§10B/§10F's existing pattern) left open.
+    issued_at: int | None
 
 # auto_error=False so a missing Authorization header 401s below rather than HTTPBearer's
 # default 403, which is reserved for "authenticated but not entitled".
@@ -51,7 +59,7 @@ def _decode(token: str) -> VerifiedToken:
     # Supabase puts signUp's options.data under user_metadata, not at the top level.
     name = payload.get("user_metadata", {}).get("name")
 
-    return VerifiedToken(user_id=user_id, email=payload.get("email"), name=name)
+    return VerifiedToken(user_id=user_id, email=payload.get("email"), name=name, issued_at=payload.get("iat"))
 
 
 async def verify_jwt_full(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> VerifiedToken:

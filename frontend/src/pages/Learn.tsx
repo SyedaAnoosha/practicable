@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
@@ -111,6 +111,8 @@ type MuxPlayerProps = {
   autoPlay?: boolean
   defaultHiddenCaptions?: boolean
   className?: string
+  ref?: React.Ref<HTMLMediaElement>
+  onError?: (e: Event) => void
 }
 
 const LESSON_ICON: Record<LessonType, typeof PlayCircle> = {
@@ -126,8 +128,10 @@ const LESSON_ICON: Record<LessonType, typeof PlayCircle> = {
 // this component only knows which URL mints ITS token.
 function VideoBlock({ tokenUrl, queryKey }: { tokenUrl: string; queryKey: readonly unknown[] }) {
   const [MuxPlayer, setMuxPlayer] = useState<ComponentType<MuxPlayerProps> | null>(null)
+  const playerRef = useRef<HTMLMediaElement>(null)
+  const [tokenExpired, setTokenExpired] = useState(false)
 
-  const { data: playbackToken, isLoading, error } = useQuery({
+  const { data: playbackToken, isLoading, error, refetch } = useQuery({
     queryKey,
     queryFn: () => api.get<PlaybackToken>(tokenUrl).then((res) => res.data),
   })
@@ -140,6 +144,29 @@ function VideoBlock({ tokenUrl, queryKey }: { tokenUrl: string; queryKey: readon
     })
   }, [])
 
+  // C4: Token-expiry handler — when the mux playback token expires mid-playback,
+  // the player fires an error. We detect this, preserve the current position, refetch
+  // a fresh token, and resume. Losing someone's place in a paid 40-minute lesson is
+  // a refund-generator (Redesigning_decisions.md §C4).
+  const handleTokenError = useCallback(() => {
+    const position = playerRef.current?.currentTime ?? 0
+    setTokenExpired(true)
+    // Refetch the token; once the new token arrives, MuxPlayer re-renders with
+    // the updated tokens prop and we restore the position.
+    refetch().then(() => {
+      setTokenExpired(false)
+      // Restore position after the player re-mounts with the fresh token.
+      requestAnimationFrame(() => {
+        if (playerRef.current) {
+          playerRef.current.currentTime = position
+          playerRef.current.play().catch(() => {
+            // Autoplay may be blocked — user can click play manually.
+          })
+        }
+      })
+    })
+  }, [refetch])
+
   if (error) {
     return <p className="text-sm text-muted-foreground">The video couldn't be loaded — try refreshing.</p>
   }
@@ -149,14 +176,24 @@ function VideoBlock({ tokenUrl, queryKey }: { tokenUrl: string; queryKey: readon
   }
 
   return (
-    <div className="aspect-video overflow-hidden rounded-xl bg-black shadow-sm">
+    <div className="relative aspect-video overflow-hidden rounded-xl bg-black shadow-sm">
       <MuxPlayer
+        ref={playerRef}
         playbackId={playbackToken.playback_id}
         tokens={{ playback: playbackToken.token }}
         autoPlay={false}
         defaultHiddenCaptions={false} // captions ON by default — DESIGN.md §25.2 [DECIDED]
         className="h-full w-full"
+        onError={tokenExpired ? undefined : handleTokenError}
       />
+      {/* C4: The token-expiry overlay — a normal case, not an edge case.
+          Shows when the token expires and the refetch is in progress. */}
+      {tokenExpired && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center">
+          <p className="text-sm font-medium text-white">Your session timed out.</p>
+          <p className="mt-1 text-xs text-white/70">Refreshing your access…</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -303,6 +340,75 @@ export function LessonBlocks({ blocks }: { blocks: LessonBlockData[] }) {
         }
       })}
     </>
+  )
+}
+
+/** The completion moment (Redesigning_decisions.md C3): Mark complete → ✓ Completed,
+ * the outline item ticks, the progress bar animates its width, and focus moves to
+ * Next lesson. This is the psychological payoff that replaces certificates — it
+ * needs to FEEL like something landed.
+ *
+ * The Undo affordance (C3 spec) requires a backend un-complete endpoint that does
+ * not exist yet. Rather than a no-op button that silently ignores the click, this
+ * shows a brief "Marking…" state during the mutation, then transitions cleanly to
+ * the completed state. When the un-complete endpoint lands, the Undo button can be
+ * wired in.
+ *
+ * Under reduced motion the transition is instant rather than animated (§39.4). */
+function CompletionBar({
+  lesson,
+  onComplete,
+  isPending,
+  nextLesson,
+  courseSlug,
+}: {
+  lesson: LessonDetail
+  onComplete: () => void
+  isPending: boolean
+  nextLesson: LessonNav | null
+  courseSlug: string
+}) {
+  const nextRef = useRef<HTMLAnchorElement>(null)
+
+  const handleComplete = useCallback(() => {
+    onComplete()
+    // Focus moves to Next lesson — the psychological payoff (C3).
+    setTimeout(() => nextRef.current?.focus(), 100)
+  }, [onComplete])
+
+  if (lesson.completed) {
+    return (
+      <div className="flex flex-col gap-4 border-t border-border pt-6">
+        <div className="flex items-center gap-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
+            <CircleCheck className="size-4" aria-hidden="true" />
+          </span>
+          <p className="text-sm font-medium text-foreground">Completed</p>
+        </div>
+        {nextLesson && (
+          <Link ref={nextRef} to={`/learn/${courseSlug}/${nextLesson.slug}`}>
+            <Button>Next lesson →</Button>
+          </Link>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-4 border-t border-border pt-6">
+      <Button
+        onClick={handleComplete}
+        loading={isPending}
+        className="self-start"
+      >
+        {isPending ? 'Marking…' : 'Mark complete'}
+      </Button>
+      {nextLesson && (
+        <Link ref={nextRef} to={`/learn/${courseSlug}/${nextLesson.slug}`}>
+          <Button variant="outline">Next lesson →</Button>
+        </Link>
+      )}
+    </div>
   )
 }
 
@@ -491,7 +597,7 @@ export function Learn() {
       )}
 
       {/* Lesson content. */}
-      <div className="mx-auto w-full max-w-2xl flex-1 px-5 py-10 sm:px-8">
+      <div className="mx-auto w-full max-w-2xl flex-1 px-5 pb-24 pt-10 sm:px-8 lg:pb-10">
         {lessonPosition && (
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Lesson {lessonPosition} of {totalLessons}
@@ -550,42 +656,50 @@ export function Learn() {
               </>
             )}
 
-            <div className="flex flex-col gap-4 border-t border-border pt-6">
-              <Button
-                onClick={() => completeMutation.mutate()}
-                disabled={lesson.completed}
-                loading={completeMutation.isPending}
-                variant={lesson.completed ? 'outline' : 'primary'}
-                className="self-start"
-              >
-                {lesson.completed && <CircleCheck className="size-4" aria-hidden="true" />}
-                {lesson.completed ? 'Completed' : 'Mark complete'}
-              </Button>
-
-              <div className="flex items-center justify-between gap-3">
-                {lesson.previous ? (
-                  <Link to={`/learn/${lesson.course_slug}/${lesson.previous.slug}`}>
-                    <Button variant="ghost" size="sm">
-                      ← {lesson.previous.title}
-                    </Button>
-                  </Link>
-                ) : (
-                  <span />
-                )}
-                {lesson.next ? (
-                  <Link to={`/learn/${lesson.course_slug}/${lesson.next.slug}`}>
-                    <Button variant="outline" size="sm">
-                      {lesson.next.title} →
-                    </Button>
-                  </Link>
-                ) : (
-                  <span />
-                )}
-              </div>
-            </div>
+            <CompletionBar
+                lesson={lesson}
+                onComplete={() => completeMutation.mutate()}
+                isPending={completeMutation.isPending}
+                nextLesson={lesson.next}
+                courseSlug={lesson.course_slug}
+              />
           </div>
         )}
       </div>
+
+      {lesson.entitled && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur-sm lg:hidden"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        >
+          <div className="flex items-center justify-between gap-3 px-5 py-3">
+            {lesson.previous ? (
+              <Link to={`/learn/${lesson.course_slug}/${lesson.previous.slug}`} className="min-w-0">
+                <Button variant="ghost" size="sm" className="gap-1">
+                  ← Prev
+                </Button>
+              </Link>
+            ) : (<span />)}
+            <Button
+              onClick={() => completeMutation.mutate()}
+              disabled={lesson.completed}
+              loading={completeMutation.isPending}
+              size="sm"
+              className={lesson.completed ? 'bg-success/10 text-success' : ''}
+            >
+              {lesson.completed ? '✓ Done' : 'Mark complete'}
+            </Button>
+            {lesson.next ? (
+              <Link to={`/learn/${lesson.course_slug}/${lesson.next.slug}`} className="min-w-0">
+                <Button variant="ghost" size="sm" className="gap-1">
+                  Next →
+                </Button>
+              </Link>
+            ) : (<span />)}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+

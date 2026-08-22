@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ReceiptView } from '@/components/purchases/ReceiptView'
+import { SkeletonState } from '@/components/ui/SkeletonState'
 
 interface OrderItem {
   product_id: string
@@ -54,6 +55,27 @@ const INELIGIBLE_MESSAGES: Record<string, string> = {
   no_course_in_order: "This order doesn't include a course. Contact us and we'll sort it out.",
   order_not_completed: 'This order is still being processed.',
   progress_exceeded: "You've completed more than 15% of this course — past the point where change-of-mind refunds apply. If something is materially wrong with it, contact us: your consumer-guarantee rights still apply.",
+}
+
+/** The refusal, with the buyer's real number in it where we have one.
+ *
+ * `[CHANGED 2026-08-22]` The eligible branch already said "You've completed 33% of this
+ * course"; the INELIGIBLE branch — the one place a buyer actually wants to check the
+ * figure — said only "more than 15%". A refusal a reader cannot check against their own
+ * progress is a refusal they can only accept or dispute, never verify. The server
+ * already returns `progress_percent`, so there is no reason to round it away here.
+ *
+ * Falls back to the generic sentence when the server sent no number, rather than
+ * inventing one — the same absence rule the evidence panel follows. */
+function ineligibleMessage(reasonCode: string | null, progressPercent: number | null): string {
+  if (reasonCode === 'progress_exceeded' && progressPercent != null) {
+    return (
+      `You've completed ${progressPercent}% of this course — past the 15% point where ` +
+      'change-of-mind refunds apply. If something is materially wrong with it, contact us: ' +
+      'your consumer-guarantee rights still apply.'
+    )
+  }
+  return INELIGIBLE_MESSAGES[reasonCode ?? ''] ?? 'Not eligible for a self-serve refund.'
 }
 
 /** Phase 9B (W4-R20): Purchases page — shows order history and lets eligible orders start a refund. */
@@ -111,9 +133,9 @@ export function Purchases() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Loading purchases">
-        <div className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
-        <span className="sr-only">Loading your purchases…</span>
+      <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
+        <PageTitle title="Your purchases" description="Order history and refund requests." />
+        <SkeletonState className="mt-8" variant="row" rows={4} />
       </div>
     )
   }
@@ -237,7 +259,7 @@ export function Purchases() {
                       </p>
                     ) : elig?.eligible === false ? (
                       <p className="mt-3 text-sm text-muted-foreground">
-                        {INELIGIBLE_MESSAGES[elig.reason_code ?? ''] ?? 'Not eligible for a self-serve refund.'}
+                        {ineligibleMessage(elig.reason_code, elig.progress_percent)}
                       </p>
                     ) : elig?.eligible ? (
                       <>

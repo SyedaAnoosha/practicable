@@ -1,8 +1,15 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, TimestampMixin, str_enum
 import enum
 import uuid
+
+if TYPE_CHECKING:
+    from app.db.models.lesson import Lesson
+    from app.db.models.media import Media
+    from app.db.models.template import Template
 
 
 class LessonBlockType(str, enum.Enum):
@@ -33,6 +40,10 @@ class LessonBlock(Base, IdMixin, TimestampMixin):
     # text / callout only.
     text_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     heading: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Phase 8 (8E): Sanitized version of prose for safe display.
+    # The original text_body is kept for editing; this field stores sanitized HTML.
+    prose_sanitized: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # video only.
     media_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("media.id"), nullable=True)

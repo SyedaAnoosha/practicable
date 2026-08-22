@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
-import { Menu, X } from 'lucide-react'
+import { Menu, Search, X } from 'lucide-react'
 import { ProductsMenu } from '@/components/nav/ProductsMenu'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
@@ -11,6 +11,10 @@ import { staggerContainer, riseItem, inViewOnce } from '@/lib/motion'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { NewsletterForm } from '@/components/marketing/NewsletterForm'
 import { CartButton } from '@/components/cart/CartButton'
+import { CommandPalette } from '@/components/ui/CommandPalette'
+import { useCommandPalette } from '@/lib/useCommandPalette'
+import { DiscountBanner } from '@/components/ui/DiscountBanner'
+import { CookieConsent } from '@/components/ui/CookieConsent'
 
 const DOMAINS = ['Risk', 'Cyber', 'Compliance', 'Resilience', 'AI']
 
@@ -32,6 +36,7 @@ export default function MarketingLayout() {
   const location = useLocation()
   // Mobile slide-over: the nav is too wide for phones, so it becomes a sheet.
   const [menuOpen, setMenuOpen] = useState(false)
+  const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette()
   // Escape closes the sheet, matching dialog conventions.
   useEffect(() => {
     if (!menuOpen) return
@@ -64,6 +69,7 @@ export default function MarketingLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <DiscountBanner />
       <header
         className={cn(
           'sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md transition-[box-shadow] duration-200',
@@ -92,6 +98,16 @@ export default function MarketingLayout() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="hidden items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex"
+              aria-label="Search (Ctrl+K)"
+            >
+              <Search className="size-3.5" aria-hidden="true" />
+              <span className="hidden lg:inline">Search</span>
+              <kbd className="ml-1 rounded border border-border bg-background px-1 py-0.5 text-[0.6rem] font-medium">⌘K</kbd>
+            </button>
             <CartButton />
             <ThemeToggle />
             {user ? (
@@ -125,7 +141,8 @@ export default function MarketingLayout() {
             </button>
           </div>
         </div>
-      </header>
+      </header>      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CookieConsent />
 
       {/* Mobile slide-over, same sheet pattern as MemberLayout: an overlay + left-
           docked panel with the nav items as tall touch targets. */}

@@ -31,6 +31,7 @@ import { TokenizedVideoPreview } from '@/components/admin/TokenizedVideoPreview'
 import { PublishStateChip, type PublishStateValue } from '@/components/admin/PublishStateChip'
 import { InlineEditableTitle } from '@/components/admin/InlineEditableTitle'
 import { required, requiredSelect, useFieldValidation } from '@/lib/useFieldValidation'
+import { readError } from '@/lib/utils/readError'
 
 // Exported for LessonWriteScreen.tsx (the full-screen "Write" route) — same course
 // shape, same admin API, so it reuses these rather than a second copy that could drift.
@@ -140,11 +141,7 @@ const LESSON_TYPES = [
 const inputClass =
   'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
 
-export const readError = (e: unknown): string => {
-  const detail = (e as { response?: { data?: { detail?: { error?: { message?: string } } } } })?.response?.data
-    ?.detail
-  return detail?.error?.message ?? 'Something went wrong. Please try again.'
-}
+
 
 /** Course cover image upload — same presigned-URL pattern as templates, but talks
  * to the course-specific endpoints. A single image, not a gallery, so no alt text

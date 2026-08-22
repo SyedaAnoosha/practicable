@@ -1,9 +1,15 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import String, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, TimestampMixin
 import uuid
+
+if TYPE_CHECKING:
+    from app.db.models.user import User
+    from app.db.models.lesson import Lesson
+    from app.db.models.course import Course
 
 class LessonProgress(Base, IdMixin, TimestampMixin):
     __tablename__ = "lesson_progress"

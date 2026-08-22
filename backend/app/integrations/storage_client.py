@@ -79,6 +79,19 @@ def head_object(key: str) -> dict | None:
     return {"content_length": resp.get("ContentLength"), "content_type": resp.get("ContentType")}
 
 
+def download_file(key: str) -> bytes | None:
+    """Download bytes from Supabase Storage. Returns None if the object doesn't exist.
+
+    Blocking (boto3), so callers must use asyncio.to_thread.
+    Used by stamping.py to fetch the original file for per-buyer stamping.
+    """
+    try:
+        resp = _get_s3_client().get_object(Bucket=settings.supabase_storage_bucket_name, Key=key)
+        return resp["Body"].read()
+    except Exception:
+        return None
+
+
 def delete_file(key: str) -> None:
     """Remove an object — used when a replaced template file would otherwise be orphaned."""
     _get_s3_client().delete_object(Bucket=settings.supabase_storage_bucket_name, Key=key)

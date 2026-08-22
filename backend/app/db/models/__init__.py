@@ -21,6 +21,10 @@ from app.db.models.lead import Lead
 from app.db.models.contact_message import ContactMessage
 from app.db.models.audit import AuditLog
 from app.db.models.webhook_event import WebhookEvent
+from app.db.models.filter_event import FilterEvent
+from app.db.models.download_event import DownloadEvent
+from app.db.models.recommendation_event import RecommendationEvent
+from app.db.models.setting import Setting
 
 __all__ = [
     "Base",
@@ -45,4 +49,8 @@ __all__ = [
     "ContactMessage",
     "AuditLog",
     "WebhookEvent",
+    "FilterEvent",
+    "DownloadEvent",
+    "RecommendationEvent",
+    "Setting",
 ]

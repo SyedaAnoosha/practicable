@@ -4,7 +4,7 @@ this course and do I own it" — lesson content is served by lessons.py.
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +14,7 @@ from app.core.entitlements import ResourceType, resolve_granted_content_ids, res
 from app.db.models import (
     Author,
     Course,
+    Entitlement,
     Lesson,
     LessonProgress,
     Media,
@@ -52,11 +53,9 @@ class CourseSummaryOut(BaseModel):
     lesson_count: int
     owned: bool
     cover_image_url: Optional[str] = None
-    # week2_plan.md Phase 4 (`/store`'s ContentTypeCard needs a real price for every
-    # type, W2-R5's "every price shown is real"). `/courses` never carried one before —
-    # CoursesCatalogue.tsx simply didn't show one — so this mirrors TemplateSummaryOut's
-    # existing cheapest-published-product resolution rather than inventing a second
-    # pattern. None only when no published product currently sells this course.
+    # Level and estimated duration for catalogue filtering (migration 025).
+    level: Optional[str] = None
+    estimated_duration_minutes: Optional[int] = None
     product: Optional[RelatedProductOut]
 
 
@@ -102,12 +101,20 @@ class CourseDetailOut(BaseModel):
     cover_image_url: Optional[str] = None
     modules: list[ModuleOut]
     related_products: list[RelatedProductOut]
+    # W4-R20 / ledger row 92: when a buyer's access to THIS course ended because their
+    # order was refunded. Null in every other case, including a course never bought.
+    # Without it, a refunded buyer silently sees an ordinary buy page and is never told
+    # what happened — §20.10's "the four states" with the fourth state missing.
+    access_ended_at: Optional[str] = None
 
 
 @router.get("/courses", response_model=list[CourseSummaryOut])
 async def list_courses(
     session: AsyncSession = Depends(get_session),
     user_id: Optional[str] = Depends(get_current_user_id_optional),
+    level: Optional[str] = Query(None, description="Filter by level: beginner, intermediate, advanced"),
+    min_duration: Optional[int] = Query(None, ge=0, description="Minimum duration in minutes"),
+    max_duration: Optional[int] = Query(None, ge=0, description="Maximum duration in minutes"),
 ):
     """The course catalogue — public. `owned` is a real entitlement check, so a card
     never shows a price on something the visitor already holds.
@@ -191,8 +198,50 @@ async def list_courses(
         for lesson_id, product in product_result.all():
             cheapest_product_by_lesson[lesson_id] = product
 
+    # Media durations for every video/mixed lesson, once — for the duration filter.
+    media_lesson_ids = [
+        l.id for l in lessons
+        if _lesson_type_value(l.lesson_type) in ("video", "mixed")
+    ]
+    duration_by_lesson: dict = {}
+    if media_lesson_ids:
+        media_rows = await session.execute(
+            select(Media.lesson_id, Media.duration_seconds).where(Media.lesson_id.in_(media_lesson_ids))
+        )
+        # `[FIXED 2026-08-22]` `Media.duration_seconds` is nullable — a video row exists
+        # as soon as it is uploaded, but its duration is only known once the encoder has
+        # probed it. Keeping the None here meant the sum below did `int + None` and the
+        # whole /courses endpoint returned a 500, so one un-probed video took down the
+        # entire catalogue. Unknown durations are dropped instead: a course then reports
+        # the duration of the lessons whose length we actually know, which is honest and
+        # renders, rather than nothing at all.
+        duration_by_lesson = {lid: dur for lid, dur in media_rows.all() if dur is not None}
+
+    # Pre-compute duration per course from media durations, for the filter.
+    duration_by_course: dict = {}
+    for lesson in lessons:
+        assert lesson.module_id is not None
+        course_id = module_to_course.get(lesson.module_id)
+        if course_id and lesson.id in duration_by_lesson:
+            duration_by_course[course_id] = duration_by_course.get(course_id, 0) + duration_by_lesson[lesson.id]
+
+    # Apply course filters (level, duration) before building the output.
+    filtered_courses = courses
+    if level:
+        filtered_courses = [c for c in filtered_courses if c.level and c.level.lower() == level.lower()]
+    if min_duration is not None:
+        filtered_courses = [
+            c for c in filtered_courses
+            if duration_by_course.get(c.id, 0) >= min_duration
+        ]
+    if max_duration is not None:
+        filtered_courses = [
+            c for c in filtered_courses
+            if duration_by_course.get(c.id, 0) <= max_duration
+        ]
+
     out: list[CourseSummaryOut] = []
-    for course in courses:
+    for course in filtered_courses:
         course_modules = modules_by_course.get(course.id, [])
         course_lessons = lessons_by_course.get(course.id, [])
 
@@ -219,6 +268,8 @@ async def list_courses(
             except Exception:  # noqa: BLE001
                 pass
 
+        duration_minutes = duration_by_course.get(course.id)
+
         out.append(
             CourseSummaryOut(
                 id=str(course.id), slug=course.slug,
@@ -230,6 +281,8 @@ async def list_courses(
                 lesson_count=len(course_lessons),
                 owned=owned,
                 cover_image_url=cover_url,
+                level=course.level,
+                estimated_duration_minutes=duration_minutes,
                 product=product_out,
             )
         )
@@ -340,6 +393,12 @@ async def get_course(
             ModuleQuestionOut(id=str(q.id), slug=q.slug, title=q.title, sort_order=mq.sort_order)
         )
 
+    # Ledger row 92: distinguish "never owned" from "owned, then refunded". The gate
+    # itself is untouched — `resolve_product_ids` already excludes revoked entitlements,
+    # so this is purely about what the page is allowed to SAY, never about access.
+    # One query, and only for a signed-in reader who does not currently own the course.
+    access_ended_at: Optional[str] = None
+
     owned = False
     lesson_count = 0
     first_lesson_slug: Optional[str] = None
@@ -400,6 +459,29 @@ async def get_course(
             for p in related_result.scalars().all()
         ]
 
+    # Ledger row 92 — "owned, then refunded", resolved only when it can possibly apply:
+    # a signed-in reader who does NOT currently own the course. One query, skipped
+    # entirely for anonymous readers and for readers who still have access.
+    if user_id and not owned and all_lesson_ids:
+        revoked_row = await session.execute(
+            select(Entitlement.revoked_at)
+            .join(ProductContent, ProductContent.product_id == Entitlement.product_id)
+            .where(
+                Entitlement.user_id == uuid.UUID(user_id),
+                Entitlement.revoked_at.is_not(None),
+                ProductContent.content_type == ResourceType.LESSON.value,
+                ProductContent.content_id.in_(all_lesson_ids),
+            )
+            # Most recent revocation wins: a reader who bought, refunded, re-bought and
+            # refunded again should see the date their access actually ended, not the
+            # first time it ever did.
+            .order_by(Entitlement.revoked_at.desc())
+            .limit(1)
+        )
+        revoked_at = revoked_row.scalar_one_or_none()
+        if revoked_at is not None:
+            access_ended_at = revoked_at.isoformat()
+
     # Resolve cover image URL (best-effort)
     cover_url = None
     if course.cover_image_key:
@@ -422,4 +504,5 @@ async def get_course(
         cover_image_url=cover_url,
         modules=module_outs,
         related_products=related_products,
+        access_ended_at=access_ended_at,
     )

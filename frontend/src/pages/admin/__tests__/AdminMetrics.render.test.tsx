@@ -35,16 +35,26 @@ const mockMetricsData = {
       description: 'Links issued',
     },
   ],
-  generated_at: '2026-08-20T00:00:00Z',
-  revenue_gross_cents: 4900,
-  revenue_refunded_cents: 0,
-  revenue_net_cents: 4900,
-  enrollment_splits: { purchase: 3 },
-  product_rankings: [
-    { id: '1', name: 'Product A', units: 1, revenue_cents: 4900, revenue_dollars: 49.0 },
+  /* `[FIXED 2026-08-22]` This fixture was snake_case throughout while the endpoint
+     returns camelCase (`backend/app/api/v1/admin/metrics.py` builds the dict with
+     "revenueGrossCents", "enrollmentSplits", … explicitly). So every field below the
+     `metrics` array arrived as `undefined` in the component under test, and the suite
+     was asserting against a response shape the API has never sent.
+
+     It passed anyway until the component started reading those fields — at which point
+     it crashed rather than failed, because `MetricTile` checked `!== null` and
+     `undefined` walked past it. Both were fixed; this fixture now mirrors the real
+     payload so the test actually exercises the contract. */
+  generatedAt: '2026-08-20T00:00:00Z',
+  revenueGrossCents: 4900,
+  revenueRefundedCents: 0,
+  revenueNetCents: 4900,
+  enrollmentSplits: { purchase: 3 },
+  productRankings: [
+    { id: '1', name: 'Product A', units: 1, revenueCents: 4900, revenueDollars: 49.0 },
   ],
-  download_links_issued: 0,
-  course_enrollment_rankings: [
+  downloadLinksIssued: 0,
+  courseEnrollmentRankings: [
     { id: '1', title: 'Course A', enrolled: 3, started: 2, completed: 1 },
   ],
 }

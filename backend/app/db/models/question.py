@@ -1,7 +1,15 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String, Text, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, PublishStateMixin, TimestampMixin
 import uuid
+
+if TYPE_CHECKING:
+    from app.db.models.domain import Domain
+    from app.db.models.tag_value import TagValue
+    from app.db.models.template import Template
+    from app.db.models.lesson import Lesson
 
 class Question(Base, IdMixin, TimestampMixin, PublishStateMixin):
     __tablename__ = "questions"

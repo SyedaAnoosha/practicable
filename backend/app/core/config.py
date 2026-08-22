@@ -51,13 +51,21 @@ class Settings(BaseSettings):
     # must be set to the real Vercel URL in Render's environment, same treatment as
     # ALLOWED_ORIGIN below.
     frontend_url: str = "http://localhost:5173"
-    # ── Analytics ────────────────────────────────────────────────────────────────
-    # week2_plan.md Phase 5 / W2-R8. Empty by default so the app boots without it —
-    # posthog_client.py no-ops rather than erroring when this isn't set, same pattern
-    # as resend_api_key above. Same project key the frontend uses (VITE_POSTHOG_KEY);
-    # a project API key is meant to be shared across a project's client and server SDKs.
-    posthog_api_key: str = ""
-    posthog_host: str = "https://us.i.posthog.com"
+    # ── Invoice / Tax receipt (W4-R2) ─────────────────────────────────────────────
+    # Empty by default so the app boots without it. The owner has no ABN to publish —
+    # the entity is not GST-registered — so no ABN field exists anywhere in this app;
+    # the invoice block states the seller name only, never a placeholder number.
+    seller_legal_name: str = ""
+    # ── Operational settings (Phase 6C / W4-R13) ───────────────────────────────
+    # Keys that can be overridden by the settings DB table. Secrets are NEVER here —
+    # they live in env with no DB path, so no database row can ever supply a key.
+    _operational_keys: list[str] = [
+        "seller_legal_name",
+        "mailjet_sender_email",
+        "mailjet_sender_name",
+        "owner_notification_email",
+        "frontend_url",
+    ]
     # Comma-separated for multiple frontend origins (production alias, previews, www vs
     # non-www); a single value works unchanged. CORS preflight is an exact string match
     # against this list, so a mismatch is what produces "400 Disallowed CORS origin".
@@ -73,4 +81,28 @@ class Settings(BaseSettings):
         # crash the app at import over any ad-hoc key left in the environment.
         extra = "ignore"
 
-settings = Settings()
+# pydantic-settings populates required fields from the environment/.env at runtime,
+# not from constructor arguments — Pylance can't see that and flags this call as
+# missing every required field. Known false positive, standard pydantic-settings idiom.
+settings = Settings()  # type: ignore[call-arg]
+
+
+async def resolve_settings_from_db() -> None:
+    """Overlay DB settings onto the env-backed `settings` object.
+
+    Phase 6C (W4-R13): operational keys can be overridden by the `settings` table.
+    Called once at startup (or on demand from the admin settings endpoint). Secrets
+    are never resolved from the DB — they have no path here.
+    """
+    from sqlalchemy import select
+    from app.db.models.setting import Setting
+    from app.db.session import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Setting.key, Setting.value).where(
+                Setting.key.in_(settings._operational_keys)
+            )
+        )
+        for key, value in result.all():
+            setattr(settings, key, value)

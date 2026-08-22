@@ -75,6 +75,36 @@ function RouteAnnouncer() {
   )
 }
 
+/** Focuses the new page's h1 after every route change so keyboard-only users
+ * land on the page heading rather than staying wherever they were.
+ *
+ * `[ADDED 2026-08-22, §6.1 J4 P0]` WCAG 2.2 §2.4.3 (Focus Order) requires that
+ * focus moves to the content of the new page after user-initiated navigation.
+ * The RouteAnnouncer already reads the h1 for screen-reader users; this targets
+ * keyboard users who tab through the page after a click.
+ *
+ * Left alone: hash navigation (focus to an anchor), POP (back/forward), and
+ * query-string-only changes (the reader is still on the same page). */
+function FocusH1() {
+  const { pathname, hash } = useLocation()
+  const navigationType = useNavigationType()
+
+  useEffect(() => {
+    if (navigationType === 'POP' || hash) return
+    // Defer to the next frame so the new route's h1 is in the DOM.
+    const id = requestAnimationFrame(() => {
+      const h1 = document.querySelector('h1')
+      if (h1 && !h1.hasAttribute('tabindex')) {
+        h1.setAttribute('tabindex', '-1')
+        h1.focus({ preventScroll: true })
+      }
+    })
+    return () => cancelAnimationFrame(id)
+  }, [pathname, hash, navigationType])
+
+  return null
+}
+
 /** Puts a new page at the top of itself. A browser does this for free on a full page
  * load; a SPA does not, so following a footer link from the bottom of a long page
  * landed the reader at the bottom of the next one.
@@ -161,6 +191,7 @@ export default function RootLayout() {
       </a>
       <RouteAnnouncer />
       <ScrollToTop />
+      <FocusH1 />
       <Outlet />
       {/* One instance for the whole app — every layout's CartButton just calls
           useCartStore.open() rather than rendering its own drawer, so the cart can

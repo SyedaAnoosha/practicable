@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Literal, Optional
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -256,8 +256,10 @@ def check_stripe_price(
     import stripe
     from app.core.config import settings
 
+    from app.core.constants import STRIPE_PRICE_UNSET
+
     # Check 1: Placeholder or empty
-    if not stripe_price_id or stripe_price_id == "placeholder_update_in_stripe":
+    if not stripe_price_id or stripe_price_id == STRIPE_PRICE_UNSET:
         return StripePriceResult(
             ok=False,
             message="Stripe price is not set. Create a product to generate a real Stripe price.",
@@ -265,13 +267,13 @@ def check_stripe_price(
 
     try:
         price = stripe.Price.retrieve(stripe_price_id)
-    except stripe.error.InvalidRequestError:
+    except stripe.InvalidRequestError:
         # Check 2: Price does not resolve at Stripe
         return StripePriceResult(
             ok=False,
             message="Stripe price not found. The price ID may have been deleted or never existed.",
         )
-    except stripe.error.AuthenticationError:
+    except stripe.AuthenticationError:
         # API key issue - this is a configuration problem, not a product problem
         return StripePriceResult(
             ok=False,
@@ -303,10 +305,11 @@ def check_stripe_price(
         )
 
     # Check 5: Price amount mismatch
-    if price.unit_amount != price_amount:
+    if price.unit_amount is None or price.unit_amount != price_amount:
+        stripe_amount = f"{price.unit_amount / 100:.2f}" if price.unit_amount is not None else "unknown"
         return StripePriceResult(
             ok=False,
-            message=f"Price mismatch: Stripe shows {price.unit_amount / 100:.2f} {price.currency.upper()}, "
+            message=f"Price mismatch: Stripe shows {stripe_amount} {price.currency.upper()}, "
             f"but database has {price_amount / 100:.2f} {currency.upper()}. Update one to match.",
         )
 
@@ -319,3 +322,56 @@ def check_stripe_price(
         )
 
     return StripePriceResult(ok=True)
+
+
+ReadinessState = Literal["no_product", "price_unset", "stripe_price_unresolved", "unpublished", "ready"]
+
+
+@dataclass
+class Readiness:
+    """Returned by compute_readiness — the one place a course/template/product's
+    purchasability state is decided (8A-6: server-derived, not inferred client-side)."""
+    state: ReadinessState
+    message: str
+
+
+def compute_readiness(product: Optional[Product]) -> Readiness:
+    """Server-derived readiness for a course, template, or the product row itself.
+
+    `product` is None when the content has no product at all yet (a course just
+    created, before "Make purchasable" has ever been called) — the state a bare
+    `ProductOut`-only readiness calculation could never express, because it always
+    starts from a product row that already exists.
+
+    Reuses `check_stripe_price` rather than a second, looser Stripe-resolution
+    check, so a course/template's readiness and a product's own agree by
+    construction instead of by two people remembering to keep them in sync.
+    """
+    if product is None:
+        return Readiness("no_product", "Not purchasable yet — no product exists")
+
+    try:
+        result = check_stripe_price(
+            stripe_price_id=product.stripe_price_id,
+            price_amount=product.price_amount,
+            currency=product.currency,
+        )
+    except Exception:
+        # check_stripe_price is deliberately strict for the publish guard, where a
+        # malformed Stripe response should be investigated, not hidden. Readiness is
+        # display-only — every list/detail response that includes a course, template
+        # or product computes this — so a genuinely unexpected error here degrades to
+        # "unresolved" rather than 500ing an otherwise-unrelated page load.
+        return Readiness("stripe_price_unresolved", "Stripe price could not be verified.")
+
+    if not result.ok:
+        # check_stripe_price's own message already distinguishes "not set" from
+        # "not found" from "inactive" etc — the caller doesn't need to re-derive it.
+        if "not set" in result.message.lower():
+            return Readiness("price_unset", result.message)
+        return Readiness("stripe_price_unresolved", result.message)
+
+    if not product.published:
+        return Readiness("unpublished", "Product is unpublished")
+
+    return Readiness("ready", "Ready to purchase")

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends
 
 from app.core.deps import require_admin
 
-from . import courses, media, orders, questions, templates
+from . import audit, contact, courses, leads, media, metrics, orders, packs, products, questions, settings, templates, users
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 router.include_router(questions.router)
@@ -21,3 +21,11 @@ router.include_router(templates.router)
 router.include_router(courses.router)
 router.include_router(orders.router)
 router.include_router(media.router)
+router.include_router(products.router)
+router.include_router(contact.router)
+router.include_router(metrics.router)
+router.include_router(users.router)
+router.include_router(audit.router)
+router.include_router(leads.router)
+router.include_router(settings.router)
+router.include_router(packs.router)

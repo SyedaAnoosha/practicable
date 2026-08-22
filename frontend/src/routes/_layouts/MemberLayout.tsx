@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router'
-import { GraduationCap, LayoutDashboard, Layers, Library, LogOut, Menu, ReceiptText, Settings, ShieldCheck, Sparkles, Store, Tags, X } from 'lucide-react'
+import { GraduationCap, LayoutDashboard, Layers, Library, LogOut, Menu, Search, ShieldCheck, Sparkles, Settings, Store, Tags, X, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
@@ -8,6 +8,9 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { supabase } from '@/lib/auth/supabase'
 import { cn } from '@/lib/utils/cn'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { CommandPalette } from '@/components/ui/CommandPalette'
+import { useCommandPalette } from '@/lib/useCommandPalette'
+import { CookieConsent } from '@/components/ui/CookieConsent'
 import { CartButton } from '@/components/cart/CartButton'
 import { signInUrlFor } from '@/lib/utils/nextPath'
 
@@ -32,28 +35,89 @@ const NAV_SECTIONS = [
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/library', label: 'My Library', icon: Library, end: false },
-      { to: '/purchases', label: 'Purchases', icon: ReceiptText, end: false },
-      // Phase 10 §2: account shell — the hub for profile, security, notifications, data rights.
-      { to: '/account', label: 'Account', icon: Settings, end: true },
     ],
   },
   {
-    // Phase 8 (8G-8): 'Browse' renamed to 'Products' per owner instruction.
-    // The old comment about 'added alongside (not instead of)' is preserved below
-    // per the plan's own rule: the reversal is written next to the comment it overturns.
     heading: 'Products',
     items: [
       { to: '/questions', label: 'Questions', icon: Tags, end: false },
       { to: '/courses', label: 'Courses', icon: GraduationCap, end: false },
       { to: '/templates', label: 'Templates', icon: Sparkles, end: false },
       { to: '/packs', label: 'Reference packs', icon: Layers, end: false },
-      // week2_plan.md Phase 4 — originally 'Store' added alongside the three
-      // catalogues. Phase 8 (8G) reverses this: 'Store' becomes 'All products'
-      // and sits at the end as the overview, not as a peer of the catalogues.
       { to: '/store', label: 'All products', icon: Store, end: false },
     ],
   },
 ] as const
+
+/**
+ * One rail row.
+ *
+ * `[ADDED 2026-08-22, owner direction]` Collapsed, the rail shows icons only and the
+ * label appears on hover. Two details that make that safe rather than merely smaller:
+ *
+ *  1. **The label is always in the DOM**, hidden with `sr-only` when collapsed rather
+ *     than removed. An icon-only nav whose labels do not exist is unusable with a
+ *     screen reader, and `title` alone does not reliably produce an accessible name.
+ *     So the link is always properly named; only the VISUAL label is conditional.
+ *
+ *  2. **The flyout is CSS-only** (`group-hover` / `group-focus-visible`), so it appears
+ *     on keyboard focus as well as pointer hover. A hover-only affordance would put the
+ *     collapsed rail out of reach of the keyboard entirely.
+ *
+ * Clicking the icon navigates — it does not expand the rail first. The owner asked for
+ * both behaviours on one control; navigating is the one that matches every other link
+ * in the product, and the chevron is the dedicated, discoverable way to expand.
+ */
+function RailLink({
+  to,
+  label,
+  icon: Icon,
+  end,
+  collapsed,
+  onNavigate,
+}: {
+  to: string
+  label: string
+  icon: LucideIcon
+  end: boolean
+  collapsed: boolean
+  onNavigate?: () => void
+}) {
+  return (
+    <div className="group relative">
+      <NavLink
+        to={to}
+        end={end}
+        onClick={onNavigate}
+        className={({ isActive }) =>
+          cn(
+            'flex items-center rounded-lg py-2.5 text-sm font-medium transition-colors duration-150',
+            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            collapsed ? 'justify-center px-0' : 'gap-3 px-3',
+            isActive
+              ? 'bg-stage-foreground/12 text-stage-foreground'
+              : 'text-stage-foreground/80 hover:bg-stage-foreground/6 hover:text-stage-foreground',
+          )
+        }
+      >
+        <Icon className="size-[18px] shrink-0" aria-hidden="true" />
+        <span className={cn(collapsed && 'sr-only')}>{label}</span>
+      </NavLink>
+
+      {/* The collapsed-state flyout. `pointer-events-none` so it can never intercept the
+          click meant for the icon underneath it. CSS-only via group-hover, so it also
+          appears on keyboard focus. */}
+      {collapsed && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  )
+}
 
 /** The rail's section label. Same typographic device as `.eyebrow` (mono, xs, uppercase,
  *  tracked) minus the 24px hairline rule — in a 256px column the rule eats a third of
@@ -61,7 +125,19 @@ const NAV_SECTIONS = [
  *
  *  DESIGN.md §6.1 puts every other string in this product in sentence case; the eyebrow
  *  is the one deliberate exception, and this is that device. */
-function RailSectionHeading({ children }: { children: React.ReactNode }) {
+function RailSectionHeading({ children, collapsed }: { children: React.ReactNode; collapsed?: boolean }) {
+  // Collapsed, the heading becomes a rule: a 64px column cannot hold "Your work" at
+  // 0.16em tracking, and truncating it to "You…" is worse than a divider. The text
+  // stays in the DOM (sr-only) so the nav's grouping survives for screen readers —
+  // the grouping is the whole reason these headings exist.
+  if (collapsed) {
+    return (
+      <>
+        <span className="sr-only">{children}</span>
+        <hr aria-hidden="true" className="mx-3 my-2 border-t border-stage-foreground/12 first:hidden" />
+      </>
+    )
+  }
   return (
     <h2 className="px-3 pb-1.5 pt-5 font-mono text-[0.6875rem] font-medium uppercase tracking-[0.16em] text-stage-foreground/55 first:pt-1">
       {children}
@@ -69,9 +145,7 @@ function RailSectionHeading({ children }: { children: React.ReactNode }) {
   )
 }
 
-function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
-  // A shortcut only: /admin is guarded independently on the client and, the part that
-  // matters, on the server by require_admin.
+function SidebarNav({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   const user = useAuthStore((s) => s.user)
   const { data: profile } = useQuery({
     queryKey: queryKeys.me.profile(),
@@ -80,98 +154,124 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
     staleTime: 5 * 60 * 1000,
   })
 
-  // Every colour here is a `stage` token or an alpha of one, never a `sidebar-*` or
-  // `primary` one — DESIGN.md §7.6. Those tokens invert between themes, and this rail is
-  // now a dark plane in BOTH themes, so a `--sidebar-foreground` label would have been
-  // correct in dark and near-invisible in light. That exact bug shipped seven times on
-  // the hero and footer before `--stage` existed.
-  //
-  // Alphas are of `--stage-foreground`, not of `white`: §7.6 bans raw white outright,
-  // and the stage foreground carries the plane's warm/cool cast (#F7F2E9 light,
-  // #EAF1FA dark) so a 12% wash of it stays in the same colour story. This matches
-  // what the footer and hero already do.
-  const linkClass = ({ isActive }: { isActive: boolean }) =>
-    cn(
-      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150',
-      'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
-      isActive
-        ? 'bg-stage-foreground/12 text-stage-foreground'
-        : 'text-stage-foreground/80 hover:bg-stage-foreground/6 hover:text-stage-foreground',
-    )
-
   return (
-    <nav className="flex flex-1 flex-col px-3" aria-label="Member">
+    <nav className={cn('flex flex-1 flex-col', collapsed ? 'px-2' : 'px-3')} aria-label="Member">
+
       {NAV_SECTIONS.map(({ heading, items }) => (
         <div key={heading} className="flex flex-col gap-1">
-          <RailSectionHeading>{heading}</RailSectionHeading>
-          {items.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} onClick={onNavigate} className={linkClass}>
-              <Icon className="size-[18px] shrink-0" aria-hidden="true" />
-              {label}
-            </NavLink>
+          <RailSectionHeading collapsed={collapsed}>{heading}</RailSectionHeading>
+          {items.map(({ to, label, icon, end }) => (
+            <RailLink
+              key={to}
+              to={to}
+              label={label}
+              icon={icon}
+              end={end}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+            />
           ))}
         </div>
       ))}
 
       {profile?.is_admin && (
         <div className="flex flex-col gap-1">
-          <RailSectionHeading>Manage</RailSectionHeading>
-          <NavLink to="/admin/questions" onClick={onNavigate} className={linkClass}>
-            <ShieldCheck className="size-[18px] shrink-0" aria-hidden="true" />
-            Content editor
-          </NavLink>
+          <RailSectionHeading collapsed={collapsed}>Manage</RailSectionHeading>
+          <RailLink
+            to="/admin/questions"
+            label="Admin Panel"
+            icon={ShieldCheck}
+            end={false}
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+          />
         </div>
       )}
     </nav>
   )
 }
 
-function SidebarBrand() {
+function SidebarBrand({ collapsed, onToggleCollapse }: { collapsed: boolean; onToggleCollapse?: () => void }) {
   return (
-    <Link
-      to="/dashboard"
-      className="flex items-center gap-2 px-6 py-6 font-sans text-base font-semibold tracking-tight text-stage-foreground"
-    >
-      {/* `bg-gold`, not `bg-sidebar-primary`. The old token is midnight navy in the light
-          theme, which on this now-dark rail would render an invisible navy square on
-          navy — the precise defect DESIGN.md §7.6 records from the footer mark. Gold is
-          decorative here, which is the only role `--gold` is ever allowed (§7.5.2). */}
-      <span className="size-2.5 rounded-[3px] bg-gold ring-1 ring-inset ring-stage-foreground/20" aria-hidden="true" />
-      Practicable
-    </Link>
+    <div className={cn('flex items-center py-6', collapsed ? 'justify-center px-0' : 'px-6')}>
+      <Link
+        to="/dashboard"
+        className="flex min-w-0 items-center gap-2 font-sans text-base font-semibold tracking-tight text-stage-foreground"
+      >
+        <span className="size-2.5 shrink-0 rounded-[3px] bg-gold ring-1 ring-inset ring-stage-foreground/20" aria-hidden="true" />
+        {!collapsed && <span className="truncate">Practicable</span>}
+      </Link>
+      {onToggleCollapse && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className={cn(
+            'ml-auto flex shrink-0 items-center justify-center rounded-md text-stage-foreground/40 transition-colors duration-150 hover:bg-stage-foreground/8 hover:text-stage-foreground/80',
+            collapsed ? 'mt-2 size-8' : 'size-7',
+          )}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? (
+            <ChevronRight className="size-4" aria-hidden="true" />
+          ) : (
+            <ChevronLeft className="size-4" aria-hidden="true" />
+          )}
+        </button>
+      )}
+    </div>
   )
 }
 
-function SidebarAccount() {
+function SidebarAccount({ collapsed }: { collapsed: boolean }) {
   const user = useAuthStore((s) => s.user)
   const email = user?.email
   const name = (user?.user_metadata?.name as string | undefined) ?? email
 
-  // Stage tokens and alphas of them only, for the same reason as SidebarNav (§7.6).
   return (
     <div className="border-t border-stage-foreground/15 px-3 py-4">
-      <div className="flex items-center gap-2 rounded-lg px-3 py-2">
+      {/* Account settings link — sits above the identity row, beside theme/signout.
+          Owner direction: Account settings are chrome, not work. Every product
+          measured puts them next to the avatar, not in the primary nav. */}
+      <div className={cn('mb-2', collapsed ? 'flex justify-center' : 'px-1')}>
+        <NavLink
+          to="/account"
+          className={({ isActive }) =>
+            cn(
+              'flex items-center rounded-lg py-2 text-sm font-medium transition-colors duration-150',
+              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+              collapsed ? 'justify-center px-0' : 'gap-2.5 px-2',
+              isActive
+                ? 'bg-stage-foreground/12 text-stage-foreground'
+                : 'text-stage-foreground/65 hover:bg-stage-foreground/6 hover:text-stage-foreground',
+            )
+          }
+        >
+          <Settings className="size-[18px] shrink-0" aria-hidden="true" />
+          <span className={cn(collapsed && 'sr-only')}>Account settings</span>
+        </NavLink>
+        {collapsed && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+          >
+            Account settings
+          </span>
+        )}
+      </div>
+
+      {/* Identity + controls row */}
+      <div className={cn('flex items-center gap-2 rounded-lg py-2', collapsed ? 'justify-center px-0' : 'px-3')}>
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-stage-foreground/12 text-xs font-semibold text-stage-foreground">
           {(name ?? '?').slice(0, 1).toUpperCase()}
         </span>
-        <p className="min-w-0 flex-1 truncate text-sm font-medium text-stage-foreground/85">{name ?? 'Your account'}</p>
+        {!collapsed && (
+          <p className="min-w-0 flex-1 truncate text-sm font-medium text-stage-foreground/85">{name ?? 'Your account'}</p>
+        )}
         <CartButton
           on="stage"
           className="text-stage-foreground/70 hover:bg-stage-foreground/8 hover:text-stage-foreground"
         />
-        {/* `/45`, not `/20` `[FIXED 2026-08-22, rail-contrast.spec.ts]`. The rendered-pixel
-            check §16.2 asked for measured this border at **1.72:1 light / 1.80:1 dark**
-            against the aurora backdrop it actually sits on — WCAG 2.1 §1.4.11 wants 3:1.
-            `/45` measures 3.24:1 / 3.62:1, the first step that clears both themes.
-
-            It matters here more than the number suggests: this button has no fill, and
-            its Sun/Moon glyph is `aria-hidden` decoration, so the border is the ONLY
-            visual evidence that a control is there. That is precisely the case §1.4.11
-            covers — unlike the rail's `border-r` and the account rule, which are region
-            separators and are exempt (both measured ~1.5:1 and deliberately left alone).
-
-            Hover moves to `/65` so it still reads as a state change above the new resting
-            value; at `/40` it would have been DIMMER than the resting border. */}
         <ThemeToggle className="border-stage-foreground/45 text-stage-foreground/70 hover:border-stage-foreground/65 hover:text-stage-foreground" />
         <button
           type="button"
@@ -193,28 +293,59 @@ function SidebarAccount() {
  * without requiring an account. CatalogueLayout picks between this and MarketingLayout
  * based on who is signed in; this half must render without asserting anything about
  * auth. */
+const SIDEBAR_KEY = 'practicable:sidebar-collapsed'
+
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(SIDEBAR_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export function MemberChrome() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  const { open: paletteOpen, setOpen: setPaletteOpen } = useCommandPalette()
+
+  const toggleCollapse = useCallback(() => {
+    setCollapsed((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(SIDEBAR_KEY, next ? '1' : '0')
+      } catch { /* private mode */ }
+      return next
+    })
+  }, [])
+
+  // Clicking a nav link in collapsed mode should expand the sidebar so the user
+  // can see where they are. `onNavigate` on RailLink is the hook for this.
+  const handleNavInCollapsed = useCallback(() => {
+    if (collapsed) {
+      setCollapsed(false)
+      try {
+        window.localStorage.setItem(SIDEBAR_KEY, '0')
+      } catch { /* private mode */ }
+    }
+  }, [collapsed])
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Desktop: a persistent left sidebar (DESIGN.md §17.2/§24.1's fixed-rail pattern).
-          `[CHANGED 2026-08-13, owner direction]` The rail now stands on the same dark
-          `--stage` plane as the hero, the auth panel and the footer, carrying the same
-          aurora — so the member chrome belongs to the brand rather than reading as a
-          separate, quieter admin shell.
-
-          This is a plane change, not a colour tweak: `--sidebar-*` inverts between
-          themes and `--stage` does not, so every child had to move to stage tokens in
-          the same pass (§7.6). Leaving one behind is how the footer shipped an invisible
-          navy mark on navy.
-
-          `isolate` scopes the aurora's `-z-10`; `relative` positions it. */}
-      <aside className="relative isolate hidden w-64 shrink-0 flex-col overflow-hidden border-r border-stage-foreground/15 bg-stage md:sticky md:top-0 md:flex md:h-screen">
+      {/* Desktop sidebar — collapsible. When collapsed: 64px, icons only, tooltips on
+          hover. When expanded: 256px, full labels. Width transitions smoothly. */}
+      <aside
+        className={cn(
+          'relative isolate hidden shrink-0 flex-col overflow-y-auto overscroll-y-contain border-r border-stage-foreground/15 bg-stage md:sticky md:top-0 md:flex md:h-screen transition-[width] duration-200 ease-[var(--ease-standard)]',
+          collapsed ? 'w-16' : 'w-64',
+        )}
+      >
         <div aria-hidden="true" className="stage-aurora stage-aurora--rail -z-10" />
-        <SidebarBrand />
-        <SidebarNav />
-        <SidebarAccount />
+        <SidebarBrand collapsed={collapsed} onToggleCollapse={toggleCollapse} />
+        <SidebarNav
+          collapsed={collapsed}
+          onNavigate={handleNavInCollapsed}
+        />
+        <SidebarAccount collapsed={collapsed} />
       </aside>
 
       {/* Mobile: a full-height sheet, same pattern as MarketingLayout's mobile menu
@@ -228,10 +359,10 @@ export function MemberChrome() {
               a different surface would make the app look like two products. */}
           {/* `absolute` (not `relative`) is both the positioning inside the overlay and
               the containing block the aurora's `inset-0` resolves against. */}
-          <aside className="absolute inset-y-0 left-0 isolate flex w-72 flex-col overflow-hidden bg-stage shadow-xl">
+          <aside className="absolute inset-y-0 left-0 isolate flex w-72 flex-col overflow-y-auto overscroll-y-contain bg-stage shadow-xl">
             <div aria-hidden="true" className="stage-aurora stage-aurora--rail -z-10" />
             <div className="flex items-center justify-between px-2 py-2">
-              <SidebarBrand />
+              <SidebarBrand collapsed={false} onToggleCollapse={() => setMobileOpen(false)} />
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
@@ -242,7 +373,7 @@ export function MemberChrome() {
               </button>
             </div>
             <SidebarNav onNavigate={() => setMobileOpen(false)} />
-            <SidebarAccount />
+            <SidebarAccount collapsed={false} />
           </aside>
         </div>
       )}
@@ -273,12 +404,23 @@ export function MemberChrome() {
             <span className="size-2 rounded-[3px] bg-primary ring-1 ring-inset ring-primary-edge" aria-hidden="true" />
             Practicable
           </Link>
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="ml-auto flex items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground md:hidden"
+            aria-label="Search"
+          >
+            <Search className="size-3.5" aria-hidden="true" />
+          </button>
         </header>
 
         <main id="main" className="flex-1">
           <Outlet />
         </main>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <CookieConsent />
     </div>
   )
 }

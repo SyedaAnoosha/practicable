@@ -1,7 +1,11 @@
+import logging
 from typing import Optional
 
 import stripe
+
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.stripe_secret_key
 
@@ -12,6 +16,7 @@ def create_checkout_session(
     user_email: str,
     user_id: str,
     product_ids: list[str],
+    discount_code: str | None = None,
 ) -> stripe.checkout.Session:
     """Create a Stripe Checkout session for one or more products (week3_plan.md
     W3-R11 — a cart checkout is N line items in ONE session; a direct "Buy" is the
@@ -28,20 +33,58 @@ def create_checkout_session(
     W4-R2: invoice_creation and billing_address_collection enable tax-invoice-quality
     receipts for business buyers who need to expense purchases.
     """
-    return stripe.checkout.Session.create(
-        payment_method_types=['card'],
-        line_items=[{'price': price_id, 'quantity': 1} for price_id in price_ids],
-        mode='payment',
-        success_url=success_url,
-        cancel_url=cancel_url,
-        customer_email=user_email,
-        invoice_creation={'enabled': True},
-        billing_address_collection='required',
-        metadata={
+    session_kwargs: dict = {
+        'payment_method_types': ['card'],
+        'line_items': [{'price': price_id, 'quantity': 1} for price_id in price_ids],
+        'mode': 'payment',
+        'success_url': success_url,
+        'cancel_url': cancel_url,
+        'customer_email': user_email,
+        'invoice_creation': {'enabled': True},
+        'billing_address_collection': 'required',
+        'metadata': {
             'user_id': user_id,
             'product_ids': ','.join(product_ids),
         },
-    )
+    }
+
+    # Discount code — validated via Stripe Promotion Codes. The admin creates
+    # the code in the Stripe dashboard; this just passes it through.
+    if discount_code:
+        applied = False
+        try:
+            promo_codes = stripe.PromotionCode.list(code=discount_code, active=True)
+            if promo_codes.data:
+                session_kwargs['discounts'] = [{
+                    'promotion_code': promo_codes.data[0].id,
+                }]
+                applied = True
+        except stripe.StripeError:
+            logger.warning(
+                "Stripe rejected the promotion-code lookup for %r; continuing at full price",
+                discount_code,
+                exc_info=True,
+            )
+
+        if not applied:
+            # `[CHANGED 2026-08-22]` Previously this passed silently. A buyer who was
+            # SHOWN a code on the site and then charged full price has a refund claim
+            # and a reason to distrust every other number on the page, so a code that
+            # does not apply must be visible rather than merely absent.
+            #
+            # It is still not fatal — failing the whole checkout over a promo code
+            # would turn a discount problem into a lost sale. Instead the checkout
+            # proceeds at full price and the reason is logged for the operator, who is
+            # the only person who can actually fix it (the code lives in the Stripe
+            # dashboard, not in this codebase).
+            logger.warning(
+                "Discount code %r did not resolve to an active Stripe promotion code — "
+                "checkout proceeding at full price. If this code is advertised on the "
+                "site, create it in the Stripe dashboard or remove the banner.",
+                discount_code,
+            )
+
+    return stripe.checkout.Session.create(**session_kwargs)
 
 def create_refund(*, payment_intent_id: str, amount: Optional[int] = None) -> stripe.Refund:
     """Refund of a completed payment. `amount` omitted (the admin path, week3_plan.md
