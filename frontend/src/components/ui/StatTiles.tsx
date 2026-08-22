@@ -1,5 +1,8 @@
+import { useEffect, useRef } from 'react'
+import { useInView } from 'motion/react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
+import { useCountUp } from '@/lib/motion'
 
 export interface Stat {
   icon?: LucideIcon
@@ -66,14 +69,7 @@ export function StatTiles({
             />
           )}
           {/* --text-stat, mono, tabular — the figure is the point of the tile. */}
-          <dd
-            className={cn(
-              'font-mono text-stat font-semibold tabular-nums',
-              onStage ? 'text-stage-foreground' : 'text-foreground',
-            )}
-          >
-            {value}
-          </dd>
+          <StatValue value={value} onStage={onStage} />
           <dt
             className={cn(
               'text-xs',
@@ -85,5 +81,41 @@ export function StatTiles({
         </div>
       ))}
     </dl>
+  )
+}
+
+/**
+ * The figure, counting up once when the tile first enters view.
+ *
+ * Only NUMERIC values animate. A string value ("Free", "v1.2") renders as-is rather
+ * than being coerced — counting a string to a number would either print NaN or invent
+ * a figure, and `useCountUp` is deliberately incapable of counting to a value the
+ * caller did not supply (principle 7).
+ *
+ * `tabular-nums` is what stops the tile jittering while the digits change; without it
+ * the label below would shift on every frame.
+ */
+function StatValue({ value, onStage }: { value: string | number; onStage: boolean }) {
+  const ref = useRef<HTMLElement>(null)
+  const inView = useInView(ref, { once: true, amount: 0.5 })
+  const numeric = typeof value === 'number' ? value : null
+  const { display, begin } = useCountUp(numeric)
+
+  useEffect(() => {
+    if (inView) begin()
+    // `begin` is a fresh closure each render; depending on it would re-fire the count.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inView])
+
+  return (
+    <dd
+      ref={ref}
+      className={cn(
+        'font-mono text-stat font-semibold tabular-nums',
+        onStage ? 'text-stage-foreground' : 'text-foreground',
+      )}
+    >
+      {numeric === null ? value : (display ?? value)}
+    </dd>
   )
 }

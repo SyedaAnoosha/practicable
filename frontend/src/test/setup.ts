@@ -61,3 +61,40 @@ if (!window.matchMedia) {
     dispatchEvent: () => false,
   }) as unknown as MediaQueryList
 }
+
+// jsdom implements no IntersectionObserver, and Motion's `useInView` (used by
+// StatTiles' countUp, and by anything else that reveals on scroll) constructs one
+// during its mount effect. Without this, any test that renders such a component dies
+// with "IntersectionObserver is not defined" — a crash in the TEST environment for a
+// component that is correct in a browser.
+//
+// The stub reports the element as immediately intersecting. That is the right default
+// for a jsdom test: there is no layout and no scrolling, so "in view" is the only
+// state that can be meaningfully asserted, and it means countUp resolves to its final
+// value rather than hanging at its start.
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  class StubIntersectionObserver implements IntersectionObserver {
+    readonly root: Element | Document | null = null
+    readonly rootMargin: string = '0px'
+    readonly thresholds: ReadonlyArray<number> = [0]
+    private readonly callback: IntersectionObserverCallback
+
+    constructor(callback: IntersectionObserverCallback) {
+      this.callback = callback
+    }
+
+    observe(target: Element) {
+      this.callback(
+        [{ isIntersecting: true, intersectionRatio: 1, target } as IntersectionObserverEntry],
+        this,
+      )
+    }
+
+    unobserve() {}
+    disconnect() {}
+    takeRecords(): IntersectionObserverEntry[] { return [] }
+  }
+
+  globalThis.IntersectionObserver =
+    StubIntersectionObserver as unknown as typeof IntersectionObserver
+}
