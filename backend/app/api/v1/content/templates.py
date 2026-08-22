@@ -144,10 +144,30 @@ async def get_template(
     user_id: Optional[str] = Depends(get_current_user_id_optional),
 ):
     """One template, public — lets the download page show what a visitor is about to get
-    without pulling the whole catalogue."""
-    template = (
-        await session.execute(select(Template).where(Template.id == uuid.UUID(template_id)))
-    ).scalar_one_or_none()
+    without pulling the whole catalogue.
+
+    Accepts either the id or the slug.
+
+    `[FIXED 2026-08-22]` This did `uuid.UUID(template_id)` with no guard, so anything
+    that wasn't a well-formed UUID raised `ValueError: badly formed hexadecimal UUID
+    string` and the endpoint returned a **500**. Two consequences, both user-visible:
+
+      - Every slug-shaped URL crashed. `/templates/risk-register-template` is exactly
+        the sort of link a person types, shares or bookmarks, and `Template` serialises
+        a `slug` field, so slugs were plainly meant to resolve here.
+      - FastAPI attaches no CORS headers to an unhandled exception, so in the browser
+        the crash surfaced as "blocked by CORS policy" — pointing every diagnosis at
+        the middleware config instead of at this line.
+
+    A wrong identifier is a 404, not a server fault: the id branch is tried only when
+    the value actually parses as a UUID, and the slug branch handles everything else.
+    """
+    try:
+        lookup = Template.id == uuid.UUID(template_id)
+    except ValueError:
+        lookup = Template.slug == template_id
+
+    template = (await session.execute(select(Template).where(lookup))).scalar_one_or_none()
     if not template or not template.published:
         raise HTTPException(status_code=404, detail="Template not found")
 
