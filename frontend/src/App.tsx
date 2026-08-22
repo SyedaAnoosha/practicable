@@ -11,6 +11,8 @@ import AdminLayout from '@/routes/_layouts/AdminLayout'
 // ── Eagerly loaded (core public pages, always needed) ──────────────────────
 import { Home } from '@/pages/Home'
 import { Contact } from '@/pages/Contact'
+import { NotFound } from '@/pages/NotFound'
+import { RouteError } from '@/pages/RouteError'
 import { Dashboard } from '@/pages/Dashboard'
 import { Library } from '@/pages/Library'
 import { Question } from '@/pages/Question'
@@ -80,6 +82,12 @@ function RouteLoading() {
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
+    /* `[ADDED 2026-08-22]` Without this, anything thrown while rendering a route —
+       and every unmatched URL — surfaced react-router's built-in developer screen
+       ("Unexpected Application Error! ... Hey developer") to real visitors. It sits on
+       the root so it covers every branch below, and `RouteError` hands a 404 off to
+       the proper not-found page rather than calling a wrong address a crash. */
+    errorElement: <RouteError />,
     children: [
       {
         element: <MarketingLayout />,
@@ -96,6 +104,11 @@ const router = createBrowserRouter([
           { path: '/legal/terms', element: <Terms /> },
           { path: '/legal/privacy', element: <Privacy /> },
           { path: '/legal/refunds', element: <Refunds /> },
+          /* Catch-all. Inside MarketingLayout so a mistyped URL keeps the site's
+             header and footer — the fastest way out of a dead end is the navigation
+             the visitor already knows, not a bare page with one link on it. Must stay
+             last: react-router matches in order and '*' matches everything. */
+          { path: '*', element: <NotFound /> },
         ],
       },
       {
