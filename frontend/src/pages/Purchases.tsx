@@ -178,7 +178,13 @@ function PurchasesBody({ Shell }: { Shell: (p: { children: React.ReactNode }) =>
     )
   }
 
-  const orders = data?.pages.flatMap((page) => page.orders) ?? []
+  /* `[HARDENED 2026-08-22]` `flatMap((page) => page.orders)` on a page object without
+     an `orders` key yields `[undefined]`, not `[]` — so the list below then rendered a
+     row for a non-existent order and threw on `order.status`, taking the whole page to
+     the error boundary. The `?? []` on the outer expression looks like it covers this
+     and does not: it only guards `data` being absent, never a page whose array is.
+     One malformed page must not cost the buyer their entire purchase history. */
+  const orders = data?.pages.flatMap((page) => page?.orders ?? []) ?? []
 
   return (
     <Shell>
