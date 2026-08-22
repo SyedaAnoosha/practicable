@@ -7,6 +7,7 @@ import { queryKeys } from '@/lib/query/keys'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { supabase } from '@/lib/auth/supabase'
 import { cn } from '@/lib/utils/cn'
+import { RailTooltip } from '@/components/ui/RailTooltip'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { CommandPalette } from '@/components/ui/CommandPalette'
 import { useCommandPalette } from '@/lib/useCommandPalette'
@@ -84,7 +85,7 @@ function RailLink({
   onNavigate?: () => void
 }) {
   return (
-    <div className="group relative">
+    <RailTooltip label={label} collapsed={collapsed}>
       <NavLink
         to={to}
         end={end}
@@ -104,18 +105,7 @@ function RailLink({
         <span className={cn(collapsed && 'sr-only')}>{label}</span>
       </NavLink>
 
-      {/* The collapsed-state flyout. `pointer-events-none` so it can never intercept the
-          click meant for the icon underneath it. CSS-only via group-hover, so it also
-          appears on keyboard focus. */}
-      {collapsed && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
-        >
-          {label}
-        </span>
-      )}
-    </div>
+    </RailTooltip>
   )
 }
 
@@ -193,12 +183,31 @@ function SidebarNav({ onNavigate, collapsed = false }: { onNavigate?: () => void
 
 function SidebarBrand({ collapsed, onToggleCollapse }: { collapsed: boolean; onToggleCollapse?: () => void }) {
   return (
-    <div className={cn('flex items-center py-6', collapsed ? 'justify-center px-0' : 'px-6')}>
+    /* `[FIXED 2026-08-22]` Collapsed, this row was `justify-center` while the toggle
+       below carried `ml-auto` — so in a 64px column the brand mark was jammed against
+       the left edge and the chevron against the right, with neither centred and the two
+       nearly touching. They are stacked when collapsed: mark above, toggle below, both
+       centred, which is what the rest of the collapsed rail does. */
+      <div className={cn('flex py-6', collapsed ? 'flex-col items-center gap-2 px-0' : 'items-center px-6')}>
       <Link
         to="/dashboard"
         className="flex min-w-0 items-center gap-2 font-sans text-base font-semibold tracking-tight text-stage-foreground"
       >
-        <span className="size-2.5 shrink-0 rounded-[3px] bg-gold ring-1 ring-inset ring-stage-foreground/20" aria-hidden="true" />
+        {/* `[FIXED 2026-08-22]` The brand mark read as a dim olive smudge rather than
+            gold. Three things compounded at this size: `--gold` (#C6A961) is a muted
+            champagne chosen for rules and gradient stops, `size-2.5` is only 10px, and
+            an inset `ring-stage-foreground/20` laid a pale wash over the whole of that
+            10px — on a small solid the inset ring is a large fraction of the visible
+            area, so it desaturated the fill instead of edging it.
+            Now 12px with the ring *outside* the fill, so the gold is unmodified. The
+            ring colour is stated literally rather than as `--gold-strong`, because that
+            token flips to a dark brown (#7C5C14) in the light theme — and this rail is
+            the dark stage in BOTH themes, so a theme-reactive token would go muddy on
+            exactly the surface it needs to read on. */}
+        <span
+          className="size-3 shrink-0 rounded-[3px] bg-gold ring-1 ring-[#E3CB92]/40"
+          aria-hidden="true"
+        />
         {!collapsed && <span className="truncate">Practicable</span>}
       </Link>
       {onToggleCollapse && (
@@ -206,8 +215,8 @@ function SidebarBrand({ collapsed, onToggleCollapse }: { collapsed: boolean; onT
           type="button"
           onClick={onToggleCollapse}
           className={cn(
-            'ml-auto flex shrink-0 items-center justify-center rounded-md text-stage-foreground/40 transition-colors duration-150 hover:bg-stage-foreground/8 hover:text-stage-foreground/80',
-            collapsed ? 'mt-2 size-8' : 'size-7',
+            'flex shrink-0 items-center justify-center rounded-md text-stage-foreground/40 transition-colors duration-150 hover:bg-stage-foreground/8 hover:text-stage-foreground/80',
+            collapsed ? 'size-8' : 'ml-auto size-7',
           )}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -234,6 +243,7 @@ function SidebarAccount({ collapsed }: { collapsed: boolean }) {
           Owner direction: Account settings are chrome, not work. Every product
           measured puts them next to the avatar, not in the primary nav. */}
       <div className={cn('mb-2', collapsed ? 'flex justify-center' : 'px-1')}>
+        <RailTooltip label="Account settings" collapsed={collapsed}>
         <NavLink
           to="/account"
           className={({ isActive }) =>
@@ -250,14 +260,7 @@ function SidebarAccount({ collapsed }: { collapsed: boolean }) {
           <Settings className="size-[18px] shrink-0" aria-hidden="true" />
           <span className={cn(collapsed && 'sr-only')}>Account settings</span>
         </NavLink>
-        {collapsed && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs font-medium text-popover-foreground opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
-          >
-            Account settings
-          </span>
-        )}
+        </RailTooltip>
       </div>
 
       {/* Identity + controls.
@@ -352,7 +355,7 @@ export function MemberChrome() {
              that momentarily exceeds 64px (mid-transition, or a long label before
              `sr-only` applies) must never produce a horizontal scrollbar across the
              navigation. */
-          'relative isolate hidden shrink-0 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain border-r border-stage-foreground/15 bg-stage md:sticky md:top-0 md:flex md:h-screen transition-[width] duration-200 ease-[var(--ease-standard)]',
+          'relative isolate hidden shrink-0 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain scrollbar-none border-r border-stage-foreground/15 bg-stage md:sticky md:top-0 md:flex md:h-screen transition-[width] duration-200 ease-[var(--ease-standard)]',
           collapsed ? 'w-16' : 'w-64',
         )}
       >

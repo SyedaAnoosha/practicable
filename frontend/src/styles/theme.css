@@ -1071,6 +1071,56 @@
 }
 
 @layer utilities {
+  /* `[ADDED 2026-08-22]` Hide a scroll container's scrollbar without disabling scroll.
+     Used by the collapsed sidebar rails: those are 64px wide, and a classic Windows
+     scrollbar takes ~15px of that — nearly a quarter of the column — which shoved the
+     icons off centre and read as a broken layout rather than as a scrollbar.
+     Scrolling still works by wheel, trackpad, touch and keyboard; only the visual track
+     is suppressed. Deliberately NOT applied to page-level or content scrollers, where
+     the scrollbar is the only affordance telling a reader there is more below. */
+  .scrollbar-none {
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* legacy Edge */
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  /* `[ADDED 2026-08-22]` Splide, dressed to match the product.
+     The library ships only structural CSS (`css/core`), which is deliberate — these
+     rules supply the look. Kept here rather than inline so the carousel matches the
+     rest of the page's motion and spacing tokens instead of restating them per usage. */
+  .practicable-splide .splide__track {
+    /* A little breathing room so a focused card's ring is not clipped by the track.
+       `overflow` is deliberately left to Splide: the library sets `overflow: hidden`
+       on the track itself, and overriding it here (an earlier attempt used
+       `visible clip`) stopped the translated list from being masked, so slides simply
+       stacked in place and the arrows appeared to do nothing. */
+    padding-block: 2px;
+  }
+  .practicable-splide .splide__list {
+    align-items: stretch;
+  }
+  .practicable-splide .splide__slide {
+    /* Cards in a row should be the same height whatever their content, exactly as the
+       flex track gave for free. */
+    display: flex;
+    height: auto;
+  }
+  .practicable-splide .splide__slide > * {
+    width: 100%;
+  }
+  /* Splide sets inline opacity/visibility on arrows; the hover-reveal is ours. */
+  .practicable-splide .splide__arrow:disabled {
+    opacity: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .practicable-splide .splide__list {
+      transition: none !important;
+    }
+  }
+
   @keyframes gradient-drift {
     0%, 100% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
