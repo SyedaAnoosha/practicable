@@ -3,7 +3,14 @@
 
 <head>
   <meta charset="UTF-8" />
+  <!-- `[CHANGED 2026-08-22]` An SVG favicon alone leaves Safari and older mobile
+       browsers with no icon at all — they fall back to /favicon.ico, and a missing one
+       shows the generic blank-page glyph. The PNG is declared for those, and
+       apple-touch-icon for a homescreen shortcut. Order matters: browsers that support
+       SVG take the first declaration and ignore the rest. -->
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- Matches the theme's --background token (theme.css) so the mobile browser
          chrome and overscroll feel like part of the page, not a white frame.
