@@ -97,17 +97,22 @@ class PackDetailOut(PackSummaryOut):
 
 
 async def _pack_product_ids(session: AsyncSession) -> set[uuid.UUID]:
-    """Published products carrying at least one question_set AND one template row."""
-    qs = select(ProductContent.product_id).where(
-        ProductContent.content_type == ResourceType.QUESTION.value
-    )
+    """Published products carrying at least one template row.
+
+    `[CHANGED 2026-08-22, owner direction]` This also required a `question_set` row.
+    Questions are no longer part of what makes something a pack (see the matching change
+    in `admin/packs.py`), and leaving the requirement here would have been the quieter
+    half of the same bug: an admin could create and publish a question-less pack, and it
+    would then simply never appear in the catalogue, with nothing anywhere saying why.
+
+    The template requirement stays — it is the file the pack sells.
+    """
     tpl = select(ProductContent.product_id).where(
         ProductContent.content_type == ResourceType.TEMPLATE.value
     )
     result = await session.execute(
         select(Product.id).where(
             Product.published.is_(True),
-            Product.id.in_(qs),
             Product.id.in_(tpl),
         )
     )
