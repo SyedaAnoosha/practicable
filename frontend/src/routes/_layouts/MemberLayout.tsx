@@ -159,7 +159,20 @@ function SidebarAccount() {
           on="stage"
           className="text-stage-foreground/70 hover:bg-stage-foreground/8 hover:text-stage-foreground"
         />
-        <ThemeToggle className="border-stage-foreground/20 text-stage-foreground/70 hover:border-stage-foreground/40 hover:text-stage-foreground" />
+        {/* `/45`, not `/20` `[FIXED 2026-08-22, rail-contrast.spec.ts]`. The rendered-pixel
+            check §16.2 asked for measured this border at **1.72:1 light / 1.80:1 dark**
+            against the aurora backdrop it actually sits on — WCAG 2.1 §1.4.11 wants 3:1.
+            `/45` measures 3.24:1 / 3.62:1, the first step that clears both themes.
+
+            It matters here more than the number suggests: this button has no fill, and
+            its Sun/Moon glyph is `aria-hidden` decoration, so the border is the ONLY
+            visual evidence that a control is there. That is precisely the case §1.4.11
+            covers — unlike the rail's `border-r` and the account rule, which are region
+            separators and are exempt (both measured ~1.5:1 and deliberately left alone).
+
+            Hover moves to `/65` so it still reads as a state change above the new resting
+            value; at `/40` it would have been DIMMER than the resting border. */}
+        <ThemeToggle className="border-stage-foreground/45 text-stage-foreground/70 hover:border-stage-foreground/65 hover:text-stage-foreground" />
         <button
           type="button"
           onClick={() => void supabase.auth.signOut()}

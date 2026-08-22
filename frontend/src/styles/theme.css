@@ -24,6 +24,7 @@
      (dark) one. Sits between --background and --muted in luminance so a band reads as
      a distinct surface without reading as "disabled". */
   --color-background-2: var(--background-2);
+  --color-background-3: var(--background-3);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   /* A raised panel INSIDE a card (M4 "layered surfaces") — grouped information that
@@ -223,6 +224,23 @@
      --gold-strong 5.12:1, --accent 5.79:1 — every text token that lands on a band
      clears 4.5:1, so no per-band contrast exception is needed. */
   --background-2: #F4EFE4;
+  /* `[ADDED 2026-08-22, owner direction]` A third plane: pale blue rather than warm.
+     The question section originally continued the dark stage under the hero, which
+     read as one indistinct dark mass — the hero's own aurora bled into it and the
+     section boundary disappeared. A LIGHT plane is the fix, but ivory and
+     --background-2 are both warm and both already spoken for in the band rhythm, so
+     neither separates this section from the ones below it.
+
+     This is the cool counterpart, drawn from the --primary/--accent family so it does
+     not introduce a third hue family (the palette rule holds — it is a tint of blue we
+     already own, not a new colour).
+
+     Measured on this plane: --foreground 13.12:1, --muted-foreground 5.09:1,
+     --primary 13.55:1, --accent 5.45:1, --gold-strong 5.22:1, and the WORST of the
+     five domain tones 5.24:1 — everything clears 4.5:1 with headroom. A white --card
+     separates from it at 1.18:1, enough to read as a raised surface without a border
+     doing all the work. */
+  --background-3: #E4EDF6;
   --foreground: #1C1712;        /* espresso ink, not near-black */
   --card: #FFFFFF;
   /* A raised panel inside a card (M4). One step off --card, the same distance
@@ -668,12 +686,29 @@
        3. dims harder than the footer (0.42 vs 0.5), because the same absolute brightness
           occupies far more of a 256px column than of a full-width band.
 
-     `[UNVERIFIED — needs a rendered-pixel check]` The numbers above are reasoned, not
-     sampled. §7.5.3 is explicit that this class's contrast claims are only meaningful
-     when measured from the composited page at the point the text actually lands, and
-     that the token-level maths said "safe" for the auth panel while the real paragraph
-     sat at 4.36:1. Sample the nav labels (which render at 80%) and the account row
-     (70%) at 1440x900 in BOTH themes before this is treated as audited. */
+     `[VERIFIED 2026-08-22 — rendered-pixel check, tests/e2e/rail-contrast.spec.ts]`
+     Carried `[UNVERIFIED]` from 2026-08-13 until this pass. The numbers were reasoned,
+     not sampled; they are now sampled, at 1440x900 in BOTH themes, from the composited
+     PNG with glyphs and borders hidden so the backdrop is the surface the text actually
+     sits on rather than the ink on top of it. Worst-case backdrop per run, light / dark:
+
+       nav labels          /80   9.23:1 / 10.73:1
+       account name        /85  11.40:1 / 12.47:1
+       cart + theme toggle /70   7.03:1 /  8.11:1
+       sign-out            /65   5.50:1 /  6.71:1
+       section headings    /55   5.33:1 /  5.63:1   (all vs 4.5:1, WCAG 2.1 §1.4.3)
+
+     The reasoning held for every text run — the `50% 128%` core and the 0.42 dim do keep
+     the bloom out from under the copy. The luminance profile confirms the mechanism
+     rather than just the outcome: mean L climbs 0.0092 -> 0.0183 top to bottom, peaking
+     at x~98%, so the bright corner really is below and right of the column.
+
+     One thing the reasoning missed, and it was a control rather than copy: the theme
+     toggle's `border-stage-foreground/20` measured **1.72:1 light / 1.80:1 dark**. That
+     button has no fill and an `aria-hidden` glyph, so its border is the only mark that a
+     control is there — WCAG 2.1 §1.4.11 territory, 3:1. Raised to `/45` (3.77:1 / 4.07:1)
+     in `MemberLayout.tsx`. The rail's own `border-r` and account rule measure ~1.5:1 and
+     were deliberately left: they are region separators, which §1.4.11 exempts. */
   .stage-aurora--rail {
     --aurora-opacity: 0.42;
     --aurora-core: 50% 128%;
@@ -799,6 +834,14 @@
      inside a max-width container that stops at the container edge reads as a card. */
   .band {
     background-color: var(--background-2);
+  }
+
+  /* `[ADDED 2026-08-22]` The cool band. Same full-bleed rules as `.band`; used where a
+     section needs to separate from BOTH the ivory ground and the warm band — chiefly
+     the question section directly under the hero, which previously continued the stage
+     and merged into it. */
+  .band-cool {
+    background-color: var(--background-3);
   }
 
   /* A faint dot grid, for a band that needs texture rather than just a tone step.
@@ -1046,6 +1089,11 @@
      rather than a raised plane. Measured on it: --foreground 13.8:1,
      --muted-foreground 5.94:1, --gold-strong 9.72:1 — all clear. */
   --background-2: #1A150D;
+  /* `[ADDED 2026-08-22]` The pale-blue plane's dark counterpart. In the light theme
+     this plane is DARKER than the ground; here it must be LIGHTER, or a cool section
+     on a warm espresso ground reads as a hole rather than a surface. Measured:
+     --foreground 14.34:1, --muted-foreground 6.17:1, worst domain tone 5.86:1. */
+  --background-3: #161E2B;
   --foreground: #F2EBDE;
   --card: #1B1710;
   --card-2: #221C13;

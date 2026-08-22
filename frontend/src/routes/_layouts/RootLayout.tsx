@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useLocation, useNavigationType } from 'react-router'
 import { supabase } from '@/lib/auth/supabase'
 import { useAuthStore } from '@/stores/useAuthStore'
@@ -8,15 +8,65 @@ import { api } from '@/lib/api/client'
 /** Announces the new page on every route change for screen-reader users, who
  * otherwise get told nothing when a SPA navigates.
  *
- * The message is derived during render rather than synced through an effect: an
- * aria-live region only announces when its text actually changes, so a navigation
- * still produces exactly one announcement without a setState-in-effect. */
+ * `[FIXED 2026-08-22, a11y-manual-checks.spec.ts]` **This announced nothing at all for
+ * its entire life, and its own comment explained why.**
+ *
+ * The message used to be `` `${document.title} — page loaded` ``, and the comment
+ * correctly noted that "an aria-live region only announces when its text actually
+ * changes". Nothing in this application ever sets `document.title` — there is no
+ * `useDocumentTitle`, no per-route title, and `index.html` hard-codes
+ * `<title>Practicable</title>`. So the text was the identical string on every route,
+ * the region never changed, and a screen-reader user navigating the whole product was
+ * told nothing, ever. The region existed, was correctly configured, and was inert.
+ *
+ * The fix reads the page's real `<h1>`, which is the one string guaranteed to exist and
+ * to differ per route: `PageTitle` is the single `<h1>` for every route by design
+ * ("One <h1> per page — every route's title goes through this component so that rule
+ * can't be violated by accident"). Deriving from it rather than adding titles to 45
+ * page components keeps one source of truth instead of two that can drift.
+ *
+ * `document.title` is updated from the same string, so the browser tab and the
+ * announcement cannot disagree — and the tab now says where the reader is too.
+ *
+ * A `MutationObserver` rather than a render-time read: the `<h1>` belongs to the route
+ * component, which mounts AFTER this one renders, and most pages fetch their title
+ * before they can show it. Reading during render would catch the previous page's
+ * heading, or nothing at all. */
 function RouteAnnouncer() {
-  // Subscribing to location is what makes this component re-render on navigation —
-  // the announcement below is derived from document.title, not from location itself,
-  // but nothing else here would re-run without this call.
-  useLocation()
-  const message = `${document.title} — page loaded`
+  const { pathname } = useLocation()
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    const read = () => {
+      const heading = document.querySelector('h1')?.textContent?.trim()
+      if (!heading || cancelled) return false
+      // Guard against announcing the OUTGOING page's heading: the effect runs on
+      // pathname change, but the new route may not have painted yet.
+      const next = `${heading} — page loaded`
+      setMessage((prev) => (prev === next ? prev : next))
+      document.title = `${heading} · Practicable`
+      return true
+    }
+
+    // Try immediately (a cached route paints synchronously), then watch for the real
+    // heading to arrive. Disconnects as soon as it does, so this is not a standing cost.
+    if (!read()) {
+      const observer = new MutationObserver(() => {
+        if (read()) observer.disconnect()
+      })
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+      return () => {
+        cancelled = true
+        observer.disconnect()
+      }
+    }
+
+    return () => {
+      cancelled = true
+    }
+  }, [pathname])
 
   return (
     <div role="status" aria-live="polite" className="sr-only">

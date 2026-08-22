@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type 
 import { Link, useNavigate } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
-  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   Banknote,
@@ -19,13 +18,22 @@ import { motion } from 'motion/react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { domainColorVar, domainVisual } from '@/lib/domainVisuals'
-import { cardTags, TAG_VARIANT } from '@/lib/tags'
+import { cardTags } from '@/lib/tags'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { cn } from '@/lib/utils/cn'
-import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { staggerContainer, riseItem, riseItemSm, inViewOnce } from '@/lib/motion'
+import {
+  staggerContainer,
+  riseItem,
+  riseItemSm,
+  inViewOnce,
+  wordStagger,
+  wordChild,
+  useParallax,
+} from '@/lib/motion'
+import { TrustStrip } from '@/components/ui/TrustStrip'
+import { PillEyebrow } from '@/components/ui/PillEyebrow'
 
 const DOMAINS = [
   { name: 'Risk (Enterprise & op.)', label: 'Risk', description: 'How do we make risk useful to the people actually deciding?' },
@@ -36,6 +44,26 @@ const DOMAINS = [
 ] as const
 
 const DIMENSIONS = ['effort', 'duration', 'cost', 'roi_horizon', 'tier', 'regulator_pressure', 'leadership_traits'] as const
+
+/** Short human labels for the seven tag dimensions, for the card metadata block. A
+ *  value ("L (3-6 months)") is only meaningful once you know which question it answers,
+ *  and the dimension name is what turns a badge into data. */
+const DIMENSION_LABEL: Record<string, string> = {
+  effort: 'Effort',
+  duration: 'Duration',
+  cost: 'Cost',
+  roi_horizon: 'Payback',
+  tier: 'Tier',
+  regulator_pressure: 'Regulator',
+  leadership_traits: 'Leadership',
+}
+
+/** The hero headline, split for the word stagger. Kept as data next to the other hero
+ *  copy so the visual split and the announced string cannot drift apart. */
+const HERO_HEADLINE = 'Have a difficult risk question? Start there.'
+const HERO_WORDS = HERO_HEADLINE.split(' ')
+/** Index from which the headline turns gold ("Start there."). */
+const HERO_ACCENT_FROM = HERO_WORDS.length - 2
 
 const PLACEHOLDER_PROBLEMS = [
   'We have a risk register, but nobody actually uses it…',
@@ -87,16 +115,28 @@ interface TemplateSummary { id: string; slug: string; title: string; description
 interface PackSummary { slug: string; name: string; description: string; question_count: number; price_amount: number; currency: string; owned: boolean }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Home — 7 sections, band rhythm, stat tiles
+// Home — 6 sections, richness front-loaded
 //
-// Section plan (design-research §8.2b "band rhythm"):
-//   1. Hero       — dark stage (already has aurora)
-//   2. Stats      — band plane, compact stat tiles
-//   3. Questions  — light, featured question cards
-//   4. Explore    — band, finder chips + domains merged
-//   5. How it works — light, 4-step grid
-//   6. Products   — band, courses/templates/packs
-//   7. Final CTA  — light, search + email
+// `[RESTRUCTURED 2026-08-22, REDESIGN_SUMMARY.md §7.1]` Was 7 sections of roughly
+// uniform richness. The Framer reference set front-loads instead: a maximal hero, then
+// the page goes calm (FRAMER_MOTION_REFERENCE.md §1.4, principle 8). Uniform richness
+// is why every section read with the same weight as every other.
+//
+// The separate stats band is gone — its three live counts are now the hero's
+// TrustStrip, which is where the references put them and costs no extra plane.
+//
+// Section plan:
+//   1. Hero        — dark stage: aurora + parallax + ambient drift, 93px
+//                    word-staggered H1, search, TrustStrip, outline word
+//   2. Questions   — light, featured question cards
+//   3. Explore     — band, finder chips + domains merged
+//   4. How it works — light, 4-step grid
+//   5. Products    — band, courses/templates/packs
+//   6. Final CTA   — light, search + email
+//
+// Motion below the hero stays entrance-only. The ambient loop and the parallax are
+// hero-exclusive: atmosphere is for the first viewport, not for a reader who is now
+// trying to read.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function Home() {
@@ -122,22 +162,19 @@ export function Home() {
       {/* 1. Hero — dark stage with aurora, search, suggestions */}
       <Hero questions={questions} />
 
-      {/* 2. Stats band — compact stat tiles on the alternating plane */}
-      <StatsBand questions={questions} />
-
-      {/* 3. Questions — light, featured cards */}
+      {/* 2. Questions — light, featured cards */}
       <QuestionShowcase questions={questions} />
 
-      {/* 4. Explore — band, finder + domains merged */}
+      {/* 3. Explore — band, finder + domains merged */}
       <ExploreSection questions={questions} />
 
-      {/* 5. How it works — light, 4-step grid */}
+      {/* 4. How it works — light, 4-step grid */}
       <HowItWorks />
 
-      {/* 6. Products — band, courses/templates/packs */}
+      {/* 5. Products — band, courses/templates/packs */}
       <ProductSection courses={courses} templates={templates} packs={packs} />
 
-      {/* 7. Final CTA — light, search + email */}
+      {/* 6. Final CTA — light, search + email */}
       <FinalCta />
     </>
   )
@@ -147,12 +184,18 @@ export function Home() {
 // Section opener — eyebrow + heading pair
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SectionOpener({ eyebrow, title, lead, className }: { eyebrow: string; title: string; lead?: string; className?: string }) {
+function SectionOpener({ eyebrow, title, lead, className, onStage = false }: { eyebrow: string; title: string; lead?: string; className?: string; onStage?: boolean }) {
   return (
     <motion.div variants={riseItem} className={cn('max-w-2xl', className)}>
-      <p className="eyebrow">{eyebrow}</p>
-      <h2 className="mt-4 text-balance text-h2 font-semibold text-foreground">{title}</h2>
-      {lead && <p className="mt-4 font-serif text-read text-muted-foreground">{lead}</p>}
+      {/* On the stage the hairline-ruled `.eyebrow` loses its rule against the aurora,
+          so the enclosed pill carries the label instead. */}
+      {onStage ? (
+        <PillEyebrow tone="stage">{eyebrow}</PillEyebrow>
+      ) : (
+        <p className="eyebrow">{eyebrow}</p>
+      )}
+      <h2 className={cn('mt-4 text-balance text-h2 font-semibold', onStage ? 'text-stage-foreground' : 'text-foreground')}>{title}</h2>
+      {lead && <p className={cn('mt-4 font-serif text-read', onStage ? 'text-stage-foreground/75' : 'text-muted-foreground')}>{lead}</p>}
     </motion.div>
   )
 }
@@ -185,6 +228,8 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
     return TRY_TERMS.filter(({ term }) => questions.some((q) => q.title.toLowerCase().includes(term) || q.preview.toLowerCase().includes(term))).slice(0, 5)
   }, [questions])
 
+  const { ref: parallaxRef, y: auroraY } = useParallax(0.08)
+
   const total = questions?.length ?? 0
   const searching = query.trim().length > 0
 
@@ -195,16 +240,76 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
   }
 
   return (
-    <section className="relative isolate overflow-hidden bg-stage px-5 pb-9 pt-14 text-stage-foreground sm:px-8 sm:pb-9 sm:pt-14">
-      <motion.div aria-hidden="true" initial={{ opacity: 0, scale: 1.06 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 1.4, ease: 'easeOut' }} className="stage-aurora -z-10" />
+    <section
+      ref={parallaxRef as React.RefObject<HTMLElement>}
+      className="relative isolate overflow-hidden bg-stage px-5 pb-10 pt-14 text-stage-foreground sm:px-8 sm:pb-12 sm:pt-16"
+    >
+      {/* The aurora now moves on two independent axes: `ambient-drift` walks the
+          gradient core on a 24s loop (atmosphere), and `useParallax` translates the
+          whole layer at 8% of scroll (depth). Both stop dead under
+          prefers-reduced-motion — the drift via its own CSS guard, the parallax
+          because useParallax returns a static 0. Neither is covered by MotionConfig. */}
+      <motion.div
+        aria-hidden="true"
+        style={{ y: auroraY }}
+        initial={{ opacity: 0, scale: 1.06 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 1.4, ease: 'easeOut' }}
+        className="stage-aurora ambient-drift -z-10"
+      />
 
+      {/* Utomic's outline word, bottom-left where the copy column has already ended.
+          Decorative and aria-hidden: "RISK" is stated in the headline, the eyebrow and
+          the trust strip, so nothing is lost when it is not announced. */}
+      {/* `[REMOVED 2026-08-22]` The `OutlineWord` device (Utomic's oversized outline
+          word) was built and placed here, then taken out after looking at the rendered
+          hero rather than the plan.
+
+          Two things it could not satisfy at once. The hero's copy column already runs
+          to ~16ch of 93px type, so the only empty stage left is the bottom-left strip —
+          which is ~120px tall, far too short for a 180px word, and the section's
+          `overflow-hidden` clipped it to a sliver that read as a rendering artifact.
+          Shrinking it to fit made it a faint smudge instead: still decoration, no
+          longer force. Utomic's word works because that hero is mostly empty; ours is
+          not, and this hero does not need a second graphic to carry it.
+
+          The component is kept (components/ui/OutlineWord.tsx) — it is correct and
+          costs nothing unused. Reach for it on a page with real empty plane. */}
       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="relative mx-auto flex w-full max-w-7xl flex-col">
-        <motion.p variants={riseItem} className="eyebrow text-stage-foreground/60">
-          Deciding in the Dark — the 100-question collection
-        </motion.p>
+        <motion.div variants={riseItem}>
+          <PillEyebrow tone="stage">Deciding in the Dark — the 100-question collection</PillEyebrow>
+        </motion.div>
 
-        <motion.h1 variants={riseItem} tabIndex={-1} className="mt-6 max-w-[16ch] text-balance text-display font-medium outline-none">
-          Have a difficult risk question? <span className="text-gold">Start there.</span>
+        {/* Word-level stagger (all nine Framer references open this way; we faded whole
+            blocks).
+
+            ⚠ The split is for animation only and MUST NOT change what the heading says.
+            An earlier form wrapped each word in an inline-block and spaced them with a
+            margin, which reads correctly but strips the spaces from the accessible
+            name: `textContent` became "Haveadifficultriskquestion?" — caught by reading
+            the rendered DOM, not the source. Real space characters are therefore
+            emitted between the words, and `inline-block` is kept only on the animated
+            span so the transform still applies.
+
+            `aria-label` additionally pins the announced string, so a future refactor of
+            the visual split cannot silently degrade it again. */}
+        <motion.h1
+          variants={wordStagger}
+          tabIndex={-1}
+          aria-label={HERO_HEADLINE}
+          className="mt-6 max-w-[16ch] text-balance text-display font-medium outline-none"
+        >
+          {HERO_WORDS.map((word, i) => (
+            <span key={`${word}-${i}`}>
+              <motion.span
+                variants={wordChild}
+                className={cn('inline-block', i >= HERO_ACCENT_FROM && 'text-gold')}
+              >
+                {word}
+              </motion.span>
+              {i < HERO_WORDS.length - 1 ? ' ' : null}
+            </span>
+          ))}
         </motion.h1>
 
         <motion.p variants={riseItem} className="mt-6 max-w-2xl font-serif text-lead text-stage-foreground/75">
@@ -271,58 +376,26 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
           </Link>
         </motion.div>
 
-        <motion.div variants={riseItem} className="mt-9 flex flex-col gap-6 border-t border-stage-foreground/15 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-stage-foreground/60">
-            {total > 0 ? `${total} real questions` : 'Real questions'} from risk leaders · {DOMAINS.length} areas of risk · {DIMENSIONS.length} ways to filter them
-          </p>
-          <div aria-hidden="true" className="hidden items-center gap-3 text-sm text-stage-foreground/60 sm:flex">
-            <span>Scroll to explore</span>
-            <motion.span animate={{ y: [0, 4, 0] }} transition={{ repeat: Infinity, duration: 1.8, ease: 'easeInOut' }}>
-              <ArrowDown className="size-4" strokeWidth={1.5} />
-            </motion.span>
-          </div>
+        {/* The trust strip, absorbing the separate stats band that used to be section 2
+            (REDESIGN_SUMMARY.md §7.1 — 7 sections down to 6). Same facts, no extra
+            plane, and they now sit directly under the CTA where the reference set puts
+            them rather than in a strip the reader has to scroll to.
+
+            Every value is a live count. `total` is null-guarded inside TrustStrip, so
+            before the questions query resolves the row is simply absent rather than
+            reading "0 questions" — the failure principle 7 exists to prevent. */}
+        <motion.div variants={riseItem} className="mt-9 border-t border-stage-foreground/15 pt-6">
+          <TrustStrip
+            tone="stage"
+            facts={[
+              { icon: Search, value: total > 0 ? total : null, label: 'real questions from risk leaders' },
+              { icon: Layers, value: DOMAINS.length, label: 'areas of risk' },
+              { icon: Clock, value: DIMENSIONS.length, label: 'ways to filter them' },
+            ]}
+          />
         </motion.div>
       </motion.div>
     </section>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 2. Stats band — compact stat tiles on the alternating plane
-// ─────────────────────────────────────────────────────────────────────────────
-
-function StatsBand({ questions }: { questions: QuestionSummary[] | undefined }) {
-  const stats = [
-    { value: questions?.length ?? null, label: 'questions', accent: true },
-    { value: DOMAINS.length, label: 'areas of risk' },
-    { value: DIMENSIONS.length, label: 'ways to filter' },
-    { value: 1, label: 'goal: know what to do next' },
-  ]
-
-  return (
-    <motion.section
-      variants={staggerContainer}
-      initial="hidden"
-      whileInView="visible"
-      viewport={inViewOnce}
-      className="band"
-    >
-      <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
-        <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4 sm:gap-8">
-          {stats.map((stat) => (
-            <motion.div key={stat.label} variants={riseItemSm} className="text-center sm:text-left">
-              <dt className={cn(
-                'text-stat font-semibold tabular-nums leading-none',
-                stat.accent ? 'text-primary' : 'text-foreground',
-              )}>
-                {stat.value ?? '—'}
-              </dt>
-              <dd className="mt-2 text-sm text-muted-foreground">{stat.label}</dd>
-            </motion.div>
-          ))}
-        </dl>
-      </div>
-    </motion.section>
   )
 }
 
@@ -356,7 +429,24 @@ function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefi
       })()
 
   return (
-    <motion.section variants={staggerContainer} initial="hidden" whileInView="visible" viewport={inViewOnce} className="py-10 sm:py-12">
+    /* `[CHANGED 2026-08-22, owner direction]` This section used to continue the dark
+       stage under the hero and float glass cards over it (the Galilee device). Rejected
+       on sight of the rendered page: two dark planes stacked read as one indistinct
+       dark mass, the hero's aurora bled straight into the section, and the boundary
+       between "the hero" and "the product" vanished.
+
+       It now sits on `.band-cool` (--background-3), a pale blue drawn from the
+       primary/accent family. It separates from the stage above it AND from the warm
+       ivory/band planes below, so the page reads as four distinct surfaces rather than
+       two. The hero keeps the atmosphere; this section gets legibility, which is what
+       a grid of four questions actually needs. */
+    <motion.section
+      variants={staggerContainer}
+      initial="hidden"
+      whileInView="visible"
+      viewport={inViewOnce}
+      className="band-cool relative isolate pb-12 pt-10 sm:pb-14 sm:pt-12"
+    >
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener
           eyebrow="Questions people actually ask"
@@ -364,10 +454,16 @@ function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefi
           lead="Not topics. Not chapter titles. The thing someone said out loud in a meeting before they went looking for help."
         />
 
-        <div className="mt-6 grid gap-5 sm:grid-cols-2">
-          {featured.map((question) => (
+        {/* 4 across at xl, not 2. The research audit measured ~600px per card in the
+            old `sm:grid-cols-2` inside max-w-7xl — content that needs ~340px, so the
+            cards read empty (PLATFORM_UI_UX_RESEARCH.md §7.1 #2). */}
+        {/* Divided columns, not floating boxes: one hairline between adjacent cards
+            rather than a gap plus four borders. This is how a broadsheet sets parallel
+            columns, and it removes 8 visible edges from the composition. */}
+        <div className="mt-6 grid overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 xl:grid-cols-4 [&>*]:bg-card gap-px">
+          {featured.map((question, i) => (
             <motion.div key={question.slug} variants={riseItemSm}>
-              <QuestionCard question={question} />
+              <QuestionCard question={question} index={i} />
             </motion.div>
           ))}
         </div>
@@ -382,30 +478,102 @@ function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefi
   )
 }
 
-function QuestionCard({ question }: { question: QuestionSummary }) {
+/**
+ * The question card, as an editorial index entry.
+ *
+ * `[REDESIGNED 2026-08-22, owner direction: "these cards look too much AI designed"]`
+ * The previous card was the generic pattern — rounded box, coloured left bar, a row of
+ * grey pill badges, "Read the answer ->". Every AI-generated dashboard produces it, and
+ * it fought the brand this product actually claims ("private bank meets editorial
+ * publisher").
+ *
+ * What changed, and why each one:
+ *
+ *   Left rule -> top rule. A 4px coloured bar down the left edge is the single most
+ *   recognisable AI-card tell. A hairline rule ACROSS THE TOP is how a printed index or
+ *   a broadsheet column head is set, and it gives the domain colour more presence, not
+ *   less.
+ *
+ *   Rounded box -> square-cornered column. `rounded-xl` on everything is what makes a
+ *   page read as a template. These are set as columns divided by rules, which is the
+ *   reference-document register.
+ *
+ *   Pill badges -> a metadata line. Three grey lozenges is decoration pretending to be
+ *   data. The same three facts set as mono text, separated by middots, read as a
+ *   catalogue entry — denser, quieter, and they stop competing with the title.
+ *
+ *   Numbered. An index entry has a position. The mono numeral gives the eye an anchor
+ *   and signals "this is one of a hundred", which is the actual proposition.
+ *
+ *   The arrow link is gone. The whole card is one link (§36 — a card with a separate
+ *   link inside is two tab stops for one destination), so a fake inline "button" was
+ *   never real. The title underlines on hover, which is what a link does.
+ */
+function QuestionCard({ question, index }: { question: QuestionSummary; index: number }) {
   const color = domainColorVar(question.domain)
   const DomainIcon = domainVisual(question.domain).icon
+  const tags = cardTags(question.tags)
 
   return (
     <Link
       to={`/questions/${question.slug}`}
-      className="group hover-lift hover-lift-domain flex h-full flex-col rounded-xl border border-border bg-card p-6 transition-[border-color] duration-150 hover:border-[var(--card-domain-color)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      style={{ '--card-domain-color': color } as CSSProperties}
+      className="group relative flex h-full flex-col bg-card px-5 pb-5 pt-4 transition-colors duration-150 hover:bg-card-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      style={{ '--domain-color': color } as CSSProperties}
     >
-      <p className="eyebrow gap-1.5" style={{ color }}>
-        <DomainIcon className="size-3" aria-hidden="true" />
-        {question.domain}
-      </p>
-      <h3 className="mt-2.5 text-h3 font-semibold text-foreground transition-colors duration-150 group-hover:text-primary">{question.title}</h3>
-      {question.subtitle && <p className="mt-2 font-serif text-read text-muted-foreground">{question.subtitle}</p>}
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {cardTags(question.tags).map((tag) => (
-          <Badge key={`${tag.dimension}-${tag.value}`} variant={TAG_VARIANT[tag.dimension]}>{tag.display_label}</Badge>
-        ))}
+      {/* The domain rule: 2px across the top, full bleed. Thickens on hover rather than
+          the card moving — a grid of four columns that each lift 2px is restless. */}
+      <span
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-1 transition-[height] duration-150 group-hover:h-1.5"
+        style={{ backgroundColor: color }}
+      />
+
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="flex items-center gap-1.5 font-mono text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          <DomainIcon className="size-3 shrink-0" aria-hidden="true" style={{ color }} />
+          {question.domain}
+        </p>
+        {/* The index numeral. Decorative ordering only — it is the card's position in
+            this shelf, not a stable question ID, so it is aria-hidden rather than
+            announced as though it meant something. */}
+        <span aria-hidden="true" className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground/60">
+          {String(index + 1).padStart(2, '0')}
+        </span>
       </div>
-      <span className="mt-5 inline-flex items-center gap-1.5 pt-1 text-sm font-medium text-primary">
-        Read the answer <ArrowRight className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true" />
-      </span>
+
+      <h3 className="mt-3 text-h4 font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
+        {question.title}
+      </h3>
+
+      {question.subtitle && (
+        <p className="mt-2 line-clamp-3 font-serif text-sm leading-relaxed text-muted-foreground">
+          {question.subtitle}
+        </p>
+      )}
+
+      {/* The three card-level tags as one mono metadata line rather than three pills
+          (H1/H3: metadata is its own tier, and mono is the signal that a string is
+          data). The dimension values are already short codes — "L (3-6 months)" — so
+          they set compactly on one or two lines. */}
+      {tags.length > 0 && (
+        /* A ruled metadata block, not a wrapping middot list. At four columns each
+            card is ~280px, so a middot-separated line wrapped to one value per row and
+            the separators fell to the start of each line, where they read as bullets.
+            A hairline above and one value per row is the catalogue-entry treatment and
+            it is legible at any column width. */
+        <dl className="mt-auto space-y-1 border-t border-border pt-3">
+          {tags.map((tag) => (
+            <div key={`${tag.dimension}-${tag.value}`} className="flex items-baseline justify-between gap-2">
+              <dt className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-muted-foreground/70">
+                {DIMENSION_LABEL[tag.dimension] ?? tag.dimension}
+              </dt>
+              <dd className="text-right font-mono text-[0.6875rem] tabular-nums text-foreground">
+                {tag.display_label}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </Link>
   )
 }
