@@ -522,3 +522,105 @@ report a suite as green from a truncated tail.
 
 `tests/test_packs.py` still cannot be collected — `ModuleNotFoundError: reportlab`, and
 `reportlab` is absent from `requirements.txt`. Pre-existing and unrelated.
+
+---
+
+## §13 — Closing the Definition of Done: what I ticked, and the four I refused to
+
+`2026-08-22`. The last pass over `week4_plan.md` took the unticked count from **112 → 30
+→ 5**. This section records the judgement calls in that final step, because most of them
+were about *not* ticking something.
+
+### The count, honestly
+
+| | Count |
+|---|---|
+| `[x]` closed with evidence | 281 |
+| `[~]` partial or superseded, with the reason written in | 13 |
+| `[ ]` genuinely open | **5** |
+
+All five open items are `[HUMAN]` or `[OWNER]`. None of them can be closed by an
+engineering session, and none of them should be closed by one.
+
+### Four decisions where the honest answer was "no"
+
+**1. `/admin/products` — superseded, struck through, not ticked.** The §7 line reads *"A
+price is set and republished entirely through `/admin/products`"*. W4-R19 requires that
+route's **absence**. Ticking it would have asserted the opposite of what the plan now
+asks; deleting it would have hidden that a requirement was reversed. So it is struck
+through and marked `[~] SUPERSEDED`, with a pointer to W4-R19 and a note that the
+underlying price-control capability *was* built and tested (`a49eec5`, Phase 8B). A
+reversed requirement should stay legible as a reversal.
+
+**2. "≥2 real preview images" — `[~]`, not `[x]`.** Every published paid template has
+complete evidence: page/sheet count, `is_editable`, `has_macros`, licence. But 4 of 8
+carry exactly **one** preview image. The DoD line is conjunctive, so half-true is false.
+`[OWNER]`: four more preview images is a content task. I did not fabricate them and did
+not round the line up.
+
+**3. Six manual a11y checks — `[~]` at four of six.** Keyboard-only purchase, keyboard-only
+lesson, 200% zoom and `prefers-reduced-motion` are now measured against a running build
+(`tests/e2e/a11y-manual-checks.spec.ts`). **Screen reader** and **dark mode, every state**
+are left `[HUMAN]`. I could have written assertions that pass for both. They would have
+produced a green tick and no assurance — a screen-reader check is a human listening, and
+"every state looks right in dark mode" is a human looking.
+
+**4. Font FOUT — left `[ ]` with the reason.** LCP measured 1425ms against a 2.0s budget,
+which is tempting to read as closing the font line. It does not: that run was unthrottled,
+and the line asks about the *jump* (CLS attributed to text), not the load. Inferring a
+pass from an adjacent green metric is precisely the "reasoned about, not exercised"
+failure W4-R6 exists to catch, so it stays open.
+
+### Three lines that were stale in the *other* direction
+
+`week4_plan.md` had three Phase-DoD lines asserting `NOT DONE` for work finished later in
+the same session. A stale "not done" misleads exactly as much as a premature "done", so
+all three were corrected rather than left alone:
+
+- **Rail contrast (line 2057)** claimed `theme.css` still carried the `[UNVERIFIED]`
+  marker. It does not — the marker is replaced by `[VERIFIED 2026-08-22]` and a measured
+  table. Now `[x]`.
+- **Six a11y checks (line 2055)** claimed none were done. Four are. Now `[~]`, with both
+  my own measurement errors recorded alongside the app defect found.
+- **Video watched in admin (line 2454)** claimed no human had watched one. The owner
+  stated they had. Now `[x]`, recorded explicitly as **the owner's attestation, attributed
+  to them** — not as an engineering verification, because this session did not observe it.
+
+### Verified this pass, not assumed
+
+Four §7 lines were cross-references I had not personally checked in this window, so I
+checked them rather than inheriting the claim:
+
+- **`h1` + axe route list.** Both halves separately: `CheckoutSuccess.tsx:121` and
+  `Template.tsx:220` render `PageTitle`, and `PageTitle.tsx:33` is a real `<h1>`. A bare
+  `grep "<h1"` on either page returns **nothing**, which would have read as a failure —
+  the heading is one component away. Both routes are in `accessibility.spec.ts`'s
+  `PUBLIC_ROUTES`.
+- **Migration 013 / `CONCURRENTLY`.** `alembic_version` reads `025`. The clause that
+  matters is the concurrency one: a failed `CREATE INDEX CONCURRENTLY` leaves an
+  **invalid** index that still appears in `pg_indexes`, so listing indexes proves nothing.
+  `SELECT count(*) FROM pg_index WHERE indisvalid = false` returns **0**. That is the
+  evidence.
+- **Mailjet, not Resend.** `ci.yml:39–42` export the four `MAILJET_*` vars; no `RESEND_*`
+  appears anywhere in the workflow.
+- **Topic-scoped commits.** Read the log. Each commit names one phase and one concern;
+  `5bea74d` and `35226cd` each carry a single fix. The working tree still holds the
+  in-flight redesign pass uncommitted — expected, not a violation.
+
+### Still owed to you
+
+1. **Four preview images** for the templates that have one (content).
+2. **The non-developer usability test** — a real stranger, 30 minutes, unaided, every
+   place they stop written down. Carried since Week 3; the single most valuable open item
+   on this list.
+3. **Screen-reader pass** and **dark-mode every-state pass**.
+4. **Throttled font/FOUT profile.**
+5. **Render env checklist**, ticked against the live dashboard.
+6. **One of the nine email templates** opened in a real mail client.
+7. **Supabase Auth Site URL / Redirect URLs** confirmed by an owner dashboard login.
+8. **Renegotiate or fix the bundle budget** — CI is red on a real ~537KB-vs-180KB entry
+   chunk. That red is correct and should stay red until one of the two happens in writing.
+
+Two known-unrelated failures remain visible rather than suppressed: 12 `test_metrics*`
+failures (endpoint serialises camelCase, tests assert snake_case) and `test_packs.py`
+uncollectable on a missing `reportlab` in `requirements.txt`.
