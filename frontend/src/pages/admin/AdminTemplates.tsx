@@ -197,7 +197,23 @@ export function AdminTemplates() {
   })
 
   // Phase 9A: price control — POST /admin/products/{id}/price (one endpoint, three surfaces)
-  const [priceAmount, setPriceAmount] = useState('')
+  /* `[FIXED 2026-08-22]` One `priceAmount` string was shared by every row in the list,
+     so the price input is rendered once per template but backed by a single piece of
+     state: typing 22 into any one row filled the field on all of them, and the
+     disabled/loading states moved together too. The owner's screenshot shows exactly
+     this — every template showing "22".
+     Nothing was actually mis-charged (the click handler still sends `t.id`), but an
+     admin could not tell which template a typed price belonged to, which on a screen
+     that sets real prices is its own hazard. Drafts are now keyed by template id. */
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({})
+  const setPriceDraft = (id: string, value: string) =>
+    setPriceDrafts((prev) => ({ ...prev, [id]: value }))
+  const clearPriceDraft = (id: string) =>
+    setPriceDrafts((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
   const changePrice = useMutation({
     mutationFn: (v: { productId: string; priceAmount: number }) =>
       api.post(`/admin/products/${v.productId}/price`, {
@@ -205,8 +221,11 @@ export function AdminTemplates() {
         currency: 'AUD',
         reason: 'Price set from template editor',
       }),
-    onSuccess: () => {
-      setPriceAmount('')
+    onSuccess: (_data, variables) => {
+      // Clear only the row that was just saved — the drafts are keyed by template id
+      // now, so clearing "the" price field no longer means clearing all of them.
+      const saved = templates?.find((t) => t.product_id === variables.productId)
+      if (saved) clearPriceDraft(saved.id)
       invalidate()
     },
     onError: (e) => setError(readError(e)),
@@ -461,21 +480,23 @@ export function AdminTemplates() {
                             step="0.01"
                             placeholder="Price in dollars, e.g. 49.00"
                             className="w-40"
-                            value={priceAmount}
-                            onChange={(e) => setPriceAmount(e.target.value)}
+                            value={priceDrafts[t.id] ?? ''}
+                            onChange={(e) => setPriceDraft(t.id, e.target.value)}
+                            aria-label={`Price for ${t.title}`}
                           />
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              const cents = dollarsToCents(priceAmount)
+                              const draft = priceDrafts[t.id] ?? ''
+                              const cents = dollarsToCents(draft)
                               if (!Number.isFinite(cents) || cents <= 0) return
 
                               if (!t.product_id) {
                                 // First price ever set on this template — one action
                                 // instead of two.
                                 createTemplateProduct.mutate({ id: t.id, priceAmount: cents })
-                                setPriceAmount('')
+                                clearPriceDraft(t.id)
                                 return
                               }
 
@@ -490,8 +511,11 @@ export function AdminTemplates() {
                               }
                               changePrice.mutate({ productId: t.product_id, priceAmount: cents })
                             }}
-                            loading={changePrice.isPending || (createTemplateProduct.isPending && createTemplateProduct.variables?.id === t.id)}
-                            disabled={!priceAmount}
+                            loading={
+                              (changePrice.isPending && changePrice.variables?.productId === t.product_id) ||
+                              (createTemplateProduct.isPending && createTemplateProduct.variables?.id === t.id)
+                            }
+                            disabled={!(priceDrafts[t.id] ?? '')}
                           >
                             Set price
                           </Button>
