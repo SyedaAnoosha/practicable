@@ -15,8 +15,8 @@ export function Terms() {
           Practicable is operated by Effective Risk Management. Effective Risk Management is the entity you contract
           with when you make a purchase, the name on your receipt, and the party these terms are between.{' '}
           <span className="font-sans text-sm text-muted-foreground">
-            [OWNER: confirm the exact legal structure — sole trader / company — and ABN/ACN before this page leaves
-            draft status.]
+            [OWNER: confirm the exact legal structure — sole trader / company — before this page leaves draft
+            status.]
           </span>
         </p>
       </LegalSection>

@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigationType } from 'react-router'
 import { supabase } from '@/lib/auth/supabase'
 import { useAuthStore } from '@/stores/useAuthStore'
-import { identifyUser, trackPageview } from '@/lib/analytics'
 import { CartDrawer } from '@/components/cart/CartDrawer'
+import { api } from '@/lib/api/client'
 
 /** Announces the new page on every route change for screen-reader users, who
  * otherwise get told nothing when a SPA navigates.
@@ -12,14 +12,11 @@ import { CartDrawer } from '@/components/cart/CartDrawer'
  * aria-live region only announces when its text actually changes, so a navigation
  * still produces exactly one announcement without a setState-in-effect. */
 function RouteAnnouncer() {
-  const location = useLocation()
+  // Subscribing to location is what makes this component re-render on navigation —
+  // the announcement below is derived from document.title, not from location itself,
+  // but nothing else here would re-run without this call.
+  useLocation()
   const message = `${document.title} — page loaded`
-
-  // Page views are tracked from here rather than PostHog's own autocapture (disabled
-  // in analytics.ts), in the same place that already re-renders on pathname change.
-  useEffect(() => {
-    trackPageview(location.pathname)
-  }, [location.pathname])
 
   return (
     <div role="status" aria-live="polite" className="sr-only">
@@ -56,18 +53,49 @@ export default function RootLayout() {
   const setLoading = useAuthStore((s) => s.setLoading)
 
   useEffect(() => {
+    // Phase 10 (§10A re-verification, 2026-08-22): me.py's own docstring for
+    // POST /me/account/email-changed says "After Supabase confirms the new email,
+    // the frontend calls this" — but nothing did. AccountProfile.tsx's
+    // updateUser({ email }) only *requests* the change; Supabase's email does not
+    // change until the confirmation link is clicked, per the page's own copy. This
+    // is the one app-wide place that already observes every session change
+    // (RootLayout's own comment above: "every layout and page reads session state
+    // from useAuthStore, never from Supabase directly"), so it's where the
+    // confirmed-email moment is actually observable — comparing the previous
+    // session's email to the incoming one catches exactly that transition, without
+    // firing on unrelated USER_UPDATED events (e.g. a password change, which
+    // touches the user object but never the email).
+    //
+    // previousEmail starts as `undefined`, not read from the Zustand store: the
+    // store's own session is populated by this same effect's getSession() call
+    // below, which resolves asynchronously — reading it synchronously here would
+    // race that resolution and silently miss the very first real transition after
+    // a fresh page load. Leaving it undefined until getSession() (or the first
+    // onAuthStateChange firing, whichever the client delivers first) actually
+    // reports a session means the first comparison is always against a real
+    // baseline, never a guess.
+    let previousEmail: string | undefined
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (previousEmail === undefined) previousEmail = session?.user.email
       setSession(session)
       setLoading(false)
-      // A user id only — never the email getSession() also returns.
-      if (session?.user) identifyUser(session.user.id)
     })
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      if (session?.user) identifyUser(session.user.id)
+
+      const newEmail = session?.user.email
+      if (newEmail && previousEmail && newEmail !== previousEmail) {
+        void api.post('/me/account/email-changed', { new_email: newEmail }).catch(() => {
+          // Best-effort, matching every other post-action audit hook in this app —
+          // a failed audit write must never block the sign-in state update above,
+          // which has already happened by this point.
+        })
+      }
+      previousEmail = newEmail
     })
 
     return () => subscription.unsubscribe()

@@ -4,9 +4,9 @@ import { isAxiosError } from 'axios'
 import { ShoppingCart, X } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { signInUrlFor } from '@/lib/utils/nextPath'
 import { useCartStore } from '@/stores/useCartStore'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
-import { track } from '@/lib/analytics'
 import { Button } from '@/components/ui/Button'
 
 // week3_plan.md W3-R11 — a drawer, same slide-over pattern MarketingLayout's mobile
@@ -42,20 +42,21 @@ export function CartDrawer() {
       // Same guard /buy/:slug relies on (MemberLayout redirects signed-out visitors
       // to /sign-in) — the cart drawer is reachable from public pages, so it has to
       // check for itself rather than assume the route already gated it.
-      window.location.href = '/sign-in'
+      // .assign(), not `.href =` — the react-hooks/immutability rule flags a property
+      // write to the module-level `window` global as if it were outer-scope mutation;
+      // the method call is the same navigation with no such false positive.
+      // `[CHANGED 2026-08-21, USER_FLOW_AUDIT.md §3]` Come back to the page the drawer
+      // was opened over. The cart itself survives regardless (localStorage), but
+      // returning to /dashboard made the visitor re-find the page and reopen the drawer.
+      window.location.assign(signInUrlFor(`${window.location.pathname}${window.location.search}`))
       return
     }
     setIsCheckingOut(true)
-    track('checkout_started', {
-      cart_size: items.length,
-      product_slug: items.map((i) => i.slug).join(','),
-      price: total,
-    })
     try {
       const { data } = await api.post<{ checkout_url: string }>('/checkout/session', {
         product_ids: items.map((i) => i.id),
       })
-      window.location.href = data.checkout_url
+      window.location.assign(data.checkout_url)
       // Deliberately NOT clearing the cart here — it drains only once the webhook
       // confirms, on the success page. Clearing on redirect and having the webhook
       // fail behind it would show an empty cart for a purchase that never completed.

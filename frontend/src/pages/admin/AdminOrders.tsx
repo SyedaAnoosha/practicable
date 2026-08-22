@@ -24,6 +24,7 @@ interface AdminOrderRow {
   user_id: string
   order_status: 'pending' | 'completed' | 'failed' | 'refunded'
   order_total_amount_cents: number
+  cursor: string
 }
 
 /** The Stripe reference column, copyable on click with a `Copied` confirmation
@@ -60,10 +61,14 @@ export function AdminOrders() {
   const [grantTarget, setGrantTarget] = useState<ManualGrantTarget | null>(null)
   const [refundTarget, setRefundTarget] = useState<RefundTarget | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [cursor, setCursor] = useState<string | null>(null)
 
   const { data: orders, isLoading } = useQuery({
     queryKey: queryKeys.admin.orders(),
-    queryFn: () => api.get<AdminOrderRow[]>('/admin/orders').then((r) => r.data),
+    queryFn: () => {
+      const params = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+      return api.get<AdminOrderRow[]>(`/admin/orders${params}`).then((r) => r.data)
+    },
   })
 
   const grantMutation = useMutation({
@@ -253,6 +258,22 @@ export function AdminOrders() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Keyset pagination: load more button when we have data */}
+      {!isLoading && orders && orders.length > 0 && (
+        <div className="mt-4 flex justify-center">
+          <Button
+            variant="outline"
+            onClick={() => {
+              // Use the last row's cursor as the next page's cursor
+              const lastCursor = orders[orders.length - 1].cursor
+              setCursor(lastCursor)
+            }}
+          >
+            Load more
+          </Button>
         </div>
       )}
 

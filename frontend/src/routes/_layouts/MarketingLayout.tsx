@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
 import { Menu, X } from 'lucide-react'
+import { ProductsMenu } from '@/components/nav/ProductsMenu'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -13,12 +14,14 @@ import { CartButton } from '@/components/cart/CartButton'
 
 const DOMAINS = ['Risk', 'Cyber', 'Compliance', 'Resilience', 'AI']
 
-// Courses and Templates are folded into Store, the umbrella catalogue for both plus
-// Reference packs. Questions stays top-level: it's the flagship free discovery
-// surface, not just a shopping link.
+// Phase 8 (8G): header is `Products` (the ProductsMenu dropdown rendered just above
+// this list, not a NAV_ITEMS entry) · `About`. Courses, Templates and Reference packs
+// moved into that menu; Questions stays a top-level link — the flagship free
+// discovery surface, not just another shopping link buried inside the menu.
+// (Superseded the prior comment here, which described Courses/Templates folding into
+// Store — that was true before 8G moved them into ProductsMenu instead.)
 const NAV_ITEMS = [
   { to: '/questions', label: 'Questions' },
-  { to: '/store', label: 'Store' },
   { to: '/#about', label: 'About' },
 ] as const
 
@@ -77,6 +80,7 @@ export default function MarketingLayout() {
             Practicable
           </Link>
           <nav className="hidden items-center gap-5 md:flex" aria-label="Main">
+            <ProductsMenu />
             {NAV_ITEMS.map((item) => (
               <Link
                 key={item.to}
@@ -148,6 +152,26 @@ export default function MarketingLayout() {
             </button>
             </div>
             <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Mobile">
+              {/* 8G-7: Mobile has no dropdown — the Products group is expanded under a heading */}
+              <p className="px-3 pt-3 pb-1 font-mono text-[0.6875rem] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Products
+              </p>
+              {[
+                { to: '/questions', label: 'Questions — free to read' },
+                { to: '/courses', label: 'Courses' },
+                { to: '/templates', label: 'Templates' },
+                { to: '/packs', label: 'Reference packs' },
+                { to: '/store', label: 'All products' },
+              ].map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-muted"
+                >
+                  {item.label}
+                </Link>
+              ))}
               {NAV_ITEMS.map((item) => (
                 <Link
                   key={item.to}

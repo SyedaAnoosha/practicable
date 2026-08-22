@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Link, NavLink, Navigate, Outlet } from 'react-router'
-import { GraduationCap, LayoutDashboard, Library, LogOut, Menu, ShieldCheck, Sparkles, Store, Tags, X } from 'lucide-react'
+import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router'
+import { GraduationCap, LayoutDashboard, Layers, Library, LogOut, Menu, ReceiptText, Settings, ShieldCheck, Sparkles, Store, Tags, X } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
@@ -9,6 +9,7 @@ import { supabase } from '@/lib/auth/supabase'
 import { cn } from '@/lib/utils/cn'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { CartButton } from '@/components/cart/CartButton'
+import { signInUrlFor } from '@/lib/utils/nextPath'
 
 export function FullPageSpinner() {
   return (
@@ -31,19 +32,25 @@ const NAV_SECTIONS = [
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/library', label: 'My Library', icon: Library, end: false },
+      { to: '/purchases', label: 'Purchases', icon: ReceiptText, end: false },
+      // Phase 10 §2: account shell — the hub for profile, security, notifications, data rights.
+      { to: '/account', label: 'Account', icon: Settings, end: true },
     ],
   },
   {
-    heading: 'Browse',
+    // Phase 8 (8G-8): 'Browse' renamed to 'Products' per owner instruction.
+    // The old comment about 'added alongside (not instead of)' is preserved below
+    // per the plan's own rule: the reversal is written next to the comment it overturns.
+    heading: 'Products',
     items: [
       { to: '/questions', label: 'Questions', icon: Tags, end: false },
-      // week2_plan.md Phase 4 — the store index, added alongside (not instead of)
-      // the three catalogues below: the rail has no five-item ceiling the way the
-      // marketing header does (§17.1), so there's no forcing reason to consolidate
-      // links a signed-in member already has muscle memory for.
-      { to: '/store', label: 'Store', icon: Store, end: false },
       { to: '/courses', label: 'Courses', icon: GraduationCap, end: false },
       { to: '/templates', label: 'Templates', icon: Sparkles, end: false },
+      { to: '/packs', label: 'Reference packs', icon: Layers, end: false },
+      // week2_plan.md Phase 4 — originally 'Store' added alongside the three
+      // catalogues. Phase 8 (8G) reverses this: 'Store' becomes 'All products'
+      // and sits at the end as the overview, not as a peer of the catalogues.
+      { to: '/store', label: 'All products', icon: Store, end: false },
     ],
   },
 ] as const
@@ -268,9 +275,17 @@ export function MemberChrome() {
 export default function MemberLayout() {
   const user = useAuthStore((s) => s.user)
   const loading = useAuthStore((s) => s.loading)
+  const location = useLocation()
 
   if (loading) return <FullPageSpinner />
-  if (!user) return <Navigate to="/sign-in" replace />
+  // `[CHANGED 2026-08-21, USER_FLOW_AUDIT.md §2]` Carry where they were going.
+  // /buy/:slug sits behind this guard, so a logged-out click on any of the 16 buy CTAs
+  // used to land on /sign-in and then, unconditionally, on an empty /dashboard — losing
+  // the product on the revenue path. `signInUrlFor` validates the destination before it
+  // becomes a URL (open-redirect boundary; see nextPath.ts).
+  if (!user) {
+    return <Navigate to={signInUrlFor(`${location.pathname}${location.search}`)} replace />
+  }
 
   return <MemberChrome />
 }

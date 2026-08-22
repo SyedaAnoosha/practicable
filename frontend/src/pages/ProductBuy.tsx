@@ -5,12 +5,13 @@ import { Download, FileQuestion, PlayCircle, ShoppingCart } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
-import { track } from '@/lib/analytics'
 import { useCartStore } from '@/stores/useCartStore'
 import { Button } from '@/components/ui/Button'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
+import { WhyThis } from '@/components/product/WhyThis'
+import { OBJECTION_BLOCK } from '@/lib/labels'
 import type { Preview } from '@/components/product/PreviewGallery'
 
 interface ProductContent {
@@ -88,11 +89,6 @@ export function ProductBuy() {
     if (!product) return
     setIsRedirecting(true)
     setError('')
-    // week2_plan.md Phase 5 — fired on the click that actually starts checkout, before
-    // the redirect; the drop-off signal is the gap between this and the server-side
-    // `purchase_completed` in PostHog, not a separate client-side "abandoned" event
-    // (see analytics.ts's note on why that one was dropped).
-    track('checkout_started', { product_slug: product.slug, price: product.price_amount })
     try {
       // week3_plan.md W3-R11 — `product_ids` is always a list; a direct "Buy" here is
       // just the one-item case of the same cart checkout the drawer uses.
@@ -218,7 +214,41 @@ export function ProductBuy() {
             view on a long description. Hidden below `lg` in favour of the fixed
             mobile bar so the primary action never appears twice on screen at once. */}
         <div className="mt-8 hidden flex-col gap-5 lg:sticky lg:top-24 lg:mt-0 lg:flex">
+          {/* CTA ladder (8F-3): Buy is the only primary. See sample pages scrolls to
+              PreviewGallery inside EvidencePanel. Start with a free one is tertiary. */}
+          <div className="flex flex-col gap-3">
+            {alreadyOwned ? (
+              <Link to="/dashboard">
+                <Button className="w-full">Go to your library</Button>
+              </Link>
+            ) : (
+              <>
+                <Button onClick={handleCheckout} loading={isRedirecting} className="w-full">
+                  Continue to secure checkout
+                </Button>
+                <Button
+                  onClick={handleAddToCart}
+                  variant="outline"
+                  disabled={inCart}
+                  className="w-full"
+                >
+                  <ShoppingCart className="size-4" aria-hidden="true" />
+                  {inCart ? 'In your cart' : 'Add to cart'}
+                </Button>
+              </>
+            )}
+            {product.previews && product.previews.length > 0 && !alreadyOwned && (
+              <a
+                href="#evidence-panel"
+                className="text-center text-sm text-primary underline underline-offset-2 hover:text-primary/80"
+              >
+                See the sample pages
+              </a>
+            )}
+          </div>
+
           <EvidencePanel
+            id="evidence-panel"
             format={product.format}
             pageCount={product.page_count}
             sheetCount={product.sheet_count}
@@ -231,6 +261,29 @@ export function ProductBuy() {
             licence={product.licence}
             title={product.name}
           />
+
+          <WhyThis />
+
+          {/* Objection block (8F-4) — five things, four of which are columns. */}
+          <div className="rounded-lg border border-border bg-card p-5 sm:p-6">
+            <p className="eyebrow">Before you decide</p>
+            <ul className="mt-4 flex flex-col gap-3">
+              {OBJECTION_BLOCK.map((item) => (
+                <li key={item.label}>
+                  <p className="text-sm font-medium text-foreground">
+                    {'href' in item && item.href ? (
+                      <a href={item.href} className="underline underline-offset-2 hover:text-primary">
+                        {item.label}
+                      </a>
+                    ) : (
+                      item.label
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{item.detail}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
 
           <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 shadow-sm">
             {priceBlock}
@@ -262,6 +315,7 @@ export function ProductBuy() {
             licence={product.licence}
             title={product.name}
           />
+          <WhyThis />
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}

@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -21,7 +20,6 @@ import { cn } from '@/lib/utils/cn'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { domainColorVar, domainVisual } from '@/lib/domainVisuals'
-import { track } from '@/lib/analytics'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { Button } from '@/components/ui/Button'
@@ -117,13 +115,6 @@ export function Question() {
     queryFn: () => api.get<QuestionData>(`/questions/${slug}`).then((res) => res.data),
     enabled: !!slug,
   })
-
-  // week2_plan.md Phase 5 — keyed on the slug value, not the query's object identity,
-  // so a background refetch of the same question doesn't double-count a view.
-  useEffect(() => {
-    if (question) track('content_viewed', { type: 'question', slug: question.slug })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [question?.slug])
 
   if (isLoading) {
     return (

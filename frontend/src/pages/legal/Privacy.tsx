@@ -22,8 +22,7 @@ export function Privacy() {
       <LegalSection heading="Why we collect it">
         <p>
           To create and run your account, deliver the content you've bought, process payments, send transactional
-          email (receipts, sale confirmations), respond to enquiries, and understand which parts of the platform are
-          actually used — see "Analytics" below.
+          email (receipts, sale confirmations), and respond to enquiries.
         </p>
       </LegalSection>
 
@@ -34,7 +33,6 @@ export function Privacy() {
           <li><strong className="font-sans font-semibold text-foreground">Stripe</strong> — payment processing. We never see or store your card details.</li>
           <li><strong className="font-sans font-semibold text-foreground">Mux</strong> — video hosting and playback for course lessons.</li>
           <li><strong className="font-sans font-semibold text-foreground">Resend</strong> — sends receipt and notification emails on our behalf.</li>
-          <li><strong className="font-sans font-semibold text-foreground">PostHog</strong> — product analytics (see "Analytics" below).</li>
           <li><strong className="font-sans font-semibold text-foreground">Vercel</strong> — hosts the website you're reading this on.</li>
           <li><strong className="font-sans font-semibold text-foreground">Render</strong> — hosts the backend service the website talks to.</li>
         </ul>
@@ -43,10 +41,9 @@ export function Privacy() {
 
       <LegalSection heading="Analytics">
         <p>
-          We use PostHog to understand what's viewed and bought, by content type, and where people drop off — nine
-          specific events, covering things like a page being viewed, a checkout starting, or a purchase completing.
-          No event we send carries anything beyond your user id — no name, no email, no free-text content. If your
-          browser sends a Do Not Track signal, we honour it and no analytics events are sent.
+          We do not use any third-party analytics or tracking service. What we know about how the platform is used
+          comes from aggregate counts in our own database — the number of times a filter was applied or a download
+          link was issued, for example — never anything that identifies you individually.
         </p>
       </LegalSection>
 

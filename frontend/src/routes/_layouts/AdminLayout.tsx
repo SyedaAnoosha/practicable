@@ -1,6 +1,6 @@
 import { Link, NavLink, Navigate, Outlet } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, BarChart3, ClipboardList, DollarSign, FileText, GraduationCap, Mail, Package, Receipt, Settings, ShieldCheck, Tags, UserPlus, Users } from 'lucide-react'
+import { ArrowLeft, BarChart3, ClipboardList, FileText, GraduationCap, Mail, Package, Receipt, Settings, ShieldCheck, Tags, UserPlus, Users, Video } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
@@ -28,12 +28,15 @@ const ADMIN_NAV_GROUPS = [
       { to: '/admin/courses', label: 'Courses', icon: GraduationCap },
       { to: '/admin/templates', label: 'Templates', icon: FileText },
       { to: '/admin/packs', label: 'Packs', icon: Package },
+      // Phase 8 (8D-4): the third TokenizedVideoPreview placement.
+      { to: '/admin/media', label: 'Media', icon: Video },
     ],
   },
   {
     label: 'Commerce',
     items: [
-      { to: '/admin/products', label: 'Products', icon: DollarSign },
+      // Phase 9A: /admin/products removed from nav — pricing moves into content editors
+      // (courses, templates, packs). The API stays; admin/products.py is kept.
       { to: '/admin/orders', label: 'Orders', icon: Receipt },
       { to: '/admin/contact', label: 'Contact', icon: Mail },
       { to: '/admin/leads', label: 'Leads', icon: UserPlus },

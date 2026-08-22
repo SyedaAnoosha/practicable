@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { Download, FileText, Info } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
-import { track } from '@/lib/analytics'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
+import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
+import { WhyThis } from '@/components/product/WhyThis'
+import { OBJECTION_BLOCK } from '@/lib/labels'
+import { Accordion, type AccordionItemData } from '@/components/ui/Accordion'
 import type { Preview } from '@/components/product/PreviewGallery'
 
 interface PackQuestion {
@@ -83,11 +86,6 @@ export function PackDetail() {
     enabled: !!slug,
   })
 
-  useEffect(() => {
-    if (pack) track('content_viewed', { type: 'pack', slug: pack.slug })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pack?.slug])
-
   // Same contract as Template.tsx: fetch the presigned URL on click, use it
   // immediately, discard it. Never rendered as a visible href — a 60-second URL
   // sitting in the DOM is a link a backgrounded tab will hit after it expired.
@@ -141,8 +139,34 @@ export function PackDetail() {
     )
   }
 
+
+  // Build accordion items from the questions list
+  const questionAccordionItems: AccordionItemData[] = pack.questions.map((q) => ({
+    id: q.slug,
+    title: q.title,
+    summary: [q.tier, q.effort].filter(Boolean).join(' · '),
+    content: (
+      <div className="px-4 py-3">
+        <Link
+          to={`/questions/${q.slug}`}
+          className="text-sm font-medium text-primary underline-offset-2 hover:underline"
+        >
+          Read this question →
+        </Link>
+      </div>
+    ),
+  }))
+
   return (
     <div className="mx-auto w-full max-w-5xl px-5 py-8 sm:px-8 lg:px-12">
+      <Breadcrumb
+        className="animate-enter mb-6"
+        items={[
+          { label: 'Reference packs', to: '/packs' },
+          { label: pack.name },
+        ]}
+      />
+
       <PageTitle eyebrow="Reference pack" title={pack.name} description={pack.description} />
 
       {/* §20.6's honesty notice — above the price, above the fold, never fine print. */}
@@ -162,32 +186,17 @@ export function PackDetail() {
           <h2 className="text-h3 font-semibold text-foreground">What’s inside</h2>
           <p className="mt-2 max-w-[68ch] text-sm text-muted-foreground">
             All {pack.question_count} questions, in the pack’s working order: foundations before
-            ambition, regulator-exposed before not, cheap before expensive. Every title below links
-            to its free page.
+            ambition, regulator-exposed before not, cheap before expensive. Every question is free to
+            read on the site — the pack is the formatted PDF and the working order.
           </p>
 
-          <ol className="mt-6 divide-y divide-border rounded-lg border border-border">
-            {pack.questions.map((q, i) => (
-              <li key={q.slug} className="flex items-baseline gap-4 px-4 py-3">
-                <span className="w-6 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">
-                  {i + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to={`/questions/${q.slug}`}
-                    className="text-sm font-medium text-foreground underline-offset-2 hover:underline"
-                  >
-                    {q.title}
-                  </Link>
-                  {(q.tier || q.effort) && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {[q.tier, q.effort].filter(Boolean).join(' · ')}
-                    </p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
+          <Accordion
+            className="mt-6"
+            items={questionAccordionItems}
+            defaultOpen={questionAccordionItems.length > 0 ? [questionAccordionItems[0].id] : []}
+            expandAllLabel="Expand all questions"
+            collapseAllLabel="Collapse all questions"
+          />
         </section>
 
         {/* ── Buy / download ─────────────────────────────────────────────────── */}
@@ -227,6 +236,29 @@ export function PackDetail() {
               title={pack.name}
               className="mt-5 border-0 bg-transparent p-0"
             />
+
+            <WhyThis className="mt-5" />
+
+            {/* Objection block (8F-4) */}
+            <div className="mt-5 rounded-lg border border-border bg-card p-5 sm:p-6">
+              <p className="eyebrow">Before you decide</p>
+              <ul className="mt-4 flex flex-col gap-3">
+                {OBJECTION_BLOCK.map((item) => (
+                  <li key={item.label}>
+                    <p className="text-sm font-medium text-foreground">
+                      {'href' in item && item.href ? (
+                        <a href={item.href} className="underline underline-offset-2 hover:text-primary">
+                          {item.label}
+                        </a>
+                      ) : (
+                        item.label
+                      )}
+                    </p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{item.detail}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
             <div className="mt-5">
               {pack.owned ? (

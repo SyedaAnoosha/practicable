@@ -3,9 +3,11 @@
  *
  * week4_plan.md Phase 8 (8E-4): Heading levels are capped at h2-h4.
  * A lesson body's <h1> would compete with the page's own PageTitle <h1>,
- * which §22 forbids and axe will flag.  The toolbar's first heading button
- * therefore emits <h2>, not <h1>.  Three visible levels — h2/h3/h4 — styled
- * at the §13.1 rungs the design already defines.
+ * which §22 forbids and axe will flag.  The toolbar still presents three
+ * heading levels labelled "Heading 1/2/3" — matching how an author thinks
+ * about a document's own outline — but they emit <h2>/<h3>/<h4> under the
+ * hood, so the page never ends up with two real <h1>s. Three visible levels
+ * — h2/h3/h4 — styled at the §13.1 rungs the design already defines.
  *
  * week4_plan.md Phase 8 (8E-8): Link and Underline extensions installed
  * per W4-R13.
@@ -70,7 +72,15 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
     },
     editorProps: {
       attributes: {
-        class: 'rich-text prose prose-sm max-w-none focus:outline-none min-h-[300px] p-4',
+        // `.rich-text` is the real styling and is the SAME class the reading page uses
+        // (theme.css §8E-6), so what the author sees here is what the reader gets.
+        //
+        // `prose prose-sm` used to sit here too and were removed 2026-08-22: they come
+        // from @tailwindcss/typography, which this project deliberately does not use
+        // (its defaults would introduce a second type scale beside §13.1's) and which
+        // is not installed. They were dead classes that read as if the editor pane
+        // rendered at a smaller size than the reading page — it never did.
+        class: 'rich-text max-w-none focus:outline-none min-h-[300px] p-4',
       },
     },
   })
@@ -99,7 +109,7 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
           type="button"
           size="sm"
           variant="ghost"
-          title="Heading 1 (renders as h2 — h1 is reserved for the page title)"
+          title="Heading 1"
           aria-label="Heading 1"
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
           className={cn(editor.isActive('heading', { level: 2 }) && 'bg-accent')}
@@ -110,7 +120,7 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
           type="button"
           size="sm"
           variant="ghost"
-          title="Heading 2 (renders as h3)"
+          title="Heading 2"
           aria-label="Heading 2"
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
           className={cn(editor.isActive('heading', { level: 3 }) && 'bg-accent')}
@@ -121,7 +131,7 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
           type="button"
           size="sm"
           variant="ghost"
-          title="Heading 3 (renders as h4)"
+          title="Heading 3"
           aria-label="Heading 3"
           onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
           className={cn(editor.isActive('heading', { level: 4 }) && 'bg-accent')}

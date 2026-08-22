@@ -40,6 +40,17 @@ interface MetricsResponse {
   product_rankings: ProductRanking[]
   download_links_issued: number
   course_enrollment_rankings: CourseEnrollmentRanking[]
+  /** W4-R4 item 6 — routing clicks, split by the surface that produced them. Optional
+   *  on the type, and defaulted at the read site below: the admin page must not blank
+   *  itself out against a backend that predates this field. A metrics page is exactly
+   *  the wrong place for one absent key to take out every other number on the screen. */
+  recommendation_clicks?: { question: number; catalogue: number; total: number }
+  recommendation_rankings?: RecommendationRanking[]
+}
+
+interface RecommendationRanking {
+  product_slug: string
+  clicks: number
 }
 
 /** §20.7a: Fetches revenue-series data and renders the TrendChart.
@@ -276,6 +287,56 @@ export function AdminMetrics() {
             </div>
           </section>
         )}
+
+        {/* W4-R4 item 6 — whether routing a reader from a question to a product actually
+            works. Rendered unconditionally, unlike the ranking tables above: "no reader
+            has followed a recommendation yet" is itself the answer to the question this
+            section exists to ask, and hiding the section would read as "we don't
+            measure this" instead. */}
+        <section>
+          <h3 className="mb-4 text-lg font-semibold text-foreground">Recommendations followed</h3>
+          {(metricsData.recommendation_clicks?.total ?? 0) === 0 ? (
+            <p className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+              No routed recommendation has been followed yet. This fills once a reader
+              opens a product from a question page or a filtered catalogue.
+            </p>
+          ) : (
+            <>
+              <p className="mb-3 text-sm text-muted-foreground">
+                <span className="font-medium text-foreground tabular-nums">
+                  {metricsData.recommendation_clicks?.question ?? 0}
+                </span>{' '}
+                from a question page ·{' '}
+                <span className="font-medium text-foreground tabular-nums">
+                  {metricsData.recommendation_clicks?.catalogue ?? 0}
+                </span>{' '}
+                from a filtered catalogue
+              </p>
+              {(metricsData.recommendation_rankings?.length ?? 0) > 0 && (
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/60 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th scope="col" className="px-4 py-2.5 text-left">Product</th>
+                        <th scope="col" className="px-4 py-2.5 text-right">Clicks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(metricsData.recommendation_rankings ?? []).map((r) => (
+                        <tr key={r.product_slug} className="border-t border-border">
+                          <td className="px-4 py-2.5 text-foreground">{r.product_slug}</td>
+                          <td className="px-4 py-2.5 text-right font-medium tabular-nums text-foreground">
+                            {r.clicks}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </section>
 
         {/* Trend Chart — Recharts via shadcn chart block.
             §20.7a: revenue (area, --chart-1) and orders (line, --chart-2) over time.

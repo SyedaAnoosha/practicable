@@ -34,7 +34,24 @@ import { CheckoutCancel } from '@/pages/CheckoutCancel'
 import { AdminQuestions } from '@/pages/admin/AdminQuestions'
 import { AdminTemplates } from '@/pages/admin/AdminTemplates'
 import { AdminCourses } from '@/pages/admin/AdminCourses'
+import { LessonBodyWriteScreen, BlockTextWriteScreen } from '@/pages/admin/LessonWriteScreen'
 import { AdminOrders } from '@/pages/admin/AdminOrders'
+import { AdminContact } from '@/pages/admin/AdminContact'
+import { AdminMetrics } from '@/pages/admin/AdminMetrics'
+import { AdminMedia } from '@/pages/admin/AdminMedia'
+import { AdminUsers } from '@/pages/admin/AdminUsers'
+import { AdminAudit } from '@/pages/admin/AdminAudit'
+import { AdminLeads } from '@/pages/admin/AdminLeads'
+import { AdminSettings } from '@/pages/admin/AdminSettings'
+import { AdminPacks } from '@/pages/admin/AdminPacks'
+import { PacksCatalogue } from '@/pages/PacksCatalogue'
+import { Purchases } from '@/pages/Purchases'
+import { AccountShell } from '@/pages/account/AccountShell'
+import { AccountProfile } from '@/pages/account/AccountProfile'
+import { AccountSecurity } from '@/pages/account/AccountSecurity'
+import { AccountPurchases } from '@/pages/account/AccountPurchases'
+import { AccountNotifications } from '@/pages/account/AccountNotifications'
+import { AccountDataPrivacy } from '@/pages/account/AccountDataPrivacy'
 
 // react-router v8, data mode.
 const router = createBrowserRouter([
@@ -70,6 +87,7 @@ const router = createBrowserRouter([
           { path: '/courses', element: <CoursesCatalogue /> },
           { path: '/courses/:slug', element: <CourseDetail /> },
           { path: '/templates', element: <TemplatesCatalogue /> },
+          { path: '/packs', element: <PacksCatalogue /> },
           // Public: the free lead-magnet template must be reachable with no account.
           // Paid templates here show a buy/sign-in prompt instead of a download.
           { path: '/templates/:templateId', element: <Template /> },
@@ -111,6 +129,20 @@ const router = createBrowserRouter([
           { path: '/buy/:slug', element: <ProductBuy /> },
           { path: '/checkout/success', element: <CheckoutSuccess /> },
           { path: '/checkout/cancel', element: <CheckoutCancel /> },
+          { path: '/purchases', element: <Purchases /> },
+          // Phase 10: account shell with routed sub-pages (Decision #44)
+          {
+            path: '/account',
+            element: <AccountShell />,
+            children: [
+              { index: true, element: <AccountProfile /> },
+              { path: 'profile', element: <AccountProfile /> },
+              { path: 'security', element: <AccountSecurity /> },
+              { path: 'purchases', element: <AccountPurchases /> },
+              { path: 'notifications', element: <AccountNotifications /> },
+              { path: 'data', element: <AccountDataPrivacy /> },
+            ],
+          },
         ],
       },
       {
@@ -121,8 +153,24 @@ const router = createBrowserRouter([
           { path: '/admin', element: <AdminQuestions /> },
           { path: '/admin/questions', element: <AdminQuestions /> },
           { path: '/admin/courses', element: <AdminCourses /> },
+          // Full-screen "Write" editor (week4_plan.md Phase 8, 8E-continued,
+          // `[OWNER INSTRUCTION 2026-08-21]`) — its own route rather than a modal, so
+          // it has Back/Cancel/Save and is reachable/refreshable by URL. Still nested
+          // under AdminLayout (keeps the admin nav bar and the is_admin guard, same as
+          // every other /admin/* route) — "full screen" means its own routed page, not
+          // escaping the admin shell entirely.
+          { path: '/admin/courses/:courseId/lessons/:lessonId/write', element: <LessonBodyWriteScreen /> },
+          { path: '/admin/courses/:courseId/blocks/:blockId/write', element: <BlockTextWriteScreen /> },
           { path: '/admin/templates', element: <AdminTemplates /> },
+          { path: '/admin/packs', element: <AdminPacks /> },
+          { path: '/admin/media', element: <AdminMedia /> },
+          { path: '/admin/contact', element: <AdminContact /> },
           { path: '/admin/orders', element: <AdminOrders /> },
+          { path: '/admin/metrics', element: <AdminMetrics /> },
+          { path: '/admin/users', element: <AdminUsers /> },
+          { path: '/admin/audit', element: <AdminAudit /> },
+          { path: '/admin/leads', element: <AdminLeads /> },
+          { path: '/admin/settings', element: <AdminSettings /> },
         ],
       },
     ],

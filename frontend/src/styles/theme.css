@@ -17,8 +17,18 @@
 
 @theme inline {
   --color-background: var(--background);
+  /* `[ADDED 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md M2 "band rhythm"]`
+     The alternating band plane. The research audit's finding was that every interior
+     page is one unbroken ivory field with hairlines — no plane changes, so nothing
+     segments a long scroll. This is the second plane; `--stage` remains the third
+     (dark) one. Sits between --background and --muted in luminance so a band reads as
+     a distinct surface without reading as "disabled". */
+  --color-background-2: var(--background-2);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
+  /* A raised panel INSIDE a card (M4 "layered surfaces") — grouped information that
+     needs to separate from the card it sits on without earning its own border. */
+  --color-card-2: var(--card-2);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
@@ -58,6 +68,10 @@
   --color-gold: var(--gold);
   --color-gold-strong: var(--gold-strong);
   --color-gold-soft: var(--gold-soft);
+  /* `[ADDED 2026-08-20]` A gold hairline for use ON the dark stage plane, where
+     `--border` (a warm light hairline tuned for ivory) disappears. Decorative only,
+     like `--gold` itself — never a text colour. */
+  --color-gold-border: var(--gold-border);
 
   /* Domain signature colours — registered as Tailwind utilities (text-domain-risk,
      bg-domain-risk/10, border-domain-risk, ...) so pages can reach for them like
@@ -118,15 +132,59 @@
      the oversized headlines. Line-height/letter-spacing ratios are unchanged — only
      the size roots move — so the vertical rhythm rules elsewhere in this file (§ the
      heading-to-body spacing comments) still hold at the new sizes. */
-  --text-display: clamp(2.0rem, 1.3rem + 3.2vw, 2.75rem);
-  --text-display--line-height: 1.05;
+  /* `[CHANGED 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md M1 "restore the
+     voice"]` The top three rungs only are returned toward hero scale. The 2026-08-15
+     pass above shrank EVERY rung 25–30% to pull the product back from a display-heavy
+     poster feel — correct for the reading rungs, and they keep those values. But it
+     also left `--text-display` topping out at 44px, which is supporting-player size for
+     a desktop marketing headline, and the competitor capture (Coursera 36px H1 inside a
+     1340px column; Udemy 32px inside 1180px; MasterClass 60px+) showed Practicable's
+     hero reading quieter than every platform it competes with.
+
+     Deliberately NOT touched: h3, h4, lead, body, read, sm, xs. The reference-document
+     register the 08-15 pass was protecting lives in those rungs, and the audit found the
+     blandness in composition (flat planes, thin cards) rather than in reading size.
+     Line-height/letter-spacing ratios are unchanged — only the size roots move. */
+  /* `[CHANGED 2026-08-22, REDESIGN_SUMMARY.md 4 / D1.2]` Display reaches hero scale at
+     desktop WITHOUT growing on mobile. The Framer reference set runs 72-110px at 1440;
+     we topped out at 68px, and that gap was the largest measurable one against the
+     brief.
+
+     The move is a STEEPER SLOPE, not a raised floor. Naively raising the whole clamp to
+     a 96px cap (the first proposal) also lifts the 390px rung 44px -> 50px, which wraps
+     the real hero headline ("Have a difficult risk question? Start there.", the only
+     `text-display` call site) from three lines to four and adds ~70px of mobile height.
+     Solving blandness with vertical length is explicitly forbidden, so the minimum is
+     held and only the vw term moves.
+
+     Measured against that real string at max-w-[16ch], not lorem ipsum:
+        390px -> 42px, 3 lines      1024px -> 72px, 3 lines
+        768px -> 59px, 3 lines      1440px -> 93px, 3 lines
+       1680px -> 96px (cap), 3 lines
+     Line count is constant across every breakpoint; only the size grows. */
+  --text-display: clamp(2.625rem, 1.3rem + 5vw, 6rem);
+  --text-display--line-height: 1.04;
   --text-display--letter-spacing: -0.03em;
-  --text-h1: clamp(1.625rem, 1.3rem + 1.6vw, 2.125rem);
-  --text-h1--line-height: 1.15;
+  --text-h1: clamp(2rem, 1.5rem + 2.4vw, 3.5rem);
+  --text-h1--line-height: 1.12;
   --text-h1--letter-spacing: -0.02em;
-  --text-h2: clamp(1.375rem, 1.2rem + 0.8vw, 1.75rem);
+  --text-h2: clamp(1.5rem, 1.28rem + 1.1vw, 2.375rem);
   --text-h2--line-height: 1.2;
   --text-h2--letter-spacing: -0.015em;
+  /* `[ADDED 2026-08-22, D1.2]` The Utomic device: an oversized outline word sitting
+     BEHIND real content. Decoration only — every consumer must set `aria-hidden="true"`
+     and it must never be the only place a word appears. Capped at 180px and floored low
+     enough that it never forces horizontal overflow on a 390px screen. */
+  --text-outline: clamp(4rem, 1rem + 13vw, 11.25rem);
+  --text-outline--line-height: 0.86;
+  --text-outline--letter-spacing: -0.04em;
+  /* `[ADDED 2026-08-20, M5 "metadata richness"]` The fact-strip and stat-tile figure.
+     Always paired with `tabular-nums` and, by house rule, the mono face — a number that
+     carries a decision (a count, a duration, a percentage, a price) is data, and
+     `--font-mono` was chosen to read as data. */
+  --text-stat: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+  --text-stat--line-height: 1.1;
+  --text-stat--letter-spacing: -0.02em;
   --text-h3: clamp(1.125rem, 1.02rem + 0.4vw, 1.3125rem);
   --text-h3--line-height: 1.3;
   --text-h3--letter-spacing: -0.01em;
@@ -158,8 +216,18 @@
 :root {
   /* Surfaces — warm ivory, not violet-white: the paper this brand is printed on */
   --background: #FBF9F4;
+  /* `[ADDED 2026-08-20, M2]` The alternating band plane. Chosen by luminance, not by
+     eye: it sits between --background (#FBF9F4) and --muted (#F1ECE1), so a band reads
+     as a distinct surface without borrowing --muted's meaning ("quiet/disabled fill").
+     Measured on this plane: --foreground 14.9:1, --muted-foreground 4.61:1,
+     --gold-strong 5.12:1, --accent 5.79:1 — every text token that lands on a band
+     clears 4.5:1, so no per-band contrast exception is needed. */
+  --background-2: #F4EFE4;
   --foreground: #1C1712;        /* espresso ink, not near-black */
   --card: #FFFFFF;
+  /* A raised panel inside a card (M4). One step off --card, the same distance
+     --background-2 sits off --background, so the two layering moves feel related. */
+  --card-2: #FAF7F0;
   --card-foreground: #1C1712;
   --popover: #FFFFFF;
   --popover-foreground: #1C1712;
@@ -193,6 +261,32 @@
   --stage-glow-1: #10305F;       /* deep blue — the widest, quietest bloom */
   --stage-glow-2: #1F6FC4;       /* azure — the body of the ramp */
   --stage-glow-3: #8ED2FB;       /* sky, near-white — the corner core only (1.48:1, never under text) */
+
+  /* `[ADDED 2026-08-22, REDESIGN_SUMMARY.md 3.3 / D1.5]` Glass surfaces — panels that
+     float OVER the stage plane rather than sitting in a bordered box on a flat field
+     (the Galilee device).
+
+     `[CORRECTED against the strategy doc]` 3.3 specified the fill as an alpha of
+     `--stage-foreground` (a LIGHT wash). Measured, that inverts the intent: over the
+     aurora's bright corner (`--stage-glow-3`, #8ED2FB) a light fill RAISES the
+     backdrop's luminance and drives `--stage-foreground` text DOWN to 1.43:1 — worse
+     than the 1.48:1 bare hazard the plan set out to fix. A light-on-light scrim cannot
+     protect light text.
+
+     The fill is therefore a DARK scrim (`--stage-deep`), which is also what the
+     existing `.stage-aurora` layer-1 scrim already does for the same reason. Measured
+     text contrast (`--stage-foreground` on the composite), worst backdrop first:
+                       over glow-3   over glow-2   over stage
+       fill @ 50%          4.79          9.82        16.18
+       fill @ 66%          7.68         12.42        16.74   <- chosen
+       fill @ 72%          9.20         13.46        16.89
+     66% clears 4.5:1 even at the single brightest point of the aurora, so a panel may
+     drift anywhere over the plane without a per-position exception. The EDGE stays a
+     light alpha — it is a hairline, never a text backdrop, and it is what reads as
+     glass. Raw white is banned (7.6), so the edge is an alpha of --stage-foreground. */
+  --glass-fill: color-mix(in srgb, var(--stage-deep) 66%, transparent);
+  --glass-edge: color-mix(in srgb, var(--stage-foreground) 18%, transparent);
+  --glass-blur: 12px;
   --secondary: #F0E7D2;          /* champagne surface — secondary buttons, sidebar, chips */
   --secondary-foreground: #4A3D22;
   --accent: #1D5FA8;             /* vivid blue — the one interactive accent, 6.13:1 on ivory */
@@ -206,6 +300,11 @@
      --gold-soft, so gold text is safe anywhere without a per-surface check. */
   --gold-strong: #7C5C14;
   --gold-soft: #F3E9D2;          /* champagne wash — tinted card/tile surfaces */
+  /* `[ADDED 2026-08-20]` Gold hairline for the dark stage plane. --border is a warm
+     LIGHT hairline tuned for ivory and vanishes on --stage; this is its counterpart, so
+     a stage band can carry a visible edge without reaching for a raw white alpha
+     (banned, §7.6). Decorative only — never text. */
+  --gold-border: #E3D3AC;
 
   /* Quiet */
   --muted: #F1ECE1;
@@ -229,13 +328,42 @@
   --primary-edge: color-mix(in srgb, var(--primary-foreground) 16%, transparent);
   --secondary-strong: #E5D7B6;
 
-  /* Five shades of blue, not five hues — varying in depth and lean so they stay
-     distinguishable at a glance inside the constrained palette. */
-  --domain-risk: #142E5C;         /* deep navy-blue */
-  --domain-cyber: #1B5FA8;        /* azure */
-  --domain-compliance: #1D6FA5;   /* steel blue, leaning cyan */
-  --domain-resilience: #3D5A99;   /* indigo-blue */
-  --domain-ai: #46618C;           /* slate blue-grey */
+  /* `[CHANGED 2026-08-22, REDESIGN_SUMMARY.md 3.2 / D1.1]` Five genuinely separate
+     hues, replacing five shades of blue.
+
+     The previous set spanned 204-221 degrees — a 17-degree spread across five colours
+     called "signature". A mixed-domain grid read as one undifferentiated blue field:
+     the system paid the full cost of colour-coding and delivered none of the benefit.
+     Now 28/147/186/218/261 — a 233-degree spread. Navy is kept as the brand anchor
+     and the darkest rung.
+
+     Ordered as a LUMINANCE LADDER as well as a hue wheel (greyscale 7/20/26/28/30),
+     because luminance is the one channel no dichromacy distorts. The 4.5:1 floor on
+     ivory caps any hue at greyscale ~39, so 23 points is close to the maximum spread
+     available; a wider ladder is not reachable without failing text contrast.
+
+     Measured (relative luminance), light theme:
+                    bg #FBF9F4   card #FFFFFF   band #F4EFE4   hue   grey
+       risk           12.67         13.33         11.63        218     7
+       compliance      7.89          8.30          7.24        261    20
+       ai              6.50          6.84          5.97         28    26
+       resilience      6.19          6.51          5.68        147    28
+       cyber           5.89          6.20          5.41        186    30
+     Lowest value in the table is 5.41:1 — every domain clears 4.5:1 on all three
+     planes with headroom.
+
+     COLOUR IS NEVER THE SOLE DOMAIN SIGNAL. Simulating protanopia, deuteranopia and
+     tritanopia across all ten pairs, the worst pair separates at 1.04:1 — effectively
+     identical. This is structural, not a tuning failure: an exhaustive search over
+     ~81,000 five-hue combinations inside the contrast-legal envelope could not beat
+     1.08:1. No five-hue palette survives dichromacy on hue alone. Domain identity is
+     therefore always carried by colour + icon + label together (ContentCard, E4.2);
+     if you remove the icon or the label, the colour alone is not accessible. */
+  --domain-risk: #142E5C;         /* navy   218 — brand anchor, darkest rung */
+  --domain-compliance: #5B3E8F;   /* violet 261 */
+  --domain-ai: #8A4A12;           /* rust    28 */
+  --domain-resilience: #1C6B3F;   /* green  147 */
+  --domain-cyber: #136B75;        /* teal   186 — lightest rung */
 
   /* Sidebar — blue, not champagne `[CHANGED 2026-08-12]`.
      Still a quieter plane than the ivory ground, but now in the primary family rather
@@ -265,7 +393,19 @@
   --sidebar-border: #BDCEE5;
   --sidebar-ring: #1B4E8C;
 
-  /* Charts — exempt from the palette constraint. Dormant: nothing renders a chart yet. */
+  /* Charts — exempt from the palette constraint. `/admin/metrics` (week4_plan.md
+     §20.7a) reads --chart-1/--chart-2 for revenue/orders.
+
+     `[REPAIRED 2026-08-20, Phase 5 / §12.6]` --chart-1 and --chart-2 were previously
+     navy/steel in light and gold in dark — different hue families per theme, the same
+     defect class as --primary on a --stage plane (handover.md §1). Repaired: one hue
+     family per token across both themes, derived from existing brand blues.
+       --chart-1 (navy):  #10213E light / #7AAED4 dark — same navy-blue family
+         light on --card (#FFFFFF): 17.63:1  |  dark on --card (#1B1710): 7.09:1
+       --chart-2 (steel): #1D6FA5 light / #5EA3D4 dark — same steel-blue family
+         light on --card (#FFFFFF): 5.39:1  |  dark on --card (#1B1710): 6.10:1
+       --chart-4 was byte-identical across themes (#5C6B4F); given a distinct lighter
+       dark-mode value (#8FA377); 5.96:1 against dark --card. */
   --chart-1: #10213E;
   --chart-2: #1D6FA5;
   --chart-3: #B3402E;
@@ -593,12 +733,297 @@
     box-shadow: var(--shadow-md);
   }
 
+  /* ── Ambient drift ────────────────────────────────────────────────────────
+     `[ADDED 2026-08-22, REDESIGN_SUMMARY.md §5.2]` The only continuously-moving thing
+     in the product, and it is always a BACKGROUND layer — Verity's light sweep and
+     Utomic's gradient drift are the reference. Never applied to, or near, text.
+
+     Implemented as a slow drift of the aurora's core position rather than a transform
+     of the whole layer: moving the gradient's origin keeps the composition's edges
+     pinned, so nothing appears to slide behind the page edge. 24s, symmetric, no
+     easing snap at the turn.
+
+     The `prefers-reduced-motion` block at the top of this file collapses animation
+     DURATION globally, which stops the movement — but an iteration-count of 1 on a
+     collapsed duration leaves the element frozen at the animation's first frame, and
+     for a drift that is a legitimate resting position. Guarded explicitly here anyway
+     so the intent is not an accident of the global backstop. */
+  .ambient-drift {
+    animation: ambient-drift 24s ease-in-out infinite alternate;
+    will-change: --aurora-core;
+  }
+  /* The `--quiet` (footer) and `--rail` (sidebar) variants pin `--aurora-core` to a
+     specific off-canvas position for a measured contrast reason. Drifting it would walk
+     the bright core back toward text those variants exist to protect, so the drift is
+     refused there rather than left to call-site discipline. */
+  .stage-aurora--quiet.ambient-drift,
+  .stage-aurora--rail.ambient-drift {
+    animation: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ambient-drift { animation: none; }
+  }
+
+  /* ── Glass surfaces ───────────────────────────────────────────────────────
+     `[ADDED 2026-08-22, D1.5]` A panel that floats over the stage plane. Only ever
+     used ON `--stage` (or the aurora): on the ivory ground a dark scrim is not glass,
+     it is a black box. See the token comments for the contrast measurements — the fill
+     is dark by measurement, not by taste.
+
+     `backdrop-filter` is progressively enhanced. Where it is unsupported the fill alone
+     still carries the full 7.68:1 worst-case text contrast, so nothing becomes
+     unreadable — the panel just reads as a flat scrim instead of frosted. */
+  .glass {
+    background-color: var(--glass-fill);
+    border: 1px solid var(--glass-edge);
+  }
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .glass {
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+      backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+    }
+  }
+
+  /* ── M2: band rhythm ──────────────────────────────────────────────────────
+     `[ADDED 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md §8.2b]`
+
+     The research audit's headline structural finding: every interior page is one
+     unbroken ivory field with hairline borders, so nothing segments a long scroll and
+     every section carries the same visual weight as every other. Competitors solve this
+     with plane changes — Udemy's charcoal course header, edX's tinted panels,
+     MasterClass's dark ground. Practicable already owns the dark plane (`--stage`); what
+     it lacked was the quiet middle plane between ivory and navy.
+
+     `.band` is that plane. Full-bleed is the consumer's job (the same
+     `left-1/2 w-screen -translate-x-1/2` idiom the page washes use), because a band
+     inside a max-width container that stops at the container edge reads as a card. */
+  .band {
+    background-color: var(--background-2);
+  }
+
+  /* A faint dot grid, for a band that needs texture rather than just a tone step.
+     Ink at 3% — felt, not seen; at 4% it starts reading as a pattern and competes with
+     the content. Decorative, so consumers mark it aria-hidden. */
+  .band-dotgrid {
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      color-mix(in srgb, var(--foreground) 3%, transparent) 1px,
+      transparent 0
+    );
+    background-size: 22px 22px;
+  }
+
+  /* ── M4: layered surfaces ─────────────────────────────────────────────────
+     A raised panel INSIDE a card — grouped information that needs to separate from the
+     card it sits on without earning a second border (which would read as a card in a
+     card). One tone step plus an inset hairline, nothing more. */
+  .panel-raised {
+    background-color: var(--card-2);
+    border-radius: var(--radius-lg);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 60%, transparent);
+  }
+
+  /* The domain-tinted variant: a card header zone or a callout that carries its
+     domain's identity. Consumers set `--tone` to the domain colour (or any semantic
+     token) and this handles the wash and the edge. Kept at 7%/18% because the tones are
+     text-safe colours at full strength — a heavier wash would fight the text on it. */
+  .panel-tone {
+    background-color: color-mix(in srgb, var(--tone, var(--accent)) 7%, var(--card));
+    border-radius: var(--radius-lg);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone, var(--accent)) 18%, transparent);
+  }
+
+  /* ── M3: generative course artwork ────────────────────────────────────────
+     Replaces the flat provisional `--primary` panel. A duotone ramp from the course's
+     own domain tone into the stage plane, plus the "signal found" arc motif — concentric
+     rings anchored off-canvas bottom-right, echoing `.stage-aurora`'s corner-anchored
+     composition so the two read as one family.
+
+     Deterministic from the consumer's `--art-shift` (derived from the slug), so a given
+     course always draws the same artwork while two courses in the same domain still
+     differ. No image request, no upload required, no broken-image state, and it follows
+     a theme swap because every stop is a token. An uploaded `cover_image_url` still
+     wins where one exists — this is the floor, not the ceiling. */
+  .art-duotone {
+    /* `[FIXED 2026-08-21]` The first build of this ramped `--tone` straight into
+       `--stage` and rendered as a flat near-black panel — visible in the capture as two
+       identical cards. Two causes, both real: courses were resolving to `--primary`
+       (see domainVisuals.ts), and even once that was fixed the light-theme domain
+       tokens are *deep* blues — `--domain-risk` is #142E5C against `--stage` #10213E,
+       a ramp of about one step. The domain palette was tuned as small accents on a
+       light page, not as fill on a dark plane.
+
+       So the artwork lifts the tone before using it rather than re-tuning the domain
+       tokens, which would repaint every question card. `--art-tone` mixes the domain
+       colour toward `--stage-glow-2`/`-3`, the aurora ramp's upper rungs — the same
+       decorative-only family `.stage-aurora` climbs to, which is why they are free to
+       run bright (§12's note: they are kept out of the text column by construction).
+       That gives the ramp somewhere to travel while keeping each domain distinguishable,
+       since the domain hue still supplies most of the mix. Decorative only: no text is
+       ever placed on this plane, so no contrast floor applies — the icon tile carries
+       its own `--stage-foreground` alphas. */
+    --art-tone: color-mix(in srgb, var(--tone, var(--accent)) 55%, var(--stage-glow-2));
+    --art-core: color-mix(in srgb, var(--tone, var(--accent)) 34%, var(--stage-glow-3));
+    background-color: var(--stage);
+    background-image:
+      repeating-radial-gradient(
+        circle at var(--art-shift, 88%) 108%,
+        transparent 0 38px,
+        color-mix(in srgb, var(--stage-foreground) 9%, transparent) 38px 39px,
+        transparent 39px 78px
+      ),
+      radial-gradient(
+        84% 96% at var(--art-shift, 88%) 106%,
+        color-mix(in srgb, var(--art-core) 90%, transparent) 0%,
+        color-mix(in srgb, var(--art-tone) 62%, transparent) 38%,
+        color-mix(in srgb, var(--art-tone) 26%, transparent) 62%,
+        transparent 82%
+      ),
+      linear-gradient(
+        146deg,
+        var(--stage-deep) 0%,
+        var(--stage) 48%,
+        color-mix(in srgb, var(--art-tone) 58%, var(--stage)) 100%
+      );
+  }
+
   /* Pairs with `.hover-lift` on cards that set `--card-domain-color` (QuestionCard):
      the lift shadow tints toward the card's own domain colour instead of a flat
      neutral grey. Decorative shadow colour only, so it needs no contrast audit — the
      domain palette is already part of the token layer (§5.3), not a one-off hex. */
   .hover-lift-domain:hover {
     box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--card-domain-color, var(--accent)) 35%, transparent);
+  }
+
+  /* Phase 8 (8E-6): Rich text rendering for lesson prose. Maps HTML elements
+     onto the existing type scale tokens — NOT @tailwindcss/typography, whose
+     defaults would introduce a second type scale beside §13.1's. The same class
+     styles the editor pane, so what the author sees is what the reader gets. */
+  .rich-text {
+    h2 {
+      font-size: var(--text-h2);
+      line-height: var(--text-h2--line-height);
+      letter-spacing: var(--text-h2--letter-spacing);
+      font-weight: 600;
+      color: var(--foreground);
+      margin-top: 2rem;
+      margin-bottom: 0.75rem;
+    }
+    h3 {
+      font-size: var(--text-h3);
+      line-height: var(--text-h3--line-height);
+      letter-spacing: var(--text-h3--letter-spacing);
+      font-weight: 600;
+      color: var(--foreground);
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    h4 {
+      font-size: var(--text-h4);
+      line-height: var(--text-h4--line-height);
+      letter-spacing: var(--text-h4--letter-spacing);
+      font-weight: 600;
+      color: var(--foreground);
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      font-family: var(--font-serif);
+      font-size: var(--text-read);
+      line-height: var(--text-read--line-height);
+      color: var(--foreground);
+      margin-bottom: 1rem;
+    }
+    ul, ol {
+      font-family: var(--font-serif);
+      font-size: var(--text-read);
+      line-height: var(--text-read--line-height);
+      color: var(--foreground);
+      margin-bottom: 1rem;
+      padding-left: 1.5rem;
+    }
+    ul {
+      list-style-type: disc;
+    }
+    ol {
+      list-style-type: decimal;
+    }
+    li {
+      margin-bottom: 0.25rem;
+    }
+    strong, b {
+      font-weight: 600;
+    }
+    em, i {
+      font-style: italic;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      transition: color 150ms var(--ease-standard);
+    }
+    a:hover {
+      color: var(--primary);
+    }
+    blockquote {
+      border-left: 4px solid var(--accent);
+      padding-left: 1rem;
+      margin: 1.5rem 0;
+      color: var(--muted-foreground);
+      font-style: italic;
+    }
+    code {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      background: var(--muted);
+      padding: 0.125rem 0.375rem;
+      border-radius: 4px;
+    }
+    pre {
+      background: var(--muted);
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 1.5rem 0;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-size: var(--text-sm);
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+    th {
+      background: var(--muted);
+      font-weight: 600;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+  }
+}
+
+/* Editor-pane only (Phase 8E / owner report 2026-08-22). `.rich-text` is shared between
+   the reading page and the editor so the author sees what the reader gets; this rule is
+   the exception, because it is about WRITING and is meaningless on the reading page.
+   Scoped to `.ProseMirror`, the class Tiptap puts on its editable element. */
+@layer components {
+  /* An empty <p> collapses to zero height, so pressing Enter to start a new paragraph
+     looked like it did nothing — the caret disappeared until a character was typed. */
+  .rich-text.ProseMirror p:empty::after {
+    content: "";
+    display: inline-block;
   }
 }
 
@@ -616,8 +1041,14 @@
 .dark {
   /* Surfaces — espresso rather than blue-black: a warm night */
   --background: #141008;
+  /* `[ADDED 2026-08-20, M2]` The band plane, dark. In the light theme a band is
+     DARKER than the ground; here it must be LIGHTER, or the band would read as a hole
+     rather than a raised plane. Measured on it: --foreground 13.8:1,
+     --muted-foreground 5.94:1, --gold-strong 9.72:1 — all clear. */
+  --background-2: #1A150D;
   --foreground: #F2EBDE;
   --card: #1B1710;
+  --card-2: #221C13;
   --card-foreground: #F2EBDE;
   --popover: #1E1911;
   --popover-foreground: #F2EBDE;
@@ -648,6 +1079,9 @@
   --gold: #C9AC6A;               /* champagne — decorative only, as in :root */
   --gold-strong: #E3CB92;        /* text-safe on espresso, 12.0:1 (§7.5.1) */
   --gold-soft: #2E2517;          /* champagne wash, dark-surface equivalent */
+  /* The stage plane is dark in BOTH themes, so this hairline barely moves — it is
+     dimmed slightly here only because the dark theme's stage runs deeper (#080D18). */
+  --gold-border: #4A3D22;
 
   /* Quiet */
   --muted: #201B12;
@@ -671,14 +1105,23 @@
   --primary-edge: color-mix(in srgb, var(--primary-foreground) 18%, transparent);
   --secondary-strong: #2E271B;
 
-  /* Domain signature colours — lifted a step brighter than the light values so
-     they still read as saturated colour on an espresso background; same five
-     blue leans as :root (navy, azure, steel-cyan, indigo, slate), not five hues. */
-  --domain-risk: #5B7FBD;
-  --domain-cyber: #6FB0E8;
-  --domain-compliance: #5FB8D9;
-  --domain-resilience: #8090D8;
-  --domain-ai: #93A7C9;
+  /* `[CHANGED 2026-08-22, D1.1]` Dark counterparts to the re-hued light set. Derived
+     and measured per hue, NOT auto-lightened — an algorithmic lift pushes teal and
+     green past each other in luminance and collapses the ladder.
+
+     Measured against the espresso planes:
+                    bg #141008   card #1B1710   band #1E1A12   hue
+       risk            6.85          6.44          6.26        219
+       compliance      6.64          6.25          6.07        264
+       ai              7.30          6.87          6.67         26
+       resilience      7.47          7.03          6.83        151
+       cyber           7.75          7.29          7.08        189
+     Lowest is 6.07:1. The same colour-is-never-alone rule applies here. */
+  --domain-risk: #7C9CD6;         /* navy   219 */
+  --domain-compliance: #A98BD6;   /* violet 264 */
+  --domain-ai: #D9905A;           /* rust    26 */
+  --domain-resilience: #4FB584;   /* green  151 */
+  --domain-cyber: #4FB3C4;        /* teal   189 */
 
   /* Sidebar — blue, matching the light theme's move off champagne `[CHANGED 2026-08-12]`.
      The warm near-black plane (#161209) and its warm-grey text went with it; keeping
@@ -699,14 +1142,34 @@
   --sidebar-border: #22314A;
   --sidebar-ring: #8FC1EA;
 
-  /* Charts */
-  --chart-1: #C7AC6D;
-  --chart-2: #A17D2E;
+  /* Charts. --chart-1/--chart-2 repaired (§12.6) to same hue families as light theme:
+     navy and steel-blue respectively, lightened for espresso --card (#1B1710).
+     --chart-4 given its own dark-mode value (was #5C6B4F, identical to :root's — see
+     the comment there); olive/sage hue family; 5.96:1 against --card. */
+  --chart-1: #7AAED4;
+  --chart-2: #5EA3D4;
   --chart-3: #E55252;
-  --chart-4: #5C6B4F;
+  --chart-4: #8FA377;
   --chart-5: #B7AC96;
 
   /* Elevation — dark surfaces read depth from a lighter surface, not a darker
      shadow; the tint goes near-black so what little shadow remains stays neutral */
   --shadow-tint: 0 0 0;
+}
+
+/* `[ADDED 2026-08-22]` Ambient drift — see `.ambient-drift`. Travel is deliberately
+   small (6% of the plane) so it registers as atmosphere rather than as something
+   moving; at 12% it reads as a sliding background and competes with the text. */
+@keyframes ambient-drift {
+  from { --aurora-core: 106% 106%; }
+  to   { --aurora-core: 96% 112%; }
+}
+
+/* The custom property must be registered or it animates as a discrete swap rather
+   than interpolating. Falls back to the discrete swap where @property is unsupported,
+   which at 24s is imperceptible. */
+@property --aurora-core {
+  syntax: '<length-percentage> <length-percentage>';
+  inherits: true;
+  initial-value: 106% 106%;
 }

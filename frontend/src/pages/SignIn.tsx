@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { motion } from 'motion/react'
 import { supabase } from '@/lib/auth/supabase'
 import { Button } from '@/components/ui/Button'
 import { AuthField } from '@/components/ui/AuthField'
 import { springItem } from '@/lib/motion'
+import { NEXT_PARAM, resolveNextPath } from '@/lib/utils/nextPath'
 import { Lock, Mail } from 'lucide-react'
 
 /** Sign in — the right-hand column of AuthLayout's split screen (auth-08 / auth-10).
@@ -18,6 +19,11 @@ import { Lock, Mail } from 'lucide-react'
  */
 export function SignIn() {
   const navigate = useNavigate()
+  // `[CHANGED 2026-08-21, USER_FLOW_AUDIT.md §2]` Return to whatever sent them here.
+  // Read from the query string rather than router state because CartDrawer arrives via
+  // window.location.assign (a full document load) and SignUp's confirmation email routes
+  // back through /sign-in — router state survives neither. Validated in nextPath.ts.
+  const { search } = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -43,8 +49,14 @@ export function SignIn() {
       )
       return
     }
-    navigate('/dashboard')
+    navigate(resolveNextPath(search))
   }
+
+  // Switching to sign-up mid-purchase must not drop the destination. `resolveNextPath`
+  // has already validated it, so re-encoding it here is safe.
+  const nextPath = resolveNextPath(search)
+  const signUpHref =
+    nextPath === '/dashboard' ? '/sign-up' : `/sign-up?${NEXT_PARAM}=${encodeURIComponent(nextPath)}`
 
   return (
     <>
@@ -101,7 +113,7 @@ export function SignIn() {
 
         <motion.p variants={springItem} className="text-center text-sm text-muted-foreground">
           No account?{' '}
-          <Link to="/sign-up" className="font-medium text-accent underline-offset-4 hover:underline">
+          <Link to={signUpHref} className="font-medium text-accent underline-offset-4 hover:underline">
             Create one — it&apos;s free
           </Link>
         </motion.p>

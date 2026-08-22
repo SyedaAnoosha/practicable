@@ -3,6 +3,7 @@ export const queryKeys = {
   questions: {
     list: () => ['questions', 'list'] as const,
     detail: (slug: string) => ['questions', 'detail', slug] as const,
+    relatedProducts: (slug: string) => ['questions', 'detail', slug, 'related-products'] as const,
   },
   courses: {
     list: () => ['courses', 'list'] as const,
@@ -34,19 +35,31 @@ export const queryKeys = {
   products: {
     list: () => ['products', 'list'] as const,
     detail: (slug: string) => ['products', 'detail', slug] as const,
+    forQuestions: (questionIds: string[]) => ['products', 'for-questions', questionIds] as const,
   },
   me: {
     entitlements: () => ['me', 'entitlements'] as const,
     library: () => ['me', 'library'] as const,
     profile: () => ['me', 'profile'] as const,
+    orders: () => ['me', 'orders'] as const,
+    notifications: () => ['me', 'notifications'] as const,
   },
   admin: {
     questions: (search: string, published: string) => ['admin', 'questions', search, published] as const,
     question: (id: string) => ['admin', 'question', id] as const,
     questionFormOptions: () => ['admin', 'questions', 'form-options'] as const,
     templates: () => ['admin', 'templates'] as const,
+    products: () => ['admin', 'products'] as const,
     courses: () => ['admin', 'courses'] as const,
     course: (id: string) => ['admin', 'course', id] as const,
     orders: () => ['admin', 'orders'] as const,
+    metrics: () => ['admin', 'metrics'] as const,
+    revenueSeries: (days: number) => ['admin', 'metrics', 'revenue-series', days] as const,
+    users: () => ['admin', 'users'] as const,
+    user: (id: string) => ['admin', 'user', id] as const,
+    audit: () => ['admin', 'audit'] as const,
+    leads: () => ['admin', 'leads'] as const,
+    settings: () => ['admin', 'settings'] as const,
+    media: () => ['admin', 'media'] as const,
   },
 } as const

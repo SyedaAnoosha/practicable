@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { Download, FileSpreadsheet, Mail } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
-import { track } from '@/lib/analytics'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -14,6 +13,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
 import type { Preview } from '@/components/product/PreviewGallery'
+import { WhyThis } from '@/components/product/WhyThis'
+import { OBJECTION_BLOCK } from '@/lib/labels'
 
 interface DownloadUrlResponse {
   download_url: string
@@ -83,25 +84,8 @@ export function Template() {
         // Storage unavailable — still unlock this render via state.
       }
       setEmailGiven(true)
-      track('email_captured', { source: 'free_template' })
     },
   })
-
-  // week2_plan.md Phase 5. Both effects above any early return (isLoading/!template
-  // below), per the rules of hooks — computed from the query data directly rather
-  // than the post-guard `template` variable those returns gate.
-  useEffect(() => {
-    if (template) track('content_viewed', { type: 'template', slug: template.slug })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template?.slug])
-
-  const gateShown = useRef(false)
-  useEffect(() => {
-    if (template?.is_free && !signedIn && !emailGiven && !gateShown.current) {
-      gateShown.current = true
-      track('email_gate_shown', { source: 'free_template' })
-    }
-  }, [template?.is_free, signedIn, emailGiven])
 
   // DESIGN.md §26.4/§26.5: fetch the presigned URL on click, use it immediately,
   // discard it — never render it as a visible href. A 60-second URL sitting in the
@@ -206,6 +190,29 @@ export function Template() {
             title={template.title}
             className="mb-4"
           />
+
+          <WhyThis className="mb-4" />
+
+          {/* Objection block (8F-4) — five things, four of which are columns. */}
+          <div className="mb-4 rounded-lg border border-border bg-card p-5 sm:p-6">
+            <p className="eyebrow">Before you decide</p>
+            <ul className="mt-4 flex flex-col gap-3">
+              {OBJECTION_BLOCK.map((item) => (
+                <li key={item.label}>
+                  <p className="text-sm font-medium text-foreground">
+                    {'href' in item && item.href ? (
+                      <a href={item.href} className="underline underline-offset-2 hover:text-primary">
+                        {item.label}
+                      </a>
+                    ) : (
+                      item.label
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{item.detail}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
 
           {canDownload && downloadButton}
 

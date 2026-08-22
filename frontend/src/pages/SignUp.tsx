@@ -1,14 +1,20 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { motion } from 'motion/react'
 import { Lock, Mail, MailCheck, User } from 'lucide-react'
 import { supabase } from '@/lib/auth/supabase'
 import { Button } from '@/components/ui/Button'
 import { AuthField } from '@/components/ui/AuthField'
 import { springItem } from '@/lib/motion'
+import { resolveNextPath, signInUrlFor } from '@/lib/utils/nextPath'
 
 export function SignUp() {
   const navigate = useNavigate()
+  // `[CHANGED 2026-08-21, USER_FLOW_AUDIT.md §2]` See SignIn for why this is a query
+  // parameter. Sign-up is the COMMON path for a first purchase, so losing the
+  // destination here is the more expensive of the two cases.
+  const { search } = useLocation()
+  const next = resolveNextPath(search)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -29,7 +35,9 @@ export function SignUp() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name }, emailRedirectTo: `${window.location.origin}/sign-in` },
+      // The confirmation link lands back on /sign-in, so the destination has to ride
+      // along on it or it is lost the moment the visitor leaves for their inbox.
+      options: { data: { name }, emailRedirectTo: `${window.location.origin}${signInUrlFor(next)}` },
     })
     setLoading(false)
 
@@ -44,7 +52,7 @@ export function SignUp() {
       setAwaitingConfirmation(true)
       return
     }
-    navigate('/dashboard')
+    navigate(next)
   }
 
   if (awaitingConfirmation) {
@@ -57,7 +65,7 @@ export function SignUp() {
         <p className="mt-3 text-sm text-muted-foreground">
           We&apos;ve sent a confirmation link to <span className="font-medium text-foreground">{email}</span>.
           Click it, then{' '}
-          <Link to="/sign-in" className="font-medium text-accent underline-offset-4 hover:underline">
+          <Link to={signInUrlFor(next)} className="font-medium text-accent underline-offset-4 hover:underline">
             sign in
           </Link>
           .
@@ -127,7 +135,7 @@ export function SignUp() {
 
         <motion.p variants={springItem} className="mt-4 text-center text-sm text-muted-foreground">
           Already have an account?{' '}
-          <Link to="/sign-in" className="font-medium text-accent underline-offset-4 hover:underline">
+          <Link to={signInUrlFor(next)} className="font-medium text-accent underline-offset-4 hover:underline">
             Sign in
           </Link>
         </motion.p>

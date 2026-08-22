@@ -1,17 +1,35 @@
-import { useEffect } from 'react'
+import { type CSSProperties } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { CircleCheck, Download, FileText, GraduationCap, HelpCircle, Lock, PlayCircle } from 'lucide-react'
+import {
+  CircleCheck,
+  Clock,
+  Download,
+  FileText,
+  GraduationCap,
+  HelpCircle,
+  Infinity as InfinityIcon,
+  Layers,
+  Lock,
+  PlayCircle,
+  ReceiptText,
+  User,
+} from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
-import { track } from '@/lib/analytics'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
+import { ACCESS_ENDED_BODY, ACCESS_ENDED_HEADING } from '@/lib/labels'
+import { domainColorVar } from '@/lib/domainVisuals'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import { PageTitle } from '@/components/ui/PageTitle'
 import { SectionHeading } from '@/components/ui/SectionHeading'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Breadcrumb } from '@/components/ui/Breadcrumb'
+import { FactStrip, type Fact } from '@/components/ui/FactStrip'
+import { Accordion, type AccordionItemData } from '@/components/ui/Accordion'
+import { CourseArt } from '@/components/ui/CourseArt'
+import { ShowMore } from '@/components/ui/ShowMore'
 
 type LessonType = 'video' | 'reading' | 'download' | 'mixed'
 
@@ -63,6 +81,9 @@ interface CourseDetailData {
   cover_image_url?: string | null
   modules: ModuleOut[]
   related_products: RelatedProduct[]
+  /** ISO timestamp when a refund ended this reader's access to this course. Null in
+   *  every other case, including a course they never bought (W4-R20, ledger row 92). */
+  access_ended_at?: string | null
 }
 
 const LESSON_ICON: Record<LessonType, typeof PlayCircle> = {
@@ -78,10 +99,31 @@ function formatDuration(seconds: number | null): string | null {
   return `${minutes} min`
 }
 
+/** Total runtime across a module's lessons, as "1h 12m" / "37 min". Returns null when
+ *  no lesson in the module carries a duration — an absent total is better than "0 min",
+ *  which would read as a claim that the module is empty. */
+function moduleDuration(module: ModuleOut): string | null {
+  const total = module.lessons.reduce((sum, l) => sum + (l.duration_seconds ?? 0), 0)
+  if (!total) return null
+  const minutes = Math.round(total / 60)
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest ? `${hours}h ${rest}m` : `${hours}h`
+}
+
 // DESIGN.md §23.3's course product page — the public syllabus a stranger reads before
-// buying. Every lesson is listed with a type icon and a lock state whether or not
-// they own the course; the one free-preview lesson is genuinely playable from here,
-// logged in or not (§23.3: "not optional").
+// buying.
+//
+// `[REBUILT 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md §9 P0 items 1/5/6]`
+// The previous version was a max-w-4xl single column: title, a run-on muted metadata
+// line, a flat fully-expanded syllabus, and `related_products` fetched but never
+// rendered. The research capture found every comparable page in the market uses a dark
+// identity band, a fact strip, a collapsed curriculum accordion carrying per-module
+// counts, and a sticky buy rail — Udemy fits a 374-lecture course into 3025px that way,
+// against edX's 6943px for less. This adopts that structure in Practicable's own
+// language: the `--stage` plane it already owns, the domain colour, and the mono face
+// for figures.
 export function CourseDetail() {
   const { slug } = useParams<{ slug: string }>()
 
@@ -95,11 +137,6 @@ export function CourseDetail() {
     queryFn: () => api.get<CourseDetailData>(`/courses/${slug}`).then((res) => res.data),
     enabled: !!slug,
   })
-
-  useEffect(() => {
-    if (course) track('content_viewed', { type: 'course', slug: course.slug })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [course?.slug])
 
   if (isLoading) {
     return (
@@ -126,147 +163,366 @@ export function CourseDetail() {
 
   const startHref = course.first_lesson_slug ? `/learn/${course.slug}/${course.first_lesson_slug}` : null
   const primaryProduct = course.related_products[0]
+  // Everything after the first is genuinely "related" rather than the thing that sells
+  // this course — the buy rail takes [0], this rail takes the rest.
+  const alsoAvailable = course.related_products.slice(1)
+  const tone = domainColorVar(course.section)
 
-  // Nothing in the course is free (video and lessons are never free — only a
-  // question's written guidance is), so the header action only ever offers a way
-  // into content once it's actually owned. Not-owned visitors get the price/buy card
-  // below instead of a button that would just land on a locked lesson.
-  return (
-    <div className="mx-auto w-full max-w-4xl px-5 py-8 sm:px-8">
-      <PageTitle
-        eyebrow={course.section}
-        title={course.title}
-        description={course.subtitle ?? undefined}
-        action={
-          course.owned && startHref ? (
-            <Link to={startHref}>
-              <Button size="lg">Continue the course</Button>
-            </Link>
-          ) : undefined
-        }
-      />
+  const totalSeconds = course.modules
+    .flatMap((m) => m.lessons)
+    .reduce((sum, l) => sum + (l.duration_seconds ?? 0), 0)
+  const totalMinutes = Math.round(totalSeconds / 60)
+  const runtime =
+    totalMinutes >= 60
+      ? `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`.replace(' 0m', '')
+      : totalMinutes > 0
+        ? `${totalMinutes} min`
+        : null
+  const downloadCount = course.modules
+    .flatMap((m) => m.lessons)
+    .filter((l) => l.lesson_type === 'download').length
 
-      {course.cover_image_url && (
-        <div className="mt-6">
-          <img
-            src={course.cover_image_url}
-            alt={`Cover image for ${course.title}`}
-            className="w-full rounded-xl object-cover sm:h-64"
-          />
-        </div>
-      )}
+  // The four facts a buyer decides on, each with the edX-style one-line explainer.
+  // Runtime and downloads are omitted rather than shown as zero when the data has none
+  // — the absence rule this codebase already applies to product evidence.
+  const facts: Fact[] = [
+    {
+      icon: Layers,
+      label: 'Structure',
+      value: `${course.modules.length} ${course.modules.length === 1 ? 'module' : 'modules'}`,
+      hint: `${course.lesson_count} ${course.lesson_count === 1 ? 'lesson' : 'lessons'} in total`,
+      numeric: true,
+    },
+    ...(runtime
+      ? [{ icon: Clock, label: 'Length', value: runtime, hint: 'Work at your own pace', numeric: true }]
+      : []),
+    ...(downloadCount > 0
+      ? [
+          {
+            icon: Download,
+            label: 'Includes',
+            value: `${downloadCount} ${downloadCount === 1 ? 'template' : 'templates'}`,
+            hint: 'Working files you keep',
+            numeric: true,
+          } as Fact,
+        ]
+      : []),
+    {
+      icon: InfinityIcon,
+      label: 'Access',
+      value: 'Lifetime',
+      hint: 'One-time purchase, no subscription',
+    },
+  ]
 
-      <p className="mt-6 max-w-2xl font-serif text-lead text-muted-foreground">{course.description}</p>
-      <p className="mt-4 text-sm text-muted-foreground">
-        By {course.author_name} · {course.modules.length} {course.modules.length === 1 ? 'module' : 'modules'} ·{' '}
-        {course.lesson_count} {course.lesson_count === 1 ? 'lesson' : 'lessons'} · lifetime access
-      </p>
-
-      {/* §23.3's "Price · [Buy the course]" surface, resolved to whichever real
-          product actually grants this course — never a hardcoded price. Hidden
-          entirely once owned, per §23.2's "never show a price on something the user
-          already owns." Same accent-blue left-rule family as the question page's buy card
-          and the dashboard product card: the price is the conversion moment, so it
-          earns the accent. */}
-      {!course.owned && primaryProduct && (
-        <Card
-          className="mt-8 border-l-4 shadow-sm transition-[box-shadow] duration-150 hover:shadow-md"
-          style={{ borderLeftColor: 'var(--accent)' }}
-        >
-          <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent ring-1 ring-inset ring-accent/25">
-                <GraduationCap className="size-4" aria-hidden="true" />
-              </span>
-              <div>
-                {/* Accent-blue like every other buy card — large marketing price, 24px,
-                    large-text-safe (theme.css). Do not shrink it. */}
-                <p className="text-2xl font-semibold tabular-nums text-accent">
-                  {formatCurrency(primaryProduct.price_amount, primaryProduct.currency)}
-                </p>
-                <p className="text-xs text-muted-foreground">One-time purchase · lifetime access</p>
+  // Each module collapses to one row carrying its own counts, so a ten-module course is
+  // scannable at a glance instead of a wall. The first module opens by default — the
+  // reader should see the shape of a module without having to click.
+  const syllabus: AccordionItemData[] = course.modules.map((module) => {
+    const duration = moduleDuration(module)
+    const itemCount = module.lessons.length + module.questions.length
+    return {
+      id: module.id,
+      title: module.title,
+      description: module.description,
+      summary: [
+        `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`,
+        duration,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      content: (
+        <ul className="flex flex-col divide-y divide-border border-t border-border">
+          {module.lessons.map((lesson) => {
+            const Icon = LESSON_ICON[lesson.lesson_type]
+            const duration = formatDuration(lesson.duration_seconds)
+            const row = (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  {lesson.completed ? (
+                    <CircleCheck className="size-4 text-success" aria-hidden="true" />
+                  ) : lesson.locked ? (
+                    <Lock className="size-3.5" aria-hidden="true" />
+                  ) : (
+                    <Icon className="size-4" aria-hidden="true" />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-foreground">{lesson.title}</span>
+                  <span className="text-xs capitalize text-muted-foreground">{lesson.lesson_type}</span>
+                </span>
+                {duration && (
+                  <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                    {duration}
+                  </span>
+                )}
               </div>
-            </div>
-            <Link to={`/buy/${primaryProduct.slug}`}>
-              <Button>See what's included</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      )}
+            )
+            return (
+              <li key={lesson.id}>
+                {!lesson.locked ? (
+                  <Link
+                    to={`/learn/${course.slug}/${lesson.slug}`}
+                    className="block transition-colors duration-150 hover:bg-muted/60"
+                  >
+                    {row}
+                  </Link>
+                ) : (
+                  <div className="opacity-60">{row}</div>
+                )}
+              </li>
+            )
+          })}
 
-      <section className="mt-6">
-        <SectionHeading>Full syllabus</SectionHeading>
-        <div className="mt-4 flex flex-col gap-6">
-          {course.modules.map((module) => (
-            <div key={module.id}>
-              <p className="eyebrow">{module.title}</p>
-              {module.description && <p className="mt-1 text-sm text-muted-foreground">{module.description}</p>}
-              <ul className="mt-3 flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-                {module.lessons.map((lesson) => {
-                  const Icon = LESSON_ICON[lesson.lesson_type]
-                  const duration = formatDuration(lesson.duration_seconds)
-                  const row = (
-                    <div className="flex items-center gap-3 px-4 py-3.5">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                        {lesson.completed ? (
-                          <CircleCheck className="size-4 text-success" aria-hidden="true" />
-                        ) : lesson.locked ? (
-                          <Lock className="size-4" aria-hidden="true" />
-                        ) : (
-                          <Icon className="size-4" aria-hidden="true" />
-                        )}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-foreground">{lesson.title}</span>
-                        <span className="text-xs capitalize text-muted-foreground">
-                          {lesson.lesson_type}
-                          {duration ? ` · ${duration}` : ''}
-                        </span>
-                      </span>
-                    </div>
-                  )
-                  return (
-                    <li key={lesson.id}>
-                      {!lesson.locked ? (
-                        <Link
-                          to={`/learn/${course.slug}/${lesson.slug}`}
-                          className="block transition-colors duration-150 hover:bg-muted/60"
-                        >
-                          {row}
-                        </Link>
-                      ) : (
-                        <div className="opacity-60">{row}</div>
-                      )}
-                    </li>
-                  )
-                })}
-
-                {/* Questions attached to this module (ModuleQuestion) — always free
-                    and public, so these rows never carry a lock state. */}
-                {module.questions.map((question) => (
-                  <li key={question.id}>
-                    <Link
-                      to={`/questions/${question.slug}`}
-                      className="flex items-center gap-3 px-4 py-3.5 transition-colors duration-150 hover:bg-muted/60"
-                    >
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                        <HelpCircle className="size-4" aria-hidden="true" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-foreground">{question.title}</span>
-                        <span className="text-xs text-muted-foreground">Related question · free to read</span>
-                      </span>
-                      <Badge variant="outline" className="shrink-0">
-                        Free
-                      </Badge>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {/* Questions attached to this module (ModuleQuestion) — always free and
+              public, so these rows never carry a lock state. */}
+          {module.questions.map((question) => (
+            <li key={question.id}>
+              <Link
+                to={`/questions/${question.slug}`}
+                className="flex items-center gap-3 px-4 py-3 transition-colors duration-150 hover:bg-muted/60"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                  <HelpCircle className="size-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-foreground">{question.title}</span>
+                  <span className="text-xs text-muted-foreground">Related question</span>
+                </span>
+                <Badge variant="outline" className="shrink-0">
+                  Free
+                </Badge>
+              </Link>
+            </li>
           ))}
+        </ul>
+      ),
+    }
+  })
+
+  return (
+    <div>
+      {/* ── Identity band, on the dark stage plane ──
+          The research's most consistent structural finding for detail pages: put course
+          identity on a dark plane and the content on light below it, and the page is
+          hierarchically resolved before the reader scrolls at all. Practicable already
+          owns this plane — it just had never been used on an interior page. */}
+      <div className="relative isolate overflow-hidden bg-stage text-stage-foreground">
+        <div aria-hidden="true" className="stage-aurora stage-aurora--quiet -z-10" />
+        <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
+          <Breadcrumb
+            on="stage"
+            items={[
+              { label: 'Courses', to: '/courses' },
+              { label: course.title },
+            ]}
+          />
+
+          <div className="mt-5 grid gap-8 lg:grid-cols-[1fr_360px]">
+            <div className="min-w-0">
+              <p className="eyebrow text-stage-foreground/70" style={{ '--eyebrow-rule-color': tone } as CSSProperties}>
+                {course.section}
+              </p>
+              <h1 tabIndex={-1} className="mt-3 max-w-3xl text-balance text-h1 font-semibold outline-none">
+                {course.title}
+              </h1>
+              {course.subtitle && (
+                <p className="mt-3 max-w-2xl font-serif text-lead text-stage-foreground/75">
+                  {course.subtitle}
+                </p>
+              )}
+
+              {/* The author, as a person rather than a fragment of a metadata line.
+                  §6 of the research: authority is transmitted by a named human, and
+                  this product's core claim is that the answers come from a practising
+                  professional rather than a vendor. */}
+              <div className="mt-5 flex items-center gap-2.5">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-stage-foreground/12 text-stage-foreground/85 ring-1 ring-inset ring-stage-foreground/20">
+                  <User className="size-4" aria-hidden="true" />
+                </span>
+                <p className="text-sm text-stage-foreground/85">
+                  Written by <span className="font-medium text-stage-foreground">{course.author_name}</span>
+                </p>
+              </div>
+
+              {course.owned && startHref && (
+                <Link to={startHref} className="mt-6 inline-flex">
+                  <Button size="lg">Continue the course</Button>
+                </Link>
+              )}
+
+              {/* W4-R20 / ledger row 92 — the fourth state. Without this a refunded
+                  buyer saw an ordinary buy page and was never told what happened.
+                  `muted`, never `destructive`: a refund they asked for is a completed
+                  transaction, not an error. The buy rail below stays exactly as it is,
+                  so buying again is one scroll away rather than a dead end. */}
+              {!course.owned && course.access_ended_at && (
+                <div className="mt-6 max-w-prose rounded-lg border border-border bg-card/70 p-4">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <ReceiptText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    {ACCESS_ENDED_HEADING}{' '}
+                    <time dateTime={course.access_ended_at} className="font-normal text-muted-foreground">
+                      {new Date(course.access_ended_at).toLocaleDateString('en-AU', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })}
+                    </time>
+                  </p>
+                  <p className="mt-1.5 text-sm text-muted-foreground">{ACCESS_ENDED_BODY}</p>
+                  <Link
+                    to="/purchases"
+                    className="mt-3 inline-block text-sm font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:decoration-gold-strong"
+                  >
+                    See this in your purchases
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* Course artwork, echoing the aurora's corner-anchored composition. An
+                uploaded cover still wins where one exists. */}
+            <div className="hidden lg:block">
+              <CourseArt
+                slug={course.slug}
+                domain={course.section}
+                src={course.cover_image_url}
+                alt={`Cover image for ${course.title}`}
+                className="aspect-[16/10] rounded-xl ring-1 ring-inset ring-stage-foreground/15"
+              />
+            </div>
+          </div>
         </div>
-      </section>
+      </div>
+
+      {/* ── Content ── */}
+      <div className="mx-auto w-full max-w-7xl px-5 py-8 sm:px-8">
+        <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
+          <div className="min-w-0">
+            <FactStrip facts={facts} tone={tone} />
+
+            <section className="mt-8">
+              <SectionHeading>About this course</SectionHeading>
+              <ShowMore lines={5} className="mt-3 max-w-2xl">
+                <p className="font-serif text-read text-pretty text-muted-foreground">
+                  {course.description}
+                </p>
+              </ShowMore>
+            </section>
+
+            <section className="mt-8">
+              <SectionHeading>Full syllabus</SectionHeading>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Every lesson is listed whether or not you own the course. Questions attached to a
+                module are free to read for everyone.
+              </p>
+              <Accordion
+                className="mt-4"
+                items={syllabus}
+                defaultOpen={syllabus.length > 0 ? [syllabus[0].id] : []}
+              />
+            </section>
+
+            {/* Fetched by the API since this page was written, and until now dropped on
+                the floor — the audit's finding 8. Every platform reviewed carries a
+                related-content rail. */}
+            {alsoAvailable.length > 0 && (
+              <section className="mt-8">
+                <SectionHeading>Also available</SectionHeading>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  {alsoAvailable.map((product) => (
+                    <Link key={product.slug} to={`/buy/${product.slug}`} className="group">
+                      <Card className="hover-lift flex h-full items-center justify-between gap-4 p-4">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{product.name}</p>
+                          <p className="mt-0.5 font-mono text-xs tabular-nums text-muted-foreground">
+                            {formatCurrency(product.price_amount, product.currency)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm font-medium text-accent group-hover:underline">
+                          View
+                        </span>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* ── Sticky buy rail ──
+              The same structure ProductBuy.tsx already uses (lg:grid-cols-[1fr_380px]),
+              which the audit noted was the best-built page in the app while this one had
+              no rail at all. Hidden entirely once owned, per §23.2's "never show a price
+              on something the user already owns". */}
+          {!course.owned && primaryProduct && (
+            <aside className="lg:sticky lg:top-6 lg:self-start">
+              <Card
+                className="border-l-4 shadow-sm"
+                style={{ borderLeftColor: 'var(--accent)' }}
+              >
+                <CardContent className="flex flex-col gap-4 pt-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent ring-1 ring-inset ring-accent/25">
+                      <GraduationCap className="size-4" aria-hidden="true" />
+                    </span>
+                    <div>
+                      {/* Accent-blue like every other buy card — large marketing price,
+                          24px, large-text-safe (theme.css). Do not shrink it. */}
+                      <p className="font-mono text-2xl font-semibold tabular-nums text-accent">
+                        {formatCurrency(primaryProduct.price_amount, primaryProduct.currency)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">One-time purchase · lifetime access</p>
+                    </div>
+                  </div>
+
+                  <Link to={`/buy/${primaryProduct.slug}`} className="block">
+                    <Button className="w-full">See what's included</Button>
+                  </Link>
+
+                  <ul className="flex flex-col gap-2 border-t border-border pt-4 text-sm text-muted-foreground">
+                    <li className="flex items-start gap-2">
+                      <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                      {course.lesson_count} {course.lesson_count === 1 ? 'lesson' : 'lessons'} across{' '}
+                      {course.modules.length} {course.modules.length === 1 ? 'module' : 'modules'}
+                    </li>
+                    {downloadCount > 0 && (
+                      <li className="flex items-start gap-2">
+                        <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                        {downloadCount} downloadable {downloadCount === 1 ? 'template' : 'templates'}
+                      </li>
+                    )}
+                    <li className="flex items-start gap-2">
+                      <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                      Lifetime access, including updates
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </aside>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile buy bar — the primary action always within thumb reach on a long page,
+          matching the pattern ProductBuy.tsx already ships. Respects the iOS home
+          indicator via env(safe-area-inset-bottom). */}
+      {!course.owned && primaryProduct && (
+        <div
+          className="sticky bottom-0 z-30 flex items-center justify-between gap-3 border-t border-border bg-background/95 px-5 py-3 backdrop-blur-sm lg:hidden"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
+          <div>
+            <p className="font-mono text-lg font-semibold tabular-nums text-accent">
+              {formatCurrency(primaryProduct.price_amount, primaryProduct.currency)}
+            </p>
+            <p className="text-xs text-muted-foreground">Lifetime access</p>
+          </div>
+          <Link to={`/buy/${primaryProduct.slug}`} className="shrink-0">
+            <Button>See what's included</Button>
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

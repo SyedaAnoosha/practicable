@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { api } from '@/lib/api/client'
-import { track } from '@/lib/analytics'
 import { queryKeys } from '@/lib/query/keys'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
+import { recordRecommendationClick } from '@/lib/recommendationEvents'
+import { QuestionLink, type RoutedQuestion } from './QuestionLink'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 
@@ -16,19 +17,12 @@ interface RelatedProduct {
 
 interface SituationProductsProps {
   questionIds: string[]
-  /** The titles of the questions the user filtered by — rendered in the panel
-   *  explanation so the recommendation names real questions, per week4_plan.md
-   *  W4-R4 acceptance: "Every recommendation states at least one real question
-   *  it routes through, by title, as a link." */
-  questionTitles: string[]
-  /** Same questions' slugs, same order as `questionIds`/`questionTitles` — kept
-   *  separate from `questionIds` because the analytics contract's `question_slug`
-   *  field is a slug, not the question's database id, and the two must never be
-   *  conflated in a tracked event. */
-  questionSlugs: string[]
+  /** The questions the reader filtered to, named and linked in the explanation so the
+   *  recommendation is checkable rather than asserted (W4-R4 acceptance 2). */
+  questions: RoutedQuestion[]
 }
 
-export function SituationProducts({ questionIds, questionTitles, questionSlugs }: SituationProductsProps) {
+export function SituationProducts({ questionIds, questions }: SituationProductsProps) {
   const { data: products, isLoading } = useQuery({
     queryKey: queryKeys.products.forQuestions(questionIds),
     queryFn: () => {
@@ -65,6 +59,12 @@ export function SituationProducts({ questionIds, questionTitles, questionSlugs }
 
   if (!products || products.length === 0) return null
 
+  // W4-R4 item 6: both routes to the product record the click. No questionSlug — this
+  // surface routes from a filter result set, not from one question, and inventing one
+  // would make the metric lie about where the reader came from.
+  const onRecommendationClick = (productSlug: string) =>
+    recordRecommendationClick({ surface: 'catalogue', productSlug })
+
   return (
     <Card>
       <CardHeader>
@@ -73,19 +73,19 @@ export function SituationProducts({ questionIds, questionTitles, questionSlugs }
       <CardContent>
         <p className="mb-4 text-sm text-muted-foreground">
           We're suggesting these because they address{' '}
-          {questionTitles.length <= 3 ? (
-            questionTitles.map((title, i) => (
-              <span key={title}>
-                {i > 0 && (i === questionTitles.length - 1 ? ' and ' : ', ')}
-                <strong>{title}</strong>
+          {questions.length <= 3 ? (
+            questions.map((q, i) => (
+              <span key={q.slug}>
+                {i > 0 && (i === questions.length - 1 ? ' and ' : ', ')}
+                <QuestionLink question={q} />
               </span>
             ))
           ) : (
             <>
-              <strong>{questionTitles[0]}</strong>,{' '}
-              <strong>{questionTitles[1]}</strong>, and{' '}
-              {questionTitles.length - 2} other question
-              {questionTitles.length - 2 > 1 ? 's' : ''}
+              <QuestionLink question={questions[0]} />,{' '}
+              <QuestionLink question={questions[1]} />, and{' '}
+              {questions.length - 2} other question
+              {questions.length - 2 > 1 ? 's' : ''}
             </>
           )}{' '}
           — which match your constraints.
@@ -99,17 +99,8 @@ export function SituationProducts({ questionIds, questionTitles, questionSlugs }
               <div className="min-w-0 flex-1">
                 <Link
                   to={`/buy/${product.slug}`}
+                  onClick={() => onRecommendationClick(product.slug)}
                   className="font-medium text-foreground underline-offset-2 hover:underline"
-                  onClick={() =>
-                    track('recommendation_clicked', {
-                      // A real slug, not a question id — this panel can be driven by
-                      // several matched questions at once, so the first stands in for
-                      // "which situation drove this", same as questionTitles[0] does
-                      // in the explanation copy above.
-                      question_slug: questionSlugs[0] ?? '',
-                      product_slug: product.slug,
-                    })
-                  }
                 >
                   {product.name}
                 </Link>
@@ -117,7 +108,7 @@ export function SituationProducts({ questionIds, questionTitles, questionSlugs }
                   {formatCurrency(product.price_amount, product.currency)}
                 </p>
               </div>
-              <Link to={`/buy/${product.slug}`}>
+              <Link to={`/buy/${product.slug}`} onClick={() => onRecommendationClick(product.slug)}>
                 <Button size="sm">View</Button>
               </Link>
             </div>

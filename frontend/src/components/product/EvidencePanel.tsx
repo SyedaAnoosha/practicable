@@ -5,6 +5,7 @@ import { LicenceLine } from './LicenceLine'
 import { VersionStamp } from './VersionStamp'
 
 interface EvidencePanelProps {
+  id?: string
   format?: string
   pageCount?: number
   sheetCount?: number
@@ -30,6 +31,7 @@ interface FactRow {
  * distinct item). The absence rule is the whole component: a fact whose column is
  * unset does not render its row at all — no `—`, no "Not specified". */
 export const EvidencePanel = ({
+  id,
   format,
   pageCount,
   sheetCount,
@@ -73,6 +75,7 @@ export const EvidencePanel = ({
 
   return (
     <section
+      id={id}
       aria-label={`What you get with ${title}`}
       className={cn('rounded-lg border border-border bg-gold-soft p-5 sm:p-6', className)}
     >

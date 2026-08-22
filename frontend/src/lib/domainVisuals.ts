@@ -20,10 +20,40 @@ export const DOMAIN_VISUALS: Record<string, { color: string; icon: LucideIcon }>
 
 const FALLBACK_VISUAL = { color: '--primary', icon: Sparkles }
 
-/** A domain not in the map yet falls back to the brand primary rather than throwing —
- * the page still works, just without colour differentiation until this catches up. */
+/** The first word of each canonical key, in map order — the token every near-miss
+ *  vocabulary still agrees on. Built from `DOMAIN_VISUALS` rather than written out, so
+ *  adding a sixth domain cannot leave this behind. */
+const KEYWORD_INDEX: Array<[string, { color: string; icon: LucideIcon }]> = Object.entries(
+  DOMAIN_VISUALS,
+).map(([name, visual]) => [name.split(' ')[0].toLowerCase(), visual])
+
+/**
+ * A domain not in the map falls back to the brand primary rather than throwing — the
+ * page still works, just without colour differentiation.
+ *
+ * `[FIXED 2026-08-21]` Courses were hitting that fallback every time, and the symptom
+ * was visible in the capture: two identical near-black cards where the duotone should
+ * have ramped a domain tone into the stage. Cause is a **second taxonomy** — questions
+ * and packs carry `domain.name` (`Risk (Enterprise & op.)`, a key here), while a course
+ * carries `section.name` from the separate `sections` table, whose only row is
+ * `Risk Management`. No key matched, so every course resolved to `--primary` and the
+ * "duotone" ramped navy into navy.
+ *
+ * The match is widened rather than the vocabularies merged. Merging them is a backend
+ * decision about what a section *is* (a course shelf, not a domain) and it is not this
+ * redesign's to make — see REDESIGN_SUMMARY.md's known limitations. Widening is exact
+ * match first, then the leading keyword, so `Risk Management` → risk and
+ * `Cyber Security` → cyber, while an unrelated section still lands on the fallback.
+ */
 export function domainVisual(domainName: string) {
-  return DOMAIN_VISUALS[domainName] ?? FALLBACK_VISUAL
+  const exact = DOMAIN_VISUALS[domainName]
+  if (exact) return exact
+
+  const first = domainName.trim().split(/[\s(]+/)[0]?.toLowerCase()
+  if (!first) return FALLBACK_VISUAL
+
+  const keyword = KEYWORD_INDEX.find(([token]) => token === first)
+  return keyword ? keyword[1] : FALLBACK_VISUAL
 }
 
 /** CSS `var(--domain-x)` string for inline styles — Tailwind's JIT can't see a

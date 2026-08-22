@@ -18,8 +18,8 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
+import { recordFilterEvent } from '@/lib/filterEvents'
 import { domainColorVar, domainVisual } from '@/lib/domainVisuals'
-import { track } from '@/lib/analytics'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Input } from '@/components/ui/Input'
@@ -258,8 +258,6 @@ function FilterPanel({
       next.delete(param)
     } else {
       next.set(param, value)
-      // Fired on APPLY, not on clear — tracking which filters get reached for.
-      track('filter_applied', { dimension: param, value })
     }
     setSearchParams(next)
   }
@@ -273,7 +271,6 @@ function FilterPanel({
     const adding = !current.includes(value)
     const updated = adding ? [...current, value] : current.filter((v) => v !== value)
     for (const v of updated) next.append(param, v)
-    if (adding) track('filter_applied', { dimension: param, value })
     setSearchParams(next)
   }
 
@@ -549,6 +546,18 @@ export function QuestionsCatalogue() {
   }
   const clearAll = () => setSearchParams({})
 
+  // Record filter events server-side (debounced fire-and-forget). Only when filters
+  // are active — an unfiltered page has no situation to record.
+  useEffect(() => {
+    if (!hasFilters) return
+    const term = debouncedQuery.trim().toLowerCase()
+    recordFilterEvent({
+      ...filters,
+      query_text: term || undefined,
+      result_count: exact.length + close.length,
+    })
+  }, [hasFilters, filters, debouncedQuery, exact.length, close.length])
+
   const toggleQuickFilter = (dimension: string, values: readonly string[]) => {
     const next = new URLSearchParams(searchParams)
     const current = next.get(dimension)
@@ -689,8 +698,7 @@ export function QuestionsCatalogue() {
             <div className="mt-6">
               <SituationProducts
                 questionIds={exact.map((s) => s.question.id)}
-                questionTitles={exact.map((s) => s.question.title)}
-                questionSlugs={exact.map((s) => s.question.slug)}
+                questions={exact.map((s) => ({ slug: s.question.slug, title: s.question.title }))}
               />
             </div>
           )}

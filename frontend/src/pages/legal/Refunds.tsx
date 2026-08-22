@@ -40,16 +40,16 @@ export function Refunds() {
       <LegalSection heading="If you've simply changed your mind">
         <p>
           This is company policy, on top of the guarantees above — not a substitute for them, and not a limit on
-          them.{' '}
-          <span className="font-sans text-sm text-muted-foreground">
-            [OWNER: confirm the exact window and conditions below before this leaves draft status — RS 11.3 records
-            this as a commercial call, not an engineering one.]
-          </span>
+          them.
         </p>
         <ul className="ml-5 list-disc space-y-2">
-          <li>Templates: a refund is available within 14 days of purchase, provided the file hasn't been downloaded.</li>
-          <li>Courses: a refund is available within 14 days of purchase, provided you haven't started a lesson. Once progress is recorded against a course, that purchase is final under this change-of-mind policy — the guarantees above still apply if something is actually wrong with it.</li>
+          <li>Courses: you can request a self-serve refund from your <a href="/purchases" className="text-accent underline underline-offset-2">purchases page</a> up to 15% course completion. We keep 15% of the purchase price and refund the rest to your original payment method.</li>
+          <li>Courses past 15% completion: contact us and we'll assess your situation. Your consumer-guarantee rights always apply regardless.</li>
+          <li>Templates and reference packs: contact us for a refund assessment.</li>
         </ul>
+        <p className="mt-3">
+          No templates are automatically refunded through the self-serve path. If something is materially wrong with a template, contact us — your consumer-guarantee rights still apply.
+        </p>
       </LegalSection>
 
       <LegalSection heading="How to ask for one">
