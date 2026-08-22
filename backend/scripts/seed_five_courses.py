@@ -2,10 +2,18 @@
 
 Creates:
   - 2 new sections (Compliance, Resilience) + reuses existing Risk Management
-  - 2 new authors
+  - 1 author (`practicable-author`), created or bio-backfilled if already present
   - 5 courses with modules, reading lessons (full HTML body + prose_sanitized),
     video lessons (reusing existing Mux assets), and generated cover images
     uploaded to Supabase Storage.
+
+Deliberately creates NO commerce rows. Products carry real Stripe price IDs, which
+cannot be invented here, so the seeded courses are published-but-unpurchasable until
+an admin attaches a product. The catalogue and course pages say so explicitly rather
+than rendering a blank where the price belongs.
+
+Re-runnable: sections, authors and courses are matched on slug, so a second run
+updates rather than duplicates.
 
 Usage:
     cd backend && python -m scripts.seed_five_courses
@@ -2354,6 +2362,16 @@ async def _get_or_create_author(
     result = await session.execute(select(Author).where(Author.slug == slug))
     existing = result.scalar_one_or_none()
     if existing:
+        # `[FIXED 2026-08-22]` This returned the existing row untouched, so the richer
+        # bio defined below was written only on a database that had never seen this
+        # author. On the real one it silently kept a 28-character stub ("Risk management
+        # practitioner"), and the course page's author card — whose entire job is to say
+        # WHY this name should be trusted — rendered that one fragment.
+        # Backfilling a placeholder is safe; a bio someone has since edited to be longer
+        # than the seed's is deliberate and is left alone.
+        if bio and len(bio) > len(existing.bio or ""):
+            existing.bio = bio
+            print(f"  Updated author bio: {name}")
         return existing
     author = Author(
         id=uuid.uuid4(),
@@ -2492,6 +2510,15 @@ async def seed_courses():
                 await session.flush()
 
                 for lesson_data in mod_data.lessons:
+                    # Check if lesson with this slug already exists
+                    existing_lesson = await session.execute(
+                        select(Lesson).where(Lesson.slug == lesson_data.slug)
+                    )
+                    if existing_lesson.scalar_one_or_none():
+                        print(f"    Lesson '{lesson_data.title}' already exists — skipping")
+                        total_lessons += 1
+                        continue
+
                     # Determine lesson type
                     if lesson_data.reuse_video and mux_assets:
                         lesson_type = LessonType.VIDEO
