@@ -71,6 +71,15 @@ export function FactStrip({
             />
             {label}
           </dt>
+          {/* `[FIXED 2026-08-22, WCAG]` The hint used to be a sibling `<p>` inside this
+              wrapper div, which made it a direct non-dt/dd descendant of the `<dl>` —
+              axe's `only-dlitems`, serious impact: "dl element has direct children that
+              are not allowed: div > p". A definition list with stray content in it is
+              not a definition list any more, and assistive tech pairing dt to dd has no
+              defined place to put the stray node.
+              The hint qualifies the value, so it belongs *inside* the `<dd>` — same
+              appearance, valid structure, and it is now announced as part of the
+              definition it describes rather than as loose text. */}
           <dd
             className={cn(
               'text-sm font-semibold text-foreground',
@@ -78,8 +87,12 @@ export function FactStrip({
             )}
           >
             {value}
+            {hint && (
+              <span className="mt-1 block text-xs font-normal leading-snug text-muted-foreground">
+                {hint}
+              </span>
+            )}
           </dd>
-          {hint && <p className="text-xs leading-snug text-muted-foreground">{hint}</p>}
         </div>
       ))}
     </dl>

@@ -36,6 +36,35 @@ const PUBLIC_ROUTES = [
   '/store/packs/risk-register-fundamentals',
 ] as const
 
+/** `[ADDED 2026-08-22]` Wait for entry animations to finish before auditing.
+ *
+ * Every page fades and rises in on mount (`animate-enter`, motion's `riseItem`). While
+ * that runs, an element's *computed* colour is a partway blend of its final colour and
+ * the background — so axe measured `#8b867b` where the resting colour is the token's
+ * `#6e675a`, and reported a 3.59:1 contrast failure against a control that actually
+ * renders at 4.61:1 and passes. Four routes failed this way in both themes.
+ *
+ * Waiting for `<h1>` visibility (which this file already did) is not enough: the
+ * heading becomes visible at the *start* of the fade, not the end. This waits for the
+ * document's own animations to settle, which is the real precondition for measuring a
+ * colour, and falls back to a short fixed delay where the API is unavailable.
+ */
+async function settleAnimations(page: import('@playwright/test').Page) {
+  await page
+    .waitForFunction(
+      () =>
+        document.getAnimations === undefined ||
+        document.getAnimations().every((a) => a.playState !== 'running'),
+      null,
+      { timeout: 5_000 },
+    )
+    .catch(() => {
+      /* An indefinitely-running decorative animation must not fail the a11y audit. */
+    })
+  // One extra frame so the final committed styles are what axe reads.
+  await page.waitForTimeout(150)
+}
+
 for (const route of PUBLIC_ROUTES) {
   test(`axe: ${route} has no violations`, async ({ page }) => {
     await page.goto(route)
@@ -48,6 +77,7 @@ for (const route of PUBLIC_ROUTES) {
     // Both themes are in scope (DESIGN.md §7.6/§45 — contrast tokens are audited per
     // theme), so this checks the default (light) render only; a dark-mode pass is a
     // second, deliberately separate run rather than doubling every route here.
+    await settleAnimations(page)
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
   })
@@ -73,7 +103,8 @@ test.describe('dark theme', () => {
       })
       await page.goto(route)
       await expect(page.locator('h1')).toBeVisible()
-      const results = await new AxeBuilder({ page }).analyze()
+      await settleAnimations(page)
+    const results = await new AxeBuilder({ page }).analyze()
       expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
     })
   }
@@ -94,6 +125,7 @@ test('axe: a real question detail page has no violations', async ({ page }) => {
   // resolves catches the LOADING state, not the page, and axe correctly flags a
   // transient "no level-one heading" that was never real. Wait for the actual heading.
   await expect(page.locator('h1')).toBeVisible()
+  await settleAnimations(page)
   const results = await new AxeBuilder({ page }).analyze()
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
 })
@@ -108,6 +140,7 @@ test('axe: a real template detail page has no violations', async ({ page }) => {
 
   await page.goto(href!)
   await expect(page.locator('h1')).toBeVisible()
+  await settleAnimations(page)
   const results = await new AxeBuilder({ page }).analyze()
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
 })
@@ -124,6 +157,7 @@ test.describe('axe: /admin/metrics (admin-only)', () => {
     // The revenue tiles arrive via React Query after mount, same reasoning as the
     // question/template detail checks above — wait past the loading skeleton.
     await expect(page.getByText('Gross revenue')).toBeVisible()
+    await settleAnimations(page)
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
   })
@@ -137,6 +171,7 @@ test.describe('axe: /admin/metrics (admin-only)', () => {
     await page.goto('/admin/metrics')
     await expect(page.getByRole('heading', { name: /metrics/i })).toBeVisible()
     await expect(page.getByText('Gross revenue')).toBeVisible()
+    await settleAnimations(page)
     const results = await new AxeBuilder({ page }).analyze()
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
   })
