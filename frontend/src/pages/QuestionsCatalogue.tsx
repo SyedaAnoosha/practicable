@@ -241,7 +241,7 @@ function ZeroResults({
  */
 function FilterCount({ n }: { n: number }) {
   return (
-    <span aria-hidden="true" className="shrink-0 font-mono text-[0.6875rem] tabular-nums text-muted-foreground/70">
+    <span aria-hidden="true" className="shrink-0 font-mono text-[0.6875rem] tabular-nums text-muted-foreground">
       {n}
     </span>
   )
@@ -446,6 +446,25 @@ function FilterPanel({
 
 const CLOSE_PREVIEW_COUNT = 3
 
+/* `[ADDED 2026-08-22]` How many exact results render before "Show more".
+ *
+ * The unfiltered page rendered all 100 questions at once: 100 rows x 138px =
+ * **14,846px, 16.5 viewports** — measured against the live API, and by a wide margin
+ * the tallest page in the product. `Practicable_Redesign.md` ("Reduce Vertical
+ * Scrolling") asks for the opposite, and the close-match list already solved exactly
+ * this with a preview cap plus an expander.
+ *
+ * 20 is chosen against the row height, not picked round: ~7 rows fill a 1440x900
+ * viewport, so 20 is roughly three screens — enough that scanning feels unrestricted
+ * and a filtered result set (usually well under 20) never sees the control at all,
+ * while the unfiltered page opens at ~3,000px instead of ~15,000px.
+ *
+ * Deliberately NOT virtualised: the row is a link with real text, and windowing it
+ * would break in-page find, keyboard tab order, and the browser's scroll restoration
+ * that E4 depends on. An expander keeps all of that and stays honest — the count
+ * above always states the true total. */
+const EXACT_PAGE_SIZE = 20
+
 function QuestionRow({
   scored,
   showBadges,
@@ -550,6 +569,7 @@ export function QuestionsCatalogue() {
   // derived rather than reset by an effect: when `debouncedQuery` moves, the equality
   // below stops holding and the list collapses on its own.
   const [expandedFor, setExpandedFor] = useState<string | null>(null)
+  const [exactShownFor, setExactShownFor] = useState<{ signature: string; count: number } | null>(null)
   const showAllClose = expandedFor === debouncedQuery
 
   useEffect(() => {
@@ -664,6 +684,16 @@ export function QuestionsCatalogue() {
   }
 
   const visibleClose = showAllClose ? close : close.slice(0, CLOSE_PREVIEW_COUNT)
+
+  /* Exact-list paging. `exactShownFor` pins the count to the query+filter signature it
+   * was grown for, so changing a filter resets to the first page rather than leaving a
+   * previously-expanded list expanded over a different result set. Same derived-state
+   * shape as `showAllClose` above — no effect, nothing to fall out of sync. */
+  const resultSignature = `${debouncedQuery}|${searchParams.toString()}`
+  const grownFor = exactShownFor?.signature === resultSignature ? exactShownFor.count : 0
+  const exactShownCount = Math.max(EXACT_PAGE_SIZE, grownFor)
+  const visibleExact = exact.slice(0, exactShownCount)
+  const exactRemaining = exact.length - visibleExact.length
   const isZeroResults = hasFilters && exact.length === 0 && close.length === 0
 
   return (
@@ -854,7 +884,7 @@ export function QuestionsCatalogue() {
                   hasFilters ? 'mt-2 border-t border-border' : 'mt-4',
                 )}
               >
-                {exact.map((scored) => (
+                {visibleExact.map((scored) => (
                   <QuestionRow
                     key={scored.question.slug}
                     scored={scored}
@@ -865,6 +895,25 @@ export function QuestionsCatalogue() {
                   />
                 ))}
               </ul>
+
+              {/* The count is always the true total, so the page never understates what
+                  is behind the control — it is a rendering cap, not a filter. */}
+              {exactRemaining > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() =>
+                    setExactShownFor({
+                      signature: resultSignature,
+                      count: exactShownCount + EXACT_PAGE_SIZE,
+                    })
+                  }
+                >
+                  Show {Math.min(exactRemaining, EXACT_PAGE_SIZE)} more
+                  {exactRemaining > EXACT_PAGE_SIZE ? ` of ${exactRemaining}` : ''}
+                </Button>
+              )}
 
               {close.length > 0 && (
                 <>

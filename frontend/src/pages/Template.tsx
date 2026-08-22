@@ -9,7 +9,6 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Badge } from '@/components/ui/Badge'
-import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -197,69 +196,65 @@ export function Template() {
     </>
   )
 
+  /* `[REDESIGNED 2026-08-22, D6]` This page used to be a single `max-w-2xl` column
+   * with everything — fact strip, evidence, why-this, objections, download — stacked
+   * inside one Card. Measured at 1440px it ran to 3,213px: 3.6 viewports for a product
+   * whose entire purchase decision is "what is it, and what does it cost". Every other
+   * product surface (ProductBuy, PackDetail, CourseDetail) already uses the two-column
+   * sticky-rail layout the docs mandate, so this was the last holdout.
+   *
+   * Content left, commitment right: the rail carries the price, the file, the download
+   * or gate, and the evidence panel — the things a buyer looks at repeatedly — and it
+   * stays on screen while the objection block and description scroll under it. */
   return (
-    <div className="mx-auto w-full max-w-2xl px-5 pb-24 pt-8 sm:px-8 sm:pb-8">
+    <div className="mx-auto w-full max-w-5xl px-5 pb-24 pt-8 sm:px-8 sm:pb-8 lg:px-12">
       <Breadcrumb
+        className="animate-enter mb-6"
         items={[
           { label: 'Templates', to: '/templates' },
           { label: template.title },
         ]}
       />
-      <Card className="mt-6">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gold-soft text-gold-strong ring-1 ring-inset ring-gold/40">
-              <FileSpreadsheet className="size-5" aria-hidden="true" />
-            </span>
-            {template.is_free && <Badge variant="success">Free</Badge>}
-          </div>
-          <PageTitle className="mt-3" title={template.title} description={template.description} />
-        </CardHeader>
-        <CardContent>
-          {/* D1: Fact strip — the purchase-decision facts in one horizontal row.
-              For a template: format, page/sheet count, access type, price. */}
-          {(() => {
-            const facts: Fact[] = [
-              ...(template.format
-                ? [{ icon: Layers, label: 'Format', value: template.format }]
-                : []),
-              ...((template.page_count || template.sheet_count)
-                ? [{
-                    icon: Table2,
-                    label: template.sheet_count ? 'Sheets' : 'Pages',
-                    value: String(template.sheet_count ?? template.page_count),
-                    numeric: true,
-                  }]
-                : []),
-              {
-                icon: Lock,
-                label: 'Access',
-                value: template.is_free ? 'Free forever' : 'Lifetime',
-                hint: template.is_free ? 'No account needed' : 'One-time purchase, no subscription',
-              },
-            ]
-            return <FactStrip facts={facts} className="mb-4" />
-          })()}
-          <p className="mb-4 font-mono text-xs text-muted-foreground">{template.file_name}</p>
 
-          <EvidencePanel
-            format={template.format}
-            pageCount={template.page_count}
-            sheetCount={template.sheet_count}
-            isEditable={template.is_editable}
-            hasMacros={template.has_macros}
-            minOfficeVersion={template.min_office_version}
-            previews={template.previews}
-            version={template.version}
-            lastReviewedAt={template.last_reviewed_at}
-            title={template.title}
-            className="mb-4"
-          />
+      <div className="flex items-start justify-between gap-3">
+        <PageTitle eyebrow="Template" title={template.title} description={template.description} />
+        {template.is_free && <Badge variant="success" className="mt-1 shrink-0">Free</Badge>}
+      </div>
 
-          <WhyThis className="mb-4" />
+      {/* D1: Fact strip — the purchase-decision facts in one horizontal row.
+          For a template: format, page/sheet count, access type. */}
+      {(() => {
+        const facts: Fact[] = [
+          ...(template.format
+            ? [{ icon: Layers, label: 'Format', value: template.format }]
+            : []),
+          ...((template.page_count || template.sheet_count)
+            ? [{
+                icon: Table2,
+                label: template.sheet_count ? 'Sheets' : 'Pages',
+                value: String(template.sheet_count ?? template.page_count),
+                numeric: true,
+              }]
+            : []),
+          {
+            icon: Lock,
+            label: 'Access',
+            value: template.is_free ? 'Free forever' : 'Lifetime',
+            hint: template.is_free ? 'No account needed' : 'One-time purchase, no subscription',
+          },
+        ]
+        return <FactStrip facts={facts} className="mt-6" />
+      })()}
 
-          {/* Objection block (8F-4) — five things, four of which are columns. */}
-          <div className="mb-4 rounded-lg border border-border bg-card p-5 sm:p-6">
+      <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_20rem] lg:items-start">
+        {/* ── Why this template ──────────────────────────────────────────────── */}
+        <section>
+          <h2 className="text-h3 font-semibold text-foreground">Why this template</h2>
+          <WhyThis className="mt-4" />
+
+          {/* Objection block (8F-4) — the things a buyer wants settled before they
+              commit. Left column, because it is read once, not referred back to. */}
+          <div className="mt-6 rounded-lg border border-border bg-card p-5 sm:p-6">
             <p className="eyebrow">Before you decide</p>
             <ul className="mt-4 flex flex-col gap-3">
               {OBJECTION_BLOCK.map((item) => (
@@ -278,82 +273,127 @@ export function Template() {
               ))}
             </ul>
           </div>
+        </section>
 
-          {canDownload && downloadButton}
-
-          {/* The free lead magnet (product spec §9). Same soft gate as the free
-              question: one email, once, and it is a conversion device rather than a
-              boundary — the API serves a free template to anyone who asks, so no
-              claim is made here that this protects the file. It doesn't, and it
-              isn't meant to. */}
-          {template.is_free && !unlocked && (
-            <form
-              onSubmit={(e: FormEvent) => {
-                e.preventDefault()
-                leadMutation.mutate()
-              }}
-              className="rounded-lg border border-border bg-secondary/40 p-5 text-center"
-            >
-              <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-gold-soft text-gold-strong ring-1 ring-inset ring-gold/40">
-                <Mail className="size-5" aria-hidden="true" />
+        {/* ── Get the file ───────────────────────────────────────────────────── */}
+        <aside className="lg:sticky lg:top-24 lg:self-start">
+          <div className="rounded-lg border border-border bg-card p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gold-soft text-gold-strong ring-1 ring-inset ring-gold/40">
+                <FileSpreadsheet className="size-5" aria-hidden="true" />
               </span>
-              <p className="mt-3 font-sans font-semibold">Where should we send it?</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Enter your email and the template downloads straight away — no payment, no account.
-              </p>
-              <label htmlFor="template-gate-email" className="sr-only">
-                Your email address
-              </label>
-              <Input
-                id="template-gate-email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="mt-4"
-              />
-              <Button type="submit" loading={leadMutation.isPending} className="mt-3 w-full">
-                Get the template
-              </Button>
-              {leadMutation.isError && (
-                <p role="alert" className="mt-2 text-xs text-destructive">
-                  Something went wrong — please try again.
-                </p>
-              )}
-              <p className="mt-2 text-xs text-muted-foreground">No spam, unsubscribe any time.</p>
-            </form>
-          )}
-
-          {/* Paid, and this visitor doesn't have it. */}
-          {!template.is_free && !template.owned && (
-            <div className="rounded-lg border border-border bg-secondary/40 p-5">
-              <p className="text-sm text-foreground">
-                This template is part of a product you don't have yet.
-              </p>
-              {template.product ? (
-                <Link to={`/buy/${template.product.slug}`} className="mt-3 inline-block">
-                  <Button size="sm">See what's included</Button>
-                </Link>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  It isn't on sale at the moment.{' '}
-                  <Link to="/templates" className="underline">
-                    Browse the other templates
-                  </Link>
-                  .
-                </p>
-              )}
+              {template.owned && <Badge variant="success">In your library</Badge>}
             </div>
-          )}
 
-          {status === 'not-entitled' && (
-            <p role="alert" className="mt-3 text-sm text-destructive">
-              You don't have access to this template yet.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+            {template.is_free ? (
+              <p className="mt-4 text-h2 font-semibold text-foreground">Free</p>
+            ) : !template.owned && template.product ? (
+              <p className="mt-4 text-h2 font-semibold tabular-nums text-foreground">
+                {formatCurrency(template.product.price_amount, template.product.currency)}
+              </p>
+            ) : null}
+
+            <p className="mt-2 font-mono text-xs text-muted-foreground">{template.file_name}</p>
+
+            <EvidencePanel
+              format={template.format}
+              pageCount={template.page_count}
+              sheetCount={template.sheet_count}
+              isEditable={template.is_editable}
+              hasMacros={template.has_macros}
+              minOfficeVersion={template.min_office_version}
+              previews={template.previews}
+              version={template.version}
+              lastReviewedAt={template.last_reviewed_at}
+              title={template.title}
+              className="mt-5 border-0 bg-transparent p-0"
+            />
+
+            {canDownload && <div className="mt-5">{downloadButton}</div>}
+
+            {/* The free lead magnet (product spec §9). Same soft gate as the free
+                question: one email, once, and it is a conversion device rather than a
+                boundary — the API serves a free template to anyone who asks, so no
+                claim is made here that this protects the file. It doesn't, and it
+                isn't meant to. */}
+            {template.is_free && !unlocked && (
+              <form
+                onSubmit={(e: FormEvent) => {
+                  e.preventDefault()
+                  leadMutation.mutate()
+                }}
+                className="mt-5 rounded-lg border border-border bg-secondary/40 p-5 text-center"
+              >
+                <span className="mx-auto flex size-11 items-center justify-center rounded-full bg-gold-soft text-gold-strong ring-1 ring-inset ring-gold/40">
+                  <Mail className="size-5" aria-hidden="true" />
+                </span>
+                <p className="mt-3 font-sans font-semibold">Where should we send it?</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Enter your email and the template downloads straight away — no payment, no account.
+                </p>
+                <label htmlFor="template-gate-email" className="sr-only">
+                  Your email address
+                </label>
+                <Input
+                  id="template-gate-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-4"
+                />
+                <Button type="submit" loading={leadMutation.isPending} className="mt-3 w-full">
+                  Get the template
+                </Button>
+                {leadMutation.isError && (
+                  <p role="alert" className="mt-2 text-xs text-destructive">
+                    Something went wrong — please try again.
+                  </p>
+                )}
+                <p className="mt-2 text-xs text-muted-foreground">No spam, unsubscribe any time.</p>
+              </form>
+            )}
+
+            {/* Paid, and this visitor doesn't have it. */}
+            {!template.is_free && !template.owned && (
+              <div className="mt-5">
+                {template.product ? (
+                  <Link to={`/buy/${template.product.slug}`} className="block">
+                    <Button className="w-full">See what&rsquo;s included</Button>
+                  </Link>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    It isn&rsquo;t on sale at the moment.{' '}
+                    <Link to="/templates" className="underline">
+                      Browse the other templates
+                    </Link>
+                    .
+                  </p>
+                )}
+              </div>
+            )}
+
+            {status === 'not-entitled' && (
+              <p role="alert" className="mt-3 text-sm text-destructive">
+                You don&rsquo;t have access to this template yet.
+              </p>
+            )}
+
+            {!template.is_free && (
+              <p className="mt-4 border-t border-border pt-4 text-xs text-muted-foreground">
+                One payment, lifetime access, including updates to this template.
+              </p>
+            )}
+          </div>
+
+          <Link to="/templates" className="mt-4 block">
+            <Button variant="outline" className="w-full">
+              Browse the other templates
+            </Button>
+          </Link>
+        </aside>
+      </div>
 
       {/* E3: Sticky bottom action bar on mobile — the download/buy button
           follows the scroll so the reader never has to hunt for it. */}
