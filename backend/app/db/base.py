@@ -71,5 +71,18 @@ class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
+
+class CreatedAtMixin:
+    """`created_at` only, for append-only rows that are created and deleted but never
+    edited (`bookmarks`, migration 030).
+
+    It exists so such a table can't be given `TimestampMixin` out of habit: that adds an
+    `updated_at` the migration never created, and SQLAlchemy then names the missing
+    column in every INSERT. `bookmarks` shipped that way — the failure surfaced through
+    the endpoint's broad `except` as a 409 "already bookmarked" on a learner's *first*
+    bookmark, which reads like a working duplicate guard rather than a broken table.
+    """
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
 class IdMixin:
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
