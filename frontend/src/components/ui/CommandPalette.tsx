@@ -10,46 +10,52 @@ import {
   X,
 } from 'lucide-react'
 import { api } from '@/lib/api/client'
-import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
 
 // ─── Data shapes ──────────────────────────────────────────────────────────────
 
-interface QuestionSummary {
-  id: string
-  slug: string
-  title: string
-  domain: string
-}
-
-interface CourseSummary {
-  id: string
-  slug: string
-  title: string
-  section: string
-}
-
-interface TemplateSummary {
-  id: string
-  title: string
-  description: string
-}
-
 interface SearchResult {
-  type: 'question' | 'course' | 'template' | 'lesson'
+  type: 'question' | 'course' | 'template' | 'pack'
   title: string
   subtitle: string
   href: string
   icon: typeof HelpCircle
 }
 
+interface SearchGroup {
+  type: string
+  total: number
+  items: Array<{
+    id: string
+    slug: string
+    title: string
+    subtitle?: string | null
+    type: string
+    rank: number
+  }>
+}
+
+interface SearchResponse {
+  query: string
+  groups: SearchGroup[]
+}
+
 // ─── Type config ──────────────────────────────────────────────────────────────
 
+// One entry per group `/search` can return — question, course, template, pack.
+//
+// `pack` was missing and a stale `lesson` was here in its place, so every search that
+// matched a pack (most of them) threw `Cannot read properties of undefined (reading
+// 'icon')` and the palette rendered nothing at all. The `Record<SearchResult['type']>`
+// annotation is what should have caught it: it does require every key, but only when
+// the object is checked against it — and `lesson` is not a member of that union, so the
+// excess-property error and the missing-property error were reported on the same line
+// and neither surfaced during the edit that introduced them.
 const TYPE_CONFIG: Record<SearchResult['type'], { icon: typeof HelpCircle; label: string }> = {
   question: { icon: HelpCircle, label: 'Questions' },
   course: { icon: GraduationCap, label: 'Courses' },
   template: { icon: FileSpreadsheet, label: 'Templates' },
-  lesson: { icon: BookOpen, label: 'Lessons' },
+  pack: { icon: BookOpen, label: 'Packs' },
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -63,6 +69,13 @@ export function CommandPalette({
 }) {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+
+  // Debounce the search query by 250ms
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [query])
   /* The highlighted row, stored WITH the query it was chosen for — see the derivation
      below. A bare index would go stale for one frame every time the query changes. */
   const [activeFor, setActiveFor] = useState<{ query: string; index: number }>({ query: '', index: 0 })
@@ -75,93 +88,57 @@ export function CommandPalette({
     [query],
   )
   const inputRef = useRef<HTMLInputElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
-
-  // Fetch all content types in parallel
-  const { data: questions } = useQuery({
-    queryKey: queryKeys.questions.list(),
-    queryFn: () => api.get<QuestionSummary[]>('/questions/index').then((r) => r.data),
-    enabled: open,
-    staleTime: 5 * 60 * 1000,
-  })
-  const { data: courses } = useQuery({
-    queryKey: queryKeys.courses.list(),
-    queryFn: () => api.get<CourseSummary[]>('/courses').then((r) => r.data),
-    enabled: open,
-    staleTime: 5 * 60 * 1000,
-  })
-  const { data: templates } = useQuery({
-    queryKey: queryKeys.templates.list(),
-    queryFn: () => api.get<TemplateSummary[]>('/templates').then((r) => r.data),
-    enabled: open,
-    staleTime: 5 * 60 * 1000,
+  const listRef = useRef<HTMLDivElement>(null)  // Server-side full-text search via the /search endpoint
+  const { data: searchResponse } = useQuery<SearchResponse>({
+    queryKey: ['search', 'palette', debouncedQuery],
+    queryFn: () => api.get<SearchResponse>('/search', { params: { q: debouncedQuery } }).then((r) => r.data),
+    enabled: open && debouncedQuery.length > 0,
+    staleTime: 2 * 60 * 1000,
   })
 
-  // Build search results
+  // Build search results from server response
   const results = useMemo<SearchResult[]>(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return []
+    if (!searchResponse) return []
+
+    const iconMap: Record<string, typeof HelpCircle> = {
+      question: HelpCircle,
+      course: GraduationCap,
+      template: FileSpreadsheet,
+      pack: BookOpen,
+    }
+    const hrefMap: Record<string, (item: { slug: string; id: string }) => string> = {
+      question: (item) => `/questions/${item.slug}`,
+      course: (item) => `/courses/${item.slug}`,
+      template: (item) => `/templates/${item.id}`,
+      pack: (item) => `/store/packs/${item.slug}`,
+    }
 
     const items: SearchResult[] = []
-
-    for (const question of questions ?? []) {
-      if (
-        question.title.toLowerCase().includes(q) ||
-        question.domain.toLowerCase().includes(q)
-      ) {
+    for (const group of searchResponse.groups) {
+      for (const item of group.items) {
         items.push({
-          type: 'question',
-          title: question.title,
-          subtitle: question.domain,
-          href: `/questions/${question.slug}`,
-          icon: HelpCircle,
+          type: group.type as SearchResult['type'],
+          title: item.title,
+          subtitle: item.subtitle ?? item.type,
+          href: (hrefMap[group.type] ?? ((i: any) => `/`))(item),
+          icon: iconMap[group.type] ?? HelpCircle,
         })
       }
     }
-
-    for (const course of courses ?? []) {
-      if (course.title.toLowerCase().includes(q) || course.section.toLowerCase().includes(q)) {
-        items.push({
-          type: 'course',
-          title: course.title,
-          subtitle: course.section,
-          href: `/courses/${course.slug}`,
-          icon: GraduationCap,
-        })
-      }
-    }
-
-    for (const template of templates ?? []) {
-      if (
-        template.title.toLowerCase().includes(q) ||
-        template.description.toLowerCase().includes(q)
-      ) {
-        items.push({
-          type: 'template',
-          title: template.title,
-          subtitle: template.description,
-          href: `/templates/${template.id}`,
-          icon: FileSpreadsheet,
-        })
-      }
-    }
-
     return items
-  }, [query, questions, courses, templates])
+  }, [searchResponse])
 
-  // Group results by type
+  // Group results by type for display
   const grouped = useMemo(() => {
     const groups: Record<string, SearchResult[]> = {}
     for (const item of results) {
-      const key = item.type
-      if (!groups[key]) groups[key] = []
-      groups[key].push(item)
+      if (!groups[item.type]) groups[item.type] = []
+      groups[item.type].push(item)
     }
     return groups
   }, [results])
 
-  // Flat list for keyboard navigation
-  const flatResults = useMemo(() => results, [results])
+  const flatResults = results
 
   /* `[FIXED 2026-08-22]` The active row used to be reset inside an effect keyed on
      `query`, which renders the stale highlight once and then corrects it — the render
@@ -210,10 +187,16 @@ export function CommandPalette({
       } else if (e.key === 'ArrowUp') {
         e.preventDefault()
         setActiveIndex((i) => Math.max(i - 1, 0))
-      } else if (e.key === 'Enter' && flatResults[activeIndex]) {
-        e.preventDefault()
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (flatResults[activeIndex]) {
         handleSelect(flatResults[activeIndex].href)
-      } else if (e.key === 'Escape') {
+      } else if (query.trim()) {
+        // No selection — navigate to the full search results page
+        onClose()
+        navigate(`/search?q=${encodeURIComponent(query.trim())}`)
+      }
+    } else if (e.key === 'Escape') {
         e.preventDefault()
         onClose()
       }
@@ -230,20 +213,37 @@ export function CommandPalette({
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
-      {/* Palette */}
-      <div className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl">
-        {/* Search input */}
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+      {/* Palette.
+
+          `role="dialog"` + `aria-modal` because this IS one: it covers the page behind
+          an opaque backdrop and takes the keyboard. Without the role a screen reader
+          announces no boundary on open and keeps offering the page underneath as if it
+          were still reachable, which is precisely the confusion the role prevents.
+          `aria-label` gives it the name a dialog is required to have. */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search"
+        className="relative z-10 flex w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
+      >
+        {/* Search input — role="search" on the wrapper landmark, visually-hidden
+            label for screen readers, and aria-live status for announcing result count. */}
+        <div role="search" className="flex items-center gap-3 border-b border-border px-4 py-3">
           <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {/* Visually-hidden label paired with the input by for/id. The placeholder
+              is not an accessible name — screen readers ignore it. */}
+          <label htmlFor="command-palette-input" className="sr-only">
+            Search questions, courses, templates, and packs
+          </label>
           <input
             ref={inputRef}
+            id="command-palette-input"
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search questions, courses, templates…"
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-            aria-label="Search"
             role="combobox"
             aria-expanded={flatResults.length > 0}
             aria-controls="command-palette-list"
@@ -282,7 +282,12 @@ export function CommandPalette({
           )}
 
           {Object.entries(grouped).map(([type, items]) => {
+            // Skip a group type this build doesn't know about rather than throwing.
+            // The backend can add one (or be ahead of a deployed frontend), and losing
+            // one section is a far better failure than the blank palette an unhandled
+            // TypeError produced here.
             const config = TYPE_CONFIG[type as SearchResult['type']]
+            if (!config) return null
             const Icon = config.icon
             return (
               <div key={type} role="group" aria-label={config.label}>
@@ -324,6 +329,18 @@ export function CommandPalette({
               </div>
             )
           })}
+        </div>
+
+        {/* Live region announcing result count to screen readers. Updated
+            whenever the debounced query or result count changes. */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {query.trim() && debouncedQuery.length > 0 && (
+            <span>
+              {flatResults.length === 0
+                ? `No results for ${query}`
+                : `${flatResults.length} result${flatResults.length === 1 ? '' : 's'}`}
+            </span>
+          )}
         </div>
 
         {/* Footer hint */}
