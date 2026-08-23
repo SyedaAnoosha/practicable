@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
+import { Award } from 'lucide-react'
 import {
   ArrowRight,
   Banknote,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
+import { useCertificates } from '@/hooks/useCertificates'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -88,6 +90,7 @@ interface LibraryCourse {
   total_lessons: number
   completed_lessons: number
   percentage_complete: number
+  estimated_duration_minutes?: number | null
   resume_lesson_slug?: string | null
   resume_lesson_title?: string | null
 }
@@ -122,6 +125,77 @@ interface LibraryData {
 //
 // Restructured to: resume first (the verb), then a compact stat row, then a two-column
 // grid for discovery. Same content, roughly 40% of the previous height.
+/**
+ * Fetch the certificate's short-lived presigned URL, then open it.
+ *
+ * Two reasons this is not a plain `<a href download>`:
+ *
+ *  - `GET /me/certificates/{id}/download` returns JSON (`{download_url}`), not the
+ *    file. It renders the PDF on first call and presigns it; the browser must follow
+ *    the presigned URL it hands back, not the endpoint itself.
+ *  - The endpoint is authenticated. An `<a>` sends no Authorization header, so the
+ *    request would 401 — and the previous markup pointed at `/api/v1/…`, which is not
+ *    even where the API lives (`VITE_API_BASE_URL` is the origin, with no `/api/v1`
+ *    prefix), so it resolved against the SPA origin and returned the index page.
+ */
+async function downloadCertificate(certificateId: string) {
+  try {
+    const { data } = await api.get<{ download_url: string }>(
+      `/me/certificates/${certificateId}/download`,
+    )
+    // `noopener` because this is a third-party storage origin.
+    window.open(data.download_url, '_blank', 'noopener,noreferrer')
+  } catch {
+    // Deliberately quiet: a failed download must not throw inside the dashboard. The
+    // learner still has the certificate, and the next click retries the render.
+  }
+}
+
+function CertificatesSection() {
+  // Via the shared hook rather than an inline useQuery. Both existed, with *different*
+  // cache keys (`['me','certificates']` here vs the hook's library-scoped one), so a
+  // second consumer would have fetched and cached the same data twice and neither copy
+  // would have been invalidated by the other.
+  const { data: certificates } = useCertificates()
+
+  if (!certificates || certificates.length === 0) return null
+
+  return (
+    <section className="mt-8">
+      <SectionHeading>Your certificates</SectionHeading>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {certificates.map((cert) => (
+          <Card key={cert.id} className="flex items-center gap-3 p-4">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-gold-soft text-gold-strong ring-1 ring-inset ring-gold/40">
+              <Award className="size-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">{cert.course_title}</p>
+              <p className="text-xs text-muted-foreground">
+                {new Date(cert.issued_at).toLocaleDateString('en-AU', { dateStyle: 'medium' })}
+              </p>
+            </div>
+            {!cert.revoked && (
+              <button
+                type="button"
+                onClick={() => downloadCertificate(cert.id)}
+                className="shrink-0 rounded text-xs font-medium text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              >
+                Download
+              </button>
+            )}
+            {cert.revoked && (
+              <span className="shrink-0 rounded bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
+                Revoked
+              </span>
+            )}
+          </Card>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function Dashboard() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
@@ -302,6 +376,9 @@ export function Dashboard() {
                 <div className="flex items-center justify-between text-xs text-stage-foreground/70">
                   <span>
                     {resumeCourse.completed_lessons} of {resumeCourse.total_lessons} lessons
+                    {resumeCourse.estimated_duration_minutes != null && resumeCourse.percentage_complete < 100 && (
+                      <> · ~{Math.max(1, Math.round(resumeCourse.estimated_duration_minutes * (resumeCourse.total_lessons - resumeCourse.completed_lessons) / resumeCourse.total_lessons))} min left</>
+                    )}
                   </span>
                   <span className="font-mono tabular-nums">{resumeCourse.percentage_complete}%</span>
                 </div>
@@ -514,7 +591,7 @@ export function Dashboard() {
                     size="sm"
                     value={course.percentage_complete}
                     label={`${course.title} progress`}
-                    caption={`${course.completed_lessons} of ${course.total_lessons}`}
+                    caption={`${course.completed_lessons} of ${course.total_lessons}${course.estimated_duration_minutes && course.percentage_complete < 100 ? ` · ~${Math.max(1, Math.round(course.estimated_duration_minutes * (course.total_lessons - course.completed_lessons) / course.total_lessons))} min left` : ''}`}
                   />
                 </Card>
               </Link>
@@ -539,6 +616,11 @@ export function Dashboard() {
           </Link>
         </section>
       )}
+
+      {/* ── Certificates ──
+          Shows earned certificates with a link to download each one. Only rendered
+          when the learner has at least one. */}
+      <CertificatesSection />
 
       {/* Kept as a caption rather than a paragraph block — the counts now live in the
           stat row above, so this only carries the cadence claim. */}

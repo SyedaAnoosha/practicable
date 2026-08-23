@@ -5,6 +5,7 @@ import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
+import { NotesPanel } from '@/components/ui/NotesPanel'
 
 interface PlaybackToken {
   playback_id: string
@@ -104,6 +105,10 @@ export function Lesson() {
             <p className="mt-1 text-xs text-white/70">Refreshing your access…</p>
           </div>
         )}
+      </div>
+      {/* W5-R5: personal notes for this lesson */}
+      <div className="mt-6">
+        <NotesPanel lessonId={lessonId ?? ''} />
       </div>
     </div>
   )

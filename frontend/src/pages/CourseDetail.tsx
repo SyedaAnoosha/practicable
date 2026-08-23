@@ -31,6 +31,15 @@ import { FactStrip, type Fact } from '@/components/ui/FactStrip'
 import { Accordion, type AccordionItemData } from '@/components/ui/Accordion'
 import { CourseArt } from '@/components/ui/CourseArt'
 import { ShowMore } from '@/components/ui/ShowMore'
+import { TestimonialSection } from '@/components/ui/Testimonial'
+import { BookmarkButton } from '@/components/ui/BookmarkButton'
+import { useFeaturedReviews } from '@/hooks/useFeaturedReviews'
+
+function FeaturedTestimonials({ contentType, contentId }: { contentType: string; contentId: string }) {
+  const { data: reviews } = useFeaturedReviews(contentType, contentId)
+  if (!reviews || reviews.length === 0) return null
+  return <TestimonialSection reviews={reviews} />
+}
 
 type LessonType = 'video' | 'reading' | 'download' | 'mixed'
 
@@ -87,6 +96,10 @@ interface CourseDetailData {
   /** ISO timestamp when a refund ended this reader's access to this course. Null in
    *  every other case, including a course they never bought (W4-R20, ledger row 92). */
   access_ended_at?: string | null
+  /** W5-R2: whether this reader has completed every lesson in the course. */
+  completed: boolean
+  /** W5-R2: verification code for the reader's certificate, if one was issued. */
+  certificate_verification_code?: string | null
 }
 
 const LESSON_ICON: Record<LessonType, typeof PlayCircle> = {
@@ -352,6 +365,16 @@ export function CourseDetail() {
                 </p>
               )}
 
+              {/* W5-R5: save for later. Renders nothing for a signed-out visitor —
+                  there is no account to save against, and a control that 401s on
+                  click is worse than one that isn't offered. */}
+              <BookmarkButton
+                contentType="course"
+                contentId={course.id}
+                title={course.title}
+                className="mt-4"
+              />
+
               {/* The author, as a person rather than a fragment of a metadata line.
                   §6 of the research: authority is transmitted by a named human, and
                   this product's core claim is that the answers come from a practising
@@ -365,7 +388,25 @@ export function CourseDetail() {
                 </p>
               </div>
 
-              {course.owned && startHref && (
+              {/* W5-R2: when the course is completed, show a certificate link instead
+                  of the "Continue the course" CTA. A completed course with no certificate
+                  is an edge case (certificate generation failed) — show Continue so the
+                  learner can re-trigger completion. */}
+              {course.owned && course.completed && course.certificate_verification_code && (
+                <div className="mt-6 flex items-center gap-3">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-success/15 px-3 py-1.5 text-sm font-medium text-success ring-1 ring-inset ring-success/25">
+                    <CircleCheck className="size-4" aria-hidden="true" />
+                    Completed
+                  </span>
+                  <Link
+                    to={`/verify/${course.certificate_verification_code}`}
+                    className="text-sm font-medium text-stage-foreground underline decoration-stage-foreground/30 underline-offset-2 transition-colors hover:decoration-stage-foreground/70"
+                  >
+                    View certificate
+                  </Link>
+                </div>
+              )}
+              {course.owned && startHref && !course.completed && (
                 <Link to={startHref} className="mt-6 inline-flex">
                   <Button size="lg">Continue the course</Button>
                 </Link>
@@ -442,6 +483,12 @@ export function CourseDetail() {
                 defaultOpen={syllabus.length > 0 ? [syllabus[0].id] : []}
               />
             </section>
+
+            {/* W5-R4 Stage A: featured testimonials */}
+            <FeaturedTestimonials
+              contentType="course"
+              contentId={course.id}
+            />
 
             {/* `[ADDED 2026-08-22, Redesing_decisions.md B5 — P1]` The hero already
                 names the author on the stage plane, but a name alone is an assertion.

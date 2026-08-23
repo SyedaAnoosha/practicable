@@ -16,6 +16,8 @@ import { WhyThis } from '@/components/product/WhyThis'
 import { OBJECTION_BLOCK } from '@/lib/labels'
 import { Accordion, type AccordionItemData } from '@/components/ui/Accordion'
 import { FactStrip, type Fact } from '@/components/ui/FactStrip'
+import { TestimonialSection } from '@/components/ui/Testimonial'
+import { useFeaturedReviews } from '@/hooks/useFeaturedReviews'
 import type { Preview } from '@/components/product/PreviewGallery'
 
 interface PackQuestion {
@@ -84,6 +86,12 @@ const QUESTION_PAGE_SIZE = 12
  *
  * The notice text comes from the API (`honesty_notice`), not from a string here, so it
  * cannot drift from the PDF cover, which makes the same promise. */
+function FeaturedTestimonials({ contentType, contentId }: { contentType: string; contentId: string }) {
+  const { data: reviews } = useFeaturedReviews(contentType, contentId)
+  if (!reviews || reviews.length === 0) return null
+  return <TestimonialSection reviews={reviews} />
+}
+
 export function PackDetail() {
   const { slug } = useParams<{ slug: string }>()
   const [status, setStatus] = useState<DownloadStatus>('idle')
@@ -324,6 +332,9 @@ export function PackDetail() {
               ))}
             </ul>
           </div>
+
+          {/* W5-R4 Stage A: featured testimonials */}
+          <FeaturedTestimonials contentType="pack" contentId={pack.slug} />
         </section>
 
         {/* ── Buy / download ─────────────────────────────────────────────────── */}

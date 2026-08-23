@@ -19,6 +19,8 @@ import { WhyThis } from '@/components/product/WhyThis'
 import { OBJECTION_BLOCK } from '@/lib/labels'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { FactStrip, type Fact } from '@/components/ui/FactStrip'
+import { TestimonialSection } from '@/components/ui/Testimonial'
+import { useFeaturedReviews } from '@/hooks/useFeaturedReviews'
 
 interface DownloadUrlResponse {
   download_url: string
@@ -60,6 +62,12 @@ function readUnlocked(): boolean {
   } catch {
     return false
   }
+}
+
+function FeaturedTestimonials({ contentType, contentId }: { contentType: string; contentId: string }) {
+  const { data: reviews } = useFeaturedReviews(contentType, contentId)
+  if (!reviews || reviews.length === 0) return null
+  return <TestimonialSection reviews={reviews} />
 }
 
 export function Template() {
@@ -273,6 +281,9 @@ export function Template() {
               ))}
             </ul>
           </div>
+
+          {/* W5-R4 Stage A: featured testimonials */}
+          <FeaturedTestimonials contentType="template" contentId={template.id} />
         </section>
 
         {/* ── Get the file ───────────────────────────────────────────────────── */}
