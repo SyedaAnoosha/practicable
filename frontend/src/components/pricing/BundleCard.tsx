@@ -22,6 +22,16 @@ export interface BundleCardProps {
    * way to owe a refund). */
   ownsEveryPart?: boolean
   owned?: boolean
+  /** `[ADDED 2026-08-23]` The heading level this card's title renders at.
+   *
+   * It was hard-coded `<h3>`. On /store the card is the page's featured item and sits
+   * directly under the `<h1>`, with the first `<h2>` ("Reference packs") only appearing
+   * further down — so the document jumped h1 → h3, which axe reports as `heading-order`
+   * and which makes the outline wrong for anyone navigating by headings.
+   *
+   * Defaulted to `h3` so any future in-section use is unchanged; /store passes `h2`,
+   * which is what it actually is there. */
+  headingLevel?: 'h2' | 'h3'
 }
 
 // week3_plan.md §20.2. The saving is shown as a real dollar amount computed from the
@@ -29,6 +39,7 @@ export interface BundleCardProps {
 // arithmetic if either part's price ever changes.
 export function BundleCard({
   eyebrow = 'Bundle', title, description, parts, bundlePriceAmount, currency, product, ownsEveryPart, owned,
+  headingLevel: Heading = 'h3',
 }: BundleCardProps) {
   const addItem = useCartStore((s) => s.addItem)
   const openCart = useCartStore((s) => s.open)
@@ -49,7 +60,7 @@ export function BundleCard({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="eyebrow">{eyebrow}</p>
-          <h3 className="mt-1 text-h3 font-semibold text-foreground">{title}</h3>
+          <Heading className="mt-1 text-h3 font-semibold text-foreground">{title}</Heading>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">{description}</p>
         </div>
         <Package className="size-5 shrink-0 text-gold-strong" aria-hidden="true" />

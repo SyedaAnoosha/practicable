@@ -751,7 +751,7 @@ function HowItWorks() {
  * matching the app's own `--ease-standard` feel. `reducedMotion` is honoured by turning
  * the transition off entirely rather than merely shortening it.
  */
-function ProductScrollRow({ children }: { children: ReactNode }) {
+function ProductScrollRow({ children, label }: { children: ReactNode; label: string }) {
   const slides = Children.toArray(children)
   const prefersReducedMotion = useReducedMotion()
 
@@ -778,9 +778,28 @@ function ProductScrollRow({ children }: { children: ReactNode }) {
         flickPower: 300,
         waitForTransition: false,
         keyboard: 'focused',
-        label: 'Products',
+        /* Splide puts `role="group"` on every `<li>`, which axe flags as
+           `aria-allowed-role` — `group` is not a permitted role for a list item. The
+           attributes are stripped after mount (see `onMounted` below) rather than via
+           a `role` option, which targets the carousel ROOT and not the slides. */
+        slideFocus: false,
+        /* `[FIXED 2026-08-23]` Every carousel used to declare `label: 'Products'`,
+           so the three of them landed as three identically-named landmarks — axe's
+           `landmark-is-unique`, and for a screen-reader user a landmark list reading
+           "Products, Products, Products" with no way to tell which is which. Each now
+           carries the row's own name ("Courses", "Reference packs", "Templates"). */
+        label,
       }}
-      aria-label="Products"
+      onMounted={(splide) => {
+        /* Strip Splide's `role="group"` / `aria-roledescription="slide"` from each
+           `<li>`. The cards inside are real links, already reachable and announced on
+           their own, so nothing is lost — and an invalid role is a genuine parse
+           problem for assistive tech, not a lint nicety. */
+        splide.root.querySelectorAll('.splide__slide').forEach((li) => {
+          li.removeAttribute('role')
+          li.removeAttribute('aria-roledescription')
+        })
+      }}
       className="practicable-splide group/scroll relative"
     >
       {/* `hasTrack={false}` so the arrows can be positioned against the row rather than
@@ -946,7 +965,7 @@ function ProductRow({
 
       {/* Horizontal scroll of items — full width, no card wrapper */}
       <div className="mt-4">
-        <ProductScrollRow>{children}</ProductScrollRow>
+        <ProductScrollRow label={label}>{children}</ProductScrollRow>
       </div>
 
       {/* Mobile see-all — hidden on desktop where it sits in the header row */}

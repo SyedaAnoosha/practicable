@@ -1092,12 +1092,20 @@
      rules supply the look. Kept here rather than inline so the carousel matches the
      rest of the page's motion and spacing tokens instead of restating them per usage. */
   .practicable-splide .splide__track {
-    /* A little breathing room so a focused card's ring is not clipped by the track.
-       `overflow` is deliberately left to Splide: the library sets `overflow: hidden`
-       on the track itself, and overriding it here (an earlier attempt used
-       `visible clip`) stopped the translated list from being masked, so slides simply
-       stacked in place and the arrows appeared to do nothing. */
-    padding-block: 2px;
+    /* `overflow` is deliberately left to Splide: the library sets `overflow: hidden`
+       on the track, and overriding it here (an earlier attempt used `visible clip`)
+       un-masked the translated list, so slides stacked in place and the arrows
+       appeared to do nothing.
+       That clip does mean a focused card's 2px outline is cropped — which the a11y
+       sweep caught as "product link has focus but no visible indicator", a real WCAG
+       2.4.7 failure and not a cosmetic one, since keyboard users would have no idea
+       where they were. Padding the track by the ring's own size (2px outline + 2px
+       offset, rounded up) gives the indicator room inside the clip without changing
+       what the mask does. The negative margin keeps the row's outer geometry
+       unchanged, so nothing else on the page shifts. */
+    --rail-focus-ring: 5px;
+    padding: var(--rail-focus-ring);
+    margin: calc(var(--rail-focus-ring) * -1);
   }
   .practicable-splide .splide__list {
     align-items: stretch;
@@ -1108,8 +1116,14 @@
     display: flex;
     height: auto;
   }
+  /* `[FIXED 2026-08-23]` This block used to be `.splide__slide > * { width: 100% }`.
+     Combined with `autoWidth`, it was circular: Splide measured the slide, the child
+     was then stretched to that measurement, and cards declaring `w-48 sm:w-56`
+     (192/224px) rendered at 207px, 405px and 284px in the same row — one pack card
+     filled the entire width. The card's own width class is the authority; the slide
+     must size to the card, never the other way round. */
   .practicable-splide .splide__slide > * {
-    width: 100%;
+    flex: 0 0 auto;
   }
   /* Splide sets inline opacity/visibility on arrows; the hover-reveal is ours. */
   .practicable-splide .splide__arrow:disabled {

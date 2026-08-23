@@ -374,8 +374,16 @@ test.describe('W4-R7 check 1: keyboard-only purchase (PARTIAL — stops at the S
 
     // Reach the store by keyboard alone. Tab until a store/products link has focus,
     // then activate it with Enter — not `.click()`, which would prove nothing.
+    /* `[RAISED 2026-08-23]` The budget was 40 and the first catalogue link is now
+       reached at tab 45. Nothing regressed and nothing traps focus — the landing page
+       simply gained stops: the promo bar and its dismiss, the cookie notice and its
+       two links, the filter chips, and one arrow pair per product carousel. Measured
+       stop-by-stop before changing this, precisely because raising a budget is the
+       easy way to hide a real trap.
+       80 leaves headroom for another section without going unbounded; a genuine trap
+       still fails here, because focus would stop advancing rather than take longer. */
     let reached = false
-    for (let i = 0; i < 40 && !reached; i++) {
+    for (let i = 0; i < 80 && !reached; i++) {
       await page.keyboard.press('Tab')
       const href = await page.evaluate(() => (document.activeElement as HTMLAnchorElement | null)?.getAttribute('href') ?? '')
       if (/^\/(store|templates|courses|packs)/.test(href)) {
@@ -384,7 +392,7 @@ test.describe('W4-R7 check 1: keyboard-only purchase (PARTIAL — stops at the S
         reached = true
       }
     }
-    expect(reached, 'no catalogue link was reachable by Tab from the landing page in 40 stops').toBe(true)
+    expect(reached, 'no catalogue link was reachable by Tab from the landing page in 80 stops').toBe(true)
     // Wait for the SPA navigation to settle before reading the URL below — Enter starts
     // a client-side route change, it does not finish one.
     await expect(page).not.toHaveURL(/localhost:\d+\/$/)
