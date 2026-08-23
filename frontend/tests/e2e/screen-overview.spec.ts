@@ -53,14 +53,23 @@ const ROUTES: RouteCase[] = [
   { path: '/packs', expectText: /pack/i },
   { path: '/pricing', maxViewports: 5 },
   { path: '/contact' },
-  // Legal pages live under /legal/*; there is no /about or /faq route (About is an
-  // anchor into the home page). Verified against App.tsx's route table rather than
-  // guessed — an invented path here would test the 404 page, not the real screen.
+  { path: '/about' },
+  // Legal pages live under /legal/*.
   { path: '/legal/terms' },
   { path: '/legal/privacy' },
   { path: '/legal/refunds' },
   { path: '/sign-in' },
   { path: '/sign-up' },
+  // W5-R3: search page (public, no auth required)
+  { path: '/search?q=risk' },
+  // W5-R2: certificate verification (public, no auth required).
+  //
+  // `test-code` is deliberately not a real certificate, so the API answers 404 by
+  // design and the browser logs that response. What this sweep is checking here is the
+  // NOT-FOUND screen — the one a stranger following a stale or mistyped link actually
+  // lands on. It still has to paint a sound page rather than a blank body, so the
+  // expected 404 is allowed through while every other console error still fails.
+  { path: '/verify/test-code', allowNotFound: true },
 ]
 
 /** Unmatched URLs must reach the product's own not-found page, never react-router's
@@ -200,7 +209,14 @@ test.describe('screen overview — every public route paints correctly', () => {
 
       // ── 4. Console / network health ─────────────────────────────────────────
       expect(collected.pageErrors, `${route.path}: uncaught exceptions`).toEqual([])
-      expect(collected.consoleErrors, `${route.path}: console errors`).toEqual([])
+
+      // A route flagged `allowNotFound` is being visited with an id that intentionally
+      // does not exist, so the browser logs the 404 the API correctly returned. Only
+      // that one message is forgiven — anything else still fails the route.
+      const consoleErrors = route.allowNotFound
+        ? collected.consoleErrors.filter((m) => !/\b404\b/.test(m))
+        : collected.consoleErrors
+      expect(consoleErrors, `${route.path}: console errors`).toEqual([])
       expect(collected.failedRequests, `${route.path}: 5xx responses`).toEqual([])
     })
   }

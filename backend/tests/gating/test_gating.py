@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import AuditLog, Entitlement, Order, Product, ProductContent, WebhookEvent
+from tests.conftest import _slug
 
 
 # ── Case 1 — logged-out request for a gated lesson ──────────────────────────────────
@@ -778,3 +779,107 @@ async def test_duplicate_entitlement_rejected_by_database_constraint(
 
     with pytest.raises(IntegrityError):
         await grant(entitled_user, g.lesson_product)
+
+
+# ── A lesson added AFTER purchase ───────────────────────────────────────────────────
+#
+# Owner rule, 2026-08-23: "No matter if the lesson is added after someone has purchased,
+# the lesson must be granted to the one who has already purchased — they don't have to
+# repurchase it. Moreover, if I add a lesson and someone hasn't purchased, they will
+# have to buy the course."
+#
+# Both halves are asserted here. The first was a real, live defect: access was resolved
+# only against explicit `product_contents` rows of type `lesson`, so a lesson added after
+# a product was seeded had no row naming it and was locked to people who had already paid
+# for the course. `risk-register-fundamentals` was in exactly that state in production
+# data — 4 published lessons, 3 granted — with both its own description and the bundle's
+# promising "the full course".
+#
+# The second half is the one that must not regress in the other direction: granting by
+# course must not leak a lesson to someone who owns some *other* product, or nothing.
+
+
+@pytest.mark.asyncio
+async def test_lesson_added_after_purchase_is_granted_to_existing_buyer(
+    db_session: AsyncSession, content_graph, member_user, grant
+):
+    """A course grant covers lessons added later — no repurchase, no backfill."""
+    from app.core.entitlements import ResourceType, has_access_to
+    from app.db.models import Lesson, LessonType
+
+    course_product = Product(
+        slug=_slug("course-product"), name="Whole Course", description="d",
+        stripe_price_id=f"price_test_{uuid.uuid4().hex[:12]}",
+        price_amount=9900, currency="AUD", published=True,
+    )
+    db_session.add(course_product)
+    await db_session.flush()
+
+    # The product grants the COURSE, naming no individual lesson.
+    db_session.add(
+        ProductContent(
+            product_id=course_product.id,
+            content_type="course",
+            content_id=content_graph.course.id,
+        )
+    )
+    buyer = member_user
+    await grant(buyer, course_product)
+
+    # A lesson that did not exist when the product was created.
+    late_lesson = Lesson(
+        slug=_slug("late-lesson"), title="Added After Purchase", description="d",
+        lesson_type=LessonType.READING, body="BODY-ADDED-LATER",
+        module_id=content_graph.module.id, sort_order=99, published=True,
+    )
+    db_session.add(late_lesson)
+    await db_session.flush()
+
+    assert await has_access_to(
+        user_id=buyer.id,
+        resource_type=ResourceType.LESSON,
+        resource_id=late_lesson.id,
+        session=db_session,
+    ), "a lesson added after purchase must unlock for someone who already bought the course"
+
+
+@pytest.mark.asyncio
+async def test_lesson_added_after_purchase_stays_locked_without_the_course(
+    db_session: AsyncSession, content_graph, member_user, grant
+):
+    """The other half of the rule: no purchase, no access — a new lesson is not free."""
+    from app.core.entitlements import ResourceType, has_access_to
+    from app.db.models import Lesson, LessonType
+
+    # This member owns a DIFFERENT product, which grants an unrelated template.
+    other_product = Product(
+        slug=_slug("other-product"), name="Something Else", description="d",
+        stripe_price_id=f"price_test_{uuid.uuid4().hex[:12]}",
+        price_amount=2900, currency="AUD", published=True,
+    )
+    db_session.add(other_product)
+    await db_session.flush()
+    db_session.add(
+        ProductContent(
+            product_id=other_product.id,
+            content_type="template",
+            content_id=content_graph.paid_template.id,
+        )
+    )
+    non_buyer = member_user
+    await grant(non_buyer, other_product)
+
+    late_lesson = Lesson(
+        slug=_slug("late-locked"), title="Added After, Still Paid", description="d",
+        lesson_type=LessonType.READING, body="BODY-STILL-GATED",
+        module_id=content_graph.module.id, sort_order=98, published=True,
+    )
+    db_session.add(late_lesson)
+    await db_session.flush()
+
+    assert not await has_access_to(
+        user_id=non_buyer.id,
+        resource_type=ResourceType.LESSON,
+        resource_id=late_lesson.id,
+        session=db_session,
+    ), "adding a lesson must not hand it to someone who never bought the course"

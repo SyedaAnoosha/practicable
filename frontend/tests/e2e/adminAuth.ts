@@ -19,8 +19,13 @@ export const adminE2ESkipReason =
 
 export async function signInAsAdmin(page: Page): Promise<void> {
   await page.goto('/sign-in')
-  await page.getByLabel(/email/i).fill(process.env.E2E_ADMIN_EMAIL!)
-  await page.getByLabel(/password/i).fill(process.env.E2E_ADMIN_PASSWORD!)
-  await page.getByRole('button', { name: /sign in/i }).click()
-  await expect(page).toHaveURL(/\/dashboard/)
+  // `getByRole('textbox')` rather than `getByLabel(/password/i)`: the field sits beside
+  // a "Show password" toggle button, so a bare /password/i label lookup matches two
+  // elements and fails as a strict-mode violation before it ever types anything. This
+  // was only reachable with real credentials set, so the whole admin suite skipped past
+  // it and the broken helper went unnoticed.
+  await page.getByRole('textbox', { name: /email/i }).fill(process.env.E2E_ADMIN_EMAIL!)
+  await page.getByRole('textbox', { name: /^password$/i }).fill(process.env.E2E_ADMIN_PASSWORD!)
+  await page.getByRole('button', { name: /^sign in$/i }).click()
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 20_000 })
 }

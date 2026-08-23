@@ -34,6 +34,13 @@ const PUBLIC_ROUTES = [
   '/checkout/success',
   '/templates/4935c92a-3138-4dd4-9c70-1d23beb0a8b4',
   '/store/packs/risk-register-fundamentals',
+  // W5-R3/W5-R2 (week5_plan.md Phase 6 step 4). Both are public and anonymous, so they
+  // belong in this sweep like any other public route. `/verify/:code` is scanned with a
+  // deliberately unknown code: its not-found state is the one a stranger following a
+  // bad link actually lands on, and an unaudited error state is exactly where contrast
+  // and heading-order slips survive.
+  '/search?q=risk',
+  '/verify/not-a-real-certificate-code',
 ] as const
 
 /** `[ADDED 2026-08-22]` Wait for entry animations to finish before auditing.

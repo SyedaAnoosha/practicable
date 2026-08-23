@@ -44,6 +44,8 @@ const ADMIN_ROUTES = [
   '/admin/users',
   '/admin/audit',
   '/admin/settings',
+  '/admin/promotions',
+  '/admin/reviews',
 ] as const
 
 /** Member-side authenticated screens — the other half a real user actually sees. */
@@ -111,6 +113,11 @@ const EMPTY_PAYLOADS: Array<[RegExp, unknown]> = [
   // `/me/orders` is cursor-paginated and read via useInfiniteQuery.
   [/\/me\/orders/, { orders: [], has_more: false, next_cursor: null }],
   [/\/me\/(entitlements|purchases|progress|recommendations)/, []],
+  // W5-R5: notes and bookmarks
+  [/\/me\/notes/, []],
+  [/\/me\/bookmarks/, []],
+  // W5-R4: reviews list (admin moderation)
+  [/\/admin\/reviews/, []],
   [/\/me\/account/, {}],
   // Plain content collections.
   [/\/(admin\/)?(courses|templates|packs|media|contact|questions)/, []],
