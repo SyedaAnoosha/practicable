@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 import stripe
@@ -85,6 +86,53 @@ def create_checkout_session(
             )
 
     return stripe.checkout.Session.create(**session_kwargs)
+
+def create_promotion_in_stripe(
+    *,
+    code: str,
+    percent_off: int,
+    expires_at: datetime | None = None,
+) -> tuple[str, str]:
+    """Create the Coupon and the PromotionCode that references it, returning both ids.
+
+    Two calls, not one: Stripe models the *discount* (Coupon) separately from the
+    *string a buyer types* (PromotionCode). Checkout resolves the typed string, which
+    is why create_checkout_session looks up PromotionCode and not Coupon.
+
+    Raises on failure. The caller must not write a promotions row for a code Stripe
+    will not honour — a banner advertising a dead code is worse than no banner.
+    """
+    # `amount_off` is omitted rather than passed as None: this is a percentage
+    # discount, and Stripe rejects a Coupon carrying both kinds.
+    coupon = stripe.Coupon.create(
+        percent_off=percent_off,
+        duration='once',
+        name=f'PRC-{code}',
+    )
+
+    promo_code_params: dict = {
+        'coupon': coupon.id,
+        'code': code,
+        'active': True,
+    }
+    if expires_at is not None:
+        # The expiry belongs on the PromotionCode — the thing a buyer types — not on
+        # the Coupon, whose `redeem_by` governs when the discount may first be
+        # attached. Stripe wants a Unix timestamp, so a naive datetime is read as UTC
+        # rather than silently taking the server's local zone.
+        #
+        # Without this the window is enforced in our database only: GET
+        # /promotions/active would stop advertising the code while Stripe kept
+        # honouring it indefinitely for anyone who had already copied it. An expiry
+        # that only one of the two systems knows about is not an expiry.
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        promo_code_params['expires_at'] = int(expires_at.timestamp())
+
+    promo_code = stripe.PromotionCode.create(**promo_code_params)
+
+    return coupon.id, promo_code.id
+
 
 def create_refund(*, payment_intent_id: str, amount: Optional[int] = None) -> stripe.Refund:
     """Refund of a completed payment. `amount` omitted (the admin path, week3_plan.md

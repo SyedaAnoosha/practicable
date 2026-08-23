@@ -51,7 +51,10 @@ const ROUTES = [
   '/templates',
   '/packs',
   '/store',
+  '/about',
   '/contact',
+  '/search?q=risk',
+  '/verify/test-code',
   '/templates/4935c92a-3138-4dd4-9c70-1d23beb0a8b4',
   '/store/packs/risk-register-fundamentals',
 ] as const

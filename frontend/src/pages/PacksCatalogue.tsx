@@ -91,31 +91,49 @@ export function PacksCatalogue() {
       {!isLoading && !isError && !!packs?.length && (
       <div className="mt-6 grid gap-px overflow-hidden rounded-md border border-border bg-card sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:bg-card [&>*]:outline [&>*]:outline-1 [&>*]:-outline-offset-[0.5px] [&>*]:outline-border">
         {packs?.map((pack) => (
+          /* `focus-visible:` classes `[FIXED 2026-08-23]`: the grid draws its cell
+             dividers as `[&>*]:outline-1` on these links, which beats the global
+             `:focus-visible` rule in theme.css and left focus invisible. Same defect
+             and same fix as CoursesCatalogue — see the fuller note there. */
           <Link
             key={pack.slug}
             to={`/store/packs/${pack.slug}`}
-            className="group flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2"
+            className="group flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2 focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
           >
             <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
               <p className="eyebrow">{pack.domain_name ?? 'Reference'}</p>
-              <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
-                {pack.name}
-              </h3>
-              {pack.description && (
-                <p className="mt-1 line-clamp-2 font-serif text-xs leading-relaxed text-muted-foreground">
-                  {pack.description}
-                </p>
-              )}
+              {/* `[ADDED 2026-08-22, owner direction]` "the card title and description must
+                  never affect the metadata and pricing + view/see-what's-included row".
+                  `mt-auto` already pins the metadata+CTA pair to the card's bottom, but cards in
+                  a CSS grid row stretch to the tallest, so one two-line title changed the height
+                  of every card beside it. Both title and description are clamped to two lines and
+                  the block reserves that height whether or not the text fills it — so the text
+                  region is identical on every card, the cards sit a little taller (as asked), and
+                  the bottom rows line up across the whole grid. */}
+              <div className="min-h-[5.25rem]">
+                <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline line-clamp-2">
+                  {pack.name}
+                </h3>
+                {pack.description && (
+                  <p className="mt-1 line-clamp-2 font-serif text-xs leading-relaxed text-muted-foreground">
+                    {pack.description}
+                  </p>
+                )}
+              </div>
 
+              {/* `[FIXED 2026-08-22]` `mt-auto` moved from the footer up to here, so the
+                  metadata and the price/CTA row form one bottom-anchored block and line up
+                  across a row of cards regardless of title/description length. See
+                  CoursesCatalogue for the full note. */}
               <Meta
-                className="mt-2"
+                className="mt-auto pt-2"
                 items={[
                   { icon: HelpCircle, value: String(pack.question_count), label: pack.question_count === 1 ? 'question' : 'questions' },
                   { icon: FileText, value: 'PDF', label: 'reference document', numeric: false },
                 ]}
               />
 
-              <div className="mt-auto flex items-center justify-between border-t border-border pt-2.5">
+              <div className="flex items-center justify-between border-t border-border pt-2.5">
                 {pack.owned ? (
                   <Badge variant="success" className="gap-1 text-[0.625rem]">
                     <CircleCheck className="size-2.5" aria-hidden="true" /> Owned

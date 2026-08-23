@@ -27,16 +27,69 @@ export function Meta({
   items,
   className,
   tone,
+  singleLine,
 }: {
   items: (MetaItem | null | undefined | false)[]
   className?: string
   /** Optional CSS colour for the icons (a domain colour). */
   tone?: string
+  /** `[ADDED 2026-08-23]` Lay the row out as a single non-wrapping line whose cells
+   *  size to their content, instead of a wrapping flex line.
+   *
+   *  The default flex row is right for a variable-length list, but wrong wherever the
+   *  same facts appear on every card in a grid. Course cards carry modules / lessons /
+   *  level / duration, and `level` is a word of unpredictable width ("beginner" vs
+   *  "intermediate") sitting between two short figures. The row therefore wrapped at a
+   *  different item on each card, and the wrapped item kept the `index > 0` left
+   *  hairline — which then read as a stray leading rule at the start of line two,
+   *  aligned to nothing.
+   *
+   *  `[CORRECTED 2026-08-23]` The first attempt at this made every cell an equal
+   *  `1fr` grid column. That aligned the separators and then truncated the values to
+   *  fit them — "beginner" rendered as "be…", "2h 20m" as "2…". Alignment bought by
+   *  hiding the data is a worse card than the ragged one: the row exists to answer
+   *  "is this course for me and how long is it", and neither question survives an
+   *  ellipsis.
+   *
+   *  So the cells size to their content and the row never wraps. The two short counts
+   *  take the space they need, level and duration take theirs, and every value stays
+   *  legible in full. What this guarantees is a single clean line with evenly-spaced
+   *  separators on every card — not identical x-positions across cards, which is not
+   *  worth truncating real values to achieve. */
+  singleLine?: boolean
 }) {
   // Callers build these lists inline with && guards, so falsy entries are expected
   // rather than a mistake — filtering here keeps every call site from repeating it.
   const visible = items.filter((i): i is MetaItem => Boolean(i))
   if (visible.length === 0) return null
+
+  if (singleLine) {
+    return (
+      <ul className={cn('flex items-center', className)}>
+        {visible.map(({ icon: Icon, label, value, numeric = true }, index) => (
+          <li
+            key={`${label ?? ''}-${value}`}
+            className={cn(
+              'flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground',
+              index > 0 && 'ml-3 border-l border-border pl-3',
+            )}
+          >
+            {Icon && (
+              <Icon
+                className="size-3.5 shrink-0"
+                aria-hidden="true"
+                style={tone ? { color: tone } : undefined}
+              />
+            )}
+            <span className={cn(numeric && 'font-mono tabular-nums')}>
+              {value}
+              {label && <span className="sr-only"> {label}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
 
   return (
     <ul className={cn('flex flex-wrap items-center gap-x-3 gap-y-1.5', className)}>

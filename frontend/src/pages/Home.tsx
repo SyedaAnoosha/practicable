@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { Children, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
@@ -18,7 +18,9 @@ import {
   Sparkles,
   TrendingUp,
 } from 'lucide-react'
-import { motion } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
+import { Splide, SplideSlide, SplideTrack } from '@splidejs/react-splide'
+import '@splidejs/react-splide/css/core'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { domainColorVar, domainVisual } from '@/lib/domainVisuals'
@@ -556,7 +558,7 @@ function QuestionCard({ question, index }: { question: QuestionSummary; index: n
         {/* The index numeral. Decorative ordering only — it is the card's position in
             this shelf, not a stable question ID, so it is aria-hidden rather than
             announced as though it meant something. */}
-        <span aria-hidden="true" className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground/60">
+        <span aria-hidden="true" className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
           {String(index + 1).padStart(2, '0')}
         </span>
       </div>
@@ -584,7 +586,7 @@ function QuestionCard({ question, index }: { question: QuestionSummary; index: n
         <dl className="mt-auto space-y-1 border-t border-border pt-3">
           {tags.map((tag) => (
             <div key={`${tag.dimension}-${tag.value}`} className="flex items-baseline justify-between gap-2">
-              <dt className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-muted-foreground/70">
+              <dt className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-muted-foreground">
                 {DIMENSION_LABEL[tag.dimension] ?? tag.dimension}
               </dt>
               <dd className="text-right font-mono text-[0.6875rem] tabular-nums text-foreground">
@@ -727,82 +729,103 @@ function HowItWorks() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Horizontal scroll row — hidden scrollbar, snap, fade edges
+// Product carousel — Splide
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ProductScrollRow({ children }: { children: ReactNode }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(true)
-
-  const checkScroll = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) return
-    setCanScrollLeft(el.scrollLeft > 4)
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4)
-  }, [])
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    checkScroll()
-    el.addEventListener('scroll', checkScroll, { passive: true })
-    window.addEventListener('resize', checkScroll)
-    return () => {
-      el.removeEventListener('scroll', checkScroll)
-      window.removeEventListener('resize', checkScroll)
-    }
-  }, [checkScroll])
-
-  const scroll = (direction: 'left' | 'right') => {
-    const el = scrollRef.current
-    if (!el) return
-    const amount = el.clientWidth * 0.75
-    el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' })
-  }
+/**
+ * `[REBUILT 2026-08-22, owner direction]` "for slider on home/landing page:
+ * https://splidejs.com/. make the sliding beautiful."
+ *
+ * This was a hand-rolled `overflow-x-auto` track with snap points, two fade masks and a
+ * pair of chevrons wired to `scrollBy`. It worked, but it was a scroll area pretending
+ * to be a carousel: no real paging, no keyboard model beyond native scroll, no drag on
+ * desktop, no accessible announcement of position, and arrow state derived from
+ * scroll-offset arithmetic that had to be recomputed on every scroll and resize.
+ *
+ * Splide replaces all of that with a real carousel: pointer/touch drag, proper paging,
+ * arrow-key and Home/End support, focus management, and ARIA wiring maintained by the
+ * library. `perMove: 1` with a per-breakpoint `perPage` keeps one card of travel per
+ * press, which is what makes it feel considered rather than jumpy.
+ *
+ * Motion: a longer `speed` with an ease-out curve, so slides settle rather than snap —
+ * matching the app's own `--ease-standard` feel. `reducedMotion` is honoured by turning
+ * the transition off entirely rather than merely shortening it.
+ */
+function ProductScrollRow({ children, label }: { children: ReactNode; label: string }) {
+  const slides = Children.toArray(children)
+  const prefersReducedMotion = useReducedMotion()
 
   return (
-    <div className="group/scroll relative">
-      {/* Left arrow */}
-      {canScrollLeft && (
+    <Splide
+      hasTrack={false}
+      options={{
+        // `autoWidth` keeps each card at its own natural width, exactly as the previous
+        // flex track did — the cards are not a uniform size and forcing them to be
+        // would change every card on the page.
+        autoWidth: true,
+        gap: '1.25rem',
+        perMove: 1,
+        pagination: false,
+        arrows: slides.length > 1,
+        // Never scroll past the last card into empty space.
+        trimSpace: true,
+        omitEnd: true,
+        drag: true,
+        // A slow, eased settle rather than a snap. 0 with reduced motion: the position
+        // still changes, it just does not animate.
+        speed: prefersReducedMotion ? 0 : 520,
+        easing: 'cubic-bezier(0.22, 0.61, 0.36, 1)',
+        flickPower: 300,
+        waitForTransition: false,
+        keyboard: 'focused',
+        /* Splide puts `role="group"` on every `<li>`, which axe flags as
+           `aria-allowed-role` — `group` is not a permitted role for a list item. The
+           attributes are stripped after mount (see `onMounted` below) rather than via
+           a `role` option, which targets the carousel ROOT and not the slides. */
+        slideFocus: false,
+        /* `[FIXED 2026-08-23]` Every carousel used to declare `label: 'Products'`,
+           so the three of them landed as three identically-named landmarks — axe's
+           `landmark-is-unique`, and for a screen-reader user a landmark list reading
+           "Products, Products, Products" with no way to tell which is which. Each now
+           carries the row's own name ("Courses", "Reference packs", "Templates"). */
+        label,
+      }}
+      onMounted={(splide) => {
+        /* Strip Splide's `role="group"` / `aria-roledescription="slide"` from each
+           `<li>`. The cards inside are real links, already reachable and announced on
+           their own, so nothing is lost — and an invalid role is a genuine parse
+           problem for assistive tech, not a lint nicety. */
+        splide.root.querySelectorAll('.splide__slide').forEach((li) => {
+          li.removeAttribute('role')
+          li.removeAttribute('aria-roledescription')
+        })
+      }}
+      className="practicable-splide group/scroll relative"
+    >
+      {/* `hasTrack={false}` so the arrows can be positioned against the row rather than
+          inside the clipped track — the same hover-revealed treatment the hand-rolled
+          version had, kept because it stays out of the way until wanted. */}
+      <SplideTrack>
+        {slides.map((child, i) => (
+          <SplideSlide key={i}>{child}</SplideSlide>
+        ))}
+      </SplideTrack>
+
+      <div className="splide__arrows">
         <button
+          className="splide__arrow splide__arrow--prev absolute -left-1 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-sm opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover/scroll:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-0"
           type="button"
-          onClick={() => scroll('left')}
-          className="absolute -left-1 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-sm opacity-0 transition-opacity duration-150 group-hover/scroll:opacity-100 focus-visible:opacity-100 backdrop-blur-sm"
-          aria-label="Scroll left"
         >
-          <ChevronLeft className="size-4" />
+          <ChevronLeft className="size-4" aria-hidden="true" />
         </button>
-      )}
-
-      {/* Right arrow */}
-      {canScrollRight && (
         <button
+          className="splide__arrow splide__arrow--next absolute -right-1 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-sm opacity-0 backdrop-blur-sm transition-opacity duration-150 group-hover/scroll:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-0"
           type="button"
-          onClick={() => scroll('right')}
-          className="absolute -right-1 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card/90 text-foreground shadow-sm opacity-0 transition-opacity duration-150 group-hover/scroll:opacity-100 focus-visible:opacity-100 backdrop-blur-sm"
-          aria-label="Scroll right"
         >
-          <ChevronRight className="size-4" />
+          <ChevronRight className="size-4" aria-hidden="true" />
         </button>
-      )}
-
-      {/* Fade edges */}
-      {canScrollLeft && (
-        <div className="pointer-events-none absolute left-0 top-0 z-[5] h-full w-8 bg-gradient-to-r from-card to-transparent" />
-      )}
-      {canScrollRight && (
-        <div className="pointer-events-none absolute right-0 top-0 z-[5] h-full w-8 bg-gradient-to-l from-card to-transparent" />
-      )}
-
-      {/* Scrollable track */}
-      <div
-        ref={scrollRef}
-        className="flex gap-5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-      >
-        {children}
       </div>
-    </div>
+    </Splide>
   )
 }
 
@@ -942,7 +965,7 @@ function ProductRow({
 
       {/* Horizontal scroll of items — full width, no card wrapper */}
       <div className="mt-4">
-        <ProductScrollRow>{children}</ProductScrollRow>
+        <ProductScrollRow label={label}>{children}</ProductScrollRow>
       </div>
 
       {/* Mobile see-all — hidden on desktop where it sits in the header row */}

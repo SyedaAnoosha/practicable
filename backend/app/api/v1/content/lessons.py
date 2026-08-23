@@ -34,6 +34,8 @@ from app.db.session import get_session
 from app.integrations.mux_client import generate_mux_playback_token
 from app.integrations.storage_client import download_file, generate_presigned_url, upload_file
 from app.services.download_events import record_download_event
+from app.services.certificate_service import issue_certificate_if_newly_complete
+from app.services.email_service import send_certificate_issued_email
 from app.services.stamping import get_or_stamp, is_stampable
 from app.services.link_rate_limit import check_and_record as check_link_rate
 
@@ -604,6 +606,11 @@ async def mark_lesson_complete(
                     )
                 )
             ).scalar_one_or_none()
+
+            # Capture the before-state so we can detect the false→true edge
+            # for certificate issuance — the edge, not the current state.
+            was_complete = course_progress.completed if course_progress else False
+
             if course_progress is None:
                 session.add(
                     CourseProgress(
@@ -620,6 +627,41 @@ async def mark_lesson_complete(
                 if is_complete:
                     course_progress.completed_at = now
             await session.commit()
+
+            # W5-R2: Issue a certificate on the false→true edge. Called after commit
+            # so the completion is durable before a certificate is minted. The service
+            # uses INSERT ON CONFLICT to be idempotent — a double-click or replay
+            # never creates a second row.
+            if not was_complete and is_complete:
+                course = (
+                    await session.execute(
+                        select(Course).where(Course.id == module.course_id)
+                    )
+                ).scalar_one_or_none()
+                if course:
+                    cert = await issue_certificate_if_newly_complete(
+                        session=session,
+                        user=user,
+                        course=course,
+                        was_complete=was_complete,
+                        is_complete=is_complete,
+                    )
+                    await session.commit()
+
+                    # Send certificate email — best-effort, never fails the request.
+                    if cert is not None:
+                        try:
+                            from app.services.certificate_pdf import _pdf_key
+                            from app.integrations.storage_client import generate_presigned_url
+                            pdf_key = _pdf_key(str(cert.id))
+                            download_url = generate_presigned_url(pdf_key, expiry_seconds=3600)
+                            await send_certificate_issued_email(
+                                to_email=user.email,
+                                course_title=course.title,
+                                download_url=download_url,
+                            )
+                        except Exception:
+                            pass  # email failure must not undo the completion
 
     return CompleteOut(completed=True, course_progress_percent=course_progress_percent)
 

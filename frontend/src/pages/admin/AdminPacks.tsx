@@ -246,7 +246,8 @@ export function AdminPacks() {
             {/* Questions */}
             <div>
               <p className="text-sm font-medium">Questions</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Select at least 1 question set.</p>
+              {/* `[CHANGED 2026-08-22, owner direction]` Was "Select at least 1 question set." Questions are no longer required to create or publish a pack — the reference document is what it sells — so the copy no longer states a rule the API does not enforce. */}
+              <p className="mt-0.5 text-xs text-muted-foreground">Optional — attach the questions this document covers.</p>
               <div className="mt-2 max-h-60 flex flex-col gap-1.5 overflow-y-auto">
                 {availableQuestions?.map((q) => {
                   const selected = selectedContents.some((c) => c.content_type === 'question_set' && c.content_id === q.id)

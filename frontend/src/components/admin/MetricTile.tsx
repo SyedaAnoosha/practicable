@@ -10,6 +10,14 @@ interface MetricTileProps {
   denominator: number | null | undefined
   description: string
   className?: string
+  /** `[ADDED 2026-08-22]` Money-ness used to be inferred from `name === 'total_revenue'`,
+   * which only ever worked for the one tile whose name happened to match. The Revenue
+   * Breakdown section passes display strings ("Gross revenue", "Refunded", "Net
+   * revenue"), so all three fell through to the integer branch and printed raw cents —
+   * A$177.00 of takings shown as "17700" under a heading that says Revenue.
+   * Inferring a value's *unit* from its *label* was the bug; the caller knows, so the
+   * caller says. `total_revenue` still defaults to true for the API-driven grid. */
+  money?: boolean
 }
 
 /** `[ADDED 2026-08-22]` The API sends a metric's machine name (`second_purchase_rate`)
@@ -38,7 +46,14 @@ function humanise(name: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-export function MetricTile({ name, numerator, denominator, description, className }: MetricTileProps) {
+export function MetricTile({
+  name,
+  numerator,
+  denominator,
+  description,
+  className,
+  money,
+}: MetricTileProps) {
   /* `[FIXED 2026-08-22]` Was `!== null`, which `undefined` walks straight past — and
      an absent field from a partial API response arrives as `undefined`, not `null`.
      The tile then called `.toLocaleString()` on it and threw, crashing the entire
@@ -55,7 +70,7 @@ export function MetricTile({ name, numerator, denominator, description, classNam
    * "Orders & Revenue". Every plausible misreading of that is a large overstatement of
    * the business, which is the worst direction for a number on an owner's dashboard to
    * be wrong in. Money is now formatted as money. */
-  const isMoney = name === 'total_revenue'
+  const isMoney = money ?? name === 'total_revenue'
   const displayValue = !hasData
     ? null
     : isMoney
@@ -64,29 +79,46 @@ export function MetricTile({ name, numerator, denominator, description, classNam
         ? `${numerator.toLocaleString()} / ${denominator.toLocaleString()}`
         : numerator.toLocaleString()
 
+  const showsPercentage = !isMoney && isRatio && percentage !== null
+
+  /* `[REDESIGNED 2026-08-22]` The tile was a default Card with a `pb-2` header and a
+   * `text-2xl` number — the label read at the same weight as the figure, and the
+   * description sat 4px under the value with no separation, so a grid of these was a
+   * wall of undifferentiated grey text. The number is the reason the tile exists, so
+   * it now carries the visual weight: small uppercase label above, large tabular
+   * figure, description held apart on its own rule below. */
   return (
-    <Card className={cn("", className)}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{humanise(name)}</CardTitle>
+    <Card className={cn('transition-colors hover:border-border-strong', className)}>
+      <CardHeader className="pb-1">
+        <CardTitle className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {humanise(name)}
+        </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-3">
         {hasData ? (
-          <div className="text-2xl font-semibold tabular-nums text-foreground">
-            {!isMoney && isRatio && percentage !== null ? (
+          <div className="flex items-baseline gap-2">
+            {showsPercentage ? (
               <>
-                <span className="text-3xl">{percentage}%</span>
-                <span className="ml-2 text-sm text-muted-foreground">
-                  ({displayValue})
+                <span className="font-mono text-3xl font-semibold tabular-nums leading-none text-foreground">
+                  {percentage}%
+                </span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                  {displayValue}
                 </span>
               </>
             ) : (
-              displayValue
+              <span className="font-mono text-3xl font-semibold tabular-nums leading-none text-foreground">
+                {displayValue}
+              </span>
             )}
           </div>
         ) : (
+          /* Non-negotiable #15: unknown is not zero, and must not look like it. */
           <p className="text-sm text-muted-foreground">Not enough data yet</p>
         )}
-        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        <p className="border-t border-border pt-2.5 text-xs leading-relaxed text-muted-foreground">
+          {description}
+        </p>
       </CardContent>
     </Card>
   )

@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { RichText } from '@/components/content/RichText'
 import { Badge } from '@/components/ui/Badge'
 import { EmailGateForm } from '@/components/content/EmailGateForm'
+import { NotesPanel } from '@/components/ui/NotesPanel'
 import { useEmailGate } from '@/lib/emailGate'
 
 type LessonType = 'video' | 'reading' | 'download' | 'mixed'
@@ -692,6 +693,10 @@ export function Learn() {
                 nextLesson={lesson.next}
                 courseSlug={lesson.course_slug}
               />
+
+            {/* W5-R5: personal notes for this lesson, autosaving. Only shown to
+                entitled learners — notes are per-purchase. */}
+            <NotesPanel lessonId={lesson.id} />
           </div>
         )}
       </div>

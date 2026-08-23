@@ -17,6 +17,7 @@ from app.services.refund_service import apply_refund
 from app.services.account_service import deactivate_user
 import stripe as stripe_sdk
 from app.db.models import (
+    Certificate,
     Course,
     CourseProgress,
     Domain,
@@ -94,6 +95,7 @@ class LibraryCourseOut(BaseModel):
     total_lessons: int
     completed_lessons: int
     percentage_complete: int
+    estimated_duration_minutes: Optional[int] = None
     # The next lesson to open; None means everything owned is complete. Counts only
     # entitled lessons, so a partially-owned course reports progress against what was
     # bought rather than stranding the user below 100% with no way to finish.
@@ -199,6 +201,11 @@ async def get_my_library(
         for entry in by_course.values():
             course, total, done = entry["course"], entry["total"], entry["done"]
             resume = entry["resume"]
+            # Estimated time remaining: authored duration × (remaining / total)
+            time_left = None
+            if course.estimated_duration_minutes and total:
+                remaining = total - done
+                time_left = max(1, course.estimated_duration_minutes * remaining // total)
             courses.append(
                 LibraryCourseOut(
                     slug=course.slug,
@@ -208,6 +215,7 @@ async def get_my_library(
                     completed_lessons=done,
                     # Floored, so 100% is never reached by rounding.
                     percentage_complete=(done * 100 // total) if total else 0,
+                    estimated_duration_minutes=course.estimated_duration_minutes,
                     resume_lesson_slug=resume.slug if resume else None,
                     resume_lesson_title=resume.title if resume else None,
                 )
@@ -1150,3 +1158,69 @@ async def close_my_account(
         pass
 
     return {"ok": True, "message": "Your account is closed. Contact us any time to restore it."}
+
+
+# ── Certificates (W5-R2) ─────────────────────────────────────────────────────
+
+
+class CertificateOut(BaseModel):
+    id: str
+    course_title: str
+    issued_at: str
+    verification_code: str
+    revoked: bool
+
+
+@router.get("/me/certificates", response_model=list[CertificateOut])
+async def list_certificates(
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """The learner's certificates. One query, on ix_certificates_user."""
+    result = await session.execute(
+        select(Certificate)
+        .where(Certificate.user_id == user.id)
+        .order_by(Certificate.issued_at.desc())
+    )
+    certs = result.scalars().all()
+    return [
+        CertificateOut(
+            id=str(c.id),
+            course_title=c.course_title_snapshot,
+            issued_at=c.issued_at.isoformat() if hasattr(c.issued_at, 'isoformat') else str(c.issued_at),
+            verification_code=c.verification_code,
+            revoked=c.revoked_at is not None,
+        )
+        for c in certs
+    ]
+
+
+@router.get("/me/certificates/{certificate_id}/download")
+async def download_certificate(
+    certificate_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """Download the certificate PDF. Renders on first call, then presigns.
+
+    404, not 403, when the certificate belongs to someone else: a 403 confirms
+    the id exists.
+    """
+    cert = (
+        await session.execute(
+            select(Certificate).where(Certificate.id == uuid.UUID(certificate_id))
+        )
+    ).scalar_one_or_none()
+    if not cert or cert.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    if cert.revoked_at is not None:
+        raise HTTPException(
+            status_code=410,
+            detail={"error": {"code": "revoked", "message": "This certificate has been revoked."}},
+        )
+
+    from app.services.certificate_pdf import get_certificate_pdf_url
+
+    url = get_certificate_pdf_url(cert)
+    await session.commit()  # persist pdf_storage_key if it was just set
+    return {"download_url": url, "verification_code": cert.verification_code}

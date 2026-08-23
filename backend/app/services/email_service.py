@@ -439,7 +439,32 @@ async def send_account_closure_email(*, to_email: str) -> bool:
     return await _send(
         to_email=to_email,
         subject="Your Practicable account has been closed",
+        html=html, text=text,
+        context="account closure confirmation",
+    )
+
+
+# ── Certificate email (W5-R2) ───────────────────────────────────────────────
+
+
+async def send_certificate_issued_email(
+    *,
+    to_email: str,
+    course_title: str,
+    download_url: str,
+) -> bool:
+    """To the learner: your certificate is ready, with a link to download it.
+    Links to the certificate rather than attaching it: attachments hurt
+    deliverability, and a link works from any device."""
+    html, text = _render(
+        "certificate_issued",
+        course_title=course_title,
+        download_url=download_url,
+    )
+    return await _send(
+        to_email=to_email,
+        subject=f"Your certificate for {course_title}",
         html=html,
         text=text,
-        context="account closure confirmation",
+        context=f"certificate issued for {course_title}",
     )

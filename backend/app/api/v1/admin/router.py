@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends
 
 from app.core.deps import require_admin
 
-from . import audit, contact, courses, leads, media, metrics, orders, packs, products, questions, settings, templates, users
+from . import audit, contact, courses, leads, media, metrics, orders, packs, products, promotions, questions, reviews, settings, templates, users
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 router.include_router(questions.router)
@@ -27,5 +27,7 @@ router.include_router(metrics.router)
 router.include_router(users.router)
 router.include_router(audit.router)
 router.include_router(leads.router)
+router.include_router(promotions.router)
 router.include_router(settings.router)
+router.include_router(reviews.router)
 router.include_router(packs.router)

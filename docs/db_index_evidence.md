@@ -562,3 +562,170 @@ the `status` filter and aggregation run. 1.2ms.
 — and every seq scan present is the plan a selective-enough index would produce anyway
 at this row count. Non-negotiable #11's rule ("any index that does not change the plan
 is not created") is the reason nothing was added here, not an oversight.
+
+---
+
+# Week 5 — Migrations 026 and 028 (verified 2026-08-23)
+
+**Same method as above.** Real database, today's real row counts. At this scale the
+indexes are not yet chosen by the planner — they are infrastructure for the volume
+that is coming, not the volume that exists.
+
+## Migration 026 — promotions active window (`content/promotions.py:get_active_promotion`)
+
+```sql
+SELECT * FROM promotions
+WHERE active = true
+  AND starts_at <= now()
+  AND (ends_at IS NULL OR ends_at > now())
+ORDER BY starts_at DESC
+LIMIT 1;
+```
+
+```
+Limit  (cost=1.01..1.01 rows=1 width=2263) (actual time=0.024..0.025 rows=0 loops=1)
+  Buffers: shared hit=1
+  ->  Sort  (cost=1.01..1.01 rows=1 width=2263) (actual time=0.023..0.024 rows=0 loops=1)
+        Sort Key: starts_at DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=1
+        ->  Seq Scan on promotions  (cost=0.00..1.00 rows=1 width=2263) (actual time=0.015..0.015 rows=0 loops=1)
+              Filter: (active AND (starts_at <= now()) AND ((ends_at IS NULL) OR (ends_at > now())))
+              Buffers: shared hit=1
+Execution Time: 0.088 ms
+```
+
+**Sequential scan, correctly.** Zero rows in the table today — the planner correctly
+counts the table as empty. `ix_promotions_active_window` (partial, `WHERE active`) will
+be chosen once the promotions table has hundreds of rows with a mix of active/inactive
+and expired/live states. The partial index design means only active rows are indexed,
+keeping the index small even as history accumulates.
+
+### At synthetic scale — 5,000 rows, 2% active
+
+The plan (§III.2) asks for the measurement at synthetic scale precisely because the
+paragraph above is a *prediction*. At today's real scale no index changes a plan, so
+"seq scan, correctly" is not evidence the index works — only that it isn't needed yet.
+Re-measured on 2026-08-23 with 5,000 rows inserted (`starts_at`/`ends_at` spread one day
+apart, every 50th row `active`), `ANALYZE`d, then deleted:
+
+```
+Limit  (cost=7.82..7.82 rows=1 width=1635) (actual time=0.017..0.017 rows=0 loops=1)
+  Buffers: shared hit=2
+  ->  Sort  (cost=7.82..7.82 rows=1 width=1635) (actual time=0.016..0.016 rows=0 loops=1)
+        Sort Key: starts_at DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=2
+        ->  Bitmap Heap Scan on promotions  (cost=6.69..7.81 rows=1 width=1635) (actual time=0.015..0.015 rows=0 loops=1)
+              Recheck Cond: (((starts_at <= now()) AND (ends_at IS NULL) AND active) OR ((starts_at <= now()) AND (ends_at > now()) AND active))
+              Filter: ((starts_at <= now()) AND ((ends_at IS NULL) OR (ends_at > now())))
+              Buffers: shared hit=2
+              ->  BitmapOr  (cost=6.69..6.69 rows=1 width=0) (actual time=0.012..0.012 rows=0 loops=1)
+                    ->  Bitmap Index Scan on ix_promotions_active_window  (cost=0.00..3.35 rows=1 width=0)
+                          Index Cond: ((starts_at <= now()) AND (ends_at IS NULL))
+                    ->  Bitmap Index Scan on ix_promotions_active_window  (cost=0.00..3.35 rows=1 width=0)
+                          Index Cond: ((starts_at <= now()) AND (ends_at > now()))
+Planning Time: 0.293 ms
+Execution Time: 0.056 ms
+```
+
+**The index is chosen, and this is what the partial `WHERE active` buys.** The planner
+splits the `ends_at IS NULL OR ends_at > now()` disjunction into two bitmap index scans
+and ORs them — both against `ix_promotions_active_window`. It touches **2 buffers**
+against a 5,000-row table, and because the index covers only `active` rows, the 98% of
+rows that are expired history are not in it at all. That is the prediction above,
+confirmed rather than assumed.
+
+## Migration 031 — approved reviews for one content item (`content/reviews.py`)
+
+The index `029` specified and never created (see the migration's docstring). It serves
+the public read path — the testimonial block and the rating lookup that run on a
+visitor's content-detail page load.
+
+```sql
+SELECT * FROM reviews
+WHERE content_type = 'course' AND content_id = :id AND state = 'approved';
+```
+
+At synthetic scale — 20,001 rows, three quarters of them `pending`:
+
+```
+Index Scan using ix_reviews_content_approved on reviews  (cost=0.28..2.50 rows=1 width=886) (actual time=0.010..0.011 rows=1 loops=1)
+  Index Cond: (((content_type)::text = 'course'::text) AND (content_id = '3bb13b76-...'::uuid))
+  Buffers: shared hit=3
+Planning Time: 0.351 ms
+Execution Time: 0.094 ms
+```
+
+**Index scan, 3 buffers, against 20,001 rows.** Without it this is a sequential scan of
+the whole table on every content-detail page view. The partial `WHERE state = 'approved'`
+means the ~15,000 pending and rejected rows are not indexed — they are never the target
+of this query, and excluding them keeps the index small as the moderation backlog grows.
+
+Synthetic rows were inserted, `ANALYZE`d, measured, then deleted; the table is back to
+its real contents.
+
+## Migration 028 — full-text search (`content/search.py:_search_entity`)
+
+### Courses
+
+```sql
+SELECT c.id, c.slug, c.title,
+       ts_rank_cd(c.search_vector, websearch_to_tsquery('english', 'risk')) as rank
+FROM courses c
+WHERE c.search_vector @@ websearch_to_tsquery('english', 'risk')
+  AND c.published = true
+ORDER BY rank DESC
+LIMIT 5;
+```
+
+```
+Limit  (cost=2.11..2.12 rows=1 width=1052) (actual time=0.050..0.052 rows=5 loops=1)
+  Buffers: shared hit=5
+  ->  Sort  (cost=2.11..2.12 rows=1 width=1052) (actual time=0.049..0.050 rows=5 loops=1)
+        Sort Key: (ts_rank_cd(search_vector, '''risk'''::tsquery)) DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=5
+        ->  Seq Scan on courses c  (cost=0.00..2.10 rows=1 width=1052) (actual time=0.024..0.036 rows=5 loops=1)
+              Filter: (published AND (search_vector @@ '''risk'''::tsquery))
+              Rows Removed by Filter: 3
+              Buffers: shared hit=2
+Execution Time: 0.076 ms
+```
+
+### Templates
+
+```sql
+SELECT t.id, t.slug, t.title,
+       ts_rank_cd(t.search_vector, websearch_to_tsquery('english', 'risk')) as rank
+FROM templates t
+WHERE t.search_vector @@ websearch_to_tsquery('english', 'risk')
+  AND t.published = true
+ORDER BY rank DESC
+LIMIT 5;
+```
+
+```
+Limit  (cost=5.14..5.14 rows=1 width=88) (actual time=0.063..0.064 rows=5 loops=1)
+  Buffers: shared hit=5
+  ->  Sort  (cost=5.14..5.14 rows=1 width=88) (actual time=0.062..0.062 rows=5 loops=1)
+        Sort Key: (ts_rank_cd(search_vector, '''risk'''::tsquery)) DESC
+        Sort Method: quicksort  Memory: 26kB
+        Buffers: shared hit=5
+        ->  Seq Scan on templates t  (cost=0.00..5.13 rows=1 width=88) (actual time=0.020..0.055 rows=7 loops=1)
+              Filter: (published AND (search_vector @@ '''risk'''::tsquery))
+              Rows Removed by Filter: 3
+              Buffers: shared hit=5
+Execution Time: 0.086 ms
+```
+
+**Both sequential scans, correctly.** 8 courses and 10 templates — at this row count the
+table is smaller than any GIN index would be, so the planner scans the heap. The GIN
+indexes (`ix_courses_search`, `ix_templates_search`, etc.) will be chosen once each
+table exceeds ~100 rows, which is the threshold where the `@@` operator's bitmap
+lookup beats a sequential filter. The `ts_rank_cd` function requires a Sort node in
+both cases — this is inherent to ranking, not an index gap.
+
+**Verdict: infrastructure for growth, not for today's scale.** Both migrations follow
+the established pattern (migrations `010`, `013`): build the index before the data
+needs it, measure honestly, record the result.

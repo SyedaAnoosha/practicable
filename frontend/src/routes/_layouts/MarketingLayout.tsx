@@ -25,8 +25,9 @@ const DOMAINS = ['Risk', 'Cyber', 'Compliance', 'Resilience', 'AI']
 // (Superseded the prior comment here, which described Courses/Templates folding into
 // Store — that was true before 8G moved them into ProductsMenu instead.)
 const NAV_ITEMS = [
-  { to: '/questions', label: 'Questions' },
-  { to: '/#about', label: 'About' },
+  // { to: '/questions', label: 'Questions' },
+  { to: '/about', label: 'About' },
+  { to: '/contact', label: 'Contact' },
 ] as const
 
 // The public header: logo → nav → Sign in → Get started. Get started routes to the

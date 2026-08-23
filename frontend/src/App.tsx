@@ -10,9 +10,15 @@ import AdminLayout from '@/routes/_layouts/AdminLayout'
 
 // ── Eagerly loaded (core public pages, always needed) ──────────────────────
 import { Home } from '@/pages/Home'
+import { VerifyCertificate } from '@/pages/VerifyCertificate'
+import { SearchPage } from '@/pages/SearchPage'
+import { About } from '@/pages/About'
 import { Contact } from '@/pages/Contact'
+import { NotFound } from '@/pages/NotFound'
+import { RouteError } from '@/pages/RouteError'
 import { Dashboard } from '@/pages/Dashboard'
 import { Library } from '@/pages/Library'
+import { Saved } from '@/pages/Saved'
 import { Question } from '@/pages/Question'
 import { QuestionsCatalogue } from '@/pages/QuestionsCatalogue'
 import { CoursesCatalogue } from '@/pages/CoursesCatalogue'
@@ -58,7 +64,9 @@ const AdminUsers = lazy(() => import('@/pages/admin/AdminUsers').then((m) => ({ 
 const AdminAudit = lazy(() => import('@/pages/admin/AdminAudit').then((m) => ({ default: m.AdminAudit })))
 const AdminLeads = lazy(() => import('@/pages/admin/AdminLeads').then((m) => ({ default: m.AdminLeads })))
 const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings').then((m) => ({ default: m.AdminSettings })))
+const AdminPromotions = lazy(() => import('@/pages/admin/AdminPromotions').then((m) => ({ default: m.AdminPromotions })))
 const AdminPacks = lazy(() => import('@/pages/admin/AdminPacks').then((m) => ({ default: m.AdminPacks })))
+const AdminReviews = lazy(() => import('@/pages/admin/AdminReviews').then((m) => ({ default: m.AdminReviews })))
 const LessonWriteScreen = lazy(() =>
   import('@/pages/admin/LessonWriteScreen').then((m) => ({ default: m.LessonBodyWriteScreen })),
 )
@@ -80,6 +88,12 @@ function RouteLoading() {
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
+    /* `[ADDED 2026-08-22]` Without this, anything thrown while rendering a route —
+       and every unmatched URL — surfaced react-router's built-in developer screen
+       ("Unexpected Application Error! ... Hey developer") to real visitors. It sits on
+       the root so it covers every branch below, and `RouteError` hands a 404 off to
+       the proper not-found page rather than calling a wrong address a crash. */
+    errorElement: <RouteError />,
     children: [
       {
         element: <MarketingLayout />,
@@ -90,12 +104,20 @@ const router = createBrowserRouter([
           // Marketing chrome, not the catalogue sidebar: contact is a public page a
           // visitor reaches from the footer, and a member reaching it mid-session is
           // still asking the business a question rather than browsing content.
+          { path: '/search', element: <SearchPage /> },
+          { path: '/verify/:code', element: <VerifyCertificate /> },
+          { path: '/about', element: <About /> },
           { path: '/contact', element: <Contact /> },
           // Draft legal pages, marketing chrome like Contact above: reachable from the
           // footer, no account needed to read them.
           { path: '/legal/terms', element: <Terms /> },
           { path: '/legal/privacy', element: <Privacy /> },
           { path: '/legal/refunds', element: <Refunds /> },
+          /* Catch-all. Inside MarketingLayout so a mistyped URL keeps the site's
+             header and footer — the fastest way out of a dead end is the navigation
+             the visitor already knows, not a bare page with one link on it. Must stay
+             last: react-router matches in order and '*' matches everything. */
+          { path: '*', element: <NotFound /> },
         ],
       },
       {
@@ -144,6 +166,9 @@ const router = createBrowserRouter([
           { path: '/dashboard', element: <Dashboard /> },
           // Purchased items across all types, with progress and resume.
           { path: '/library', element: <Library /> },
+          // W5-R5: the saved-items list. Bookmarks were savable but not
+          // browsable until this route existed.
+          { path: '/saved', element: <Saved /> },
           // The full learning interface. The bare /lessons/:lessonId player stays for
           // any lesson that isn't part of a module/course.
           { path: '/learn/:courseSlug/:lessonSlug', element: <Suspense fallback={<RouteLoading />}><Learn /></Suspense> },
@@ -195,6 +220,8 @@ const router = createBrowserRouter([
           { path: '/admin/audit', element: <Suspense fallback={<RouteLoading />}><AdminAudit /></Suspense> },
           { path: '/admin/leads', element: <Suspense fallback={<RouteLoading />}><AdminLeads /></Suspense> },
           { path: '/admin/settings', element: <Suspense fallback={<RouteLoading />}><AdminSettings /></Suspense> },
+          { path: '/admin/promotions', element: <Suspense fallback={<RouteLoading />}><AdminPromotions /></Suspense> },
+          { path: '/admin/reviews', element: <Suspense fallback={<RouteLoading />}><AdminReviews /></Suspense> },
         ],
       },
     ],

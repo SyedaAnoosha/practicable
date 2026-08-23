@@ -126,18 +126,19 @@ async def _pack_to_out(product: Product, session: AsyncSession) -> PackOut:
 
     # Readiness
     has_template = template_count >= 1
-    has_questions = question_count >= 1
     has_price = (
         product.stripe_price_id
         and product.stripe_price_id != STRIPE_PRICE_UNSET
     )
 
+    # `[CHANGED 2026-08-22, owner direction]` A pack no longer has to carry questions.
+    # The thing a buyer pays for is the reference document, and a perfectly legitimate
+    # pack is a standalone PDF with no curated question list attached — blocking publish
+    # on that made an entire product shape unshippable.
+    # The template requirement stays: a pack with no file is genuinely nothing to sell.
     if not has_template:
         readiness = "no_template"
         readiness_message = "Needs at least 1 template (the PDF)"
-    elif not has_questions:
-        readiness = "no_questions"
-        readiness_message = "Needs at least 1 question"
     elif not has_price:
         readiness = "price_unset"
         readiness_message = "Price not set in Stripe"
@@ -202,13 +203,17 @@ async def create_pack(
     # Validate contents
     template_count = sum(1 for c in payload.contents if c.content_type == "template")
     question_count = sum(1 for c in payload.contents if c.content_type == "question_set")
-    if template_count < 1 or question_count < 1:
+    # `[CHANGED 2026-08-22, owner direction]` Questions are no longer required — see the
+    # readiness note in `_pack_to_out`. A pack sells a reference document; a curated
+    # question list is a common addition, not part of the definition. The template is
+    # still required, because a pack with no file is nothing.
+    if template_count < 1:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "error": {
                     "code": "insufficient_content",
-                    "message": f"A pack needs at least 1 template and 1 question. Got {template_count} template(s) and {question_count} question(s).",
+                    "message": f"A pack needs at least 1 template (the reference document). Got {template_count}.",
                 }
             },
         )
@@ -325,11 +330,10 @@ async def set_pack_published(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={"error": {"code": "no_template", "message": "A pack needs at least 1 template (the PDF)."}},
             )
-        if counts.get("question_set", 0) < 1:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"error": {"code": "no_questions", "message": "A pack needs at least 1 question set."}},
-            )
+        # `[REMOVED 2026-08-22, owner direction]` The "a pack needs at least 1 question
+        # set" gate used to live here. See the readiness note above: a pack whose value
+        # is the reference document alone is a real product, and this refused to publish
+        # it. The template gate above is the one that still matters.
         # Price check
         price_check = check_stripe_price(
             stripe_price_id=product.stripe_price_id,

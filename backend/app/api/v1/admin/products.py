@@ -28,7 +28,7 @@ from app.core.publish_guard import check_bundle_pricing, check_content_overlap, 
 from app.db.models import Product, ProductContent, User
 from app.db.models.product import Licence
 from app.db.session import get_session
-from app.integrations.stripe_client import archive_price, create_price_under_product
+from app.integrations.stripe_client import archive_price, create_price, create_price_under_product
 
 from .common import (
     PublishStateIn,
@@ -284,29 +284,47 @@ async def change_product_price(
             },
         )
 
+    # `[FIXED 2026-08-22]` Setting a price used to dead-end here.
+    #
+    # The flow is "look up the existing Price to find its Stripe Product, then add a new
+    # Price under that same Product" — which is right when the Price exists. When it does
+    # not, this raised 409 and the admin got "Something went wrong. Please try again.",
+    # with the price unchanged no matter how many times they tried. Retrying cannot
+    # possibly help: the stored id will never start resolving.
+    #
+    # It happens for a real and unremarkable reason: the `price_…` ids in the database
+    # were issued by a *different* Stripe account (or a since-cleared test account), so
+    # every one of them 404s against the current keys. The owner's report — "price is not
+    # updating, after setting price still Not yet for sale" — is exactly this.
+    #
+    # A missing Price is recoverable: create a fresh Stripe Product and Price and adopt
+    # them. The database is the source of truth for what a thing costs; the Stripe
+    # objects are how it gets charged, and re-minting them is the correct repair. The
+    # old id is already gone, so there is nothing to archive and nothing to lose.
+    stripe_product_id: str | None = None
     try:
         old_price = stripe.Price.retrieve(old_price_id)
         # No `expand` was requested above, so Stripe returns the Product as a plain ID.
         assert isinstance(old_price.product, str)
         stripe_product_id = old_price.product
     except stripe.InvalidRequestError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error": {
-                    "code": "stripe_price_not_found",
-                    "message": "Current Stripe price not found. It may have been deleted.",
-                }
-            },
-        )
+        stripe_product_id = None
 
-    # Step b: Create new Price under the same Stripe Product
+    # Step b: Create the new Price — under the same Stripe Product where one exists,
+    # otherwise as a brand-new Product/Price pair.
     try:
-        new_price_id = create_price_under_product(
-            unit_amount=payload.price_amount,
-            currency=payload.currency,
-            stripe_product_id=stripe_product_id,
-        )
+        if stripe_product_id:
+            new_price_id = create_price_under_product(
+                unit_amount=payload.price_amount,
+                currency=payload.currency,
+                stripe_product_id=stripe_product_id,
+            )
+        else:
+            new_price_id, _new_stripe_product_id = create_price(
+                unit_amount=payload.price_amount,
+                currency=payload.currency,
+                product_name=product.name,
+            )
     except stripe.StripeError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

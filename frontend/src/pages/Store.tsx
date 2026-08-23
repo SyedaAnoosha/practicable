@@ -151,6 +151,7 @@ export function Store() {
       {bundle && flagship && pack && (
         <div className="mt-8">
           <BundleCard
+            headingLevel="h2"
             title="Risk Register, start to finish"
             description="The course, plus every question in the domain, curated."
             parts={[

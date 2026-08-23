@@ -60,6 +60,10 @@ class Product(Base, IdMixin, TimestampMixin, PublishStateMixin):
     # Bundle declaration — explicit flag, not inferred from content counts
     is_bundle: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # W5-R4: denormalised review counters (migration 029)
+    review_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rating_sum: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     # Relationships
     contents: Mapped[list["ProductContent"]] = relationship(
         "ProductContent", back_populates="product"

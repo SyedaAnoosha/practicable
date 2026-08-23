@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.deps import get_current_user_id
-from app.api.v1.content import questions, lessons, templates, courses, packs
+from app.api.v1.content import questions, lessons, templates, courses, packs, promotions, reviews, search, verify, notes, bookmarks
 from app.api.v1.commerce import checkout, products, webhooks
 from app.api.v1 import auth, contact, filter_events, leads, me
 from app.api.v1.admin.router import router as admin_router
@@ -36,10 +36,16 @@ app.include_router(courses.router, tags=["courses"])
 # Domain packs (W2-R6). A reading surface only — the PDF still downloads through
 # templates.py's gated route, so this adds no new entitlement path.
 app.include_router(packs.router, tags=["packs"])
+app.include_router(promotions.router, tags=["promotions"])
+app.include_router(reviews.router, tags=["reviews"])
+app.include_router(search.router, tags=["search"])
+app.include_router(verify.router, tags=["certificates"])
 app.include_router(checkout.router, tags=["commerce"])
 app.include_router(products.router, tags=["commerce"])
 app.include_router(webhooks.router, tags=["commerce"])
 app.include_router(me.router, tags=["me"])
+app.include_router(notes.router)
+app.include_router(bookmarks.router)
 app.include_router(leads.router, tags=["leads"])
 app.include_router(contact.router, tags=["contact"])
 app.include_router(filter_events.router, tags=["analytics"])

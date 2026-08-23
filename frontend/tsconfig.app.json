@@ -17,7 +17,14 @@
     "jsx": "react-jsx",
 
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      /* `[ADDED 2026-08-22]` @splidejs/react-splide ships declarations
+         (dist/types/index.d.ts, named by its top-level "types" field) but its
+         "exports" map has no "types" condition. Under moduleResolution "bundler" the
+         exports map wins, the "types" field is never read, and tsc reports the module
+         as implicitly any (TS7016) — while Vite resolves it fine. Pointing at the real
+         declarations keeps full type safety instead of shimming the module as any. */
+      "@splidejs/react-splide": ["./node_modules/@splidejs/react-splide/dist/types/index.d.ts"]
     },
 
     /* Linting */

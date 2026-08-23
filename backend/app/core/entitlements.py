@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.db.models import Entitlement, ProductContent, Role, User
+from app.db.models import Entitlement, Lesson, Module, ProductContent, Role, User
 from app.db.session import get_session
 from app.services.audit_service import record_admin_bypass
 
@@ -56,6 +56,45 @@ async def resolve_product_ids(*, user_id: UUID, session: AsyncSession) -> set[UU
     return set(result.scalars().all())
 
 
+def _lessons_of_granted_courses(product_ids: set[UUID]):
+    """SELECT of every lesson id belonging to a course granted by `product_ids`.
+
+    `[FIXED 2026-08-23, owner rule]` "A lesson added after someone has purchased must be
+    granted to them — they do not repurchase. Someone who has not purchased still has to
+    buy the course."
+
+    Access was resolved ONLY against explicit `product_contents` rows of type `lesson`,
+    written once at seed/creation time. The `course` row that sits beside them granted
+    nothing: `ResourceType` had no COURSE member and nothing ever expanded a course grant
+    into its lessons, so that row was decorative as far as the gate was concerned.
+
+    The consequence was silent and permanent. Add a lesson to a course and every existing
+    buyer is locked out of it — they paid for the course, the new lesson has no
+    product_contents row naming them, and no amount of re-checking creates one. The only
+    repairs were a manual backfill script or a repurchase, and nothing in the product
+    surfaced the problem. `risk-register-fundamentals` was already in this state: 4
+    published lessons, 3 granted.
+
+    Membership is now derived from the course structure at request time instead of from a
+    frozen list. A product that grants a course grants that course's lessons, whenever
+    they were added — which is what buying a course has always meant. Explicit `lesson`
+    rows still work exactly as before, so a product can still sell an individual lesson
+    without selling its course, and the two paths union.
+
+    Deriving rather than backfilling also means a lesson MOVED between courses follows
+    its new course, and a lesson deleted stops being granted, with no rows to reconcile.
+    """
+    granted_course_ids = select(ProductContent.content_id).where(
+        ProductContent.product_id.in_(product_ids),
+        ProductContent.content_type == "course",
+    )
+    return (
+        select(Lesson.id)
+        .join(Module, Module.id == Lesson.module_id)
+        .where(Module.course_id.in_(granted_course_ids))
+    )
+
+
 async def has_access_to(
     *, user_id: UUID, resource_type: ResourceType, resource_id: UUID, session: AsyncSession
 ) -> bool:
@@ -71,7 +110,19 @@ async def has_access_to(
             ProductContent.content_id == resource_id,
         )
     )
-    return result.first() is not None
+    if result.first() is not None:
+        return True
+
+    # A lesson is also granted by owning the course it belongs to — see
+    # `_lessons_of_granted_courses`. Checked second so the common case (an explicit row)
+    # still answers in one query.
+    if resource_type is ResourceType.LESSON:
+        via_course = await session.execute(
+            _lessons_of_granted_courses(product_ids).where(Lesson.id == resource_id)
+        )
+        return via_course.first() is not None
+
+    return False
 
 
 async def resolve_granted_content_ids(
@@ -98,7 +149,17 @@ async def resolve_granted_content_ids(
             ProductContent.content_type == resource_type.value,
         )
     )
-    return set(result.scalars().all())
+    granted = set(result.scalars().all())
+
+    # Lessons are additionally granted by owning their course, so a lesson added after
+    # purchase unlocks for existing buyers without a backfill — see
+    # `_lessons_of_granted_courses`. One extra query for the whole set, preserving this
+    # function's fixed-query-count contract.
+    if resource_type is ResourceType.LESSON:
+        via_course = await session.execute(_lessons_of_granted_courses(product_ids))
+        granted |= set(via_course.scalars().all())
+
+    return granted
 
 
 async def has_access_to_or_admin(

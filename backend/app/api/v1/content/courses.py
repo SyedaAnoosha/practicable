@@ -1,6 +1,7 @@
 """Course catalogue and public syllabus pages. This file only ever answers "what is in
 this course and do I own it" — lesson content is served by lessons.py.
 """
+import math
 import uuid
 from typing import Optional
 
@@ -13,6 +14,7 @@ from app.core.deps import get_current_user_id_optional
 from app.core.entitlements import ResourceType, resolve_granted_content_ids, resolve_product_ids
 from app.db.models import (
     Author,
+    Certificate,
     Course,
     Entitlement,
     Lesson,
@@ -112,6 +114,11 @@ class CourseDetailOut(BaseModel):
     # Without it, a refunded buyer silently sees an ordinary buy page and is never told
     # what happened — §20.10's "the four states" with the fourth state missing.
     access_ended_at: Optional[str] = None
+    # W5-R2: whether this reader has completed the course, and their certificate code
+    # if one was issued. The page uses this to show a completion badge and a link to
+    # the certificate, instead of the "Continue the course" CTA.
+    completed: bool = False
+    certificate_verification_code: Optional[str] = None
 
 
 @router.get("/courses", response_model=list[CourseSummaryOut])
@@ -223,13 +230,37 @@ async def list_courses(
         # renders, rather than nothing at all.
         duration_by_lesson = {lid: dur for lid, dur in media_rows.all() if dur is not None}
 
-    # Pre-compute duration per course from media durations, for the filter.
-    duration_by_course: dict = {}
+    # `[FIXED 2026-08-22]` Two unit/source bugs lived in this block.
+    #
+    # 1. `Media.duration_seconds` is *seconds*, but the sum was assigned straight to
+    #    `estimated_duration_minutes` and compared against `min_duration`/`max_duration`,
+    #    both documented as minutes. A course with three minutes of video reported "184"
+    #    to the catalogue card and the FactStrip — a 60x overstatement, and the duration
+    #    filter was silently comparing seconds to minutes so it matched almost nothing.
+    #    Seconds are now divided down (rounded up, so a 40-second lesson is "1 min"
+    #    rather than vanishing to 0).
+    #
+    # 2. `Course.estimated_duration_minutes` — an authored column that the seed scripts
+    #    populate on every course — was never read. Reading-only courses have no Media
+    #    rows at all, so all five seeded reading courses returned `null` duration despite
+    #    having the value set. The authored figure is the better number where it exists:
+    #    it covers reading time, which no encoder can measure. Computed video time is
+    #    kept as the fallback for courses that were never given one.
+    video_seconds_by_course: dict = {}
     for lesson in lessons:
         assert lesson.module_id is not None
         course_id = module_to_course.get(lesson.module_id)
         if course_id and lesson.id in duration_by_lesson:
-            duration_by_course[course_id] = duration_by_course.get(course_id, 0) + duration_by_lesson[lesson.id]
+            video_seconds_by_course[course_id] = (
+                video_seconds_by_course.get(course_id, 0) + duration_by_lesson[lesson.id]
+            )
+
+    duration_by_course: dict = {}
+    for course in courses:
+        if course.estimated_duration_minutes:
+            duration_by_course[course.id] = course.estimated_duration_minutes
+        elif course.id in video_seconds_by_course:
+            duration_by_course[course.id] = max(1, math.ceil(video_seconds_by_course[course.id] / 60))
 
     # Apply course filters (level, duration) before building the output.
     filtered_courses = courses
@@ -241,9 +272,13 @@ async def list_courses(
             if duration_by_course.get(c.id, 0) >= min_duration
         ]
     if max_duration is not None:
+        # `[FIXED 2026-08-22]` `.get(c.id, 0)` meant a course with *unknown* duration
+        # scored 0 and therefore satisfied every "under N minutes" filter — the courses
+        # we know least about were the ones most confidently shown as short. Unknown now
+        # fails the upper bound, matching how min_duration already treats it.
         filtered_courses = [
             c for c in filtered_courses
-            if duration_by_course.get(c.id, 0) <= max_duration
+            if c.id in duration_by_course and duration_by_course[c.id] <= max_duration
         ]
 
     out: list[CourseSummaryOut] = []
@@ -496,6 +531,23 @@ async def get_course(
         except Exception:  # noqa: BLE001
             pass
 
+    # W5-R2: check for a certificate. One query, only for a signed-in reader
+    # who owns the course — an anonymous or non-owner never has a certificate.
+    completed = False
+    cert_verification_code: Optional[str] = None
+    if user_id and owned:
+        cert_row = await session.execute(
+            select(Certificate.verification_code).where(
+                Certificate.user_id == uuid.UUID(user_id),
+                Certificate.course_id == course.id,
+                Certificate.revoked_at.is_(None),
+            )
+        )
+        cert_code = cert_row.scalar_one_or_none()
+        if cert_code is not None:
+            completed = True
+            cert_verification_code = cert_code
+
     return CourseDetailOut(
         id=str(course.id),
         slug=course.slug,
@@ -512,4 +564,6 @@ async def get_course(
         modules=module_outs,
         related_products=related_products,
         access_ended_at=access_ended_at,
+        completed=completed,
+        certificate_verification_code=cert_verification_code,
     )
