@@ -8,6 +8,8 @@ import {
   GraduationCap,
   LogOut,
   Mail,
+  Megaphone,
+  MessageSquare,
   Package,
   Receipt,
   Settings,
@@ -57,6 +59,8 @@ const ADMIN_NAV_GROUPS = [
     label: 'Commerce',
     items: [
       { to: '/admin/orders', label: 'Orders', icon: Receipt, end: false },
+      { to: '/admin/promotions', label: 'Promotions', icon: Megaphone, end: false },
+      { to: '/admin/reviews', label: 'Reviews', icon: MessageSquare, end: false },
       { to: '/admin/contact', label: 'Contact', icon: Mail, end: false },
       { to: '/admin/leads', label: 'Leads', icon: UserPlus, end: false },
     ],

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router'
-import { GraduationCap, LayoutDashboard, Layers, Library, LogOut, Menu, Search, ShieldCheck, Sparkles, Settings, Store, Tags, X, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Bookmark, GraduationCap, LayoutDashboard, Layers, Library, LogOut, Menu, Search, ShieldCheck, Sparkles, Settings, Store, Tags, X, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
@@ -36,6 +36,11 @@ const NAV_SECTIONS = [
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
       { to: '/library', label: 'My Library', icon: Library, end: false },
+      // W5-R5. "Your work" rather than "Products": saved items are things the learner
+      // marked, like their library, not things they could buy. Without this row the
+      // /saved route exists but nothing points at it, which is the same shape of gap
+      // that left bookmarks write-only in the first place.
+      { to: '/saved', label: 'Saved', icon: Bookmark, end: false },
     ],
   },
   {

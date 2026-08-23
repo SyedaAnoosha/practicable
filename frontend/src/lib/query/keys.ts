@@ -37,11 +37,15 @@ export const queryKeys = {
     detail: (slug: string) => ['products', 'detail', slug] as const,
     forQuestions: (questionIds: string[]) => ['products', 'for-questions', questionIds] as const,
   },
+  promotions: {
+    active: () => ['promotions', 'active'] as const,
+  },
   me: {
     entitlements: () => ['me', 'entitlements'] as const,
     library: () => ['me', 'library'] as const,
     profile: () => ['me', 'profile'] as const,
     orders: () => ['me', 'orders'] as const,
+    certificates: () => ['me', 'certificates'] as const,
     notifications: () => ['me', 'notifications'] as const,
   },
   admin: {
@@ -59,6 +63,7 @@ export const queryKeys = {
     user: (id: string) => ['admin', 'user', id] as const,
     audit: () => ['admin', 'audit'] as const,
     leads: () => ['admin', 'leads'] as const,
+    promotions: () => ['admin', 'promotions'] as const,
     settings: () => ['admin', 'settings'] as const,
     media: () => ['admin', 'media'] as const,
   },

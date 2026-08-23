@@ -24,6 +24,11 @@ from app.db.models.webhook_event import WebhookEvent
 from app.db.models.filter_event import FilterEvent
 from app.db.models.download_event import DownloadEvent
 from app.db.models.recommendation_event import RecommendationEvent
+from app.db.models.certificate import Certificate
+from app.db.models.promotion import Promotion
+from app.db.models.review import Review, ReviewState
+from app.db.models.user_note import UserNote
+from app.db.models.bookmark import Bookmark
 from app.db.models.setting import Setting
 
 __all__ = [
@@ -52,5 +57,10 @@ __all__ = [
     "FilterEvent",
     "DownloadEvent",
     "RecommendationEvent",
+    "Certificate",
+    "Promotion",
+    "Review", "ReviewState",
+    "UserNote",
+    "Bookmark",
     "Setting",
 ]
