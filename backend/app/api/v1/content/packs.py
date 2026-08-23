@@ -22,7 +22,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -97,7 +97,8 @@ class PackDetailOut(PackSummaryOut):
 
 
 async def _pack_product_ids(session: AsyncSession) -> set[uuid.UUID]:
-    """Published products carrying at least one template row.
+    """Published products that are actually pack-shaped: more than one template, or a
+    single template sold alongside questions.
 
     `[CHANGED 2026-08-22, owner direction]` This also required a `question_set` row.
     Questions are no longer part of what makes something a pack (see the matching change
@@ -105,15 +106,49 @@ async def _pack_product_ids(session: AsyncSession) -> set[uuid.UUID]:
     half of the same bug: an admin could create and publish a question-less pack, and it
     would then simply never appear in the catalogue, with nothing anywhere saying why.
 
-    The template requirement stays — it is the file the pack sells.
+    `[FIXED 2026-08-23, owner rule]` "A pack is not a template — a pack must have more
+    than one file. A pack can only be one file when what it sells is a questions PDF."
+
+    The predicate was "has at least one template row", which is the shape of *every*
+    file-selling product, a single-file template product included. So a plain template
+    product — one template, one price, nothing else — satisfied it and appeared on the
+    packs surface as though it were a pack. The two shapes were indistinguishable here
+    because a pack is inferred rather than declared (see this module's opening note: a
+    pack is "a *shape*, not a type"), and the inference was simply too loose.
+
+    The rule is now expressed as written: >= 2 templates makes a pack, and exactly 1
+    template makes a pack only when a question_set row comes with it — which is what
+    `risk-enterprise-op-question-pack` is, a single typeset PDF of questions. A lone
+    template falls through to the templates catalogue, where it belongs.
+
+    Counting is done in one grouped query rather than per-product, keeping this the
+    fixed number of round trips the packs endpoints were built around.
     """
-    tpl = select(ProductContent.product_id).where(
-        ProductContent.content_type == ResourceType.TEMPLATE.value
+    template_counts = (
+        select(
+            ProductContent.product_id.label("product_id"),
+            func.count().label("template_count"),
+        )
+        .where(ProductContent.content_type == ResourceType.TEMPLATE.value)
+        .group_by(ProductContent.product_id)
+        .subquery()
     )
+    has_questions = select(ProductContent.product_id).where(
+        ProductContent.content_type == ResourceType.QUESTION.value
+    )
+
     result = await session.execute(
-        select(Product.id).where(
+        select(Product.id)
+        .join(template_counts, template_counts.c.product_id == Product.id)
+        .where(
             Product.published.is_(True),
-            Product.id.in_(tpl),
+            or_(
+                template_counts.c.template_count >= 2,
+                and_(
+                    template_counts.c.template_count == 1,
+                    Product.id.in_(has_questions),
+                ),
+            ),
         )
     )
     return set(result.scalars().all())

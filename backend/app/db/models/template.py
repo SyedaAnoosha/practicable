@@ -61,6 +61,10 @@ class Template(Base, IdMixin, TimestampMixin, PublishStateMixin):
         DateTime(timezone=True), nullable=True
     )
 
+    # W5-R4: denormalised review counters (migration 029)
+    review_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rating_sum: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
     # Relationships
     section: Mapped["Section"] = relationship("Section")  # type: ignore[name-defined]
     author: Mapped["Author"] = relationship("Author")  # type: ignore[name-defined]

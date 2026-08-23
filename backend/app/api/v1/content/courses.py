@@ -14,6 +14,7 @@ from app.core.deps import get_current_user_id_optional
 from app.core.entitlements import ResourceType, resolve_granted_content_ids, resolve_product_ids
 from app.db.models import (
     Author,
+    Certificate,
     Course,
     Entitlement,
     Lesson,
@@ -113,6 +114,11 @@ class CourseDetailOut(BaseModel):
     # Without it, a refunded buyer silently sees an ordinary buy page and is never told
     # what happened — §20.10's "the four states" with the fourth state missing.
     access_ended_at: Optional[str] = None
+    # W5-R2: whether this reader has completed the course, and their certificate code
+    # if one was issued. The page uses this to show a completion badge and a link to
+    # the certificate, instead of the "Continue the course" CTA.
+    completed: bool = False
+    certificate_verification_code: Optional[str] = None
 
 
 @router.get("/courses", response_model=list[CourseSummaryOut])
@@ -525,6 +531,23 @@ async def get_course(
         except Exception:  # noqa: BLE001
             pass
 
+    # W5-R2: check for a certificate. One query, only for a signed-in reader
+    # who owns the course — an anonymous or non-owner never has a certificate.
+    completed = False
+    cert_verification_code: Optional[str] = None
+    if user_id and owned:
+        cert_row = await session.execute(
+            select(Certificate.verification_code).where(
+                Certificate.user_id == uuid.UUID(user_id),
+                Certificate.course_id == course.id,
+                Certificate.revoked_at.is_(None),
+            )
+        )
+        cert_code = cert_row.scalar_one_or_none()
+        if cert_code is not None:
+            completed = True
+            cert_verification_code = cert_code
+
     return CourseDetailOut(
         id=str(course.id),
         slug=course.slug,
@@ -541,4 +564,6 @@ async def get_course(
         modules=module_outs,
         related_products=related_products,
         access_ended_at=access_ended_at,
+        completed=completed,
+        certificate_verification_code=cert_verification_code,
     )

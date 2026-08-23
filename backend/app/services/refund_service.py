@@ -14,7 +14,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Entitlement, Order, OrderItem, OrderStatus, Product, User
+from app.db.models import Certificate, Course, Entitlement, Order, OrderItem, OrderStatus, Product, ProductContent, User
 from app.services.audit_service import record_audit
 
 
@@ -96,6 +96,43 @@ async def apply_refund(
             "actor": "admin" if actor else "stripe_dashboard",
         },
     )
+
+    # W5-R2: Revoke certificates for courses covered by the refunded products.
+    # A certificate for a refunded course must not verify clean — that is the
+    # whole point of having a verify page.
+    if entitlements:
+        product_ids_for_courses = [str(e.product_id) for e in entitlements]
+        # Find lessons granted by these products, then find the courses those lessons belong to
+        pc_result = await session.execute(
+            select(ProductContent.content_id, ProductContent.content_type)
+            .where(
+                ProductContent.product_id.in_([e.product_id for e in entitlements]),
+                ProductContent.content_type == "lesson",
+            )
+        )
+        lesson_ids = [row[0] for row in pc_result.all()]
+        if lesson_ids:
+            # Find courses via modules
+            from app.db.models import Lesson, Module
+            module_result = await session.execute(
+                select(Module.course_id)
+                .join(Lesson, Lesson.module_id == Module.id)
+                .where(Lesson.id.in_(lesson_ids))
+                .distinct()
+            )
+            course_ids = [row[0] for row in module_result.all()]
+            if course_ids:
+                cert_result = await session.execute(
+                    select(Certificate).where(
+                        Certificate.user_id == order.user_id,
+                        Certificate.course_id.in_(course_ids),
+                        Certificate.revoked_at.is_(None),
+                    )
+                )
+                certs_to_revoke = cert_result.scalars().all()
+                for cert in certs_to_revoke:
+                    cert.revoked_at = now
+                    cert.revoked_reason = reason
 
     return RefundResult(
         order=order, revoked_entitlements=entitlements, revoked_products=products, already_refunded=False,
