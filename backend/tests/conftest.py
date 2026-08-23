@@ -12,6 +12,7 @@ Run from `backend/`: `Settings.Config.env_file = ".env"` resolves relative to CW
 """
 from __future__ import annotations
 
+import traceback
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import AsyncIterator, Optional
@@ -122,6 +123,31 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await connection.begin_nested()  # the first savepoint; commit()s release/restart this one
         session = AsyncSession(bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint")
 
+        # Record where each real `commit()` came from — see `asserts_commit`.
+        #
+        # Recording the CALLER matters, not just a count: `get_current_user` commits
+        # when it first materialises the `users` row, so every authenticated request
+        # already has one commit to its name before the route handler runs. A guard
+        # that only counted would pass for a handler that never committed at all —
+        # precisely the bug it exists to catch.
+        #
+        # And the caller has to be captured by wrapping `AsyncSession.commit`, not from
+        # SQLAlchemy's `after_commit` event. That event fires inside the greenlet that
+        # bridges async to sync, whose stack starts at SQLAlchemy's own frames — the
+        # application frame naming the endpoint is not in it at any depth. Wrapping the
+        # coroutine instead runs on the caller's own stack, where it is.
+        session.info["commits"] = []
+
+        _real_commit = session.commit
+
+        async def _recording_commit(*args, **kwargs):
+            session.info.setdefault("commits", []).append(
+                "".join(traceback.format_stack())
+            )
+            return await _real_commit(*args, **kwargs)
+
+        session.commit = _recording_commit
+
         @event.listens_for(session.sync_session, "after_transaction_end")
         def _restart_savepoint(sync_session, transaction):
             if connection.closed:
@@ -132,6 +158,81 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         yield session
         await session.close()
         await connection.rollback()
+
+
+@pytest.fixture
+def asserts_commit(db_session: AsyncSession):
+    """`with asserts_commit(): ...` — fail unless the code inside committed.
+
+    **The open risk this closes.** `get_session` yields a session and never commits;
+    `record_audit` deliberately does not commit either. So an endpoint that writes a
+    row and forgets `await session.commit()` leaves the work uncommitted, and in
+    production the change is simply lost when the request ends.
+
+    In tests it is invisible. The `db_session` fixture above runs everything inside
+    one outer transaction with `join_transaction_mode="create_savepoint"`, so a row
+    that was merely `flush()`ed is still readable by every subsequent statement on
+    that same connection. The assertion passes, the endpoint is broken, and nothing
+    says so. Seven endpoints shipped that way in week 5 — promotions create/update/
+    deactivate, review moderation, review submission, notes and bookmarks — and the
+    490-test suite was green for all of them.
+
+    Closing it properly by giving each test a second, non-transactional connection
+    would mean real rows in the real Supabase project and a teardown that has to
+    delete them correctly every time, including after a failure. That trade is worse
+    than the problem.
+
+    This is the cheaper closure and it catches the same defect: rather than checking
+    whether the row *survived*, check whether the code *asked* for it to survive.
+    SQLAlchemy's `after_commit` fires on `Session.commit()` and not on the savepoint
+    restarts, so it sees only genuine commits.
+
+    **Commits from auth do not count.** `get_current_user` commits when it first
+    materialises the `users` row for a token, so every authenticated request carries
+    one commit that the route handler had nothing to do with. Counting those would
+    make the guard pass for a handler that never committed at all — the precise bug
+    it exists to catch, waved through. So each commit's stack is captured and any
+    that came from `app/core/deps.py` is discarded; what remains is what the handler
+    itself did. `test_endpoints_commit.py` proves this end to end by deleting a real
+    commit from a real endpoint and asserting this fixture goes red.
+
+    Usage — wrap the request, not the setup::
+
+        async def test_creating_a_promotion_persists_it(admin_client, asserts_commit):
+            with asserts_commit():
+                resp = await admin_client.post("/admin/promotions", json={...})
+            assert resp.status_code == 201
+
+    Deliberately opt-in rather than autouse: plenty of legitimate requests are pure
+    reads, and an autouse version would fail all of them.
+    """
+    from contextlib import contextmanager
+
+    # Commits raised by the auth dependency rather than by the endpoint under test.
+    _AUTH_FRAMES = ("app/core/deps.py", "app\\core\\deps.py")
+
+    @contextmanager
+    def _asserts_commit(minimum: int = 1):
+        commits = db_session.info.setdefault("commits", [])
+        before = len(commits)
+        yield
+        new = commits[before:]
+        handler_commits = [
+            stack for stack in new
+            if not any(frame in stack for frame in _AUTH_FRAMES)
+        ]
+        assert len(handler_commits) >= minimum, (
+            f"Expected at least {minimum} commit() from the endpoint inside this block, "
+            f"saw {len(handler_commits)} "
+            f"({len(new) - len(handler_commits)} more came from the auth dependency and "
+            "do not count). The endpoint wrote rows but never committed: `get_session` "
+            "does not commit for you, so this work is discarded at the end of the request "
+            "in production. It looks fine in tests only because the fixture holds one open "
+            "transaction and never rolls back mid-test. Add `await session.commit()` — see "
+            "app/api/v1/admin/settings.py for the shape."
+        )
+
+    return _asserts_commit
 
 
 @pytest_asyncio.fixture(autouse=True)
