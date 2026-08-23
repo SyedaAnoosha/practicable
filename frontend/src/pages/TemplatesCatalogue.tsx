@@ -107,10 +107,14 @@ export function TemplatesCatalogue() {
         {templates?.map((template) => {
           const kind = fileKind(template.file_name)
           return (
+            /* `focus-visible:` classes `[FIXED 2026-08-23]`: the grid draws its cell
+               dividers as `[&>*]:outline-1` on these links, which beats the global
+               `:focus-visible` rule in theme.css and left focus invisible. Same defect
+               and same fix as CoursesCatalogue — see the fuller note there. */
             <Link
               key={template.slug}
               to={`/templates/${template.id}`}
-              className="group flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2"
+              className="group flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2 focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
             >
               <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
                 <div className="flex items-center gap-2">

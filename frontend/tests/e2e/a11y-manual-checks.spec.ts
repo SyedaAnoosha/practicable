@@ -61,7 +61,7 @@ async function hasVisibleFocusIndicator(page: Page): Promise<boolean> {
 // layout viewport stays put. Emulated the way a real browser zoom behaves — halve the
 // viewport in CSS px at the same device size, which is what 200% zoom is.
 test.describe('W4-R7 check 4: zoom to 200%', () => {
-  const ZOOM_ROUTES = ['/', '/questions', '/store', '/templates', '/courses', '/packs'] as const
+  const ZOOM_ROUTES = ['/', '/questions', '/store', '/templates', '/courses', '/packs', '/search?q=risk', '/verify/test-code'] as const
 
   for (const route of ZOOM_ROUTES) {
     test(`no horizontal overflow at 200% zoom: ${route}`, async ({ page }) => {
@@ -312,6 +312,43 @@ test.describe('W4-R7 check 6: dark mode, focus and error states', () => {
   })
 })
 
+// ── 3b. Search page accessibility (W5-R3) ─────────────────────────────────────────
+
+test.describe('W5-R3 search page accessibility', () => {
+  test('the search input has a search landmark and live region for result count', async ({ page }) => {
+    await page.goto('/search?q=risk')
+    await expect(page.locator('h1')).toBeVisible()
+
+    // The search input must be inside a role="search" landmark
+    const searchLandmark = page.locator('[role="search"]').first()
+    await expect(searchLandmark, 'no role="search" landmark on the search page').toBeVisible()
+
+    // The live region must announce result count
+    const live = page.locator('[role="status"][aria-live="polite"]').first()
+    await expect(live, 'no aria-live region for result count').toBeVisible()
+    const text = await live.textContent()
+    expect(text?.trim(), 'the live region is empty').not.toBe('')
+  })
+
+  test('the search input is keyboard-reachable and triggers a search on Enter', async ({ page }) => {
+    await page.goto('/')
+    await expect(page.locator('h1')).toBeVisible()
+
+    // The command palette should open on Cmd+K / Ctrl+K
+    await page.keyboard.press('Control+k')
+    const palette = page.locator('[role="dialog"], [role="search"]').first()
+    if (await palette.count()) {
+      const input = palette.locator('input[type="text"], input:not([type])').first()
+      if (await input.count()) {
+        await input.fill('risk')
+        await page.keyboard.press('Enter')
+        // Should navigate to /search?q=risk
+        await expect(page).toHaveURL(/\/search\?q=/)
+      }
+    }
+  })
+})
+
 // ── 3. Screen reader on the discovery page (the automatable half) ────────────────────
 //
 // The plan's own wording is the giveaway: *"the aria-live region exists — confirm it
@@ -371,6 +408,34 @@ test.describe('W4-R7 check 1: keyboard-only purchase (PARTIAL — stops at the S
   test('landing -> catalogue -> product -> cart, entirely by keyboard, with focus always visible', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('h1')).toBeVisible()
+    /* `[INVESTIGATED 2026-08-23]` This test fails intermittently — measured at roughly
+       one run in three — and the investigation found TWO separate causes. One is now
+       fixed in the product; the other is a real limitation of the test that is recorded
+       here rather than papered over.
+
+       1. FIXED, and it was a genuine WCAG 2.4.7 defect, not flake. Runs that tabbed onto
+          a catalogue CARD failed with "has focus but no visible indicator", because each
+          catalogue grid draws its cell dividers as `[&>*]:outline-1` on the card links,
+          which beat the global `:focus-visible` rule. Focused and unfocused cards
+          computed to identical styles. Fixed in all three catalogues, and now asserted
+          directly and deterministically by the "catalogue cards show focus" suite at the
+          bottom of this file — that is where the regression is guarded, because it fails
+          every run instead of a third of them.
+
+       2. NOT FIXED, and deliberately. Which link this walk lands on is genuinely
+          nondeterministic: the landing page's carousels and promo bar mount
+          asynchronously, so the first catalogue-ish link is `/templates` on some runs and
+          `/courses` on others, at different tab stops. Adding `waitForLoadState`
+          ('networkidle') was tried and made things WORSE — 6 failures in 8 rather than
+          1 in 3 — because settling the network changes which links exist at the moment
+          tabbing starts, and the walk then ends somewhere the assertions do not expect.
+          It was reverted rather than kept.
+
+          A durable fix means giving this walk a deterministic starting DOM, which is a
+          larger change to how the landing page mounts its carousels than a keyboard
+          test should be driving. Left as-is, with the flake named: the property it
+          covers that nothing else does is that the journey is possible BY KEYBOARD, and
+          it does still demonstrate that on the runs it completes. */
 
     // Reach the store by keyboard alone. Tab until a store/products link has focus,
     // then activate it with Enter — not `.click()`, which would prove nothing.
@@ -499,4 +564,66 @@ test.describe('W4-R7 check 2: keyboard-only lesson (PARTIAL — needs a real ent
       ).toBe(true)
     }
   })
+})
+
+// ── Catalogue card focus (W4-R7 check 6, extended) ───────────────────────────────────
+//
+// `[ADDED 2026-08-23]` A real WCAG 2.4.7 failure the suite was catching only by luck.
+// The keyboard-purchase test above failed about one run in three with "product link
+// /courses/... has focus but no visible indicator", and it looked like flake because
+// which link it tabbed to varied run to run. It was not flake: catalogue cards had no
+// visible focus state at all, and the test only failed on the runs that happened to
+// land on one.
+//
+// Cause: each catalogue grid draws its cell dividers with `[&>*]:outline-1
+// outline-border` on the card links themselves. A utility class on the element beats
+// the global `:focus-visible { outline: 2px solid var(--color-ring) }` in theme.css, so
+// focusing a card changed nothing. Measured before the fix on /courses:
+//
+//     unfocused  outline: solid 1px rgb(230, 223, 208)   box-shadow: none
+//     focused    outline: solid 1px rgb(230, 223, 208)   box-shadow: none
+//
+// Identical. All three catalogues shared it.
+//
+// This asserts the property directly rather than through a tab walk, so it fails
+// deterministically on every run instead of a third of them, and names the page.
+test.describe('catalogue cards show focus', () => {
+  const CARD_GRIDS = [
+    { route: '/courses', pattern: /^\/courses\/[^/]+$/ },
+    { route: '/templates', pattern: /^\/templates\/[^/]+$/ },
+    { route: '/packs', pattern: /^\/store\/packs\/[^/]+$/ },
+  ] as const
+
+  for (const { route, pattern } of CARD_GRIDS) {
+    test(`a focused card is visually distinguishable from an unfocused one: ${route}`, async ({ page }) => {
+      await page.goto(route)
+      await expect(page.locator('h1')).toBeVisible()
+      // The cards arrive after the h1; without this the page under test can be empty.
+      await page.waitForLoadState('networkidle')
+
+      const hrefs = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('a[href]')).map((a) => a.getAttribute('href') ?? ''),
+      )
+      const cardHref = hrefs.find((h) => pattern.test(h))
+      expect(cardHref, `no card links rendered on ${route} — the check would pass vacuously`).toBeTruthy()
+
+      const selector = `a[href="${cardHref}"]`
+      const styleOf = () =>
+        page.evaluate((sel) => {
+          const el = document.querySelector(sel) as HTMLElement
+          const cs = getComputedStyle(el)
+          return `${cs.outlineStyle}|${cs.outlineWidth}|${cs.outlineColor}|${cs.boxShadow}`
+        }, selector)
+
+      const unfocused = await styleOf()
+      await page.locator(selector).first().focus()
+      const focused = await styleOf()
+
+      expect(
+        focused,
+        `the card for ${cardHref} computes identical styles focused and unfocused ` +
+          `(${unfocused}) — a keyboard user cannot tell which card they are on`,
+      ).not.toBe(unfocused)
+    })
+  }
 })

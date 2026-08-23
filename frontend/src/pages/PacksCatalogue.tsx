@@ -91,10 +91,14 @@ export function PacksCatalogue() {
       {!isLoading && !isError && !!packs?.length && (
       <div className="mt-6 grid gap-px overflow-hidden rounded-md border border-border bg-card sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:bg-card [&>*]:outline [&>*]:outline-1 [&>*]:-outline-offset-[0.5px] [&>*]:outline-border">
         {packs?.map((pack) => (
+          /* `focus-visible:` classes `[FIXED 2026-08-23]`: the grid draws its cell
+             dividers as `[&>*]:outline-1` on these links, which beats the global
+             `:focus-visible` rule in theme.css and left focus invisible. Same defect
+             and same fix as CoursesCatalogue — see the fuller note there. */
           <Link
             key={pack.slug}
             to={`/store/packs/${pack.slug}`}
-            className="group flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2"
+            className="group flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2 focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
           >
             <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
               <p className="eyebrow">{pack.domain_name ?? 'Reference'}</p>

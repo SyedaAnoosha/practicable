@@ -54,6 +54,18 @@ const DURATION_BUCKETS = [
   { label: 'Over 2 hours', min: 120, max: undefined },
 ] as const
 
+/** Three letters, title case — "beginner" → "Beg", "intermediate" → "Int".
+ *
+ *  Only for the catalogue card's four-fact row, where the full word is what pushed
+ *  `duration` onto a second line. Every other surface (filter chips, course detail,
+ *  the API itself) keeps the whole word, and the whole word is still what a screen
+ *  reader announces here — see the `label` passed alongside this value. */
+function abbreviateLevel(level: string): string {
+  const trimmed = level.trim()
+  if (!trimmed) return '—'
+  return trimmed.slice(0, 3).charAt(0).toUpperCase() + trimmed.slice(1, 3).toLowerCase()
+}
+
 function formatDuration(minutes: number | null | undefined): string {
   if (minutes == null) return ''
   if (minutes < 60) return `${minutes} min`
@@ -240,7 +252,24 @@ export function CoursesCatalogue() {
                so the footers formed a ragged edge across the row. The footer is now
                pinned to the bottom of every card with `mt-auto`, independent of how
                long the title and subtitle run. */
-            <Link key={course.slug} to={`/courses/${course.slug}`} className="group block h-full">
+            /* `[FIXED 2026-08-23]` WCAG 2.4.7 — focus was invisible on every card.
+               The grid draws its cell dividers as `[&>*]:outline-1 outline-border` on
+               these very links, and a utility class on the element beats the global
+               `:focus-visible { outline: 2px }` rule in theme.css. Focused and unfocused
+               cards therefore computed to identical styles — measured directly,
+               `outline: solid 1px rgb(230,223,208)` and `box-shadow: none` in BOTH
+               states — so a keyboard user could not tell which card they were on.
+
+               Restated at `focus-visible` so it wins by specificity, and kept in the
+               outline slot at a larger width and the ring colour: the divider and the
+               focus ring both want that slot, and focus is the one that must win while
+               it is held. `z-10` lifts the focused card so its ring is not clipped by
+               the neighbouring cell's own outline. */
+            <Link
+              key={course.slug}
+              to={`/courses/${course.slug}`}
+              className="group block h-full focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+            >
               <div className="relative flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2">
                 {/* Domain top rule: 2px, full-bleed. Same treatment as the Home QuestionCard. */}
                 <span
@@ -286,14 +315,39 @@ export function CoursesCatalogue() {
                       card. Moving `mt-auto` up to the metadata makes those two a single
                       bottom-anchored block, so they line up across a row of cards
                       whatever the title and description lengths are. */}
+                  {/* `[FIXED 2026-08-23]` Four facts on one line that never wraps, and
+                      all four always rendered.
+
+                      Two separate things made this row ragged. The layout was a
+                      wrapping flex line, so `level` — a word of unpredictable width
+                      between two short figures — pushed `duration` onto a second line
+                      at a different point on each card (see Meta's `singleLine` note).
+                      And level/duration were conditional, so a course missing either
+                      dropped the cell entirely and shifted every fact to its right,
+                      which meant no two cards agreed on where a given figure sat.
+
+                      Both are fixed now: the row is a single non-wrapping line, and an
+                      absent level or duration renders an em-dash rather than
+                      collapsing. A gap is stated where it would have been filled,
+                      which is honest and keeps the four facts in the same order on
+                      every card.
+
+                      `level` is abbreviated to three letters here rather than at the
+                      source. The full word is what the filter chips and the course
+                      detail page say, and it is what the API returns; this row is the
+                      one place where four facts share ~250px, and "Int" in a card that
+                      also says "10 lessons · 3h" is unambiguous in context. The
+                      unabbreviated word stays in the accessible name via `label`, so
+                      nothing is lost to a screen reader. */}
                   <Meta
                     className="mt-auto pt-2"
                     tone={tone}
+                    singleLine
                     items={[
                       { icon: Layers, value: String(course.module_count), label: course.module_count === 1 ? 'module' : 'modules' },
                       { icon: PlayCircle, value: String(course.lesson_count), label: course.lesson_count === 1 ? 'lesson' : 'lessons' },
-                      ...(course.level ? [{ icon: GraduationCap, value: course.level }] : []),
-                      ...(course.estimated_duration_minutes ? [{ icon: Clock, value: formatDuration(course.estimated_duration_minutes) }] : []),
+                      { icon: GraduationCap, value: course.level ? abbreviateLevel(course.level) : '—', numeric: false, label: course.level ? `level: ${course.level}` : 'level not set' },
+                      { icon: Clock, value: formatDuration(course.estimated_duration_minutes) || '—', label: course.estimated_duration_minutes ? 'duration' : 'duration not set' },
                     ]}
                   />
                   <div className="flex items-center justify-between border-t border-border pt-2.5">
