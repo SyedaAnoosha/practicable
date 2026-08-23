@@ -229,7 +229,7 @@ Things I could not or should not do unattended.
 | Check | Result |
 |---|---|
 | Frontend unit tests | 237 / 237 |
-| Backend tests | 403 passing before this pass; +19 added, full re-run in progress |
+| Backend tests | **416 / 416** (403 before this pass, +13 new) |
 | `tsc --noEmit` | clean |
 | `eslint src` | clean |
 | `npm run build` | clean |
