@@ -125,6 +125,9 @@ class CourseDetailOut(BaseModel):
     # the certificate, instead of the "Continue the course" CTA.
     completed: bool = False
     certificate_verification_code: Optional[str] = None
+    # W5-R4 Stage B. Same as CourseSummaryOut — null below the display threshold.
+    rating: Optional[float] = None
+    review_count: int = 0
 
 
 @router.get("/courses", response_model=list[CourseSummaryOut])
@@ -574,4 +577,6 @@ async def get_course(
         access_ended_at=access_ended_at,
         completed=completed,
         certificate_verification_code=cert_verification_code,
+        rating=aggregate_rating(course.review_count, course.rating_sum),
+        review_count=course.review_count or 0,
     )
