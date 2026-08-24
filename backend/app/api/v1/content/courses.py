@@ -27,6 +27,7 @@ from app.db.models import (
     Question,
     Section,
 )
+from app.api.v1.content.reviews import aggregate_rating
 from app.db.session import get_session
 from app.integrations.storage_client import generate_presigned_url
 
@@ -59,6 +60,11 @@ class CourseSummaryOut(BaseModel):
     level: Optional[str] = None
     estimated_duration_minutes: Optional[int] = None
     product: Optional[RelatedProductOut]
+    # W5-R4 Stage B. `rating` is null below MIN_REVIEWS_FOR_AGGREGATE — served from
+    # the denormalised counters on the row, so a catalogue of N cards stays one query
+    # rather than N calls to /reviews/rating.
+    rating: Optional[float] = None
+    review_count: int = 0
 
 
 class LessonOutlineOut(BaseModel):
@@ -325,6 +331,8 @@ async def list_courses(
                 level=course.level,
                 estimated_duration_minutes=duration_minutes,
                 product=product_out,
+                rating=aggregate_rating(course.review_count, course.rating_sum),
+                review_count=course.review_count or 0,
             )
         )
     return out

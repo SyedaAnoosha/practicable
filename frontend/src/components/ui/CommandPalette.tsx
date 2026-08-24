@@ -120,7 +120,7 @@ export function CommandPalette({
           type: group.type as SearchResult['type'],
           title: item.title,
           subtitle: item.subtitle ?? item.type,
-          href: (hrefMap[group.type] ?? ((i: any) => `/`))(item),
+          href: (hrefMap[group.type] ?? (() => `/`))(item),
           icon: iconMap[group.type] ?? HelpCircle,
         })
       }

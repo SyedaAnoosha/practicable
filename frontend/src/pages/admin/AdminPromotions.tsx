@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { FieldError } from '@/components/ui/FieldError'
-import { required, useFieldValidation } from '@/lib/useFieldValidation'
 
 interface PromotionRow {
   id: string
@@ -46,9 +44,14 @@ const EMPTY_FORM: PromotionForm = {
   sync_to_stripe: false,
 }
 
-const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'muted'> = {
+// `secondary`, not `info`: Badge has no `info` variant, so this map was typed against
+// a token that does not exist and every render of a scheduled promotion was a type
+// error. `muted` is spoken for — theme.css documents it as "quiet/disabled fill", and a
+// scheduled promotion is pending, not disabled — so `secondary` is the neutral that
+// reads as a live state without claiming success or warning.
+const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'secondary' | 'muted'> = {
   live: 'success',
-  scheduled: 'info',
+  scheduled: 'secondary',
   expired: 'muted',
   inactive: 'warning',
 }

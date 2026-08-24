@@ -10,11 +10,10 @@
 | Document | Owns |
 |---|---|
 | `Deciding_in_the_Dark_Platform_Intern_Brief.md` | Scope, deliverables, non-negotiables, the four-week sequence |
-| `Deciding_in_the_Dark_Research_Specification.md` | Research, entity model, service selection, security model, pricing, legal |
 | `DESIGN.md` v2.0 | Everything the user sees; the frontend structure (§52) and its API expectations |
 | **This document** | The FastAPI service: structure, boundaries, the entitlement gate, and the API contract the frontend consumes |
 
-`DESIGN.md` §52 is the frontend tree. This is its counterpart. Cross-references marked `DESIGN §n` point there; `RS n.n` points at the Research Specification.
+`DESIGN.md` §52 is the frontend tree. This is its counterpart. Cross-references marked `DESIGN §n` point there.
 
 ---
 
@@ -22,7 +21,7 @@
 
 ### 1.1 There is exactly one gate
 
-The `entitlements` table is the single source of truth for access (RS 5.6). Every gated resource passes through **one dependency, in one file** — `app/core/entitlements.py`. Not a decorator repeated per router, not a check copied into each service, not a mixin.
+The `entitlements` table is the single source of truth for access. Every gated resource passes through **one dependency, in one file** — `app/core/entitlements.py`. Not a decorator repeated per router, not a check copied into each service, not a mixin.
 
 This matters structurally because the failure mode is dispersion: a codebase with entitlement logic in nine places has nine chances to get it wrong, and the ninth one is the leak found in week four. One file means one audit, one test suite, and one place to look when something is wrong.
 
@@ -55,11 +54,11 @@ A route that imports `stripe` is a bug. A service that imports `Request` is a bu
 
 ### 1.4 Sections are a foreign key, not an assumption
 
-RS 3.4 and the owner directive: a second subject, author and audience must be configuration. Concretely, in the backend:
+The research and the owner directive agree: a second subject, author and audience must be configuration. Concretely, in the backend:
 
 - Every content query is scoped by `section_id`. No query assumes one section exists.
 - No enum, constant, or route path hard-codes a domain name or the word "risk".
-- Tag values live in reference tables, not Python enums — the owner still owns those lists (RS 12.2), and changing them must be a data edit, not a deploy.
+- Tag values live in reference tables, not Python enums — the owner still owns those lists, and changing them must be a data edit, not a deploy.
 
 ### 1.5 Money and access are audited
 
@@ -82,7 +81,7 @@ backend/
       entitlements.py              ← THE GATE. §4. Read this file first.
       errors.py                    ← exception types + handlers + the error response shape
       logging.py                   ← structured logging, request IDs, secret redaction
-      rate_limit.py                ← per-IP and per-user limits (RS 7.6)
+      rate_limit.py                ← per-IP and per-user limits
       pagination.py                ← cursor/offset helpers, one implementation
 
     db/
@@ -156,7 +155,7 @@ backend/
     services/
       question_service.py          ← index build, filter query, scoring parity (§7)
       catalog_service.py           ← courses, modules, lessons, templates
-      search_service.py            ← keyword now; pgvector slot reserved (RS 9.2)
+      search_service.py            ← keyword now; pgvector slot reserved
       entitlement_service.py       ← grant, revoke, resolve-for-user
       order_service.py             ← checkout session, webhook fulfilment, reconciliation
       progress_service.py          ← lesson completion, course percentage, resume point
@@ -281,7 +280,7 @@ async def create_playback_token(
 
 ### 4.1 Order of operations, which is not negotiable
 
-The check runs **before** the endpoint does anything else — before Mux is called, before R2 is called, before a query for the body. A signed URL minted and then discarded on a failed check is a signed URL that existed, and existing is enough (RS 5.6).
+The check runs **before** the endpoint does anything else — before Mux is called, before R2 is called, before a query for the body. A signed URL minted and then discarded on a failed check is a signed URL that existed, and existing is enough.
 
 ### 4.2 What the gate protects
 
@@ -358,19 +357,19 @@ Steps 3 and 4 in one transaction is what prevents the "paid but no access" state
 
 ### 6.2 `mux_client.py`
 
-Signed JWT playback tokens, 20-minute expiry (RS 6.5). Tokens are scoped to one playback ID — a token for lesson A must be rejected for lesson B, which is a gating test (DESIGN §58.2, #6). Also owns upload tickets and caption status for admin.
+Signed JWT playback tokens, 20-minute expiry. Tokens are scoped to one playback ID — a token for lesson A must be rejected for lesson B, which is a gating test (DESIGN §58.2, #6). Also owns upload tickets and caption status for admin.
 
 ### 6.3 `r2_client.py`
 
-Presigned GETs with a 60-second TTL (RS 6.6). One URL per request; never stored, never logged, never returned in a list response. Admin uploads go through presigned PUTs so files never transit the API process.
+Presigned GETs with a 60-second TTL. One URL per request; never stored, never logged, never returned in a list response. Admin uploads go through presigned PUTs so files never transit the API process.
 
 ### 6.4 `resend_client.py`
 
-Sends pre-rendered HTML plus its plain-text alternative. Rendering is `email_service`'s job (Jinja2, per RS 6.7 — React Email cannot render in a Python process, which is why `app/emails/` holds `.html` and not `.tsx`).
+Sends pre-rendered HTML plus its plain-text alternative. Rendering is `email_service`'s job (Jinja2 — React Email cannot render in a Python process, which is why `app/emails/` holds `.html` and not `.tsx`).
 
 ### 6.5 Analytics — removed
 
-`posthog_client.py` and the client-side `lib/analytics.ts` wrapper existed through Phase 6B and were removed entirely on 2026-08-21 (decision #34, week4_plan.md §8.1). No third-party analytics or event tracking runs anywhere in this codebase now. What the admin panel knows about usage comes from `filter_events`/`download_events` — narrow, anonymous, first-party aggregate counters, not a general event stream.
+`posthog_client.py` and the client-side `lib/analytics.ts` wrapper existed through Phase 6B and were removed entirely on 2026-08-21. No third-party analytics or event tracking runs anywhere in this codebase now. What the admin panel knows about usage comes from `filter_events`/`download_events` — narrow, anonymous, first-party aggregate counters, not a general event stream.
 
 ---
 
@@ -389,7 +388,7 @@ The filtered endpoint is the authority and the thing analytics measures. Both mu
 
 ### 7.2 The query
 
-Indexed columns, `WHERE` clauses, no full-text search for tag filtering (RS 3.2). Composite index on `(section_id, published, domain_id)` plus single-column indexes on the five ordinal tags. `tier` and `leadership_traits` are arrays — GIN indexes.
+Indexed columns, `WHERE` clauses, no full-text search for tag filtering. Composite index on `(section_id, published, domain_id)` plus single-column indexes on the five ordinal tags. `tier` and `leadership_traits` are arrays — GIN indexes.
 
 Keyword search filters on `title` and `preview` before scoring, never as a scored dimension (DESIGN §57.4).
 
@@ -410,11 +409,11 @@ If a third consumer ever appears, delete the client implementation and accept th
 
 The conceptual model is RS Appendix C. Four structural points that belong here:
 
-**Tag values are rows, not enums.** `tag_values(dimension, value, label, position, section_id)`. The owner still owns these lists (RS 12.2) and a change must not require a deploy. The five ordinal scales used by scoring live on the row as `ordinal_rank`, so §7.3's arithmetic reads its scale from the database.
+**Tag values are rows, not enums.** `tag_values(dimension, value, label, position, section_id)`. The owner still owns these lists and a change must not require a deploy. The five ordinal scales used by scoring live on the row as `ordinal_rank`, so §7.3's arithmetic reads its scale from the database.
 
-**Price lives on `products`, never on content** (RS 10.1). A price change must never touch a course row.
+**Price lives on `products`, never on content.** A price change must never touch a course row.
 
-**`product_contents` is a join table**, so one product can grant a course, three templates and a domain of questions — and a bundle needs no new mechanism (RS 5.6).
+**`product_contents` is a join table**, so one product can grant a course, three templates and a domain of questions — and a bundle needs no new mechanism.
 
 **Publishing state is a column with a transition service**, not a boolean. `draft | in_review | published | archived`, and `publishing_service` is the only writer. Draft content must 404 on a public route, not render a preview (DESIGN §58.2, #8).
 
@@ -463,7 +462,7 @@ STRIPE_SECRET_KEY  STRIPE_WEBHOOK_SECRET
 MUX_TOKEN_ID  MUX_TOKEN_SECRET  MUX_SIGNING_KEY_ID  MUX_SIGNING_PRIVATE_KEY
 R2_ACCOUNT_ID  R2_ACCESS_KEY_ID  R2_SECRET_ACCESS_KEY  R2_BUCKET
 RESEND_API_KEY  EMAIL_FROM  EMAIL_REPLY_TO
-CORS_ORIGINS         # exact frontend origins — RS 6.9's silent failure mode
+CORS_ORIGINS         # exact frontend origins — a wrong one is a silent failure mode
 FRONTEND_BASE_URL    # for checkout redirects and email links
 ENVIRONMENT          # local | preview | production
 ```
@@ -472,7 +471,7 @@ ENVIRONMENT          # local | preview | production
 
 ### 10.1 CORS
 
-Two hosts means CORS, and a wrong origin fails in a way that looks exactly like a dead API (RS 6.9). `CORS_ORIGINS` is an explicit list — the deployed frontend origin plus `http://localhost:5173`. Never `["*"]` on a service that reads an `Authorization` header.
+Two hosts means CORS, and a wrong origin fails in a way that looks exactly like a dead API. `CORS_ORIGINS` is an explicit list — the deployed frontend origin plus `http://localhost:5173`. Never `["*"]` on a service that reads an `Authorization` header.
 
 ---
 
@@ -508,13 +507,13 @@ Each frontend API module in DESIGN §52 has exactly one backend counterpart. If 
 | `entitlements.ts` | `member/entitlements.py` | `entitlement_service` |
 | `admin.ts` | `admin/*` | various |
 
-Note what is absent: there is no `auth` service. Sign-up, sign-in, password reset and session refresh are Supabase's, called directly from the browser (RS 6.3). FastAPI only ever *verifies* the resulting token. Building a login endpoint here would be reimplementing solved infrastructure with real accounts attached — precisely what the brief's "custom build does not mean build everything" rules out.
+Note what is absent: there is no `auth` service. Sign-up, sign-in, password reset and session refresh are Supabase's, called directly from the browser. FastAPI only ever *verifies* the resulting token. Building a login endpoint here would be reimplementing solved infrastructure with real accounts attached — precisely what the brief's "custom build does not mean build everything" rules out.
 
 ---
 
 ## 13. Deployment
 
-Render (Starter, ~$7/month — the free tier's cold start breaks live checkout, RS 6.9). One web service, one pre-deploy migration step.
+Render (Starter, ~$7/month — the free tier's cold start breaks live checkout). One web service, one pre-deploy migration step.
 
 ```yaml
 # render.yaml

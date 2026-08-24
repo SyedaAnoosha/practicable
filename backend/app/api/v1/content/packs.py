@@ -34,6 +34,7 @@ from app.core.entitlements import (
 )
 from datetime import datetime
 from app.db.models import Domain, Product, ProductContent, Question, TagValue, Template
+from app.api.v1.content.reviews import aggregate_rating
 from app.db.session import get_session
 from app.services.template_evidence import PreviewOut, format_line, resolve_previews
 
@@ -61,6 +62,10 @@ class PackQuestionOut(BaseModel):
 
 
 class PackSummaryOut(BaseModel):
+    # The pack's Product UUID. Reviews are keyed by it (`_MODEL_MAP["pack"] -> Product`
+    # in content/reviews.py), so the detail page has to be able to send it; without this
+    # field PackDetail passed `slug` to /reviews/featured, which 500'd on uuid.UUID().
+    id: str
     slug: str
     name: str
     description: str
@@ -89,6 +94,10 @@ class PackSummaryOut(BaseModel):
     min_office_version: Optional[str] = None
     previews: list[PreviewOut] = []
     format: Optional[str] = None
+    # W5-R4 Stage B. Null below MIN_REVIEWS_FOR_AGGREGATE. A pack's counters live on
+    # its Product row, which is what `_COUNTER_MODEL["pack"]` writes to.
+    rating: Optional[float] = None
+    review_count: int = 0
 
 
 class PackDetailOut(PackSummaryOut):
@@ -215,6 +224,9 @@ async def _load_pack(session: AsyncSession, product: Product) -> dict:
 def _summary(product: Product, loaded: dict, owned: bool) -> dict:
     tpl = loaded["template"]
     return {
+        "id": str(product.id),
+        "rating": aggregate_rating(product.review_count, product.rating_sum),
+        "review_count": product.review_count or 0,
         "slug": product.slug,
         "name": product.name,
         "description": product.description,

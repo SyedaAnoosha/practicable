@@ -21,6 +21,7 @@ import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { FactStrip, type Fact } from '@/components/ui/FactStrip'
 import { TestimonialSection } from '@/components/ui/Testimonial'
 import { useFeaturedReviews } from '@/hooks/useFeaturedReviews'
+import { ReviewForm } from '@/components/ui/ReviewForm'
 
 interface DownloadUrlResponse {
   download_url: string
@@ -284,6 +285,15 @@ export function Template() {
 
           {/* W5-R4 Stage A: featured testimonials */}
           <FeaturedTestimonials contentType="template" contentId={template.id} />
+
+          {template.owned && (
+            <ReviewForm
+              className="mt-8"
+              contentType="template"
+              contentId={template.id}
+              contentTitle={template.title}
+            />
+          )}
         </section>
 
         {/* ── Get the file ───────────────────────────────────────────────────── */}

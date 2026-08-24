@@ -130,7 +130,7 @@ export function AdminReviews() {
                     >
                       {r.state}
                     </Badge>
-                    {r.is_featured && <Badge variant="info">Featured</Badge>}
+                    {r.is_featured && <Badge variant="secondary">Featured</Badge>}
                     <span className="text-xs text-muted-foreground">
                       {r.content_type} · {r.content_id.slice(0, 8)}
                     </span>

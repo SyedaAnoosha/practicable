@@ -228,7 +228,7 @@ run green, and the account was then deleted from **both** `auth.users` and
 
 ## Index evidence
 
-Appended to `docs/db_index_evidence.md`:
+Recorded in `ENGINEERING_NOTES.md` §1:
 - Migration 026: promotions active window query — sequential scan at current scale (0 rows), partial index will be chosen at ~100+ rows
 - Migration 028: full-text search on courses and templates — sequential scan at current scale (8–10 rows), GIN indexes will be chosen at ~100+ rows
 

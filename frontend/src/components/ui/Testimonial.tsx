@@ -7,7 +7,6 @@
  */
 import { Star } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
-import { computeRating } from '@/lib/reviews'
 
 interface Review {
   id: string

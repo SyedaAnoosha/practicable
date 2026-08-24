@@ -1,6 +1,6 @@
 # Deciding in the Dark — Design System & UI Specification
 
-**Version 2.4** · Supersedes v2.3 (2026-08-12: reconciled against `Deciding_in_the_Dark_Product_Spec.md` — the product reframed as a three-type content store, §0.8; the commercial model settled as free questions + one free template + paid templates/courses, §27.4 and §28.0; My Library specified as built, §30.4; the admin interface specified as built with an honest gap list, §31.8) · Supersedes v2.2 (2026-08-11: the palette settles on two brand colours — ivory ground, blue primary, champagne gold secondary — after the blue-only pass read grey on real screens; §5.3, §7.5.2) · Supersedes v2.1 (2026-08-11: the liveliness pass and its same-day blue/ivory/black/white palette constraint — §5.3) · Supersedes v2.0 (reconciled against `design_again.md` and against what had already shipped — §0.5 row 21, §0.7) · Supersedes v1.0 · Status: working specification, Week 1 build-ready
+**Version 2.4** · Supersedes v2.3 (2026-08-12: reconciled against an earlier product spec — the product reframed as a three-type content store, §0.8; the commercial model settled as free questions + one free template + paid templates/courses, §27.4 and §28.0; My Library specified as built, §30.4; the admin interface specified as built with an honest gap list, §31.8) · Supersedes v2.2 (2026-08-11: the palette settles on two brand colours — ivory ground, blue primary, champagne gold secondary — after the blue-only pass read grey on real screens; §5.3, §7.5.2) · Supersedes v2.1 (2026-08-11: the liveliness pass and its same-day blue/ivory/black/white palette constraint — §5.3) · Supersedes v2.0 (reconciled against a second creative-brief draft and against what had already shipped — §0.5 row 21, §0.7) · Supersedes v1.0 · Status: working specification, Week 1 build-ready
 **Stack:** React 19 · TypeScript · Tailwind CSS v4 (frontend) → FastAPI · Supabase · Stripe · Mux · R2 (backend, per Research Spec)
 
 ---
@@ -20,10 +20,10 @@ It is not the product specification and it is not the architecture document. Tho
 | Document | Owns |
 |---|---|
 | `Deciding_in_the_Dark_Platform_Intern_Brief.md` | Scope, deliverables, non-negotiables, the four-week sequence |
-| `Deciding_in_the_Dark_Research_Specification.md` | Market and user research, content model, entity schema, backend stack, security model, pricing, legal |
+| `BACKEND.md` | Backend architecture, entity schema, security model, integrations |
 | **This document** | Everything the user sees or touches, and the frontend code patterns that produce it |
 
-Where this document and the Research Specification appear to disagree, the Research Specification wins on *data model, security and backend*; this document wins on *interface, interaction and frontend structure*. Section 0.6 lists the places the two were reconciled and how.
+Where this document and the backend documentation appear to disagree, the backend documentation wins on *data model, security and backend*; this document wins on *interface, interaction and frontend structure*. Section 0.6 lists the places the two were reconciled and how.
 
 ### 0.3 How to use it
 
@@ -72,7 +72,7 @@ The v1.0 document was structurally sound: the principles, the surface inventory 
 | 22 | **Reconciled against the product spec; commercial model settled; Library and admin recorded as built** (§0.8, §27.4, §28.0, §30.4, §31.8) | A product spec arrived after v2.3 and reframed the product as a three-type content store rather than a question library with attachments — right, and adopted. The same pass settled the commercial model in one place (free questions, one free template, paid everything else), specified My Library, and recorded what the admin build actually does versus what §31.1–§31.7 specify — the latter mattering most, because a spec section that reads as shipped when it isn't is how a handover goes wrong. |
 | 23 | **Marketing surfaces rebuilt on the Watermelon UI blocks; the `--stage` plane and the aurora specified; `/contact` built** (§7.5.3, §7.6, §32.4, §33.3, §47.1) | The hero, footer and auth screens were rebuilt against six reference blocks the owner selected. Two things came out of it that are rules rather than styling: `--primary` **inverts between themes**, so every use of it on the dark full-bleed plane was correct in one theme and broken in the other — it shipped seven times, including a footer mark square that was invisible navy-on-navy in the light theme, which is why `--stage` now exists and §7.6 carries the rule. And the aurora's contrast had to be measured from *rendered pixels*, not from token values: the token maths said the auth panel was safe while the actual paragraph, at its actual 75% opacity and actual width, sat on 4.36:1. |
 | 24 | **All three typefaces replaced; the member rail moved onto the `--stage` plane** (§9.0–§9.3, §10, §17.2) | Owner direction. The old set (Bricolage Grotesque / Source Serif 4 / JetBrains Mono) included two faces named on a list of typefaces AI site builders default to; the third was replaced with them because a type system is a set, not three independent picks, and a face justified on its `opsz` axis standing beside two replaced faces stops being an argument. `--text-read` moved 17px → 18px as a consequence of the new serif's x-height, not as a separate preference. The same direction put the hero's gradient on the member sidebar, which is a *plane* change rather than a colour one — the rail is now dark in both themes, so every child had to move to `stage` tokens in the same pass or reproduce the §7.6 inversion bug. |
-| 21 | **Reconciled against `design_again.md` and updated to match decisions already shipped** (§3.7, §5.1–5.2, §9.4, §19.9, §21.3, §27) | A second brief (`design_again.md`) argued the product should read as a decision library, not an LMS — see `docs/win.md` for the full comparison. Cross-checking it also surfaced places this document had gone stale against code already shipped: the question title is set in serif in the actual `PageTitle` component (§9.4), the mobile filter sheet applies live (§19.9), and the question paywall was rebuilt as a free body with a soft email gate weeks after §21.3 was written (§21.3, §27). Fixed here so the document describes what is actually true, not what v2.0 assumed. |
+| 21 | **Reconciled against a second creative brief and updated to match decisions already shipped** (§3.7, §5.1–5.2, §9.4, §19.9, §21.3, §27) | A second brief argued the product should read as a decision library, not an LMS. Cross-checking it also surfaced places this document had gone stale against code already shipped: the question title is set in serif in the actual `PageTitle` component (§9.4), the mobile filter sheet applies live (§19.9), and the question paywall was rebuilt as a free body with a soft email gate weeks after §21.3 was written (§21.3, §27). Fixed here so the document describes what is actually true, not what v2.0 assumed. |
 
 ### 0.6 Reconciliations with the Research Specification
 
@@ -83,19 +83,26 @@ The v1.0 document was structurally sound: the principles, the surface inventory 
 | Research 9.2 offers semantic search as "should have"; v1 does not mention it | §22.4 `[V2]`: the discovery UI reserves the layout slot and the empty-state copy for it, so adding pgvector later is a query change, not a redesign. |
 | Research 12.6 says do not build certificates; brief says propose if cheap | §59 `[DECIDED]`: not built. §24.4 specifies the completion moment that delivers the same psychological payoff for roughly an hour of work. |
 
-### 0.7 Reconciliation with `design_again.md` `[DECIDED]`
+### 0.7 Reconciliation with a second creative brief `[DECIDED]`
 
-`design_again.md` is a creative brief, not a build spec — it names no stack, gives no contrast numbers, and doesn't resolve its own conflicts with this document (full comparison: `docs/win.md`). It is not a second source of truth. Where it disagreed with an already-audited, already-shipped decision here, this document wins and stays as-is. Three places it was simply right, and this document has been corrected to match:
+A second design brief circulated alongside this document — a creative brief, not a build
+spec: it named no stack, gave no contrast numbers, and didn't resolve its own conflicts with
+this document. It was never a second source of truth. Where it disagreed with an
+already-audited, already-shipped decision here, this document won and stayed as-is. Three
+places it was simply right, and this document was corrected to match:
 
 | Tension | Resolution |
 |---|---|
-| §21.3 said the gated question body must never reach the client; `design_again.md` §20 says the question body is public and email capture is a soft conversion device, not a security boundary | §21.3 rewritten. This is also what actually shipped (`EmailGatedBody.tsx`): the API sends the full body to every visitor, and the blur is a lead-capture device over content that was never the paid product. §21.3's old "never in the HTML" rule still stands, but for the products it actually protects — lesson video, lesson reading bodies, and template files, all server-gated with no free preview (§23.2, §26). |
-| §9.4 confined serif to reading body only; `design_again.md` §5 recommends serif for major question titles | §9.4 updated. The shipped `PageTitle` component already sets the question title in serif via an `editorial` variant, reserved for flagship reading surfaces — not applied to product/commerce titles, which stay sans. |
-| §19.9 required mobile filter changes to apply on sheet close; `design_again.md` §13/§17 expects a quick filter to update results immediately | §19.9 updated. The shipped filter sheet reuses the same live, per-tap `toggle()` as desktop — one state model for both, which turned out simpler to build and to reason about than a second batched-apply mode would have been. |
+| §21.3 said the gated question body must never reach the client; the second brief said the question body is public and email capture is a soft conversion device, not a security boundary | §21.3 rewritten. This is also what actually shipped (`EmailGatedBody.tsx`): the API sends the full body to every visitor, and the blur is a lead-capture device over content that was never the paid product. §21.3's old "never in the HTML" rule still stands, but for the products it actually protects — lesson video, lesson reading bodies, and template files, all server-gated with no free preview (§23.2, §26). |
+| §9.4 confined serif to reading body only; the second brief recommended serif for major question titles | §9.4 updated. The shipped `PageTitle` component already sets the question title in serif via an `editorial` variant, reserved for flagship reading surfaces — not applied to product/commerce titles, which stay sans. |
+| §19.9 required mobile filter changes to apply on sheet close; the second brief expected a quick filter to update results immediately | §19.9 updated. The shipped filter sheet reuses the same live, per-tap `toggle()` as desktop — one state model for both, which turned out simpler to build and to reason about than a second batched-apply mode would have been. |
 
-Everything else `design_again.md` raises — the brand-concept motif (§5.1), the anti-pattern list (§5.2), visual-priority ranking (§3.7), and the single core journey to prototype first (§4) — was genuinely missing here and has been added, in this document's own format (numbered, `[DECIDED]`-tagged, cross-referenced), not pasted in as prose.
+Everything else that brief raised — the brand-concept motif (§5.1), the anti-pattern list
+(§5.2), visual-priority ranking (§3.7), and the single core journey to prototype first (§4) —
+was genuinely missing here and has been added, in this document's own format (numbered,
+`[DECIDED]`-tagged, cross-referenced), not pasted in as prose.
 
-### 0.8 Reconciliation with `Deciding_in_the_Dark_Product_Spec.md` `[DECIDED, 2026-08-12]`
+### 0.8 Reconciliation with an earlier product spec `[DECIDED, 2026-08-12]`
 
 A product spec arrived after this document reached v2.3, and it reframes the product in a way that touches design, not just scope. It is **not** a second source of truth — this document remains the design authority — but its central argument is right and has been adopted.
 
@@ -303,7 +310,7 @@ Putting `--gold` on a text node is the one way to misuse this family. §7.5.1's 
 
 **Do not illustrate the name literally.** No moons, no stars, no night skies, no dark rooms, no lightbulb-in-the-dark clichés. None of that is on the page anywhere, and it would read as decoration over a name that is actually a claim about the product's usefulness.
 
-Instead, the motif is carried structurally, by things the product already does: clarity (short answers before long ones, §3.1), signal (the seven-tag taxonomy actually filtering, §19.2, not decorating), evidence (a real author's name and real guidance, §6.3), and decision points (`What to do next`, §21.1, is a literal list of decisions to make). The dark/light theme toggle (§66 of `design_again.md`'s vocabulary; built as `.dark` on `<html>`, §8) is a coincidence worth not overplaying — it is a standard accessibility feature, not the brand metaphor.
+Instead, the motif is carried structurally, by things the product already does: clarity (short answers before long ones, §3.1), signal (the seven-tag taxonomy actually filtering, §19.2, not decorating), evidence (a real author's name and real guidance, §6.3), and decision points (`What to do next`, §21.1, is a literal list of decisions to make). The dark/light theme toggle (built as `.dark` on `<html>`, §8) is a coincidence worth not overplaying — it is a standard accessibility feature, not the brand metaphor.
 
 ### 5.2 What "premium" is not — the anti-pattern list `[DECIDED]`
 
@@ -430,14 +437,14 @@ Every foreground/background pair in the supplied token set was measured against 
 > the product ships ivory ground (`--background: #FBF9F4`), navy primary
 > (`--primary: #10213E`) and champagne gold secondary.
 >
-> `week4_plan.md` §0.3 rule 5 governs: **`theme.css` is the single source of truth for
-> every design *value*, and where this document disagrees, this document is wrong.**
+> The standing rule: **`theme.css` is the single source of truth for every design
+> *value*, and where this document disagrees, this document is wrong.**
 >
 > The blocks are kept rather than deleted because §7.3 and §7.5.1's contrast audits
 > reason *about* these values, and deleting them would orphan that reasoning — the audits
 > are a record of how the palette was arrived at. **Read them as history. For any value
 > you intend to use, read `theme.css`.** The current palette's own contrast measurements
-> live in §7.5.2 (gold), §7.5.3 (the stage plane) and `week4_plan.md` §12.5.
+> live in §7.5.2 (gold) and §7.5.3 (the stage plane).
 
 ```css
 :root {
@@ -524,14 +531,14 @@ Every foreground/background pair in the supplied token set was measured against 
 > the product ships ivory ground (`--background: #FBF9F4`), navy primary
 > (`--primary: #10213E`) and champagne gold secondary.
 >
-> `week4_plan.md` §0.3 rule 5 governs: **`theme.css` is the single source of truth for
-> every design *value*, and where this document disagrees, this document is wrong.**
+> The standing rule: **`theme.css` is the single source of truth for every design
+> *value*, and where this document disagrees, this document is wrong.**
 >
 > The blocks are kept rather than deleted because §7.3 and §7.5.1's contrast audits
 > reason *about* these values, and deleting them would orphan that reasoning — the audits
 > are a record of how the palette was arrived at. **Read them as history. For any value
 > you intend to use, read `theme.css`.** The current palette's own contrast measurements
-> live in §7.5.2 (gold), §7.5.3 (the stage plane) and `week4_plan.md` §12.5.
+> live in §7.5.2 (gold) and §7.5.3 (the stage plane).
 
 ```css
 .dark {
@@ -888,7 +895,7 @@ Azeret Mono is squared-off and deliberate, with enough personality to read as ch
 | IDs, prices in a reconciliation table, timestamps | Mono |
 | Prices on marketing surfaces | Sans, tabular figures (`font-variant-numeric: tabular-nums`) |
 
-**`[UPDATED, 2026-08-11]`** v2.0 kept the question title in sans, reasoning that a headline needs weight more than character. Reviewing `design_again.md` §5 alongside the shipped page prompted a second look, and the serif reads *more* authoritative here, not less — it's what makes `We Have a Risk Register, But No One Uses It` look like a headline from a publication with an editor, rather than a SaaS feature title. Built as a `variant="product" | "editorial"` prop on `PageTitle`: `editorial` sets serif title + serif lead description, and is applied only to flagship reading surfaces (currently `Question.tsx`). Product and commerce titles — course cards, checkout, admin, dashboard — stay on the default `product` variant and stay in sans; this is a targeted exception for the single page type the whole product exists to make credible (§3.7 priority 2), not a reopening of "serif for headings" generally. §9.2's "never for navigation, buttons, labels, tables, admin, or anything under 16px" still holds everywhere else.
+**`[UPDATED, 2026-08-11]`** v2.0 kept the question title in sans, reasoning that a headline needs weight more than character. Reviewing the second creative brief's recommendation alongside the shipped page prompted a second look, and the serif reads *more* authoritative here, not less — it's what makes `We Have a Risk Register, But No One Uses It` look like a headline from a publication with an editor, rather than a SaaS feature title. Built as a `variant="product" | "editorial"` prop on `PageTitle`: `editorial` sets serif title + serif lead description, and is applied only to flagship reading surfaces (currently `Question.tsx`). Product and commerce titles — course cards, checkout, admin, dashboard — stay on the default `product` variant and stay in sans; this is a targeted exception for the single page type the whole product exists to make credible (§3.7 priority 2), not a reopening of "serif for headings" generally. §9.2's "never for navigation, buttons, labels, tables, admin, or anything under 16px" still holds everywhere else.
 
 ### 9.5 Loading the fonts `[DECIDED]`
 
@@ -932,13 +939,14 @@ Self-hosting is preferred for three reasons, in this order of importance here:
 A 1.25 (major third) ratio at the base, loosening at display sizes, expressed as fluid `clamp()` tokens so headings do not need per-breakpoint classes.
 
 > **`[RECONCILED 2026-08-22]`** Against `frontend/src/styles/theme.css`, which is the
-> single source of truth for every design *value* (`week4_plan.md` §0.3 rule 5 — where
-> this document and `theme.css` state different numbers, **`theme.css` is right and this
-> document is stale**). Two divergences were found and are corrected below; both are
-> `theme.css` changes this document had not caught up with, not decisions taken here.
+> single source of truth for every design *value* — where this document and `theme.css`
+> state different numbers, **`theme.css` is right and this document is stale**. Two
+> divergences were found and are corrected below; both are `theme.css` changes this
+> document had not caught up with, not decisions taken here.
 >
 > 1. **The top three rungs were returned toward hero scale on 2026-08-20**
->    (`design-research/PLATFORM_UI_UX_RESEARCH.md` M1, "restore the voice"). The
+>    (competitor research found the type read as under-scaled next to the reference set —
+>    "restore the voice"). The
 >    2026-08-15 pass had shrunk *every* rung 25–30%, which was right for the reading
 >    rungs — and they keep those values — but left `--text-display` topping out at 44px,
 >    supporting-player size for a desktop marketing headline next to the competitor
@@ -1037,7 +1045,7 @@ Arbitrary spacing values (`mt-[13px]`) need a comment explaining the optical rea
 
 Do not round everything heavily. A dense admin table with 12px corners on every cell reads as a toy.
 
-**`[CONSIDERED AND REJECTED, 2026-08-11]`** `design_again.md` §8 suggests allowing radius above 12px on "major product surfaces" like the hero. Not adopted: a larger radius on the single largest surface on the page is the most visible way to reintroduce the generic-SaaS-template read this whole tightening pass (twice, now) exists to remove — a soft giant rounded panel is exactly what a marketing-template hero looks like. The 12px ceiling stays flat across every surface size, hero included.
+**`[CONSIDERED AND REJECTED, 2026-08-11]`** The second creative brief suggested allowing radius above 12px on "major product surfaces" like the hero. Not adopted: a larger radius on the single largest surface on the page is the most visible way to reintroduce the generic-SaaS-template read this whole tightening pass (twice, now) exists to remove — a soft giant rounded panel is exactly what a marketing-template hero looks like. The 12px ceiling stays flat across every surface size, hero included.
 
 ### 12.2 Borders
 
@@ -1342,7 +1350,7 @@ Mobile:   [ Results ] + sticky [Filters · 3] button → bottom sheet
 
 A strict `WHERE` across three constraints will return nothing, at exactly the moment the product is meant to prove itself. So the filter is a *ranking*, not a gate.
 
-1. Each ordinal tag maps to a numeric scale, per `week1_plan.md` decision #3 and the live 100-question content (effectiverm.com/knowledge/100-questions) — not a generic low/medium/high placeholder: cost `low=1, medium=2, high=3`; effort `quick=1, moderate=2, project=3, transformation=4`; regulator pressure `none=1, low=2, moderate=3, high=4`; duration `under_2_weeks=1, 2_6_weeks=2, 6_12_weeks=3, 3_6_months=4, over_6_months=5`; ROI horizon `quick=1, mid=2, strategic=3` (renamed from "payback").
+1. Each ordinal tag maps to a numeric scale, per an early Week 1 content decision and the live 100-question content — not a generic low/medium/high placeholder: cost `low=1, medium=2, high=3`; effort `quick=1, moderate=2, project=3, transformation=4`; regulator pressure `none=1, low=2, moderate=3, high=4`; duration `under_2_weeks=1, 2_6_weeks=2, 6_12_weeks=3, 3_6_months=4, over_6_months=5`; ROI horizon `quick=1, mid=2, strategic=3` (renamed from "payback").
 2. With filters active, each question gets a **match score**: 2 points per exact match, 1 point for an adjacent value, 0 beyond that.
 3. A question is **exact** only when it matches *every active constraint* exactly. (See §57 — v1's implementation had this wrong.)
 4. Results are sorted by score and split into two zones with a divider.
@@ -1456,7 +1464,7 @@ Returning from a question page must restore the exact result list and scroll pos
 [Results]
 ```
 
-The sheet is a slide-over panel with the same groups as the desktop rail. **Changes apply live, per tap** — this was v2.0's opposite call ("apply on close, to avoid a disorienting recount"), reversed after building it: the shipped sheet reuses the exact same `toggle()` used by the desktop rail rather than a second batched-apply state, which is both less code and lets a user watch the result count move as they narrow in, same as desktop. `design_again.md` §13/§17 independently argued for the same behaviour ("clicking a quick filter should immediately update the results") — a useful confirmation, not the reason for the change. Debounce still applies to the *search* input only (§19.6); chip and checkbox taps recount immediately. The sheet's footer holds `Clear all` and a close action; there is no separate "Show N results" commit step because there is nothing left to commit.
+The sheet is a slide-over panel with the same groups as the desktop rail. **Changes apply live, per tap** — this was v2.0's opposite call ("apply on close, to avoid a disorienting recount"), reversed after building it: the shipped sheet reuses the exact same `toggle()` used by the desktop rail rather than a second batched-apply state, which is both less code and lets a user watch the result count move as they narrow in, same as desktop. The second creative brief independently argued for the same behaviour ("clicking a quick filter should immediately update the results") — a useful confirmation, not the reason for the change. Debounce still applies to the *search* input only (§19.6); chip and checkbox taps recount immediately. The sheet's footer holds `Clear all` and a close action; there is no separate "Show N results" commit step because there is nothing left to commit.
 
 ## 20. Question card and row
 
@@ -1542,7 +1550,7 @@ On the detail page all seven appear as a compact definition grid — icon, dimen
 
 **This section originally specified server-side gating of the guidance body, priced behind the related course.** That was reversed by an explicit, later owner decision: *questions are the free layer, in full; only the delivery of that knowledge as video, structured lessons and templates is ever paid.* The reasoning, and what actually shipped, replaces everything this section said before.
 
-**Public, always, in the API response — not a preview, the whole thing:** the question title, domain, all seven tags, the short answer, and the complete guidance body and "what to do next" steps. There is no `gated: true` flag on a question and nothing withheld server-side. This is also what `design_again.md` §20 independently argues for ("question body is public… email capture is a soft conversion mechanism, not the security boundary") — confirmation of a decision already made and shipped, not the source of it.
+**Public, always, in the API response — not a preview, the whole thing:** the question title, domain, all seven tags, the short answer, and the complete guidance body and "what to do next" steps. There is no `gated: true` flag on a question and nothing withheld server-side. This is also what the second creative brief independently argued for ("question body is public… email capture is a soft conversion mechanism, not the security boundary") — confirmation of a decision already made and shipped, not the source of it.
 
 **The email capture is a lead-magnet device, not access control.** Presentation:
 
@@ -1962,13 +1970,15 @@ That is the whole model. Four lines, and every access decision in the product fo
 | Every other template | Paid | `entitlements` → `product_contents` (`content_type='template'`) |
 | Courses (all lessons, video and reading) | Paid, no free preview | `entitlements` → `product_contents` (`content_type='lesson'`) |
 
-**Live catalogue as of 2026-08-12:** one published product — Risk Register Fundamentals, A$49. The A$29 template product was unpublished when its template became free, because it would otherwise have charged for two things anyone can have (§27.4). `docs/pricing.md` holds the price ladder and the tiering rules for everything added next.
+**Live catalogue as of 2026-08-12:** one published product — Risk Register Fundamentals, A$49. The A$29 template product was unpublished when its template became free, because it would otherwise have charged for two things anyone can have (§27.4).
 
-**The asymmetry to keep straight:** a course purchase *includes* the templates its lessons use; a template purchase never unlocks a course. That direction was a real bug — one product once bundled both — and is now enforced by the catalogue shape rather than by convention (`docs/pricing.md` §2, `db/seed/012`).
+**The adopted price ladder** (owner-proposed, adopted 2026-08-11) — clean anchor points instead of arbitrary figures like A$73 or A$117: Free question/resource · A$29 individual template · A$49 professional checklist · A$79 short practical course · A$99 template pack · A$149 full professional course · A$199 course + resources · A$279 practitioner bundle · A$399 complete programme. Tiering within that: templates run A$19–29 (simple single-file) to A$59–99 (multi-file pack); courses run A$39–59 (short, 30–60 min) to A$149–199 (professional, 3–6+ hrs).
 
-### 28.1 Structure `[SUPERSEDED by §28.0 — retained for the layout pattern only]` `[the page itself was later built to week3_plan.md §20.1 then removed entirely 2026-08-16, owner direction — week3_plan.md Phase 6 step 0b]`
+**The asymmetry to keep straight:** a course purchase *includes* the templates its lessons use; a template purchase never unlocks a course. That direction was a real bug — one product once bundled both — and is now enforced by the catalogue shape rather than by convention (`db/seed/012`).
 
-The three-column layout below is still the right *shape* for a pricing page. The contents are stale: the prices are illustrative US$ figures that were never adopted (the ladder is AUD, `docs/pricing.md` §1), and the "Free" column describes one free domain of 20 questions, which is not the model — all 100 are free (§27.1).
+### 28.1 Structure `[SUPERSEDED by §28.0 — retained for the layout pattern only]` `[the page itself was later built to spec, then removed entirely 2026-08-16, owner direction]`
+
+The three-column layout below is still the right *shape* for a pricing page. The contents are stale: the prices are illustrative US$ figures that were never adopted (the ladder is AUD — see §27 above), and the "Free" column describes one free domain of 20 questions, which is not the model — all 100 are free (§27.1).
 
 Three columns. Never two (no visual centre), never five (Research: the audience is not shopping tiers).
 
@@ -2319,7 +2329,7 @@ silently discarded the message — the one part the sender cared about.
 
 The row is committed **before** the owner notification is attempted, and a failed
 notification does not fail the request. The mail transport is a sandbox sender right now
-(see `backend/app/services/email_service.py` and `docs/email.md`), so coupling the two
+(see `backend/app/services/email_service.py`), so coupling the two
 would make a working form look broken. `notified` records
 whether the alert actually went out, so an enquiry that arrived during an outage can be
 found by querying rather than by trusting that someone read that day's logs.
@@ -2408,7 +2418,7 @@ more than one block — a device used once belongs in the page that uses it.
 | Component | Job |
 |---|---|
 | `StatusDot` | Pulsing dot + label opening a section. Appears in three of the six reference blocks. Takes `on="stage"` when it sits on the dark plane — see below |
-| `TypewriterTitle` | The rotating headline clause (from `docs/comps.md`). Animated text is `aria-hidden` behind an `sr-only` full label, and it handles `useReducedMotion()` explicitly because `MotionConfig` cannot stop a `setTimeout` loop |
+| `TypewriterTitle` | The rotating headline clause. Animated text is `aria-hidden` behind an `sr-only` full label, and it handles `useReducedMotion()` explicitly because `MotionConfig` cannot stop a `setTimeout` loop — `[REMOVED]` in the later redesign pass, see `REDESIGN.md` §2.3 |
 | `AuthField` | auth-08's icon-prefixed input with a password reveal toggle |
 | `NewsletterForm` | footer-7's joined input + button, posting to the real `/leads` |
 | `CornerFrame` | The bracketed corner rule |
@@ -2918,7 +2928,7 @@ A JWT will expire while someone is reading. Design for it:
 
 ### 45.4 Analytics and privacy
 
-`[REMOVED 2026-08-21]` PostHog (and session replay along with it) was removed from the project entirely — decision #34, week4_plan.md §8.1. This section's guidance no longer applies to anything in the running app; kept here as a record of what the masking rule would have been, had replay shipped.
+`[REMOVED 2026-08-21]` PostHog (and session replay along with it) was removed from the project entirely. This section's guidance no longer applies to anything in the running app; kept here as a record of what the masking rule would have been, had replay shipped.
 
 ### 45.5 Customer data in the interface
 
@@ -3642,7 +3652,7 @@ This is the failure mode the whole two-zone design exists to prevent, and it wou
 ```ts
 // src/lib/scoring.ts
 
-// Value sets match week1_plan.md decision #3 and the live 100-question content
+// Value sets match an early Week 1 content decision and the live 100-question content
 // (effectiverm.com/knowledge/100-questions) exactly — not a generic low/medium/high
 // placeholder. Effort and Regulator pressure each have their own scale; they no
 // longer share one generic `Ordinal` type.
@@ -3891,7 +3901,7 @@ Then, in this order:
 9. One gated template download
 10. One receipt email that arrives
 
-**[RECONCILED with `week1_plan.md`]** An earlier version of this list put the functional discovery page (filters, live count, two-zone results) in Week 1, on the reasoning that "missing is not acceptable" (Research 12.4). `week1_plan.md`'s Scope guardrails deliberately exclude it — Week 1 needs exactly one reachable question page, not the filter UI — to protect the five-day budget for the higher-risk commerce chain (auth → purchase → entitlement → signed video → gated download → receipt email), which is Week 1's actual non-negotiable per the brief. The owner confirmed keeping that exclusion. The discovery page moves to Week 2 alongside gating; build `theme.css`, the six core components, and the header/footer/layout in Week 1 regardless, since the discovery page depends on all three and this order still front-loads them correctly.
+**[RECONCILED with the Week 1 plan]** An earlier version of this list put the functional discovery page (filters, live count, two-zone results) in Week 1, on the reasoning that "missing is not acceptable" (Research 12.4). The Week 1 plan's Scope guardrails deliberately excluded it — Week 1 needs exactly one reachable question page, not the filter UI — to protect the five-day budget for the higher-risk commerce chain (auth → purchase → entitlement → signed video → gated download → receipt email), which is Week 1's actual non-negotiable per the brief. The owner confirmed keeping that exclusion. The discovery page moves to Week 2 alongside gating; build `theme.css`, the six core components, and the header/footer/layout in Week 1 regardless, since the discovery page depends on all three and this order still front-loads them correctly.
 
 **Ugly is acceptable this week. Inconsistent is not.** Plainness does not need retrofitting; inconsistency does. If the slice is not working end to end by Friday, that is a scope conversation on Friday, not a late night.
 

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
+from app.api.v1.content.reviews import aggregate_rating
 from app.db.session import get_session
 from app.db.models import Product, ProductContent, Template, User
 from app.core.deps import get_current_user_id_optional, get_current_user_optional
@@ -56,6 +57,10 @@ class TemplateSummaryOut(BaseModel):
     last_reviewed_at: Optional[datetime] = None
     # ".xlsx · 1 file" — read off the real uploaded file, never typed per product.
     format: Optional[str] = None
+    # W5-R4 Stage B. Null below MIN_REVIEWS_FOR_AGGREGATE; served from the row's own
+    # denormalised counters so a catalogue stays one query.
+    rating: Optional[float] = None
+    review_count: int = 0
 
 class DownloadUrlOut(BaseModel):
     download_url: str
@@ -133,6 +138,8 @@ async def list_templates(
                 version=t.version,
                 last_reviewed_at=t.last_reviewed_at,
                 format=format_line(t.file_name) if t.storage_key else None,
+                rating=aggregate_rating(t.review_count, t.rating_sum),
+                review_count=t.review_count or 0,
             )
         )
     return out
@@ -211,6 +218,8 @@ async def get_template(
         version=template.version,
         last_reviewed_at=template.last_reviewed_at,
         format=format_line(template.file_name) if template.storage_key else None,
+        rating=aggregate_rating(template.review_count, template.rating_sum),
+        review_count=template.review_count or 0,
     )
 
 

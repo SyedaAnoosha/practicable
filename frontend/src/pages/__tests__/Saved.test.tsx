@@ -9,7 +9,7 @@
 // The link targets are asserted per type on purpose: the three routes genuinely differ
 // (`/courses/:slug`, `/templates/:templateId`, `/store/packs/:slug`) and the uniform
 // `/{type}/{slug}` shape that looks obvious is wrong for two of the three.
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -17,6 +17,7 @@ import { MemoryRouter } from 'react-router'
 
 import { Saved } from '../Saved'
 import { api } from '@/lib/api/client'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 vi.mock('@/lib/api/client', () => ({
   api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
@@ -70,6 +71,20 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // /saved is a member-only page, and `useBookmarks` is gated on a signed-in user
+  // (an unguarded GET /me/bookmarks 401s, and the Axios interceptor turns that into a
+  // redirect to /sign-in — the bug that guard exists to prevent). Rendering this page
+  // signed out is therefore not a state a real reader can reach, so the fixture signs
+  // one in rather than the hook being loosened to keep an unrealistic test green.
+  useAuthStore.setState({
+    user: { id: 'u1', email: 'reader@example.com' } as never,
+    session: { access_token: 'test-token' } as never,
+    loading: false,
+  })
+})
+
+afterEach(() => {
+  useAuthStore.setState({ user: null, session: null, loading: true })
 })
 
 describe('Saved', () => {

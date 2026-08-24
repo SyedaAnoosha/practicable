@@ -34,6 +34,9 @@ interface CourseSummary {
   level?: string | null
   estimated_duration_minutes?: number | null
   product?: RelatedProduct | null
+  /** W5-R4 Stage B: null below the display threshold, so the card shows nothing. */
+  rating?: number | null
+  review_count?: number
 }
 
 // The course catalogue (DESIGN.md §41's /courses route). §23.1's card shape (eyebrow,
@@ -349,6 +352,14 @@ export function CoursesCatalogue() {
                       { icon: GraduationCap, value: course.level ? abbreviateLevel(course.level) : '—', numeric: false, label: course.level ? `level: ${course.level}` : 'level not set' },
                       { icon: Clock, value: formatDuration(course.estimated_duration_minutes) || '—', label: course.estimated_duration_minutes ? 'duration' : 'duration not set' },
                     ]}
+                  />
+                  {/* Above the price row, not inside it: the bottom row is a
+                      two-item flex (state left, CTA right) and a third child would
+                      push the CTA off its edge. Renders nothing below the threshold. */}
+                  <StarRating
+                    rating={course.rating}
+                    reviewCount={course.review_count}
+                    className="pt-2"
                   />
                   <div className="flex items-center justify-between border-t border-border pt-2.5">
                     {course.owned ? (

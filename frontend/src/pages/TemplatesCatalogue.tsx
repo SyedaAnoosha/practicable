@@ -30,6 +30,9 @@ interface TemplateSummary {
   page_count?: number | null
   sheet_count?: number | null
   version?: string | null
+  /** W5-R4 Stage B: null below the display threshold. */
+  rating?: number | null
+  review_count?: number
 }
 
 function fileKind(fileName: string): string | null {
@@ -162,6 +165,11 @@ export function TemplatesCatalogue() {
                   ].filter(Boolean) as MetaItem[]}
                 />
 
+                <StarRating
+                  rating={template.rating}
+                  reviewCount={template.review_count}
+                  className="pt-2"
+                />
                 <div className="flex items-center justify-between border-t border-border pt-2.5">
                   {template.is_free ? (
                     <Badge variant="success" className="text-[0.625rem]">Free</Badge>

@@ -20,6 +20,9 @@ interface PackSummary {
   currency: string
   owned: boolean
   is_bundle: boolean
+  /** W5-R4 Stage B: null below the display threshold. */
+  rating?: number | null
+  review_count?: number
 }
 
 /**
@@ -133,6 +136,11 @@ export function PacksCatalogue() {
                 ]}
               />
 
+              <StarRating
+                rating={pack.rating}
+                reviewCount={pack.review_count}
+                className="pt-2"
+              />
               <div className="flex items-center justify-between border-t border-border pt-2.5">
                 {pack.owned ? (
                   <Badge variant="success" className="gap-1 text-[0.625rem]">

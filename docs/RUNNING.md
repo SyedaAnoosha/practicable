@@ -15,8 +15,7 @@ equivalents are one-line notes where the syntax actually differs.
 | Git | any recent | `git --version` |
 | Stripe CLI | latest | `stripe --version` (only needed for webhook testing, §4.2) |
 
-You also need the values in `backend/.env` (already populated with real credentials —
-see `docs/week1_plan.md`'s Open Decisions section for where each one comes from) and
+You also need the values in `backend/.env` (already populated with real credentials) and
 `frontend/.env.local` (copy from `frontend/.env.local.example`).
 
 ---
@@ -97,7 +96,7 @@ npm run dev
 Opens on `http://localhost:5173` by default. The backend's CORS (`main.py`) is
 restricted to `ALLOWED_ORIGIN` in `backend/.env` plus `localhost:5173` — if you change
 the frontend's port, add it there too or CORS will fail silently in a way that looks
-like "the API is down" (the exact risk named in `week1_plan.md`'s risk watchlist).
+like "the API is down" — a known risk, flagged from Week 1 onward.
 
 ### 2.3 Build check (what CI/Vercel will run)
 
@@ -175,7 +174,7 @@ What each one does:
 | `003_seed_q001_question.sql` | The one real question (decision #6), resolved against 001's domain/tag rows by subquery |
 | `004_seed_course_skeleton.sql` | The section/author/course/module/lesson skeleton for the one real lesson |
 
-**Not seeded by any of the above** (still open, per `docs/week1_plan.md` Phase 3/4):
+**Not seeded by any of the above** (still open):
 the real Mux `media` row, the real `templates` row and its Supabase Storage upload,
 and the `products`/`product_contents` rows that make the checkout flow actually sell
 something. Those need real assets before they can be seeded meaningfully.
@@ -211,9 +210,9 @@ rebuilds it.
 ## 4. Testing
 
 There is no automated test suite yet (no `pytest`/`vitest` configured) — Week 1's
-verification is the manual smoke test in `docs/week1_plan.md` Phase 5, plus the
-targeted checks below. Add automated tests as a named Week 2+ task rather than
-retrofitting them under deadline pressure.
+verification is the manual smoke test below, plus the targeted checks that follow it.
+Add automated tests as a named Week 2+ task rather than retrofitting them under
+deadline pressure.
 
 ### 4.1 Backend smoke checks (curl)
 
@@ -229,7 +228,7 @@ curl http://localhost:8000/questions/we-have-a-risk-register-but-no-one-uses-it
 # Unknown slug -> 404, not 500
 curl -i http://localhost:8000/questions/does-not-exist
 
-# No auth header -> 401, not 403 (week1_plan.md Phase 2 DoD)
+# No auth header -> 401, not 403 (Week 1 Definition of Done)
 curl -i http://localhost:8000/me
 
 # With a real Supabase JWT (copy from the browser's network tab after signing in,
@@ -258,12 +257,12 @@ stripe trigger checkout.session.completed
 
 Check `webhook_events` in the DB — a row should appear with `processed = true`.
 Trigger the same event again and confirm a **second row is not created** for the same
-Stripe event id (week1_plan.md Phase 4 DoD: idempotency).
+Stripe event id (idempotency was a named Week 1 Definition-of-Done item).
 
 ### 4.3 Full manual smoke test (the actual Week 1 acceptance test)
 
-This is `docs/week1_plan.md` Phase 5's script, run against `localhost` before it's
-ever run against production:
+This is the Week 1 acceptance script, run against `localhost` before it's ever run
+against production:
 
 1. Open the site in a private/incognito window.
 2. Navigate to the one real question's page — confirm all seven tags render.
@@ -291,7 +290,7 @@ curl -i http://localhost:8000/templates/<template-id>/download-url -H "Authoriza
 curl -i http://localhost:8000/templates/<template-id>/download-url
 ```
 
-Log what you tried and the result — `week1_plan.md` Phase 5 step 5 asks for this
+Log what you tried and the result — the Week 1 acceptance script asks for this
 explicitly, not just "it seemed fine."
 
 ---
@@ -312,8 +311,8 @@ explicitly, not just "it seemed fine."
 ## 6. Deploying to production (Phase 5)
 
 Both config files are already in the repo — deploying is a dashboard/CLI step, not a
-code-writing one, and needs accounts Claude doesn't have (week1_plan.md decision #9
-never actually got answered — who owns these accounts is still open).
+code-writing one, and needs accounts Claude doesn't have (an early Week 1 decision on
+this — who owns these accounts — never actually got answered and is still open).
 
 ### 6.1 Backend → Render
 
@@ -346,8 +345,9 @@ hosting doesn't know react-router owns that path).
 ### 6.3 Close the loop
 
 1. Back in Render, set `ALLOWED_ORIGIN` to the real Vercel URL from 6.2, and redeploy
-   — until this is set, every request from the deployed frontend fails CORS (week1_plan.md's own risk watchlist names this exact failure mode: "fails silently in a way
-   that looks like the API is down").
+   — until this is set, every request from the deployed frontend fails CORS. This is
+   the same known failure mode named in §1 above: it fails silently in a way that
+   looks like the API is down.
 2. Stripe Dashboard → Webhooks → the `we_...` endpoint already configured
    (`https://practicable.onrender.com/webhooks/stripe` — confirm this matches your
    real Render URL, update it if Render assigned a different subdomain) → this is

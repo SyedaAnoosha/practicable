@@ -18,6 +18,7 @@ import { Accordion, type AccordionItemData } from '@/components/ui/Accordion'
 import { FactStrip, type Fact } from '@/components/ui/FactStrip'
 import { TestimonialSection } from '@/components/ui/Testimonial'
 import { useFeaturedReviews } from '@/hooks/useFeaturedReviews'
+import { ReviewForm } from '@/components/ui/ReviewForm'
 import type { Preview } from '@/components/product/PreviewGallery'
 
 interface PackQuestion {
@@ -28,6 +29,8 @@ interface PackQuestion {
 }
 
 interface PackDetail {
+  /** The pack's Product UUID. Reviews are keyed by it, not by the slug. */
+  id: string
   slug: string
   name: string
   description: string
@@ -334,7 +337,16 @@ export function PackDetail() {
           </div>
 
           {/* W5-R4 Stage A: featured testimonials */}
-          <FeaturedTestimonials contentType="pack" contentId={pack.slug} />
+          <FeaturedTestimonials contentType="pack" contentId={pack.id} />
+
+          {pack.owned && (
+            <ReviewForm
+              className="mt-8"
+              contentType="pack"
+              contentId={pack.id}
+              contentTitle={pack.name}
+            />
+          )}
         </section>
 
         {/* ── Buy / download ─────────────────────────────────────────────────── */}

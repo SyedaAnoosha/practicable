@@ -34,6 +34,7 @@ import { ShowMore } from '@/components/ui/ShowMore'
 import { TestimonialSection } from '@/components/ui/Testimonial'
 import { BookmarkButton } from '@/components/ui/BookmarkButton'
 import { useFeaturedReviews } from '@/hooks/useFeaturedReviews'
+import { ReviewForm } from '@/components/ui/ReviewForm'
 
 function FeaturedTestimonials({ contentType, contentId }: { contentType: string; contentId: string }) {
   const { data: reviews } = useFeaturedReviews(contentType, contentId)
@@ -489,6 +490,17 @@ export function CourseDetail() {
               contentType="course"
               contentId={course.id}
             />
+
+            {/* Only for buyers: the endpoint refuses anyone else with 403, so showing
+                the form to a visitor would be an invitation to a dead end. */}
+            {course.owned && (
+              <ReviewForm
+                className="mt-8"
+                contentType="course"
+                contentId={course.id}
+                contentTitle={course.title}
+              />
+            )}
 
             {/* `[ADDED 2026-08-22, Redesing_decisions.md B5 — P1]` The hero already
                 names the author on the stage plane, but a name alone is an assertion.

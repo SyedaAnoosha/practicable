@@ -37,6 +37,21 @@ router = APIRouter()
 MIN_REVIEWS_FOR_AGGREGATE = 8
 
 
+def aggregate_rating(review_count: Optional[int], rating_sum: Optional[int]) -> Optional[float]:
+    """The Stage B aggregate for one item, or None below the threshold.
+
+    Lives here rather than in each catalogue endpoint because the gate is a product
+    rule, not a per-endpoint one: courses, templates and packs must all hide the
+    average at the same review count, and three copies of `>= MIN_REVIEWS...` would
+    be three places for it to drift. `rating_sum` is an integer sum, so the average
+    is computed on read and never accumulates the drift a stored float would.
+    """
+    count = review_count or 0
+    if count < MIN_REVIEWS_FOR_AGGREGATE:
+        return None
+    return round((rating_sum or 0) / count, 1)
+
+
 class FeaturedReviewOut(BaseModel):
     id: str
     rating: int
@@ -106,11 +121,7 @@ async def get_content_rating(
         raise HTTPException(status_code=404, detail="Content not found")
 
     count = content.review_count or 0
-    total = content.rating_sum or 0
-
-    rating: Optional[float] = None
-    if count >= MIN_REVIEWS_FOR_AGGREGATE and count > 0:
-        rating = round(total / count, 1)
+    rating = aggregate_rating(count, content.rating_sum)
 
     return ContentRatingOut(
         content_type=content_type,
@@ -128,7 +139,15 @@ async def get_featured_reviews(
 ):
     """Public, unauthenticated. Returns approved, featured reviews for a content item.
     Used by content detail pages to render testimonials (W5-R4 Stage A)."""
-    cid = uuid.UUID(content_id)
+    # A non-UUID content_id is a caller error, not a server error. This was a bare
+    # `uuid.UUID(content_id)` and raised ValueError straight out of the handler as a
+    # 500 the moment a page passed a slug (PackDetail did exactly that). The sibling
+    # rating endpoint above already returns 404 for the same input; this matches it,
+    # because a public endpoint must not 500 on a malformed path from any caller.
+    try:
+        cid = uuid.UUID(content_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Content not found")
     result = await session.execute(
         select(Review)
         .where(

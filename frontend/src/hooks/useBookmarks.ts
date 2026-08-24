@@ -3,6 +3,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 export type BookmarkContentType = 'course' | 'template' | 'pack'
 
@@ -22,9 +23,17 @@ export interface Bookmark {
 }
 
 export function useBookmarks() {
+  // `BookmarkButton` renders nothing while signed out, but its `if (!user) return null`
+  // runs AFTER this hook — a hook cannot be called conditionally, so the early return
+  // cannot stop the request. Without this guard the button fired GET /me/bookmarks on
+  // every public page that renders it (course and template detail), got a 401, and the
+  // Axios interceptor in lib/api/client.ts treated that as an expired session and sent
+  // an anonymous reader to /sign-in. The guard belongs here, where the request is made.
+  const user = useAuthStore((s) => s.user)
   return useQuery<Bookmark[]>({
     queryKey: ['me', 'bookmarks'],
     queryFn: () => api.get<Bookmark[]>('/me/bookmarks').then((r) => r.data),
+    enabled: !!user,
   })
 }
 
