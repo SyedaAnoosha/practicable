@@ -1,8 +1,20 @@
 # Handover pack
 
-A living document — updated as the project changes, not a one-time snapshot. Last updated: 2026-08-16.
+A living document — updated as the project changes, not a one-time snapshot. Last updated: 2026-08-24.
 
 This complements `RUNNING.md` (how to run/deploy) and `DESIGN.md`/`BACKEND.md` (the specs) rather than repeating them — this doc is the "why," the "how to extend it," and the "what's actually true right now" that those don't cover.
+
+---
+
+## Table of contents
+
+1. Architecture note (stack, learning system, design direction, N+1 fixes, dark plane, landing page, contact page)
+2. Adding new content step by step (questions, courses, lessons, templates, products)
+3. Running costs
+4. Known gaps and shortcuts
+5. What to build next
+6. Week 5 (promotions, certificates, search, reviews, notes & bookmarks)
+7. Commands that matter
 
 ---
 
@@ -436,40 +448,218 @@ Ranked roughly by how much they matter, not by when they were found.
 
 ---
 
-## 5. What I'd build next, with another four weeks
+## 5. What to build next
 
-Updated 2026-08-20 after Week 4. Roughly in the order I'd actually do them — each one unblocks or de-risks the next, not just a wishlist.
+Updated 2026-08-24 after Week 5. Roughly in the order I'd actually do them — each one unblocks or de-risks the next, not just a wishlist.
 
-**Done as of Week 4 (this section's previous items now closed):**
-- ~~Minimal admin UI~~ **Closed, 2026-08-20.** `/admin/products`, `/admin/contact`, `/admin/orders` (with keyset pagination), `/admin/metrics` all ship. Admin routes cover products, courses, templates, questions, orders, contact, and metrics.
+**Done as of Week 5 (this section's previous items now closed):**
+- ~~Minimal admin UI~~ **Closed, 2026-08-20.** `/admin/products`, `/admin/contact`, `/admin/orders` (with keyset pagination), `/admin/metrics` all ship.
 - ~~Taxonomy parity test~~ **Closed, 2026-08-20.** `test_taxonomy_parity.py` reads `QuestionsCatalogue.tsx` directly.
-- ~~Checkout/webhook fixture tests~~ **Closed, 2026-08-20.** All 8 W4-R9 cases covered in `test_money.py` + `test_gating.py`. 58 backend tests, 43 frontend tests.
+- ~~Checkout/webhook fixture tests~~ **Closed, 2026-08-20.** All 8 W4-R9 cases covered.
 - ~~Cart / multi-item checkout~~ **Closed, 2026-08-16.** `useCartStore`, `CartDrawer`, multi-item `POST /checkout/session`.
 - ~~Entitlement revocation + refund flow~~ **Closed, 2026-08-16.** `refund_service.apply_refund`, `charge.refunded` webhook, `RefundDialog.tsx`.
 - ~~Editorial control over the front page~~ **Closed, 2026-08-16.** `questions.featured` / `featured_sort`, `FeaturedToggle`, `FeaturedSummary`.
 - ~~Pre-purchase evidence layer~~ **Closed, 2026-08-20.** `EvidencePanel`, `PreviewGallery`, `LicenceLine`, `VersionStamp` on all product pages.
-- ~~Tax-invoice-quality receipts~~ **Closed, 2026-08-20.** `invoice_creation` + `billing_address_collection` in Stripe checkout, invoice block in email templates.
+- ~~Tax-invoice-quality receipts~~ **Closed, 2026-08-20.** `invoice_creation` + `billing_address_collection` in Stripe checkout.
 - ~~Overlap publish guard~~ **Closed, 2026-08-20.** `check_content_overlap` in `publish_guard.py`.
-- ~~Question → product routing~~ **Closed, 2026-08-20.** `RoutedProducts`, `SituationProducts`, `GET /questions/{slug}/related-products`, `GET /products/for-questions`.
-- ~~Performance budgets in CI~~ **Closed, 2026-08-20.** Bundle-size assertion + Lighthouse CI for LCP/CLS.
-- ~~Gating attack pass~~ **Closed, 2026-08-20.** 16/16 attacks defended, documented in `gating_seen_red.md`.
+- ~~Question → product routing~~ **Closed, 2026-08-20.** `RoutedProducts`, `SituationProducts`.
+- ~~Performance budgets in CI~~ **Closed, 2026-08-20.** Bundle-size assertion + Lighthouse CI.
+- ~~Gating attack pass~~ **Closed, 2026-08-20.** 16/16 attacks defended.
+- ~~Promotions~~ **Closed, 2026-08-23.** Admin CRUD, Stripe sync, public `GET /promotions/active`, banner rewired.
+- ~~Certificates~~ **Closed, 2026-08-23.** Issuance on completion edge, PDF generation, public verify, revocation on refund, email.
+- ~~Full-text search~~ **Closed, 2026-08-23.** Postgres tsvectors + GIN, `GET /search`, header search palette, `/search` results page.
+- ~~Reviews~~ **Closed, 2026-08-23.** Curated testimonials (Stage A), moderation queue, gated aggregate (Stage B, threshold = 8).
+- ~~Notes & bookmarks~~ **Closed, 2026-08-23.** Per-lesson notes (autosave), bookmarks with `/saved` page.
+- ~~Learner progress analytics~~ **Closed, 2026-08-23.** Dashboard resume panel, library progress bars, estimated time remaining.
 
-**Week 1 of the next four:**
-- Fix the Vercel commercial-use gap (upgrade to Pro) — the one item here that's a real, live compliance exposure, not a nice-to-have.
-- Human QA pass: full sign-up → browse → buy → access flow on a real phone-sized viewport, by someone who didn't build it.
-- The watched non-developer usability test (deferred from Week 3, named in Week 4's DoD but not yet performed).
-- Hostile-client email render check — open one of the eight email templates in a real mail client.
+**Still open — ranked by priority:**
 
-**Week 2:**
-- ~~Load the real 100-question catalogue~~ **Done, 2026-08-11.** 99 of 100 still have machine-derived previews (editorial work, not engineering).
-- A second real course loaded with real content.
-- The `admin/products` editor: Stripe price changes (Phase 8 8B), course purchasability (Phase 8 8A).
+1. **Fix the Vercel commercial-use gap (upgrade to Pro)** — the one item here that's a real, live compliance exposure, not a nice-to-have. Real Stripe payments flow through a Hobby-tier deployment whose ToS prohibits commercial use.
+2. **Human QA pass** — full sign-up → browse → buy → access flow on a real phone-sized viewport, by someone who didn't build it.
+3. **The watched non-developer usability test** — deferred from Week 3, named in Week 4's DoD, still not performed.
+4. **Hostile-client email render check** — open one of the 13 email templates in a real mail client (Apple Mail, Gmail web, Outlook).
+5. **Second real course loaded with real content** — only one course has authored lessons today.
+6. **Admin product editor: Stripe price changes** (Phase 8 8B) and course purchasability (Phase 8 8A).
+7. **Admin panel video playback** (Phase 8 8D) and **rich-text lesson editor** (Phase 8 8E).
+8. **The `new_additions.md` proposals still gated**: Decision Pack workspace, free Risk Diagnostic, "Challenge My Thinking" AI, Scenario Packs.
 
-**Week 3:**
-- ~~Real discovery: search/filter UI~~ **Done, 2026-08-14.** All seven tag dimensions surfaced.
-- ~~Basic automated test coverage~~ **Done, 2026-08-20.** 58 backend + 43 frontend tests.
-- Admin panel video playback (Phase 8 8D) and rich-text lesson editor (Phase 8 8E).
+---
 
-**Week 4:**
-- A "my library" page that's a genuine hub — not just the current single-product dashboard card, but a real list of everything owned with progress state, once there's more than one product to make that meaningful.
-- The `new_additions.md` proposals still gated: Decision Pack workspace, free Risk Diagnostic, "Challenge My Thinking" AI, Scenario Packs.
+## 6. Week 5 — Commercial Control Surfaces, Credibility and Discovery (2026-08-23)
+
+Plan: [`week5_plan.md`](week5_plan.md). Report: [`week5_report.md`](week5_report.md). All items below were verified by direct read of the repository.
+
+### 6.1 Promotions (W5-R1)
+
+**What was built:** Admin-managed discount codes backed by Stripe.
+
+- **Model**: `promotions` table with `code`, `message`, `percent_off`, `starts_at`, `ends_at`, `active`, `stripe_coupon_id`, `stripe_promotion_code_id`. Migration `026`.
+- **Public endpoint**: `GET /promotions/active` — returns at most one promotion, date-filtered in SQL, unauthenticated. The `DiscountBanner` renders from this; when it returns `null` or errors, the banner renders nothing and the page layout does not shift.
+- **Admin CRUD**: `POST/PATCH/DELETE /admin/promotions` with overlap check (no two active promotions over the same instant), Stripe sync (`create_promotion_in_stripe` — creates Coupon + PromotionCode), and audit logging on every mutation.
+- **Stripe integration**: `create_promotion_in_stripe()` in `stripe_client.py` creates both the Coupon and the PromotionCode. Expiry is sent to Stripe (not just our database). A Stripe failure returns 502 and writes no row.
+- **Frontend**: `AdminPromotions.tsx` (list + create form), `useActivePromotion()` hook, `DiscountBanner.tsx` rewired from hardcoded constants to the live endpoint.
+
+**Key decisions:**
+- The banner dismissal is keyed on the promotion code (`practicable:discount-banner-dismissed:{code}`), so a new offer is not pre-dismissed.
+- Overlap check is in the endpoint (not a DB constraint) because `btree_gist` is not enabled on Supabase.
+- Stripe create happens *after* the overlap check and *inside* the error handler — an orphan coupon in Stripe is logged but not catastrophic.
+
+### 6.2 Certificates (W5-R2)
+
+**What was built:** Automatic certificate issuance on course completion, with PDF generation and public verification.
+
+- **Model**: `certificates` table with frozen snapshots (`learner_name_snapshot`, `course_title_snapshot`, `issued_at`), `verification_code` (unguessable, `secrets.token_urlsafe(16)`), `pdf_storage_key`, `revoked_at`/`revoked_reason`. `UNIQUE(user_id, course_id)` makes issuance idempotent. Migration `027`.
+- **Issuance**: `issue_certificate_if_newly_complete()` in `certificate_service.py` fires on the `false→true` edge of `CourseProgress.completed`. Uses `INSERT ... ON CONFLICT DO NOTHING` — the constraint is the guard, not a SELECT-then-INSERT race.
+- **PDF generation**: `certificate_pdf.py` renders an A4 landscape PDF using `pypdf`, uploads to `certificates/{certificate_id}.pdf`, serves via presigned URL. Generation is lazy (first fetch), so a slow render never blocks lesson completion. Colours derived from `theme.css` tokens.
+- **Endpoints**: `GET /me/certificates` (learner list), `GET /me/certificates/{id}/download` (renders + presigns), `GET /verify/{code}` (public, unauthenticated, rate-limited by caller IP).
+- **Revocation**: Refund path sets `certificates.revoked_at` for courses covered by the refunded product. The verify page shows revocation state.
+- **Email**: `certificate_issued.html.j2` + `.txt.j2` sent through `_send`. Links to the certificate rather than attaching.
+- **Frontend**: Certificates panel in `Dashboard.tsx`, completion state on `CourseDetail.tsx`, public `/verify/:code` page in `MarketingLayout`.
+
+**Key decisions:**
+- Snapshots freeze at issue time — a course rename does not rewrite issued certificates.
+- PDF colours are module constants named after the `theme.css` tokens they came from, so a theme change has one findable place.
+- The verify page is in `MarketingLayout`, not `MemberLayout` — a stranger checking a certificate is not a member.
+
+### 6.3 Full-text search (W5-R3)
+
+**What was built:** Postgres full-text search across courses, templates, questions, and packs.
+
+- **Migration `028`**: Generated `tsvector` columns on `courses`, `templates`, `questions`, and `products` with weighted fields (`title` → A, `subtitle`/`search_title` → B, `description`/`body`/`preview` → C). GIN indexes on each. `CONCURRENTLY` with `INVALID` verification pass.
+- **Backend**: `GET /search?q=…` returns results grouped by type, ranked by `ts_rank_cd`, with `LIMIT 5` per type and a `total` per group. Uses `websearch_to_tsquery` (never raises on malformed input). Empty/whitespace queries return empty groups without touching the database. Query count is exactly four regardless of result volume.
+- **Header search**: Command palette with `role="dialog"`, debounced input, keyboard-navigable listbox with `aria-activedescendant`, `role="status"` announcing result counts.
+- **Results page**: `/search?q=` with a labelled search form, `aria-live` result count, and results grouped by type.
+
+**Key decisions:**
+- Generated columns, not trigger-maintained — a trigger is a second place the truth lives.
+- `websearch_to_tsquery`, not `plainto_tsquery` — accepts phrases and `or`, never raises on malformed input.
+- Only published rows appear — tested by creating one row in each publish state.
+
+### 6.4 Reviews (W5-R4)
+
+**What was built:** Curated testimonials (Stage A) with moderation queue, and a gated aggregate rating (Stage B, hidden below 8 reviews).
+
+- **Model**: `reviews` table with `content_type` (`course`/`template`/`pack`), `content_id` (polymorphic, no FK), `rating` (1–5), `body` (sanitised on write), `state` (`pending`/`approved`/`rejected`), `is_featured`. Denormalised `review_count`/`rating_sum` on `courses`, `templates`, `products`. Migration `029`.
+- **Submission**: Entitlement-gated through `has_access_to`. One review per user per content item (`UNIQUE`). Body sanitised through `html_sanitizer`. Always born `pending`.
+- **Moderation**: `AdminReviews.tsx` — approve/reject/feature. Counter transitions (`review_count`/`rating_sum`) happen in the same transaction as the state change.
+- **Stage A rendering**: `<Testimonial>` component renders `is_featured` approved reviews as named quotes on `CourseDetail`, `Template`, and `PackDetail`. No star aggregate.
+- **Stage B (gated)**: `MIN_REVIEWS_FOR_AGGREGATE = 8` enforced in both backend (`GET /reviews/rating`) and frontend (`reviews.ts`). Below the threshold, API returns `rating: null` and the card renders no rating element.
+- **Reconciler**: `scripts/reconcile_review_aggregates.py` recomputes counters from `reviews` and reports drift.
+
+**Key decisions:**
+- No fabricated credibility — at current volume, "5.0 (2 reviews)" reads as nobody bought this. The gate starts closed.
+- Denormalised counters with a reconciler, not a `COUNT`/`AVG` per catalogue load — avoids N+1 on catalogue pages.
+- The reconciler reads the `CHECK` constraint's vocabulary to validate its own labels.
+
+### 6.5 Notes, bookmarks, learner analytics (W5-R5)
+
+**What was built:**
+
+- **Notes**: `user_notes` table, `UNIQUE(user_id, lesson_id)`. `PUT /me/notes/{lesson_id}` (upsert), `GET /me/notes`. Notes panel in `Lesson.tsx` with autosave via `useAutosave` + `AutosaveIndicator`.
+- **Bookmarks**: `bookmarks` table with `CreatedAtMixin` (not `TimestampMixin` — bookmarks are append-only, never edited). `POST/DELETE /me/bookmarks`, `GET /me/bookmarks`. `/saved` page renders bookmarks grouped by type, reachable from the member nav.
+- **Learner progress**: Dashboard resume panel with progress bar, estimated time remaining (from `courses.estimated_duration_minutes`). Library page with per-course progress bars and completion status. `ContinueRail` component for in-progress courses.
+
+### 6.6 The 14 defects found in the verification pass
+
+The week 5 verification pass found **fourteen defects** that the test suite did not catch. All were fixed. The findings are recorded in `week5_report.md` and worth summarising here because the pattern is the important part:
+
+**Every defect lived in the gap between "the API returns the right JSON" and "a person can use the feature."** The backend suite was ~490 tests and never went red, because the backend was mostly right. What was missing was anything that rendered a component against a real response, opened a real page, or committed a real row.
+
+Key findings:
+
+1. **Seven endpoint modules never committed.** `session.flush()` was called but `session.commit()` was not. The test fixture's savepoint masked this. Fixed by adding `await session.commit()` at each mutation. A new `asserts_commit` fixture now fails unless the endpoint itself committed.
+2. **Rate limiter keyed on the wrong thing.** The verify endpoint's rate limiter was keyed on the verification code (each guess gets its own counter). Fixed to key on caller IP.
+3. **Stripe promotion expiry never sent.** `expires_at` was computed then discarded. Fixed.
+4. **Search ran 8 queries instead of 4.** Separate COUNT queries alongside each select. Fixed with `COUNT(*) OVER ()`.
+5. **Missing index on reviews.** `ix_reviews_content_approved` was specified but never created. Fixed in migration `031`.
+6. **Orphan enum type.** `review_state` type created but never referenced. Fixed.
+7. **Reconciler queried wrong content type.** `'product'` instead of `'pack'`. Fixed.
+8. **Bookmarks entirely non-functional.** `TimestampMixin` added a column migration never created. The bare `except Exception` reported this as 409 "already bookmarked" — the first bookmark on any item always failed silently. Fixed with `CreatedAtMixin` and narrowed exception handlers.
+9. **Search palette crashed on every real query.** Stale `TYPE_CONFIG` key. `tsc --noEmit` passed with the bug present. Fixed.
+10. **Certificate download unreachable from UI.** `<a href>` pointed at wrong path, sent no auth header, and received JSON not a file. Fixed with authenticated fetch + presigned URL open.
+11. **Command palette missing `role="dialog"`.** Fixed.
+12. **Admin sign-in helper broken.** `getByLabel(/password/i)` matched both password field and show-password toggle. Fixed.
+13. **Missing covering index on notes.** `ix_user_notes_user` lacked `INCLUDE (lesson_id)`. Fixed in migration `032`.
+14. **`/search` results page had no search field.** Could only be reached by editing the URL. Fixed with a real labelled search form.
+
+### 6.7 Migrations added in Week 5
+
+| Migration | Purpose |
+|---|---|
+| `026` | `promotions` table + indexes |
+| `027` | `certificates` table + indexes |
+| `028` | Full-text search: tsvectors + GIN indexes on 4 tables |
+| `029` | `reviews`, `user_notes`, `bookmarks` tables + denormalised counters |
+| `030` | Notes/bookmarks indexes |
+| `031` | Reviews: missing index + orphan enum cleanup |
+| `032` | Notes: covering index fix |
+
+### 6.8 New test files added in Week 5
+
+| File | Tests |
+|---|---|
+| `tests/test_promotions.py` | Active window, overlap, Stripe sync, audit, public allowlist |
+| `tests/test_certificates.py` | Issuance edge, idempotency, snapshots, verify, revocation |
+| `tests/test_certificate_pdf.py` | PDF render, cache, failure resilience |
+| `tests/test_search.py` | Full-text search, unpublished filtering, query count |
+| `tests/test_reviews.py` | Submission, moderation, aggregates, threshold gate |
+| `tests/test_notes_bookmarks.py` | Notes CRUD, bookmarks CRUD, dedup |
+| `frontend/src/components/ui/__tests__/DiscountBanner.test.tsx` | Banner render, dismissal |
+| `frontend/src/components/ui/__tests__/CommandPalette.test.tsx` | Search palette, keyboard nav |
+
+### 6.9 What Week 5 changed in existing files
+
+- `main.py`: 6 new routers mounted (`promotions`, `search`, `notes`, `bookmarks`, `leads`, `filter_events` — the last two were already written but unmounted)
+- `app/db/models/__init__.py`: 7 new model imports + `__all__` entries
+- `app/api/v1/admin/router.py`: 3 new admin sub-routers (`promotions`, `reviews`, `packs`)
+- `frontend/src/App.tsx`: 3 new admin lazy routes, `/search`, `/saved`, `/verify/:code`
+- `frontend/src/routes/_layouts/MemberLayout.tsx`: "Saved" nav item added under "Your work"
+- `frontend/src/pages/Dashboard.tsx`: Certificates section, resume panel rebuilt, stat tiles, recommendations
+- `frontend/src/pages/Learn.tsx`: Notes panel integrated
+- `frontend/src/lib/query/keys.ts`: New cache keys for promotions, search, notes, bookmarks, certificates, reviews
+- `frontend/src/stores/useCartStore.ts`: Unchanged (cart was already built in Week 3)
+
+### 6.10 Follow-up pass (2026-08-23, after the section above)
+
+Report: [`week5_report.md`](week5_report.md#follow-up-pass-2026-08-23). Three items left open by §6.6 were revisited; two closed, one did not.
+
+**Closed:**
+
+- **`[OWNER]` §V.3.2 certificate wording — resolved.** Heading stays "Certificate of Completion"; the document is signed from the platform ("Practicable"), not a named individual, because issuance is automatic on 100% completion and a personal signature would assert a review nobody performed. A scope disclaimer ("not a professional accreditation or licence") is on the PDF itself, not only the email.
+- **Found while resolving it: the certificate PDF was a blank page.** `certificate_pdf.py` emitted `Tj` operators with no enclosing `BT`/`ET` text object — a conforming renderer discards text outside one. Poppler extracted only "Practicable"; every learner's name, course, date, and verification code were silently dropped. The only prior test on the renderer patched it to raise, so this shipped invisibly. Fixed by rewriting the content-stream builder to always emit `BT ... ET`; `test_certificate_pdf.py` (23 tests) now extracts via Poppler (`pdftotext`), not pypdf, whose lenient parser passed against the broken stream.
+- **The conftest savepoint fixture no longer hides missing commits.** A new `asserts_commit` fixture wraps `AsyncSession.commit` (not the event — `after_commit` fires inside the async/sync greenlet with no application frames on the stack at any depth) and fails unless the endpoint under test actually committed, filtering out the commit `get_current_user` performs internally. Verified by deliberately deleting a real commit from bookmarks, notes, and promotions in turn. `tests/test_endpoints_commit.py`, 9 tests.
+- **Bookmarks are now browsable, not just savable.** `frontend/src/pages/Saved.tsx` — grouped by type, reachable from the member nav, unavailable items shown as text (not a dead link) rather than silently dropped. `GET /me/bookmarks` now resolves title/slug/availability in at most three queries instead of returning bare UUIDs. 9 new frontend tests (`Saved.test.tsx`).
+- **Found while doing it: catalogue cards had no visible focus ring (WCAG 2.4.7).** All three catalogues drew grid cell dividers as `[&>*]:outline-1` on the card links, which beat the global `:focus-visible` rule — a focused card computed to identical styles as an unfocused one. This was the actual cause of the a11y flake below, some of the time. Fixed with an explicit `focus-visible:outline-2` on each card; 3 new deterministic tests in `a11y-manual-checks.spec.ts`.
+
+**Still open:**
+
+- **The keyboard-purchase e2e walk is genuinely flaky**, ~2 runs in 6. Not the WCAG defect above (that part is now fixed and deterministically covered) and not "test pollution between sibling cases" as this report first guessed — that diagnosis was wrong and has been corrected in `week5_report.md`. The real cause: the landing page mounts its carousels asynchronously, so which link the walk's Tab sequence lands on varies run to run. `waitForLoadState('networkidle')` was tried as a fix and made it worse (6 failures in 8 vs. ~1 in 3); reverted. A durable fix means changing how that page mounts carousels, which a keyboard-focus test shouldn't be what drives that change.
+
+**Backend suite after the follow-up pass: 525 passed, 0 failed (34m32s)** — up from the 490 recorded in §6.6's test-count table.
+
+**Commits and merge (2026-08-23):** the branch was split into 17 small commits (features, then fixes, then wiring, then docs — see `git log 30615f1..6f9f882` for the full list) and merged `--no-ff` into `main` at `6f9f882`. Not pushed — `main` was left ahead of `origin/main`; push only on explicit instruction.
+
+---
+
+## 7. Commands that matter
+
+```bash
+# Migrations — round-trip before committing
+cd backend && alembic upgrade head && alembic downgrade -1 && alembic upgrade head
+
+# Backend suite
+cd backend && pytest -q
+
+# Frontend unit tests
+cd frontend && npm run test
+
+# E2E tests
+cd frontend && npx playwright test
+
+# Typecheck frontend
+cd frontend && npx tsc --noEmit
+
+# Build frontend
+cd frontend && npm run build
+```
+
