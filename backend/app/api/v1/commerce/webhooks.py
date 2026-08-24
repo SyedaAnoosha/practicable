@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 import stripe
@@ -20,6 +21,8 @@ from app.services.email_service import (
 )
 from app.services.order_service import create_order_from_checkout
 from app.services.refund_service import apply_refund
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -102,8 +105,39 @@ async def stripe_webhook(
                     # week4_plan.md §20.9: the receipt states each product's own
                     # version/last_reviewed_at, same fact as the buy page's VersionStamp.
                     product_versions = [(p.version, p.last_reviewed_at) for p in products]
-                    # W4-R2: Extract invoice number from Stripe session when available
-                    invoice_number = session_data.get('invoice', {}).get('number') if session_data.get('invoice') else None
+                    # W4-R2: the human-readable invoice number for the receipt.
+                    #
+                    # This read `session_data['invoice']['number']`, which assumed an
+                    # expanded object. A webhook payload never carries one: Stripe sends
+                    # `invoice` as a bare id string (or null), and nothing here requests
+                    # `expand`. So it raised `AttributeError: 'str' object has no
+                    # attribute 'get'` on every completed checkout — and because it sits
+                    # above the sends, the receipt, the sale alert and every
+                    # access-granted email were skipped with it. The order and the
+                    # entitlements were already committed by then, so the buyer was
+                    # charged, given access, and told nothing.
+                    #
+                    # The number lives on the Invoice, so fetching it needs a second
+                    # call. That call is best-effort by design: an invoice number is a
+                    # nicety on a receipt (`me.py` already documents an absent one as a
+                    # supported state), and no failure reaching Stripe for it may ever
+                    # again cost the buyer their email.
+                    invoice_ref = session_data.get('invoice')
+                    invoice_number = None
+                    if isinstance(invoice_ref, dict):
+                        # Defensive: correct if this is ever called with an expanded session.
+                        invoice_number = invoice_ref.get('number')
+                    elif isinstance(invoice_ref, str) and invoice_ref:
+                        try:
+                            invoice_number = stripe.Invoice.retrieve(invoice_ref).get('number')
+                        except Exception:  # noqa: BLE001
+                            logger.warning(
+                                "Could not retrieve Stripe invoice %s for order %s; "
+                                "sending the receipt without an invoice number.",
+                                invoice_ref,
+                                order.id,
+                                exc_info=True,
+                            )
                     # One receipt for the whole order, however many products it contains
                     # (W3-R11) — the same call a single "Buy" made before, just with a
                     # one-item list.

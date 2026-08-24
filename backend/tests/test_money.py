@@ -488,3 +488,126 @@ async def test_put_product_does_not_change_price(admin_client, content_graph, db
     product = result.scalar_one()
     assert product.price_amount == old_price_amount
     assert product.stripe_price_id == old_stripe_price_id
+
+
+# ---------------------------------------------------------------------------
+# POST /webhooks/stripe — the invoice field's REAL shape
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_webhook_handles_invoice_as_a_string_id(
+    anon_client, member_user, content_graph, db_session
+):
+    """A checkout.session.completed payload carries `invoice` as a bare id STRING,
+    never an expanded object — nothing in this codebase asks Stripe to `expand` it.
+
+    The handler read `session_data['invoice']['number']`, which raised
+    `AttributeError: 'str' object has no attribute 'get'` on every real completed
+    checkout in production. The order and entitlements had already been committed by
+    the time it blew up, and the receipt, the sale alert and every access-granted
+    email are sent BELOW that line — so a buyer was charged, given access, and told
+    nothing, while Stripe got a 500 and retried into the idempotency guard forever.
+
+    Every existing webhook fixture omitted `invoice` entirely, which is exactly why a
+    green suite never caught it. This one sets it to the shape Stripe actually sends.
+    """
+    product = content_graph.template_product
+    event_id = f"evt_test_{uuid.uuid4().hex[:16]}"
+    fake_event = {
+        "id": event_id,
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "id": f"cs_test_{uuid.uuid4().hex[:16]}",
+                "payment_intent": f"pi_test_{uuid.uuid4().hex[:16]}",
+                "amount_total": product.price_amount,
+                "currency": "aud",
+                # The shape a real webhook sends: an id, not an object.
+                "invoice": f"in_test_{uuid.uuid4().hex[:16]}",
+                "metadata": {
+                    "user_id": str(member_user.id),
+                    "product_ids": str(product.id),
+                },
+            }
+        },
+    }
+
+    fake_invoice = {"number": "INV-TEST-0001"}
+
+    with patch(
+        "app.api.v1.commerce.webhooks.construct_webhook_event", return_value=fake_event
+    ), patch(
+        "app.api.v1.commerce.webhooks.stripe.Invoice.retrieve", return_value=fake_invoice
+    ), patch(
+        "app.api.v1.commerce.webhooks.send_receipt_email"
+    ) as receipt_mock, patch(
+        "app.api.v1.commerce.webhooks.send_sale_notification_email"
+    ) as sale_mock, patch(
+        "app.api.v1.commerce.webhooks.send_access_granted_email"
+    ), patch(
+        "app.api.v1.commerce.webhooks.send_welcome_email"
+    ):
+        resp = await anon_client.post(
+            "/webhooks/stripe",
+            content=b"{}",
+            headers={"stripe-signature": "test-sig"},
+        )
+
+    assert resp.status_code == 200, resp.text
+
+    # The whole point: the emails below the crash line actually go out.
+    receipt_mock.assert_awaited_once()
+    sale_mock.assert_awaited_once()
+    # And the number resolved off the retrieved Invoice, not off the id string.
+    assert receipt_mock.await_args.kwargs["invoice_number"] == "INV-TEST-0001"
+
+
+@pytest.mark.asyncio
+async def test_webhook_still_sends_email_when_the_invoice_lookup_fails(
+    anon_client, member_user, content_graph
+):
+    """An invoice number is a nicety on a receipt; a receipt is not. If the extra call
+    to Stripe fails, the buyer must still be emailed — losing the receipt over a
+    cosmetic field is the same failure this whole area just had, in a quieter form."""
+    product = content_graph.template_product
+    fake_event = {
+        "id": f"evt_test_{uuid.uuid4().hex[:16]}",
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "id": f"cs_test_{uuid.uuid4().hex[:16]}",
+                "payment_intent": f"pi_test_{uuid.uuid4().hex[:16]}",
+                "amount_total": product.price_amount,
+                "currency": "aud",
+                "invoice": f"in_test_{uuid.uuid4().hex[:16]}",
+                "metadata": {
+                    "user_id": str(member_user.id),
+                    "product_ids": str(product.id),
+                },
+            }
+        },
+    }
+
+    with patch(
+        "app.api.v1.commerce.webhooks.construct_webhook_event", return_value=fake_event
+    ), patch(
+        "app.api.v1.commerce.webhooks.stripe.Invoice.retrieve",
+        side_effect=stripe.StripeError("Stripe is down"),
+    ), patch(
+        "app.api.v1.commerce.webhooks.send_receipt_email"
+    ) as receipt_mock, patch(
+        "app.api.v1.commerce.webhooks.send_sale_notification_email"
+    ), patch(
+        "app.api.v1.commerce.webhooks.send_access_granted_email"
+    ), patch(
+        "app.api.v1.commerce.webhooks.send_welcome_email"
+    ):
+        resp = await anon_client.post(
+            "/webhooks/stripe",
+            content=b"{}",
+            headers={"stripe-signature": "test-sig"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    receipt_mock.assert_awaited_once()
+    assert receipt_mock.await_args.kwargs["invoice_number"] is None
