@@ -34,10 +34,14 @@ export function StarRating({ rating, reviewCount, size = 'sm', className }: Star
 
   // One accessible name for the whole control. Five separate star nodes would be read
   // out as five things, and a partially-filled star has no meaning read aloud at all.
+  // `toFixed(1)` here too: the label must say what the eye sees. A raw `5` spoken
+  // against a visible "5.0" is the same value described two ways, and the mismatch is
+  // exactly what makes an accessible name feel like a separate, less-maintained string.
+  const shownRating = rating.toFixed(1)
   const label =
     reviewCount != null
-      ? `Rated ${rating} out of 5 from ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`
-      : `Rated ${rating} out of 5`
+      ? `Rated ${shownRating} out of 5 from ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`
+      : `Rated ${shownRating} out of 5`
 
   return (
     <span
@@ -46,7 +50,7 @@ export function StarRating({ rating, reviewCount, size = 'sm', className }: Star
       aria-label={label}
     >
       <Star className={cn(starSize, 'fill-warning text-warning')} aria-hidden="true" />
-      <span className="font-medium tabular-nums text-foreground">{rating.toFixed(1)}</span>
+      <span className="font-medium tabular-nums text-foreground">{shownRating}</span>
       {reviewCount != null && (
         <span className="tabular-nums text-muted-foreground">({reviewCount})</span>
       )}

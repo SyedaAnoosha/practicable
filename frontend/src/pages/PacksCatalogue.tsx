@@ -9,6 +9,7 @@ import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Meta } from '@/components/ui/Meta'
+import { StarRating } from '@/components/ui/StarRating'
 
 interface PackSummary {
   slug: string

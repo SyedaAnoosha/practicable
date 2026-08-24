@@ -36,10 +36,30 @@ import { BookmarkButton } from '@/components/ui/BookmarkButton'
 import { useFeaturedReviews } from '@/hooks/useFeaturedReviews'
 import { ReviewForm } from '@/components/ui/ReviewForm'
 
-function FeaturedTestimonials({ contentType, contentId }: { contentType: string; contentId: string }) {
+function FeaturedTestimonials({
+  contentType,
+  contentId,
+  rating,
+  reviewCount,
+}: {
+  contentType: string
+  contentId: string
+  /* Stage B. Passed down rather than fetched again: the detail payload already
+     carries the aggregate, so a second call to /reviews/rating would be a request
+     for data this component was handed. Null below the threshold, and
+     `TestimonialSection` renders no badge for null. */
+  rating?: number | null
+  reviewCount?: number
+}) {
   const { data: reviews } = useFeaturedReviews(contentType, contentId)
   if (!reviews || reviews.length === 0) return null
-  return <TestimonialSection reviews={reviews} />
+  return (
+    <TestimonialSection
+      reviews={reviews}
+      aggregateRating={rating}
+      aggregateCount={reviewCount}
+    />
+  )
 }
 
 type LessonType = 'video' | 'reading' | 'download' | 'mixed'
@@ -101,6 +121,9 @@ interface CourseDetailData {
   completed: boolean
   /** W5-R2: verification code for the reader's certificate, if one was issued. */
   certificate_verification_code?: string | null
+  /** W5-R4 Stage B: null below the display threshold. */
+  rating?: number | null
+  review_count?: number
 }
 
 const LESSON_ICON: Record<LessonType, typeof PlayCircle> = {
@@ -489,6 +512,8 @@ export function CourseDetail() {
             <FeaturedTestimonials
               contentType="course"
               contentId={course.id}
+              rating={course.rating}
+              reviewCount={course.review_count}
             />
 
             {/* Only for buyers: the endpoint refuses anyone else with 403, so showing

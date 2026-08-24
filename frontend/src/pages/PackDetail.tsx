@@ -56,6 +56,9 @@ interface PackDetail {
   min_office_version?: string
   previews?: Preview[]
   format?: string
+  /** W5-R4 Stage B: null below the display threshold. */
+  rating?: number | null
+  review_count?: number
 }
 
 interface DownloadUrlResponse {
@@ -89,10 +92,30 @@ const QUESTION_PAGE_SIZE = 12
  *
  * The notice text comes from the API (`honesty_notice`), not from a string here, so it
  * cannot drift from the PDF cover, which makes the same promise. */
-function FeaturedTestimonials({ contentType, contentId }: { contentType: string; contentId: string }) {
+function FeaturedTestimonials({
+  contentType,
+  contentId,
+  rating,
+  reviewCount,
+}: {
+  contentType: string
+  contentId: string
+  /* Stage B. Passed down rather than fetched again: the detail payload already
+     carries the aggregate, so a second call to /reviews/rating would be a request
+     for data this component was handed. Null below the threshold, and
+     `TestimonialSection` renders no badge for null. */
+  rating?: number | null
+  reviewCount?: number
+}) {
   const { data: reviews } = useFeaturedReviews(contentType, contentId)
   if (!reviews || reviews.length === 0) return null
-  return <TestimonialSection reviews={reviews} />
+  return (
+    <TestimonialSection
+      reviews={reviews}
+      aggregateRating={rating}
+      aggregateCount={reviewCount}
+    />
+  )
 }
 
 export function PackDetail() {
@@ -337,7 +360,12 @@ export function PackDetail() {
           </div>
 
           {/* W5-R4 Stage A: featured testimonials */}
-          <FeaturedTestimonials contentType="pack" contentId={pack.id} />
+          <FeaturedTestimonials
+            contentType="pack"
+            contentId={pack.id}
+            rating={pack.rating}
+            reviewCount={pack.review_count}
+          />
 
           {pack.owned && (
             <ReviewForm

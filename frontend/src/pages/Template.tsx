@@ -47,6 +47,9 @@ interface TemplateDetail {
   version?: string
   last_reviewed_at?: string
   format?: string
+  /** W5-R4 Stage B: null below the display threshold. */
+  rating?: number | null
+  review_count?: number
 }
 
 type DownloadStatus = 'idle' | 'preparing' | 'downloaded' | 'error' | 'not-entitled'
@@ -65,10 +68,30 @@ function readUnlocked(): boolean {
   }
 }
 
-function FeaturedTestimonials({ contentType, contentId }: { contentType: string; contentId: string }) {
+function FeaturedTestimonials({
+  contentType,
+  contentId,
+  rating,
+  reviewCount,
+}: {
+  contentType: string
+  contentId: string
+  /* Stage B. Passed down rather than fetched again: the detail payload already
+     carries the aggregate, so a second call to /reviews/rating would be a request
+     for data this component was handed. Null below the threshold, and
+     `TestimonialSection` renders no badge for null. */
+  rating?: number | null
+  reviewCount?: number
+}) {
   const { data: reviews } = useFeaturedReviews(contentType, contentId)
   if (!reviews || reviews.length === 0) return null
-  return <TestimonialSection reviews={reviews} />
+  return (
+    <TestimonialSection
+      reviews={reviews}
+      aggregateRating={rating}
+      aggregateCount={reviewCount}
+    />
+  )
 }
 
 export function Template() {
@@ -284,7 +307,12 @@ export function Template() {
           </div>
 
           {/* W5-R4 Stage A: featured testimonials */}
-          <FeaturedTestimonials contentType="template" contentId={template.id} />
+          <FeaturedTestimonials
+            contentType="template"
+            contentId={template.id}
+            rating={template.rating}
+            reviewCount={template.review_count}
+          />
 
           {template.owned && (
             <ReviewForm

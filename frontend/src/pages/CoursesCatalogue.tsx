@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { CourseArt } from '@/components/ui/CourseArt'
 import { Meta } from '@/components/ui/Meta'
+import { StarRating } from '@/components/ui/StarRating'
 
 interface RelatedProduct {
   slug: string
