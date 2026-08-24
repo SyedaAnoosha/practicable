@@ -77,5 +77,13 @@ services:
       # ALLOWED_ORIGIN below once the frontend is deployed.
       - key: FRONTEND_URL
         sync: false
+      # CORS preflight is an EXACT string match against this list, so the value must
+      # be the origin only — scheme + host, no trailing slash and no path
+      # (`https://prac-erm.vercel.app`, not `.../` or `.../courses`). Comma-separate
+      # several for the production alias, `www`, and any preview domain that must
+      # reach the API. Leaving this unset does not fail the deploy: the service boots
+      # allowing localhost only and refuses the real frontend with 400 "Disallowed
+      # CORS origin", which is visible in the browser console and nowhere else —
+      # main.py now logs a warning at startup for exactly this case.
       - key: ALLOWED_ORIGIN
         sync: false # set to the real Vercel URL once the frontend is deployed

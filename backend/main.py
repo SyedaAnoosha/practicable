@@ -21,9 +21,24 @@ logging.getLogger("app").setLevel(logging.INFO)
 app = FastAPI(title="Practicable API", version="1.0.0")
 
 # CORS middleware - restricted to allowed origins only (Day 1 non-negotiable)
+_cors_origins = list(dict.fromkeys(settings.allowed_origins_list + ["http://localhost:5173"]))
+
+# A deployed backend whose only allowed origin is localhost serves nothing but 400
+# "Disallowed CORS origin" to its real frontend, and says so nowhere in its own logs —
+# the failure is visible only in a browser console, on the other side of the network.
+# ALLOWED_ORIGIN is `sync: false` in render.yaml, so a fresh service starts with no
+# value at all and this is the state it starts in. Warn loudly at boot instead.
+if not any(o.startswith("https://") for o in _cors_origins):
+    logging.getLogger("app").warning(
+        "CORS: no https origin is allowed (origins=%s). A deployed frontend will be "
+        "refused with 400 'Disallowed CORS origin'. Set ALLOWED_ORIGIN to the real "
+        "frontend URL; comma-separate several.",
+        _cors_origins,
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(dict.fromkeys(settings.allowed_origins_list + ["http://localhost:5173"])),
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
