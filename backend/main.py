@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.deps import get_current_user_id
-from app.api.v1.content import questions, lessons, templates, courses, packs, promotions, reviews, search, verify, notes, bookmarks
+from app.api.v1.content import assessments, questions, lessons, templates, courses, packs, promotions, reviews, search, verify, notes, bookmarks
 from app.api.v1.commerce import checkout, products, webhooks
 from app.api.v1 import auth, contact, filter_events, leads, me
 from app.api.v1.admin.router import router as admin_router
@@ -22,6 +22,12 @@ app = FastAPI(title="Practicable API", version="1.0.0")
 
 # CORS middleware - restricted to allowed origins only (Day 1 non-negotiable)
 _cors_origins = list(dict.fromkeys(settings.allowed_origins_list + ["http://localhost:5173"]))
+
+# No extra hardcoded localhost ports here. `allowed_origin` is already comma-separated,
+# so a developer who needs http://localhost:3000 adds it to their own .env — which keeps
+# the deployed origin list exactly what the environment says it is. Appending dev ports
+# unconditionally in code would ship them to production too, where trusting localhost
+# origins hands any page on a developer's machine a credentialed channel to the live API.
 
 # A deployed backend whose only allowed origin is localhost serves nothing but 400
 # "Disallowed CORS origin" to its real frontend, and says so nowhere in its own logs —
@@ -40,7 +46,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -55,6 +61,9 @@ app.include_router(promotions.router, tags=["promotions"])
 app.include_router(reviews.router, tags=["reviews"])
 app.include_router(search.router, tags=["search"])
 app.include_router(verify.router, tags=["certificates"])
+# Scored assessments (one per course). Learner-facing only — the admin authoring routes
+# live under the admin router, where require_admin is applied at the router level.
+app.include_router(assessments.router, tags=["assessments"])
 app.include_router(checkout.router, tags=["commerce"])
 app.include_router(products.router, tags=["commerce"])
 app.include_router(webhooks.router, tags=["commerce"])
