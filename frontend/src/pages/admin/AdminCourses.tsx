@@ -49,6 +49,12 @@ export interface CourseRow {
   // been called, same as the detail page's course.price_amount.
   price_amount?: number | null
   currency?: string | null
+  // #16: computed server-side, same three states the template list carries. A course
+  // narrating a regulation goes stale the moment the regulation moves, so the freshness
+  // system covers the whole catalogue rather than only the downloadable half.
+  last_reviewed_at?: string | null
+  freshness_status?: 'fresh' | 'stale' | 'unknown'
+  freshness_warning?: string | null
 }
 
 export interface AdminLessonBlock {
@@ -1201,6 +1207,17 @@ export function AdminCourses() {
     queryFn: () => api.get<CourseRow[]>('/admin/courses').then((r) => r.data),
   })
 
+  // #16: the course-side twin of the template list's Mark reviewed — noticing staleness
+  // and acting on it in one place, without opening the course builder.
+  const markCourseReviewed = useMutation({
+    mutationFn: (id: string) => api.post(`/admin/courses/${id}/mark-reviewed`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.courses() })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.courses.list() })
+    },
+    onError: (e) => setError(readError(e)),
+  })
+
   const createCourse = useMutation({
     mutationFn: () => api.post<CourseDetail>('/admin/courses', { title, description }),
     onSuccess: (r) => {
@@ -1217,7 +1234,7 @@ export function AdminCourses() {
 
   if (openCourseId) {
     return (
-      <div className="mx-auto w-full max-w-4xl px-5 py-10 sm:px-8">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
         <CourseBuilder courseId={openCourseId} onBack={() => setOpenCourseId(null)} />
       </div>
     )
@@ -1319,6 +1336,14 @@ export function AdminCourses() {
                           is the live, clickable one. `disabled` keeps the visual language
                           identical without implying a click does anything on this row. */}
                       <PublishStateChip value={c.publish_state} disabled onChange={() => {}} />
+                      {/* #16: stale and never-reviewed stay distinct here too. */}
+                      {c.freshness_status === 'stale' && (
+                        <Badge variant="warning" className="gap-1">
+                          <AlertTriangle className="size-3" aria-hidden="true" />
+                          Review due
+                        </Badge>
+                      )}
+                      {c.freshness_status === 'unknown' && <Badge variant="muted">Never reviewed</Badge>}
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {c.module_count} module{c.module_count === 1 ? '' : 's'} · {c.lesson_count} lesson
@@ -1327,6 +1352,20 @@ export function AdminCourses() {
                         <> · {formatCurrency(c.price_amount, c.currency ?? 'AUD')}</>
                       )}
                     </p>
+                    {c.freshness_warning && (
+                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+                        {c.freshness_warning}
+                        <button
+                          type="button"
+                          className="underline underline-offset-2 hover:text-foreground disabled:opacity-60"
+                          onClick={() => markCourseReviewed.mutate(c.id)}
+                          disabled={markCourseReviewed.isPending && markCourseReviewed.variables === c.id}
+                        >
+                          Mark reviewed
+                        </button>
+                      </p>
+                    )}
                   </div>
                   <Button size="sm" variant="outline" onClick={() => setOpenCourseId(c.id)}>
                     Open

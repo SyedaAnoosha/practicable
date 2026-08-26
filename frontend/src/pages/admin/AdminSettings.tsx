@@ -61,7 +61,7 @@ export function AdminSettings() {
 
   if (statusLoading || settingsLoading) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden="true" /> Loading settings…
         </p>
@@ -70,7 +70,7 @@ export function AdminSettings() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-5 py-10 sm:px-8">
+    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
       <PageTitle
         eyebrow="Admin"
         title="Settings"

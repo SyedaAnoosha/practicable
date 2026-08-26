@@ -44,11 +44,37 @@ interface MetricsResponse {
   courseEnrollmentRankings?: CourseEnrollmentRanking[]
   recommendationClicks?: { question: number; catalogue: number; total: number }
   recommendationRankings?: RecommendationRanking[]
+  mostSearchedQuestions?: SearchQueryCount[]
+  zeroResultQuestions?: SearchQueryCount[]
+  mostClickedTags?: FilterDimensionCounts
 }
 
 interface RecommendationRanking {
   productSlug: string
   clicks: number
+}
+
+interface SearchQueryCount {
+  query: string
+  count: number
+}
+
+/* Keys are FilterEvent's per-dimension columns verbatim (app/db/models/filter_event.py)
+   — domain, effort, duration, cost, roi_horizon, regulator_pressure, tier,
+   leadership_traits — snake_case, same as `enrollmentSplits` above: this dict is
+   returned as-is by `_get_most_clicked_tags`, not run through the `_to_camel` /
+   Pydantic-alias path that camelCases the rest of the response. */
+type FilterDimensionCounts = Record<string, number>
+
+const DIMENSION_LABELS: Record<string, string> = {
+  domain: 'Domain',
+  effort: 'Effort',
+  duration: 'Duration',
+  cost: 'Cost',
+  roi_horizon: 'ROI horizon',
+  regulator_pressure: 'Regulator pressure',
+  tier: 'Tier',
+  leadership_traits: 'Leadership traits',
 }
 
 /** `[ADDED 2026-08-22]` Every section on this page hand-rolled the same
@@ -167,6 +193,9 @@ export function AdminMetrics() {
   const enrollmentSplits = metricsData.enrollmentSplits ?? {}
   const productRankings = metricsData.productRankings ?? []
   const courseEnrollmentRankings = metricsData.courseEnrollmentRankings ?? []
+  const mostSearchedQuestions = metricsData.mostSearchedQuestions ?? []
+  const zeroResultQuestions = metricsData.zeroResultQuestions ?? []
+  const mostClickedTags = metricsData.mostClickedTags ?? {}
 
   // Group metrics into categories
   const userMetrics = metrics.filter((m) => m.name.includes('user'))
@@ -391,6 +420,82 @@ export function AdminMetrics() {
             </>
           )}
         </Section>
+
+        {/* Search analytics — item #10: what people search for, and where the catalogue
+            comes up empty. Zero-result queries render first: it is the highest-value of
+            the three because it tells the owner what content to create next, whereas
+            the other two describe usage of what already exists. */}
+        {zeroResultQuestions.length > 0 && (
+          <Section
+            title="Searches with no results"
+            description="What people typed and found nothing for — the content gap list."
+          >
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-2.5 text-left">Query</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Times searched</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zeroResultQuestions.map((row) => (
+                    <tr key={row.query} className="border-t border-border">
+                      <td className="px-4 py-2.5 text-foreground">{row.query}</td>
+                      <td className="px-4 py-2.5 text-right font-medium tabular-nums text-foreground">
+                        {row.count}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        )}
+
+        {mostSearchedQuestions.length > 0 && (
+          <Section title="Most searched queries" description="What people type into search, most-searched first.">
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/60 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-2.5 text-left">Query</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Searches</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mostSearchedQuestions.map((row) => (
+                    <tr key={row.query} className="border-t border-border">
+                      <td className="px-4 py-2.5 text-foreground">{row.query}</td>
+                      <td className="px-4 py-2.5 text-right font-medium tabular-nums text-foreground">
+                        {row.count}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Section>
+        )}
+
+        {Object.keys(mostClickedTags).length > 0 && (
+          <Section
+            title="Filter dimensions used"
+            description="How often each of the seven filter dimensions was set on a search."
+          >
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {Object.entries(mostClickedTags).map(([dimension, count]) => (
+                <MetricTile
+                  key={dimension}
+                  name={DIMENSION_LABELS[dimension] ?? dimension}
+                  numerator={count}
+                  denominator={1}
+                  description={`Searches with "${DIMENSION_LABELS[dimension] ?? dimension}" set.`}
+                />
+              ))}
+            </div>
+          </Section>
+        )}
 
         {/* Trend Chart — Recharts via shadcn chart block.
             §20.7a: revenue (area, --chart-1) and orders (line, --chart-2) over time.
