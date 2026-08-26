@@ -31,8 +31,17 @@ describe('AccountNotifications', () => {
   beforeEach(() => {
     vi.mocked(api.get).mockReset()
     vi.mocked(api.patch).mockReset()
-    vi.mocked(api.get).mockResolvedValue({
-      data: { notify_marketing: false, notify_product_updates: true },
+    // The page issues two GETs — the notification list and the preferences — so the
+    // mock has to answer by URL. A single blanket `mockResolvedValue` handed the
+    // preferences shape to the list query too, which happened to be harmless only
+    // because the list renders an empty state for anything without `.notifications`.
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url.includes('/me/account/notifications')) {
+        return Promise.resolve({
+          data: { notify_marketing: false, notify_product_updates: true, notify_sound: true },
+        } as never)
+      }
+      return Promise.resolve({ data: { notifications: [], unread_count: 0 } } as never)
     })
     vi.mocked(api.patch).mockResolvedValue({ data: {} })
   })
@@ -63,9 +72,14 @@ describe('AccountNotifications', () => {
     await user.click(screen.getByRole('button', { name: 'Save preferences' }))
 
     await waitFor(() => {
+      // `notify_sound` joined this payload with migration 037. The form sends all
+      // three fields together — the PATCH endpoint only overwrites what it is sent, so
+      // omitting one would leave it at whatever the server last stored rather than at
+      // what the checkbox on screen shows.
       expect(api.patch).toHaveBeenCalledWith('/me/account/notifications', {
         notify_marketing: true,
         notify_product_updates: true,
+        notify_sound: true,
       })
     })
   })
