@@ -208,7 +208,14 @@ async def test_submit_review_403_without_entitlement(
 async def test_submit_review_201_with_entitlement(
     anon_client: AsyncClient, db_session: AsyncSession
 ):
-    """A user who owns the course can submit a review, which is born pending."""
+    """A user who owns the course can submit a review, which is born APPROVED.
+
+    `[CHANGED 2026-08-25, owner direction]` Reviews used to be born `pending` and wait
+    for an admin. They are now visible immediately — the entitlement gate (only buyers
+    can review) is what makes that safe — and moderation is reactive: an admin deletes
+    a bad one. The counters must move on submission too, since the pending→approved
+    transition that used to advance them no longer happens.
+    """
     course, _, product = await _make_course(db_session)
     user = await _make_user(db_session)
     await _grant_user(db_session, user, product)
@@ -227,9 +234,14 @@ async def test_submit_review_201_with_entitlement(
 
     assert resp.status_code == 201
     body = resp.json()
-    assert body["state"] == "pending"
+    assert body["state"] == "approved"
     assert body["rating"] == 4
     assert body["content_type"] == "course"
+
+    # The denormalised counters advance with the insert, in the same transaction.
+    await db_session.refresh(course)
+    assert course.review_count == 1
+    assert course.rating_sum == 4
 
 
 async def test_submit_review_409_on_duplicate(
@@ -309,12 +321,19 @@ async def test_submit_review_display_name_derived(
 async def test_admin_approve_updates_counters(
     admin_client: AsyncClient, db_session: AsyncSession
 ):
-    """Approving a pending review increments review_count and rating_sum on the course."""
+    """Re-approving an already-approved review is a no-op on the counters.
+
+    `[CHANGED 2026-08-25]` This test used to assert the pending→approved transition.
+    Submission now approves directly and advances the counters itself, so what needs
+    guarding here is the other half of that: moderating an approved review to
+    "approved" again must not double-count it. `_update_counters` derives its delta
+    from old_state vs new_state, so an approved→approved move contributes zero.
+    """
     course, _, product = await _make_course(db_session)
     user = await _make_user(db_session)
     await _grant_user(db_session, user, product)
 
-    # Submit as the buyer
+    # Submit as the buyer — born approved, counters already at 1/4
     client = _make_client(user)
     async with client:
         resp = await client.post(
@@ -328,14 +347,13 @@ async def test_admin_approve_updates_counters(
         )
         review_id = resp.json()["id"]
 
-    # Verify course starts at 0/0
     await db_session.refresh(course)
-    assert course.review_count == 0
-    assert course.rating_sum == 0
+    assert course.review_count == 1
+    assert course.rating_sum == 4
 
-    # Approve as admin
+    # Re-approve as admin — must not double-count
     resp = await admin_client.patch(
-        f"/reviews/{review_id}",
+        f"/admin/reviews/{review_id}",
         json={"state": "approved"},
     )
     assert resp.status_code == 200
@@ -355,7 +373,7 @@ async def test_admin_reject_decrements_counters(
     user = await _make_user(db_session)
     await _grant_user(db_session, user, product)
 
-    # Submit + approve
+    # Submit — born approved, so no separate approval step is needed
     client = _make_client(user)
     async with client:
         resp = await client.post(
@@ -368,8 +386,6 @@ async def test_admin_reject_decrements_counters(
         )
         review_id = resp.json()["id"]
 
-    await admin_client.patch(f"/reviews/{review_id}", json={"state": "approved"})
-
     # Verify 1/5
     await db_session.refresh(course)
     assert course.review_count == 1
@@ -377,7 +393,7 @@ async def test_admin_reject_decrements_counters(
 
     # Reject
     resp = await admin_client.patch(
-        f"/reviews/{review_id}",
+        f"/admin/reviews/{review_id}",
         json={"state": "rejected"},
     )
     assert resp.status_code == 200
@@ -412,7 +428,7 @@ async def test_admin_feature_toggle(
 
     # Approve + feature
     resp = await admin_client.patch(
-        f"/reviews/{review_id}",
+        f"/admin/reviews/{review_id}",
         json={"state": "approved", "is_featured": True},
     )
     assert resp.status_code == 200
@@ -420,7 +436,7 @@ async def test_admin_feature_toggle(
 
     # Un-feature
     resp = await admin_client.patch(
-        f"/reviews/{review_id}",
+        f"/admin/reviews/{review_id}",
         json={"state": "approved", "is_featured": False},
     )
     assert resp.json()["is_featured"] is False
@@ -453,7 +469,7 @@ async def test_featured_reviews_endpoint(
 
     # Approve + feature via admin
     await admin_client.patch(
-        f"/reviews/{review_id}",
+        f"/admin/reviews/{review_id}",
         json={"state": "approved", "is_featured": True},
     )
 
@@ -468,10 +484,18 @@ async def test_featured_reviews_endpoint(
     assert any(i["id"] == review_id for i in items)
 
 
-async def test_featured_reviews_excludes_pending(
+async def test_featured_reviews_excludes_unfeatured(
     anon_client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession
 ):
-    """Pending reviews are not shown in the featured endpoint."""
+    """An approved review is NOT featured until an admin features it.
+
+    `[CHANGED 2026-08-25]` This was `..._excludes_pending`, and relied on submission
+    producing a pending review. Reviews are approved on write now, so "approved" is no
+    longer a curation signal at all — `is_featured` is the only thing separating an
+    ordinary review from one that appears on a marketing surface. That is what this
+    guards: without it, going approve-on-write would silently promote every review a
+    customer writes onto the landing page.
+    """
     course, _, product = await _make_course(db_session)
     user = await _make_user(db_session)
     await _grant_user(db_session, user, product)
@@ -484,12 +508,14 @@ async def test_featured_reviews_excludes_pending(
                 "content_type": "course",
                 "content_id": str(course.id),
                 "rating": 5,
-                "body": "Hidden pending review.",
+                "body": "Approved, but nobody featured it.",
             },
         )
+        assert resp.json()["state"] == "approved"
+        assert resp.json()["is_featured"] is False
         review_id = resp.json()["id"]
 
-    # Do NOT approve — leave as pending
+    # Do NOT feature it.
     resp = await anon_client.get(
         "/reviews/featured",
         params={"content_type": "course", "content_id": str(course.id)},
@@ -497,6 +523,11 @@ async def test_featured_reviews_excludes_pending(
     assert resp.status_code == 200
     items = resp.json()
     assert not any(i["id"] == review_id for i in items)
+
+    # The same holds for the site-wide (no content_id) listing the landing page uses.
+    resp = await anon_client.get("/reviews/featured")
+    assert resp.status_code == 200
+    assert not any(i["id"] == review_id for i in resp.json())
 
 
 # ── Template review (non-course content type) ────────────────────────────────
@@ -526,7 +557,7 @@ async def test_submit_template_review(
 
     # Approve via admin
     resp = await admin_client.patch(
-        f"/reviews/{review_id}",
+        f"/admin/reviews/{review_id}",
         json={"state": "approved"},
     )
     assert resp.status_code == 200
@@ -544,12 +575,20 @@ async def test_submit_template_review(
 async def test_admin_list_reviews_with_state_filter(
     admin_client: AsyncClient, db_session: AsyncSession
 ):
-    """GET /admin/reviews?state=pending returns only pending reviews."""
+    """GET /admin/reviews?state=… filters by state.
+
+    `[CHANGED 2026-08-25]` Submission no longer produces `pending`, so the pair this
+    separates is now approved (the state everything is born in) vs rejected (the state
+    an admin moves one to). The moderated_by/moderated_at assertions move with it: an
+    untouched review has null moderation fields even though it is approved, which is
+    the observable difference between "approved because nobody objected" and "approved
+    by a named admin".
+    """
     course, _, product = await _make_course(db_session)
     user = await _make_user(db_session)
     await _grant_user(db_session, user, product)
 
-    # Submit two reviews from different users
+    # Submit two reviews from different users — both born approved
     client = _make_client(user)
     async with client:
         resp = await client.post(
@@ -568,37 +607,37 @@ async def test_admin_list_reviews_with_state_filter(
         )
         review2_id = resp.json()["id"]
 
-    # Approve the first review
-    await admin_client.patch(f"/reviews/{review1_id}", json={"state": "approved"})
+    # Reject the first review
+    await admin_client.patch(f"/admin/reviews/{review1_id}", json={"state": "rejected"})
 
-    # List only pending — should return only the second review
-    resp = await admin_client.get("/reviews", params={"state": "pending"})
-    assert resp.status_code == 200
-    ids = [r["id"] for r in resp.json()]
-    assert review2_id in ids
-    assert review1_id not in ids
-
-    # List only approved — should return only the first review
-    resp = await admin_client.get("/reviews", params={"state": "approved"})
+    # List only rejected — should return only the first review
+    resp = await admin_client.get("/admin/reviews", params={"state": "rejected"})
     assert resp.status_code == 200
     data = resp.json()
     ids = [r["id"] for r in data]
     assert review1_id in ids
     assert review2_id not in ids
 
-    # The approved review must include admin-only fields
-    approved = next(r for r in data if r["id"] == review1_id)
-    assert approved["moderated_by"] is not None, "moderated_by must be set after moderation"
-    assert approved["moderated_at"] is not None, "moderated_at must be set after moderation"
+    # The moderated review must include admin-only fields
+    rejected = next(r for r in data if r["id"] == review1_id)
+    assert rejected["moderated_by"] is not None, "moderated_by must be set after moderation"
+    assert rejected["moderated_at"] is not None, "moderated_at must be set after moderation"
 
-    # Pending review must NOT have moderation fields
-    resp2 = await admin_client.get("/reviews", params={"state": "pending"})
-    pending = next(r for r in resp2.json() if r["id"] == review2_id)
-    assert pending["moderated_by"] is None, "unmoderated review should have null moderated_by"
-    assert pending["moderated_at"] is None, "unmoderated review should have null moderated_at"
+    # List only approved — should return only the second, untouched review
+    resp = await admin_client.get("/admin/reviews", params={"state": "approved"})
+    assert resp.status_code == 200
+    data = resp.json()
+    ids = [r["id"] for r in data]
+    assert review2_id in ids
+    assert review1_id not in ids
+
+    # An auto-approved review nobody moderated must NOT have moderation fields
+    untouched = next(r for r in data if r["id"] == review2_id)
+    assert untouched["moderated_by"] is None, "unmoderated review should have null moderated_by"
+    assert untouched["moderated_at"] is None, "unmoderated review should have null moderated_at"
 
     # List all (no filter) — should return both
-    resp = await admin_client.get("/reviews")
+    resp = await admin_client.get("/admin/reviews")
     assert resp.status_code == 200
     ids = [r["id"] for r in resp.json()]
     assert review1_id in ids
@@ -624,22 +663,26 @@ async def test_moderation_writes_audit_row(
         )
         review_id = resp.json()["id"]
 
-    # Count audit rows before
+    # Count audit rows before. `scalar_one`, not `scalar`: a COUNT always returns
+    # exactly one row, so `scalar`'s Optional return is a lie the arithmetic below
+    # cannot honour (Pylance flags `before + 1` as unsupported for None). `scalar_one`
+    # is both correctly typed and the stronger assertion — it raises if the query ever
+    # stops returning the single row this arithmetic assumes.
     before = (
         await db_session.execute(
             select(func.count()).select_from(AuditLog)
         )
-    ).scalar()
+    ).scalar_one()
 
     # Approve
-    await admin_client.patch(f"/reviews/{review_id}", json={"state": "approved"})
+    await admin_client.patch(f"/admin/reviews/{review_id}", json={"state": "approved"})
 
     # Count audit rows after — should be one more
     after = (
         await db_session.execute(
             select(func.count()).select_from(AuditLog)
         )
-    ).scalar()
+    ).scalar_one()
     assert after == before + 1
 
     # Verify the audit row content
@@ -660,7 +703,7 @@ async def test_moderate_nonexistent_review_returns_404(
 ):
     """PATCH /admin/reviews/<bad-id> returns 404."""
     resp = await admin_client.patch(
-        "/reviews/00000000-0000-0000-0000-000000000000",
+        "/admin/reviews/00000000-0000-0000-0000-000000000000",
         json={"state": "approved"},
     )
     assert resp.status_code == 404
@@ -683,7 +726,7 @@ async def test_moderate_invalid_state_returns_400(
         review_id = resp.json()["id"]
 
     resp = await admin_client.patch(
-        f"/reviews/{review_id}",
+        f"/admin/reviews/{review_id}",
         json={"state": "banana"},
     )
     assert resp.status_code == 400
@@ -757,7 +800,7 @@ async def test_multiple_reviews_counter_arithmetic(
 
     # Approve both
     for rid in ids:
-        resp = await admin_client.patch(f"/reviews/{rid}", json={"state": "approved"})
+        resp = await admin_client.patch(f"/admin/reviews/{rid}", json={"state": "approved"})
 
     # Verify combined counters: 2 reviews, sum = 3 + 5 = 8
     await db_session.refresh(course)
@@ -765,7 +808,7 @@ async def test_multiple_reviews_counter_arithmetic(
     assert course.rating_sum == 8
 
     # Reject the first one — count drops to 1, sum drops to 5
-    await admin_client.patch(f"/reviews/{ids[0]}", json={"state": "rejected"})
+    await admin_client.patch(f"/admin/reviews/{ids[0]}", json={"state": "rejected"})
     await db_session.refresh(course)
     assert course.review_count == 1
     assert course.rating_sum == 5
@@ -790,7 +833,7 @@ async def test_reconciler_fixes_counter_drift(
             json={"content_type": "course", "content_id": str(course.id), "rating": 4},
         )
         review_id = resp.json()["id"]
-    await admin_client.patch(f"/reviews/{review_id}", json={"state": "approved"})
+    await admin_client.patch(f"/admin/reviews/{review_id}", json={"state": "approved"})
 
     # Verify correct state
     await db_session.refresh(course)
@@ -809,10 +852,20 @@ async def test_reconciler_fixes_counter_drift(
     # The reconciler script uses its own AsyncSessionLocal session, which can't
     # see uncommitted test data. Instead, simulate its logic: recompute from
     # reviews and write back.
+    # Scoped to THIS course. Without the content_id filter this counted every
+    # approved course review in the database and wrote that total onto one course —
+    # so it passed only while this course was the sole one with approved reviews, and
+    # started failing (71 != 1) as soon as any other test left some behind. The real
+    # reconciler groups by content_id (scripts/reconcile_review_aggregates.py); a
+    # simulation of it that aggregates across every row is not simulating it.
     correct = (
         await db_session.execute(
             select(func.count(), func.coalesce(func.sum(Review.rating), 0))
-            .where(Review.content_type == "course", Review.state == ReviewState.APPROVED.value)
+            .where(
+                Review.content_type == "course",
+                Review.content_id == course.id,
+                Review.state == ReviewState.APPROVED.value,
+            )
         )
     ).one()
     correct_count, correct_sum = correct

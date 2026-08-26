@@ -37,6 +37,17 @@ router = APIRouter()
 MIN_REVIEWS_FOR_AGGREGATE = 8
 
 
+# Which model carries the denormalised `review_count`/`rating_sum` for each content
+# type. Defined here rather than in admin/reviews.py because both the submission path
+# (which now approves on write, and so must increment) and the admin moderation path
+# adjust the same counters — one map, so the two cannot drift onto different models.
+_COUNTER_MODEL = {
+    "course": Course,
+    "template": Template,
+    "pack": Product,
+}
+
+
 def aggregate_rating(review_count: Optional[int], rating_sum: Optional[int]) -> Optional[float]:
     """The Stage B aggregate for one item, or None below the threshold.
 
@@ -133,32 +144,54 @@ async def get_content_rating(
 
 @router.get("/reviews/featured", response_model=list[FeaturedReviewOut])
 async def get_featured_reviews(
-    content_type: str,
-    content_id: str,
+    content_type: Optional[str] = None,
+    content_id: Optional[str] = None,
+    limit: int = 5,
     session: AsyncSession = Depends(get_session),
 ):
-    """Public, unauthenticated. Returns approved, featured reviews for a content item.
-    Used by content detail pages to render testimonials (W5-R4 Stage A)."""
-    # A non-UUID content_id is a caller error, not a server error. This was a bare
-    # `uuid.UUID(content_id)` and raised ValueError straight out of the handler as a
-    # 500 the moment a page passed a slug (PackDetail did exactly that). The sibling
-    # rating endpoint above already returns 404 for the same input; this matches it,
-    # because a public endpoint must not 500 on a malformed path from any caller.
-    try:
-        cid = uuid.UUID(content_id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Content not found")
+    """Public, unauthenticated. Approved, featured reviews.
+
+    With `content_type` + `content_id`, returns that item's testimonials — what the
+    content detail pages have always asked for (W5-R4 Stage A).
+
+    `[CHANGED 2026-08-25, owner direction]` Both are now optional. Omitting them
+    returns featured reviews across the whole catalogue, which is what the landing
+    page's testimonial section needs: the home page is not about one product, and
+    hard-coding some course's id there would silently break the section the day that
+    course was unpublished.
+
+    `is_featured` remains the gate in both modes. Reviews are approved on submission
+    now, so "approved" alone is no longer a curation signal — featuring is the
+    deliberate act that puts a quote on the marketing surface.
+    """
+    conditions = [
+        Review.state == ReviewState.APPROVED.value,
+        Review.is_featured.is_(True),
+        Review.body.isnot(None),
+    ]
+
+    if content_type:
+        conditions.append(Review.content_type == content_type)
+
+    if content_id:
+        # A non-UUID content_id is a caller error, not a server error. This was a bare
+        # `uuid.UUID(content_id)` and raised ValueError straight out of the handler as a
+        # 500 the moment a page passed a slug (PackDetail did exactly that). The sibling
+        # rating endpoint above already returns 404 for the same input; this matches it,
+        # because a public endpoint must not 500 on a malformed path from any caller.
+        try:
+            cid = uuid.UUID(content_id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Content not found")
+        conditions.append(Review.content_id == cid)
+
     result = await session.execute(
         select(Review)
-        .where(
-            Review.content_type == content_type,
-            Review.content_id == cid,
-            Review.state == ReviewState.APPROVED.value,
-            Review.is_featured.is_(True),
-            Review.body.isnot(None),
-        )
+        .where(*conditions)
         .order_by(Review.created_at.desc())
-        .limit(5)
+        # Clamped: `limit` is a public query parameter, and an unbounded one lets any
+        # caller ask for the entire review table in a single request.
+        .limit(max(1, min(limit, 24)))
     )
     reviews = result.scalars().all()
     return [
@@ -270,6 +303,15 @@ async def submit_review(
             display_name = parts[0] if parts else None
 
     # 5. Insert — UNIQUE constraint catches duplicates
+    #
+    # `[CHANGED 2026-08-25, owner direction]` "allow user to see their ratings and
+    # reviews without admin accepting rejecting it, but give the admin hold to delete
+    # the reviews."
+    #
+    # Reviews are now born APPROVED rather than PENDING. The entitlement gate above is
+    # what makes that safe: only someone who actually bought the item can review it, so
+    # this is not an open comment box. Moderation becomes reactive — an admin removes a
+    # bad review — instead of a queue every honest review waits behind.
     review = Review(
         user_id=user.id,
         content_type=req.content_type,
@@ -277,7 +319,7 @@ async def submit_review(
         rating=req.rating,
         body=body,
         display_name=display_name,
-        state=ReviewState.PENDING,
+        state=ReviewState.APPROVED,
     )
     session.add(review)
     try:
@@ -293,8 +335,23 @@ async def submit_review(
             detail={"error": {"code": "already_reviewed", "message": "You have already reviewed this item."}},
         )
 
+    # The denormalised counters used to be advanced only by the admin moderation
+    # endpoint, on the pending→approved transition. Now that a review is approved on
+    # write that transition never happens, so the increment has to happen here — without
+    # it `review_count`/`rating_sum` would stay at zero forever and every card would sit
+    # below MIN_REVIEWS_FOR_AGGREGATE showing no rating at all.
+    #
+    # Same transaction as the insert, so a review and the counters it contributes to can
+    # never disagree.
+    counter_model = _COUNTER_MODEL.get(req.content_type)
+    if counter_model:
+        content = await session.get(counter_model, content_id)
+        if content:
+            content.review_count = (content.review_count or 0) + 1
+            content.rating_sum = (content.rating_sum or 0) + req.rating
+
     # `get_session` never commits, so a flushed-but-uncommitted review is discarded when
-    # the session closes: the submitter gets a 201 and the moderation queue stays empty.
+    # the session closes: the submitter gets a 201 and nothing is stored.
     # The commit also populates the `created_at` server default that the response reads.
     await session.commit()
     await session.refresh(review)
