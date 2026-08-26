@@ -27,3 +27,19 @@ export function useFeaturedReviews(contentType: string, contentId: string | unde
     staleTime: 10 * 60 * 1000,
   })
 }
+
+/**
+ * `[ADDED 2026-08-25, owner direction]` Featured reviews across the whole catalogue,
+ * for the landing page's testimonial section.
+ *
+ * Separate from the hook above rather than a flag on it: that one is disabled until a
+ * `contentId` arrives, which is exactly the behaviour the site-wide call must NOT have.
+ */
+export function useSiteFeaturedReviews(limit = 6) {
+  return useQuery<FeaturedReview[]>({
+    queryKey: ['reviews', 'featured', 'site', limit],
+    queryFn: () =>
+      api.get<FeaturedReview[]>('/reviews/featured', { params: { limit } }).then((r) => r.data),
+    staleTime: 10 * 60 * 1000,
+  })
+}

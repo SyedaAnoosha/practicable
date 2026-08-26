@@ -16,6 +16,7 @@ import {
   Download,
   Search,
   Sparkles,
+  Star,
   TrendingUp,
 } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
@@ -42,6 +43,7 @@ import {
 import { TrustStrip } from '@/components/ui/TrustStrip'
 import { PillEyebrow } from '@/components/ui/PillEyebrow'
 import { TaxonomyCanvas } from '@/components/ui/TaxonomyCanvas'
+import { useSiteFeaturedReviews } from '@/hooks/useFeaturedReviews'
 
 const DOMAINS = [
   { name: 'Risk (Enterprise & op.)', label: 'Risk', description: 'How do we make risk useful to the people actually deciding?' },
@@ -121,7 +123,7 @@ interface QuestionTag { dimension: string; value: string; display_label: string;
 interface QuestionSummary { id: string; slug: string; title: string; subtitle: string | null; preview: string; domain: string; domain_slug: string; tags: QuestionTag[]; featured: boolean; featured_sort: number | null }
 interface CourseSummary { id: string; slug: string; title: string; subtitle: string | null; section: string; lesson_count: number }
 interface TemplateSummary { id: string; slug: string; title: string; description: string; file_name: string; is_free: boolean; product: { slug: string; price_amount: number; currency: string } | null }
-interface PackSummary { slug: string; name: string; description: string; question_count: number; price_amount: number; currency: string; owned: boolean }
+interface PackSummary { slug: string; name: string; description: string; domain_name: string | null; question_count: number; price_amount: number; currency: string; owned: boolean }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Home — 6 sections, richness front-loaded
@@ -183,9 +185,138 @@ export function Home() {
       {/* 5. Products — band, courses/templates/packs */}
       <ProductSection courses={courses} templates={templates} packs={packs} />
 
-      {/* 6. Final CTA — light, search + email */}
+      {/* 6. Testimonials — light, featured reviews from across the catalogue.
+          Placed after the products and before the CTA: social proof lands hardest
+          immediately after what it is proof OF, and immediately before the ask. */}
+      <TestimonialsSection />
+
+      {/* 7. Final CTA — light, search + email */}
       <FinalCta />
     </>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Testimonials — featured reviews, site-wide
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `[ADDED 2026-08-25, owner direction]` "allow featured reviews to show as a section
+ * on testimonial on Landing/home page."
+ *
+ * Renders nothing at all when there are no featured reviews — not a heading over an
+ * empty grid, and not a "no reviews yet" placeholder. An empty testimonial section on a
+ * landing page is worse than no section: it advertises the absence of customers.
+ *
+ * Star ratings are deliberately shown per quote here, unlike the detail-page
+ * `TestimonialSection`, which suppresses them behind the Stage B aggregate gate. That
+ * gate exists to stop a averaged score being computed from too few reviews; an
+ * individual reviewer's own score is not an average and needs no threshold.
+ */
+function TestimonialsSection() {
+  const { data: reviews } = useSiteFeaturedReviews(12)
+
+  // A rating floor on top of `is_featured`. Featuring is an editorial act, but it is
+  // also reversible-by-accident: the admin list features and unfeatures with one
+  // toggle, and a 3-star "I was expecting more depth" quote reaching the landing page
+  // is a marketing failure, not a moderation one. 4+ only, so the section can never
+  // argue against the product it sits above. Over-fetch (12) so the floor still leaves
+  // enough to fill the grid.
+  const withBody = (reviews ?? []).filter((r) => r.body && r.rating >= 4).slice(0, 6)
+  if (withBody.length === 0) return null
+
+  return (
+    <motion.section
+      variants={staggerContainer}
+      initial="hidden"
+      whileInView="visible"
+      viewport={inViewOnce}
+      className="py-10 sm:py-12"
+      aria-label="What learners say"
+    >
+      <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
+        <SectionOpener
+          eyebrow="Testimonials"
+          title="What people do with it once they have it."
+          lead="From risk leads who bought the thing and used it the same week."
+        />
+        {/* `[RESTYLED 2026-08-25, owner direction]` Built in the QuestionCard language
+            rather than as generic quote boxes: full-bleed coloured top rule, a mono
+            eyebrow row with an index numeral, the quote as the card's body, and a ruled
+            mono metadata block pinned to the bottom by `mt-auto`. One card grammar
+            across the page instead of two.
+
+            `gap-px` over a `bg-border` grid draws the dividing hairlines, so adjacent
+            cards share one rule rather than stacking two borders — the same treatment
+            HowItWorks uses. */}
+        <div className="mt-6 grid items-stretch gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+          {withBody.map((review, index) => (
+            <motion.figure
+              key={review.id}
+              variants={riseItemSm}
+              className="group relative flex h-full flex-col bg-card px-5 pb-5 pt-4 transition-colors duration-150 hover:bg-card-2"
+            >
+              {/* Gold rather than a domain tone: a testimonial has no domain, and gold
+                  is the product's own accolade colour (it is what the certificate and
+                  the brand mark use). */}
+              <span
+                aria-hidden="true"
+                className="absolute inset-x-0 top-0 h-1 bg-gold transition-[height] duration-150 group-hover:h-1.5"
+              />
+
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="flex items-center gap-1.5 font-mono text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                  <Star className="size-3 shrink-0 fill-gold text-gold" aria-hidden="true" />
+                  Verified purchase
+                </p>
+                {/* Position in this shelf, not a stable id — decorative, so aria-hidden. */}
+                <span aria-hidden="true" className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+              </div>
+
+              <blockquote className="mt-3 font-serif text-sm leading-relaxed text-foreground">
+                &ldquo;{review.body}&rdquo;
+              </blockquote>
+
+              {/* Same ruled metadata block as QuestionCard's dimensions — one label/value
+                  row per line, mono, hairline above, pushed to the bottom so every card
+                  in the row aligns on it regardless of quote length. */}
+              <dl className="mt-auto space-y-1 border-t border-border pt-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-muted-foreground">
+                    Reviewer
+                  </dt>
+                  <dd className="truncate text-right font-mono text-[0.6875rem] text-foreground">
+                    {review.display_name ?? 'Anonymous'}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt className="font-mono text-[0.625rem] uppercase tracking-[0.1em] text-muted-foreground">
+                    Rating
+                  </dt>
+                  <dd
+                    className="flex shrink-0 items-center gap-0.5"
+                    aria-label={`Rated ${review.rating} out of 5`}
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star
+                        key={n}
+                        aria-hidden="true"
+                        className={cn(
+                          'size-3',
+                          n <= review.rating ? 'fill-gold text-gold' : 'fill-none text-border',
+                        )}
+                      />
+                    ))}
+                  </dd>
+                </div>
+              </dl>
+            </motion.figure>
+          ))}
+        </div>
+      </div>
+    </motion.section>
   )
 }
 
@@ -860,9 +991,16 @@ function MiniPackCard({ pack }: { pack: PackSummary }) {
       to={`/store/packs/${pack.slug}`}
       className="group snap-start shrink-0 w-48 sm:w-56 rounded-lg border border-border bg-background transition-colors hover:bg-card-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      <div className="flex aspect-[16/9] items-center justify-center rounded-t-lg bg-gradient-to-br from-accent/12 to-accent/4">
-        <Library className="size-8 text-accent/30" aria-hidden="true" />
-      </div>
+      {/* `[FIXED 2026-08-25, owner direction: "no picture"]` This was a flat
+          `accent/12 → accent/4` wash behind a `text-accent/30` icon — at those opacities
+          on the ivory plane it rendered as an empty grey box, so a row of pack cards
+          looked like unloaded images sitting next to fully-illustrated course cards.
+
+          `CourseArt` is the generative artwork the course cards use, and its own
+          docstring calls it "course/pack artwork" — it was built for both and simply
+          never wired up here. Seeded by slug, so every pack gets a distinct, stable
+          composition with no image request and no broken-image state. */}
+      <CourseArt slug={pack.slug} domain={pack.domain_name} className="aspect-[16/9] rounded-t-lg" />
       <div className="px-3 pb-3 pt-2.5">
         <p className="eyebrow">Reference pack</p>
         <h4 className="mt-1 text-sm font-semibold text-foreground line-clamp-2 decoration-1 underline-offset-4 group-hover:underline">
