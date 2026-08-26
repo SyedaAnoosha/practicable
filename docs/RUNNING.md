@@ -120,7 +120,8 @@ alembic upgrade head
 ```
 
 This runs every migration in `backend/alembic/versions/` in order against
-`DATABASE_URL`. Current head: `003` (see `alembic history` for the full chain).
+`DATABASE_URL`. Current head: `039` (see `alembic history` for the full chain —
+numbered files `001`–`039`, each chaining to the previous revision id).
 
 Useful variants:
 
@@ -209,12 +210,51 @@ rebuilds it.
 
 ## 4. Testing
 
-There is no automated test suite yet (no `pytest`/`vitest` configured) — Week 1's
-verification is the manual smoke test below, plus the targeted checks that follow it.
-Add automated tests as a named Week 2+ task rather than retrofitting them under
-deadline pressure.
+The repo has three automated suites plus the original manual smoke test. Run them from
+the repo root paths shown; each suite is independent of the others.
 
-### 4.1 Backend smoke checks (curl)
+**Do not run two heavy suites at once** (e.g. backend pytest while Playwright e2e is
+going) — they contend for the same CPU and the same dev database, and both slow to a
+crawl while producing flaky counter/overlap assertions. One at a time.
+
+### 4.1 Backend tests (pytest)
+
+```powershell
+cd backend
+python -m pytest tests/ -q          # whole suite (~600 tests, several minutes)
+python -m pytest tests/test_reviews.py -q   # one file
+python -m pytest tests/ -k "freshness" -q   # by keyword
+```
+
+Tests run against the real dev database (`DATABASE_URL`) with an isolated transaction
+per test that is rolled back afterwards — see `tests/conftest.py`. Auth is a synthetic
+locally-decoded JWT, so no Supabase round trip is needed. Tests assume migrations are
+current: if a suite fails en masse with missing-column or constraint errors, run
+`alembic upgrade head` first.
+
+### 4.2 Frontend type check and unit tests
+
+```powershell
+cd frontend
+npx tsc -b        # type-check only — what `npm run build` runs first
+npm run test      # vitest run — component/lib tests (~270 tests, ~90s)
+npm run lint
+```
+
+### 4.3 End-to-end (Playwright)
+
+```powershell
+cd frontend
+npm run e2e
+```
+
+Locally this boots the Vite dev server itself (`playwright.config.ts` `webServer`), but
+it does **not** boot the FastAPI backend — start that first in another terminal
+(§1.3) or every test fails in seconds with connection errors. CI starts the backend
+itself (`.github/workflows/ci.yml`). `E2E_BASE_URL` overrides the target if the
+frontend is already running somewhere else.
+
+### 4.4 Backend smoke checks (curl)
 
 With `uvicorn` running on port 8000:
 
@@ -239,7 +279,7 @@ curl -i http://localhost:8000/me -H "Authorization: Bearer <jwt>"
 Interactive alternative: `http://localhost:8000/docs` (Swagger) — click "Authorize" and
 paste a JWT to test protected routes without hand-building curl commands.
 
-### 4.2 Webhook testing (Stripe CLI — do this before relying on a live test)
+### 4.5 Webhook testing (Stripe CLI — do this before relying on a live test)
 
 ```powershell
 stripe login
@@ -259,7 +299,7 @@ Check `webhook_events` in the DB — a row should appear with `processed = true`
 Trigger the same event again and confirm a **second row is not created** for the same
 Stripe event id (idempotency was a named Week 1 Definition-of-Done item).
 
-### 4.3 Full manual smoke test (the actual Week 1 acceptance test)
+### 4.6 Full manual smoke test
 
 This is the Week 1 acceptance script, run against `localhost` before it's ever run
 against production:
@@ -277,7 +317,7 @@ against production:
    and with a non-entitled account's token — both must fail closed (401 / 403).
 10. Repeat on a real mobile device before calling Week 1 done.
 
-### 4.4 Gating-break attempts (do these deliberately, not accidentally)
+### 4.7 Gating-break attempts (do these deliberately, not accidentally)
 
 ```powershell
 # Valid JWT, but this user has no entitlement -> expect 403 with {"error":{"code":"not_entitled",...}}
@@ -305,6 +345,9 @@ explicitly, not just "it seemed fine."
 | `alembic upgrade head` hangs or times out | Usually still using port 6543, or a firewalled network | Same fix as the prepared-statement error above |
 | First purchase fails with a foreign-key violation on `entitlements.user_id` | The local `users` row was never created for that Supabase auth user | Only happens if a route uses `get_current_user_id` (string only) where it needed `get_current_user` (get-or-create) — `checkout.py` already does this correctly |
 | `npm run dev` frontend can't reach the backend | `VITE_API_BASE_URL` mismatch, or backend not running | Confirm both, and that `frontend/.env.local` isn't still pointing at a different port from a previous session |
+| Every Playwright e2e test fails in ~1–2s with flat connection errors | FastAPI backend isn't running — local config boots Vite but not uvicorn | Start the backend (§1.3), then re-run `npm run e2e` |
+| Backend tests fail en masse with missing column / constraint violations | Database schema is behind migration head | `cd backend && alembic upgrade head`, then re-run |
+| Suites crawl (minutes per handful of tests) and fail spuriously | Two heavy suites running concurrently against the same machine + dev DB | Run one suite at a time — see the warning atop §4 |
 
 ---
 
