@@ -1,18 +1,16 @@
 import { useCallback, useState } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router'
-import { Bookmark, GraduationCap, LayoutDashboard, Layers, Library, LogOut, Menu, Search, ShieldCheck, Sparkles, Settings, Store, Tags, X, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Bookmark, GraduationCap, LayoutDashboard, Layers, Library, ShieldCheck, Sparkles, Settings, Store, Tags, X, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { useAuthStore } from '@/stores/useAuthStore'
-import { supabase } from '@/lib/auth/supabase'
 import { cn } from '@/lib/utils/cn'
 import { RailTooltip } from '@/components/ui/RailTooltip'
-import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { CommandPalette } from '@/components/ui/CommandPalette'
 import { useCommandPalette } from '@/lib/useCommandPalette'
 import { CookieConsent } from '@/components/ui/CookieConsent'
-import { CartButton } from '@/components/cart/CartButton'
+import { AppHeader } from '@/components/layout/AppHeader'
 import { signInUrlFor } from '@/lib/utils/nextPath'
 
 export function FullPageSpinner() {
@@ -268,19 +266,19 @@ function SidebarAccount({ collapsed }: { collapsed: boolean }) {
         </RailTooltip>
       </div>
 
-      {/* Identity + controls.
+      {/* Identity only.
        *
-       * `[FIXED 2026-08-22]` Collapsed, this stayed a horizontal row: avatar + cart +
-       * theme + sign-out is roughly 150px of controls inside a 64px rail, so they
-       * overlapped each other and forced a horizontal scrollbar across the whole
-       * sidebar. Collapsed now stacks them into a single 64px-wide column, which is the
-       * only arrangement four controls fit in at this width. */}
+       * `[CHANGED 2026-08-25, owner direction]` Cart, notifications, theme and sign-out
+       * used to sit in this row. They now live in AppHeader's top-right cluster, in the
+       * same place in both the member and admin shells. Keeping a second copy here would
+       * mean two bells with two unread badges to keep in sync, and it was this row —
+       * four ~36px controls inside a 64px collapsed rail — that produced the crowding
+       * the 2026-08-22 stacking fix was working around. With only the avatar left, that
+       * problem is gone rather than mitigated. */}
       <div
         className={cn(
-          'rounded-lg py-2',
-          collapsed
-            ? 'flex flex-col items-center gap-1 px-0'
-            : 'flex items-center gap-2 px-3',
+          'flex items-center rounded-lg py-2',
+          collapsed ? 'justify-center px-0' : 'gap-2 px-3',
         )}
       >
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-stage-foreground/12 text-xs font-semibold text-stage-foreground">
@@ -289,20 +287,6 @@ function SidebarAccount({ collapsed }: { collapsed: boolean }) {
         {!collapsed && (
           <p className="min-w-0 flex-1 truncate text-sm font-medium text-stage-foreground/85">{name ?? 'Your account'}</p>
         )}
-        <CartButton
-          on="stage"
-          className="text-stage-foreground/70 hover:bg-stage-foreground/8 hover:text-stage-foreground"
-        />
-        <ThemeToggle className="border-stage-foreground/45 text-stage-foreground/70 hover:border-stage-foreground/65 hover:text-stage-foreground" />
-        <button
-          type="button"
-          onClick={() => void supabase.auth.signOut()}
-          className="flex size-9 shrink-0 items-center justify-center rounded-md text-stage-foreground/65 transition-colors duration-150 hover:bg-stage-foreground/8 hover:text-stage-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          aria-label="Sign out"
-          title="Sign out"
-        >
-          <LogOut className="size-4" aria-hidden="true" />
-        </button>
       </div>
     </div>
   )
@@ -416,28 +400,21 @@ export function MemberChrome() {
           on the learning outline. `overflow: clip` cuts the paint without that side
           effect, and clipping one axis does not force the other to `auto`. */}
       <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/80 px-5 py-3 backdrop-blur-sm md:hidden">
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            aria-label="Open menu"
+        {/* `[CHANGED 2026-08-25, owner direction]` This was `md:hidden` — a mobile-only
+            bar. It is now the one persistent header on every signed-in page, carrying
+            cart, notifications, theme and the account menu at top right on all
+            breakpoints. The brand mark stays mobile-only, because on desktop the rail
+            already shows it and repeating it puts the word "Practicable" twice on one
+            screen. */}
+        <AppHeader onOpenMenu={() => setMobileOpen(true)} onOpenSearch={() => setPaletteOpen(true)}>
+          <Link
+            to="/dashboard"
+            className="flex items-center gap-2 font-sans text-sm font-semibold tracking-tight text-foreground md:hidden"
           >
-            <Menu className="size-5" aria-hidden="true" />
-          </button>
-          <Link to="/dashboard" className="flex items-center gap-2 font-sans text-sm font-semibold tracking-tight text-foreground">
             <span className="size-2 rounded-[3px] bg-primary ring-1 ring-inset ring-primary-edge" aria-hidden="true" />
             Practicable
           </Link>
-          <button
-            type="button"
-            onClick={() => setPaletteOpen(true)}
-            className="ml-auto flex items-center gap-1.5 rounded-lg border border-border bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground md:hidden"
-            aria-label="Search"
-          >
-            <Search className="size-3.5" aria-hidden="true" />
-          </button>
-        </header>
+        </AppHeader>
 
         <main id="main" className="flex-1">
           <Outlet />

@@ -6,7 +6,6 @@ import {
   ClipboardList,
   FileText,
   GraduationCap,
-  LogOut,
   Mail,
   Megaphone,
   MessageSquare,
@@ -27,11 +26,10 @@ import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { cn } from '@/lib/utils/cn'
 import { useAuthStore } from '@/stores/useAuthStore'
-import { supabase } from '@/lib/auth/supabase'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Button } from '@/components/ui/Button'
-import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { RailTooltip } from '@/components/ui/RailTooltip'
+import { AppHeader } from '@/components/layout/AppHeader'
 import { FullPageSpinner } from './MemberLayout'
 
 export interface Profile {
@@ -53,6 +51,7 @@ const ADMIN_NAV_GROUPS = [
       { to: '/admin/templates', label: 'Templates', icon: FileText, end: false },
       { to: '/admin/packs', label: 'Packs', icon: Package, end: false },
       { to: '/admin/media', label: 'Media', icon: Video, end: false },
+      { to: '/admin/assessments', label: 'Assessments', icon: ClipboardList, end: false },
     ],
   },
   {
@@ -215,42 +214,25 @@ function AdminSidebarBrand({ collapsed, onToggleCollapse }: { collapsed: boolean
 
 function AdminSidebarFooter({ collapsed }: { collapsed: boolean }) {
   return (
-    /* `[FIXED 2026-08-22]` `px-3` on the outer box plus three 36px controls in a row
-       exceeded the 64px collapsed rail, overlapping the icons and forcing a horizontal
-       scrollbar. Collapsed drops the horizontal padding and stacks the controls. */
+    /* `[CHANGED 2026-08-25, owner direction]` The theme toggle and sign-out button that
+       used to share this row now live in AppHeader, top right, in both shells. What is
+       left is the one control that is genuinely about *leaving admin* rather than about
+       the account — the way back to the member dashboard — so the row no longer needs
+       the collapsed-stacking workaround the three-control version required. */
     <div className={cn('border-t border-stage-foreground/15 py-4', collapsed ? 'px-0' : 'px-3')}>
-      <div
-        className={cn(
-          'rounded-lg py-2',
-          collapsed
-            ? 'flex flex-col items-center gap-1 px-0'
-            : 'flex items-center gap-2 px-3',
-        )}
-      >
-        {!collapsed && (
-          <p className="min-w-0 flex-1 truncate text-xs text-stage-foreground/65">Admin</p>
-        )}
-        <ThemeToggle className="text-stage-foreground/65 hover:text-stage-foreground" />
+      <RailTooltip label="Back to dashboard" collapsed={collapsed}>
         <Link
           to="/dashboard"
           className={cn(
-            'flex items-center gap-2 rounded-md text-sm text-stage-foreground/65 transition-colors duration-150 hover:bg-stage-foreground/8 hover:text-stage-foreground',
-            collapsed ? 'size-9 justify-center' : 'px-2 py-1.5',
+            'flex items-center rounded-lg text-sm text-stage-foreground/65 transition-colors duration-150 hover:bg-stage-foreground/8 hover:text-stage-foreground',
+            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring',
+            collapsed ? 'mx-auto size-9 justify-center' : 'gap-2.5 px-3 py-2',
           )}
         >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          {!collapsed && <span>Dashboard</span>}
+          <ArrowLeft className="size-4 shrink-0" aria-hidden="true" />
+          <span className={cn(collapsed && 'sr-only')}>Back to dashboard</span>
         </Link>
-        <button
-          type="button"
-          onClick={() => void supabase.auth.signOut()}
-          className="flex size-9 shrink-0 items-center justify-center rounded-md text-stage-foreground/65 transition-colors duration-150 hover:bg-stage-foreground/8 hover:text-stage-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-          aria-label="Sign out"
-          title="Sign out"
-        >
-          <LogOut className="size-4" aria-hidden="true" />
-        </button>
-      </div>
+      </RailTooltip>
     </div>
   )
 }
@@ -324,6 +306,11 @@ export default function AdminLayout() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
+        {/* `[ADDED 2026-08-25, owner direction]` The admin shell had no header at all —
+            cart, notifications and the account menu were unreachable without first
+            navigating back out to the member area. Same component, same position as
+            MemberLayout, so the two shells read as one product. */}
+        <AppHeader />
         <main id="main" className="flex-1">
           <Outlet />
         </main>
