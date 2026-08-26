@@ -220,8 +220,26 @@ export function ContentCard({
         </div>
       )}
 
-      {/* Pack: domain label + content */}
+      {/* Pack: artwork + domain label + content */}
       {kind === 'pack' && (
+        <>
+        {/* `[ADDED 2026-08-25, owner direction]` Artwork was gated on
+            `kind === 'course'`, so a pack card rendered text-only beside an
+            illustrated course card in the same grid. `CourseArt` is documented as
+            "course/pack artwork" — packs were always in scope.
+
+            Still conditional on having something to draw with: a caller that passes
+            neither `artSlug` nor `coverImageUrl` gets the previous text-only card
+            rather than an empty 16:9 band. */}
+        {(coverImageUrl || artSlug) && (
+          <CourseArt
+            slug={artSlug ?? ''}
+            domain={domain ?? ''}
+            src={coverImageUrl}
+            alt={`Cover image for ${title}`}
+            className="aspect-[16/9]"
+          />
+        )}
         <div className="px-4 pt-3 pb-4">
           {domain && tone && <DomainTag domain={domain} tone={tone} />}
           <h3 className="mt-1.5 text-sm font-semibold text-foreground decoration-1 underline-offset-4 group-hover:underline">
@@ -251,6 +269,7 @@ export function ContentCard({
             </span>
           </div>
         </div>
+        </>
       )}
     </Link>
   )

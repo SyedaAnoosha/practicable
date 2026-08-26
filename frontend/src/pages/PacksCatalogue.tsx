@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { Meta } from '@/components/ui/Meta'
 import { StarRating } from '@/components/ui/StarRating'
+import { CourseArt } from '@/components/ui/CourseArt'
 
 interface PackSummary {
   slug: string
@@ -104,6 +105,22 @@ export function PacksCatalogue() {
             to={`/store/packs/${pack.slug}`}
             className="group flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2 focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
           >
+            {/* `[ADDED 2026-08-25, owner direction: "no picture"]` Pack cards were
+                text-only while the course catalogue's cards carry `CourseArt`, so a
+                pack grid read as unstyled next to them — and on the home rail the two
+                sat side by side, where the difference was starkest.
+
+                `CourseArt`'s own docstring calls it "course/pack artwork": it was built
+                for both and simply never wired up here. Seeded by slug, so each pack
+                gets a distinct, stable composition with no image request and no
+                broken-image state. `domain_name` feeds the same duotone ramp the course
+                cards use, and falls back to the brand primary when a pack has no
+                domain. */}
+            <CourseArt
+              slug={pack.slug}
+              domain={pack.domain_name}
+              className="aspect-[16/9]"
+            />
             <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
               <p className="eyebrow">{pack.domain_name ?? 'Reference'}</p>
               {/* `[ADDED 2026-08-22, owner direction]` "the card title and description must
