@@ -1,131 +1,207 @@
 import { useState } from 'react'
 import { motion } from 'motion/react'
-import { ArrowRight, BookOpen, ChevronDown, Shield, Users } from 'lucide-react'
+import { ArrowRight, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '@/components/ui/Button'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { cn } from '@/lib/utils/cn'
-import { staggerContainer, riseItem, riseItemSm } from '@/lib/motion'
+import { staggerContainer, riseItem, riseItemSm, inViewOnce } from '@/lib/motion'
 
 /**
  * The about page: what Practicable is, who it is for, and what it does differently.
  *
- * Visual pattern follows Contact.tsx: a centred StatusDot pill, a large heading,
- * staggered motion sections, and blurred polygon blobs behind the hero. The page is
- * informational only — no forms, no mutations.
+ * 
  */
 export function About() {
   return (
-    <section className="relative isolate w-full overflow-hidden py-9 sm:py-28">
-      <Blob position="left-[max(-9rem,calc(50%-52rem))]" gradient="from-accent to-accent/50" />
-      <Blob position="left-[max(45rem,calc(50%+8rem))]" gradient="from-gold to-gold/40" />
-
-      <motion.div
-        variants={staggerContainer}
-        initial="hidden"
-        animate="visible"
-        className="mx-auto w-full max-w-7xl px-5 sm:px-8"
-      >
-        {/* ── Hero ─────────────────────────────────────────────────────────── */}
-        <motion.div variants={riseItem} className="mx-auto flex max-w-3xl flex-col items-center text-center">
+    <div className="w-full">
+      {/* ── Hero ────────────────────────────────────────────────────────────── */}
+      <section className="w-full py-14 sm:py-24">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          className="mx-auto flex max-w-2xl flex-col items-center px-5 text-center sm:px-8"
+        >
           <StatusDot label="About Practicable" />
-          <h1 className="mt-5 text-h1 font-semibold text-foreground">
+          <motion.h1 variants={riseItem} className="mt-5 text-h1 font-semibold text-foreground">
             Real guidance for risk practitioners
-          </h1>
-          <p className="mt-4 max-w-xl text-lead text-muted-foreground">
-            Practicable is a small, focused library of courses, templates, and reference packs
-            built by people who have done the work — not a content farm, not a compliance checkbox.
-          </p>
+          </motion.h1>
+          <motion.p variants={riseItem} className="mt-4 max-w-xl font-serif text-lead text-muted-foreground">
+            A small, focused library of courses, templates, and reference packs built by people
+            who have done the work — not a content farm, not a compliance checkbox.
+          </motion.p>
+          {/* Facts, not adjectives. Everything here is verifiable elsewhere on the page
+              or in the product, so the line reads as a specification rather than a claim. */}
+          <motion.p
+            variants={riseItemSm}
+            className="mt-6 text-xs font-medium uppercase tracking-wide text-muted-foreground/70"
+          >
+            100 questions across five domains · One-time purchase, lifetime access
+          </motion.p>
         </motion.div>
+      </section>
 
-        {/* ── What we believe ──────────────────────────────────────────────── */}
-        <motion.div variants={riseItem} className="mx-auto mt-16 max-w-3xl">
-          <h2 className="text-h2 font-semibold text-foreground">What we believe</h2>
-          <div className="mt-6 grid gap-6 sm:grid-cols-3">
-            {BELIEFS.map((b) => (
-              <div
+      {/* ── What we believe ────────────────────────────────────────────────────
+          Numbered hairline rows rather than three identical cards: the numbering
+          carries the order the beliefs were written in, and the missing boxes let
+          the band plane do the grouping. */}
+      {/* `band-dotgrid` gives the plane a faint 3%-ink texture so the first plane
+          change registers as material, not just a grey rectangle (theme.css §M2). */}
+      <section className="band band-dotgrid w-full py-12 sm:py-16">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          viewport={inViewOnce}
+          className="mx-auto max-w-5xl px-5 sm:px-8"
+        >
+          <motion.h2 variants={riseItem} className="text-h2 font-semibold text-foreground">
+            What we believe
+          </motion.h2>
+          {/* Plain rows rather than a <dl>: a definition list wants dt before dd, and
+              the leading row number would have forced a dd above its dt. h3/p keep the
+              document outline honest instead. */}
+          <div className="mt-8">
+            {BELIEFS.map((b, i) => (
+              <motion.div
                 key={b.title}
-                className="rounded-xl border border-border bg-card p-6 shadow-sm"
+                variants={riseItem}
+                className="grid gap-2 border-t border-border py-6 last:border-b sm:grid-cols-[3.5rem_minmax(0,14rem)_1fr] sm:gap-6 sm:py-7"
               >
                 <span
-                  className={cn(
-                    'flex size-10 items-center justify-center rounded-lg',
-                    b.iconBg,
-                  )}
+                  className="text-sm font-medium tabular-nums text-muted-foreground/70"
+                  aria-hidden="true"
                 >
-                  <b.icon className="size-5" aria-hidden="true" />
+                  {String(i + 1).padStart(2, '0')}
                 </span>
-                <h3 className="mt-4 text-sm font-semibold text-foreground">{b.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                  {b.body}
-                </p>
-              </div>
+                <h3 className="text-base font-semibold text-foreground">{b.title}</h3>
+                <p className="max-w-prose text-sm leading-relaxed text-muted-foreground">{b.body}</p>
+              </motion.div>
             ))}
           </div>
         </motion.div>
+      </section>
 
-        {/* ── Who it is for ────────────────────────────────────────────────── */}
-        <motion.div variants={riseItem} className="mx-auto mt-16 max-w-3xl">
-          <h2 className="text-h2 font-semibold text-foreground">Who it is for</h2>
-          <ul className="mt-6 space-y-3 text-sm leading-relaxed text-muted-foreground">
-            <li className="flex gap-3">
-              <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-              Risk managers building or maturing a framework
-            </li>
-            <li className="flex gap-3">
-              <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-              Compliance leads who need practical templates, not theory
-            </li>
-            <li className="flex gap-3">
-              <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-              Cybersecurity professionals who want structured, reusable tools
-            </li>
-            <li className="flex gap-3">
-              <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-              Anyone responsible for organisational resilience and governance
-            </li>
-          </ul>
-        </motion.div>
-
-        {/* ── How it works ─────────────────────────────────────────────────── */}
-        <motion.div variants={riseItem} className="mx-auto mt-16 max-w-3xl">
-          <h2 className="text-h2 font-semibold text-foreground">How it works</h2>
-          <ol className="mt-6 space-y-4">
-            {STEPS.map((s, i) => (
-              <li key={s} className="flex gap-4">
-                <span
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
-                  aria-hidden="true"
-                >
-                  {i + 1}
-                </span>
-                <p className="text-sm leading-relaxed text-muted-foreground pt-1">{s}</p>
+      {/* ── Who / How ──────────────────────────────────────────────────────────
+          Eyebrow-column sections: the heading sits left with an annotation, the
+          content right. Two adjacent sections get deliberately different list
+          treatments (plain bullets vs. ruled steps) so they don't read as twins. */}
+      <section className="mx-auto w-full max-w-5xl px-5 py-12 sm:px-8 sm:py-20">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          viewport={inViewOnce}
+          className="grid gap-x-10 gap-y-4 md:grid-cols-[minmax(0,15rem)_1fr]"
+        >
+          <motion.div variants={riseItem}>
+            <h2 className="text-h3 font-semibold text-foreground">Who it is for</h2>
+            <p className="mt-2 hidden text-sm leading-relaxed text-muted-foreground/80 md:block">
+              If one of these sounds like your week, the material was written for you.
+            </p>
+          </motion.div>
+          <motion.ul variants={riseItem} className="space-y-3">
+            {AUDIENCES.map((a) => (
+              <li key={a} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
+                <span className="mt-[0.45em] size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                {a}
               </li>
             ))}
-          </ol>
-        </motion.div>
+          </motion.ul>
 
-        {/* ── FAQs ──────────────────────────────────────────────────────────── */}
-        <motion.div variants={riseItem} className="mx-auto mt-16 max-w-3xl">
-          <h2 className="text-h2 font-semibold text-foreground">Frequently asked questions</h2>
-          <div className="mt-6 divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+          <motion.div variants={riseItem} className="mt-6 border-t border-border pt-8 md:mt-10 md:border-t-0 md:pt-0">
+            <h2 className="text-h3 font-semibold text-foreground">How it works</h2>
+            <p className="mt-2 hidden text-sm leading-relaxed text-muted-foreground/80 md:block">
+              Three steps. No trial, no seat licence, nothing to cancel.
+            </p>
+          </motion.div>
+          <motion.ol variants={riseItem} className="mt-6 space-y-0 md:mt-0">
+            {STEPS.map((s, i) => (
+              <li
+                key={s}
+                className={cn(
+                  'flex gap-4 pb-6',
+                  i < STEPS.length - 1 && 'border-b border-border',
+                )}
+              >
+                <span className="pt-0.5 text-sm font-medium tabular-nums text-primary">
+                  {i + 1}
+                </span>
+                <p className="max-w-prose text-sm leading-relaxed text-muted-foreground">{s}</p>
+              </li>
+            ))}
+          </motion.ol>
+        </motion.div>
+      </section>
+
+      {/* ── The free floor ─────────────────────────────────────────────────────
+          The strongest fact this product has — the questions cost nothing — gets
+          its own plane instead of a bullet. Serif, because it's the page speaking
+          plainly rather than listing. */}
+      <section className="band-cool w-full py-12 sm:py-16">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          viewport={inViewOnce}
+          className="mx-auto max-w-2xl px-5 text-center sm:px-8"
+        >
+          <motion.p variants={riseItem} className="font-serif text-h3 text-foreground">
+            The hundred questions are free. All of them, with the guidance underneath —
+            no account, no email wall.
+          </motion.p>
+          <motion.p variants={riseItemSm} className="mt-4 text-sm text-muted-foreground">
+            Read them first. Buy something only if the thinking holds up.
+          </motion.p>
+          <motion.div variants={riseItemSm} className="mt-6">
+            <Link to="/questions">
+              <Button variant="outline" size="lg">
+                Start reading
+              </Button>
+            </Link>
+          </motion.div>
+        </motion.div>
+      </section>
+
+      {/* ── FAQs ─────────────────────────────────────────────────────────────── */}
+      <section className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-20">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          viewport={inViewOnce}
+        >
+          <motion.h2 variants={riseItem} className="text-h2 font-semibold text-foreground">
+            Frequently asked questions
+          </motion.h2>
+          <motion.div variants={riseItem} className="mt-6 border-t border-border">
             {FAQS.map((faq) => (
               <FaqItem key={faq.q} question={faq.q} answer={faq.a} />
             ))}
-          </div>
+          </motion.div>
         </motion.div>
+      </section>
 
-        {/* ── CTA ──────────────────────────────────────────────────────────── */}
-        <motion.div variants={riseItemSm} className="mx-auto mt-16 flex max-w-3xl justify-center">
-          <Link to="/store">
-            <Button size="lg" className="gap-2">
+      {/* ── CTA ──────────────────────────────────────────────────────────────── */}
+      <section className="border-t border-border w-full py-12 sm:py-16">
+        <motion.div
+          variants={riseItemSm}
+          initial="hidden"
+          whileInView="visible"
+          viewport={inViewOnce}
+          className="mx-auto flex max-w-3xl flex-col items-center gap-3 px-5 text-center sm:flex-row sm:justify-center sm:gap-4 sm:px-8"
+        >
+          <Link to="/store" className="w-full sm:w-auto">
+            <Button size="lg" className="w-full gap-2 sm:w-auto">
               Browse the library
               <ArrowRight className="size-4" aria-hidden="true" />
             </Button>
           </Link>
+          <span className="text-sm text-muted-foreground">One-time purchase. Lifetime access.</span>
         </motion.div>
-      </motion.div>
-    </section>
+      </section>
+    </div>
   )
 }
 
@@ -133,23 +209,24 @@ export function About() {
 
 const BELIEFS = [
   {
-    icon: BookOpen,
-    iconBg: 'bg-primary/10',
     title: 'Built from practice',
     body: 'Every course, template, and pack comes from real risk work — not rehashed textbook summaries.',
   },
   {
-    icon: Shield,
-    iconBg: 'bg-gold/10',
     title: 'One-time purchase',
     body: 'Buy once, use forever. No subscriptions, no expiring licences, no surprises.',
   },
   {
-    icon: Users,
-    iconBg: 'bg-accent/10',
     title: 'For practitioners',
     body: 'Written for the person doing the work, not the person buying the software. Practical, not theoretical.',
   },
+] as const
+
+const AUDIENCES = [
+  'Risk managers building or maturing a framework',
+  'Compliance leads who need practical templates, not theory',
+  'Cybersecurity professionals who want structured, reusable tools',
+  'Anyone responsible for organisational resilience and governance',
 ] as const
 
 const STEPS = [
@@ -196,13 +273,13 @@ const FAQS = [
 function FaqItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <div>
+    <div className="border-b border-border">
       <h3>
         <button
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors duration-150 hover:bg-muted/60 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+          className="flex w-full items-center gap-3 py-4 text-left transition-colors duration-150 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
         >
           <ChevronDown
             className={cn(
@@ -217,25 +294,10 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
         </button>
       </h3>
       {open && (
-        <div className="px-4 pb-4 pl-11 text-sm leading-relaxed text-muted-foreground">
+        <div className="pb-4 pl-7 pr-2 text-sm leading-relaxed text-muted-foreground">
           {answer}
         </div>
       )}
-    </div>
-  )
-}
-
-/** A blurred polygon with a torn-paper silhouette, matching Contact.tsx. */
-function Blob({ position, gradient }: { position: string; gradient: string }) {
-  return (
-    <div aria-hidden="true" className={cn('absolute top-1/2 -z-10 -translate-y-1/2 transform-gpu blur-2xl', position)}>
-      <div
-        style={{
-          clipPath:
-            'polygon(74.8% 41.9%, 97.2% 73.2%, 100% 34.9%, 92.5% 0.4%, 87.5% 0%, 75% 28.6%, 58.5% 54.6%, 50.1% 56.8%, 46.9% 44%, 48.3% 17.4%, 24.7% 53.9%, 0% 27.9%, 11.9% 74.2%, 24.9% 54.1%, 68.6% 100%, 74.8% 41.9%)',
-        }}
-        className={cn('aspect-[577/310] w-[36rem] bg-gradient-to-r opacity-[0.12]', gradient)}
-      />
     </div>
   )
 }

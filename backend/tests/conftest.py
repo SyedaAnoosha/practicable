@@ -22,7 +22,7 @@ import pytest_asyncio
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -249,6 +249,19 @@ async def _override_session_and_auth(db_session: AsyncSession):
     app.dependency_overrides[verify_jwt_optional] = _fake_verify_jwt_optional
     yield
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _clean_promotions(db_session: AsyncSession):
+    """Delete all promotions at the start of each test so overlap checks start clean.
+
+    Without this, active promotions left behind by the application (or a previous
+    test run that committed outside the savepoint boundary) make every `_create_promo`
+    call fail with 409 promotion_overlap — the tests assume an empty promotions
+    table."""
+    await db_session.execute(text("DELETE FROM promotions"))
+    await db_session.execute(text("DELETE FROM audit_log"))
+    await db_session.flush()
 
 
 @pytest_asyncio.fixture

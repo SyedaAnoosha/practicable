@@ -1277,6 +1277,16 @@
   to   { --aurora-core: 96% 112%; }
 }
 
+/* Notification bell shake — triggered when new unread notifications arrive. */
+@keyframes shake {
+  0%, 100% { transform: rotate(0deg); }
+  15% { transform: rotate(12deg); }
+  30% { transform: rotate(-10deg); }
+  45% { transform: rotate(8deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(3deg); }
+}
+
 /* The custom property must be registered or it animates as a discrete swap rather
    than interpolating. Falls back to the discrete swap where @property is unsupported,
    which at 24s is imperceptible. */
@@ -1284,4 +1294,24 @@
   syntax: '<length-percentage> <length-percentage>';
   inherits: true;
   initial-value: 106% 106%;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────────
+   WCAG 2.1 §2.3.3: disable non-essential animations for users who prefer
+   reduced motion. This covers:
+   - Tailwind's animate-spin, animate-pulse, animate-ping utilities
+   - Custom keyframes (shake, ambient-drift)
+   - CSS transitions (hover effects, focus rings)
+   Transitions are set to 0.01ms rather than 0 to keep the transition
+   property functional (otherwise some browsers skip the end state entirely).
+   ─────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

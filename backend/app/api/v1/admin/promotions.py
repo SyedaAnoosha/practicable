@@ -131,16 +131,14 @@ async def _overlapping(
     _inf = datetime.max.replace(tzinfo=timezone.utc)
 
     # Standard interval overlap: new_start < existing_end AND existing_start < new_end
+    # Both conditions must always be checked regardless of whether ends_at is None:
+    # - existing_start < new_end  (NULL ends = +infinity)
+    # - new_start < existing_end  (NULL existing_ends = +infinity)
     conditions = [
         Promotion.active.is_(True),
-        # existing_start < new_end  (NULL ends = +infinity so always satisfies if new_end is open)
         Promotion.starts_at < (ends_at or _inf),
+        or_(Promotion.ends_at.is_(None), Promotion.ends_at > starts_at),
     ]
-    if ends_at is not None:
-        # new_start < existing_end  (NULL existing_ends = +infinity)
-        conditions.append(
-            or_(Promotion.ends_at.is_(None), Promotion.ends_at > starts_at)
-        )
     if exclude_id is not None:
         conditions.append(Promotion.id != exclude_id)
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams, Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { FileSpreadsheet, GraduationCap, HelpCircle, Package, Search } from 'lucide-react'
+import { FileSpreadsheet, GraduationCap, HelpCircle, MessageSquarePlus, Package, Search, Tag } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -22,9 +22,28 @@ interface SearchGroup {
   items: SearchResult[]
 }
 
+interface FallbackQuestion {
+  id: string
+  slug: string
+  title: string
+  preview: string
+  domain: string
+}
+
+interface SuggestedDomain {
+  name: string
+  slug: string
+}
+
+interface SearchFallback {
+  closest_questions: FallbackQuestion[]
+  suggested_domains: SuggestedDomain[]
+}
+
 interface SearchResponse {
   query: string
   groups: SearchGroup[]
+  fallback?: SearchFallback | null
 }
 
 const TYPE_CONFIG: Record<string, { icon: typeof HelpCircle; label: string; href: (item: SearchResult) => string }> = {
@@ -129,11 +148,80 @@ export function SearchPage() {
       )}
 
       {!isLoading && data && totalResults === 0 && (
-        <div className="mt-8 text-center">
-          <Search className="mx-auto size-10 text-muted-foreground/40" aria-hidden="true" />
-          <p className="mt-3 text-sm text-muted-foreground">
-            No results for "{q}". Try different keywords.
-          </p>
+        <div className="mt-8 space-y-8">
+          {/* Header */}
+          <div className="text-center">
+            <Search className="mx-auto size-10 text-muted-foreground/40" aria-hidden="true" />
+            <p className="mt-3 text-sm text-muted-foreground">
+              We couldn't find an exact match for "{q}".
+            </p>
+          </div>
+
+          {/* Closest matching questions */}
+          {data.fallback?.closest_questions && data.fallback.closest_questions.length > 0 && (
+            <section>
+              <h2 className="text-sm font-medium text-foreground">Closest matching questions</h2>
+              <div className="mt-3 flex flex-col gap-2">
+                {data.fallback.closest_questions.map((question) => (
+                  <Link
+                    key={question.id}
+                    to={`/questions/${question.slug}`}
+                    className="group"
+                  >
+                    <Card className="flex items-center gap-3 p-4 transition-colors hover:border-primary/40">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                        <HelpCircle className="size-4" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
+                          {question.title}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {question.preview}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {question.domain}
+                      </span>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Suggested domains */}
+          {data.fallback?.suggested_domains && data.fallback.suggested_domains.length > 0 && (
+            <section>
+              <h2 className="text-sm font-medium text-foreground">Browse by domain</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {data.fallback.suggested_domains.map((domain) => (
+                  <Link
+                    key={domain.slug}
+                    to={`/questions?domain=${domain.slug}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                  >
+                    <Tag className="size-3" aria-hidden="true" />
+                    {domain.name}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Submit a question CTA */}
+          <div className="rounded-xl border border-dashed border-border py-6 text-center">
+            <MessageSquarePlus className="mx-auto size-5 text-muted-foreground" aria-hidden="true" />
+            <p className="mt-2 text-sm text-muted-foreground">
+              Can't find what you're looking for?
+            </p>
+            <Link
+              to="/contact"
+              className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:border-border-strong hover:bg-muted"
+            >
+              Submit a question
+            </Link>
+          </div>
         </div>
       )}
 

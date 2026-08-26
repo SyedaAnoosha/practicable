@@ -4,6 +4,7 @@ sequence of content blocks for mixed-content lessons.
 """
 import asyncio
 import uuid
+from datetime import datetime, timezone
 from typing import Literal, Optional, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,6 +33,7 @@ from app.db.models import (
 )
 from app.db.session import get_session
 from app.integrations.storage_client import delete_file, generate_presigned_upload_url, head_object
+from app.services.freshness_service import compute_freshness
 
 from .common import PublishStateIn, apply_publish_state_or_422, ensure_unique_slug, get_or_404, record_audit, slugify
 
@@ -44,6 +46,9 @@ class CourseWriteIn(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     description: str = Field(min_length=1)
     subtitle: Optional[str] = Field(default=None, max_length=500)
+    # #16: editable in the course editor for parity with the template editor, which has
+    # carried it since migration 013.
+    last_reviewed_at: Optional[datetime] = None
 
 
 class LessonBlockOut(BaseModel):
@@ -111,6 +116,11 @@ class CourseRowOut(BaseModel):
     # "Make purchasable" has been called, same as the detail page.
     price_amount: Optional[int] = None
     currency: Optional[str] = None
+    # #16: same computed freshness the template list carries, so a stale course is
+    # visible in the list without opening each one.
+    last_reviewed_at: Optional[datetime] = None
+    freshness_status: Literal["fresh", "stale", "unknown"] = "unknown"
+    freshness_warning: Optional[str] = None
 
 
 class CourseDetailOut(BaseModel):
@@ -134,6 +144,11 @@ class CourseDetailOut(BaseModel):
     # compute the ±50%/zero delta — it cannot be inferred client-side without this.
     price_amount: Optional[int] = None
     currency: Optional[str] = None
+    # #16: content freshness — the raw timestamp so the editor can render the date input,
+    # plus the computed verdict so the warning banner does not re-derive it.
+    last_reviewed_at: Optional[datetime] = None
+    freshness_status: Literal["fresh", "stale", "unknown"] = "unknown"
+    freshness_warning: Optional[str] = None
 
 
 def _enum_value(v) -> str:
@@ -224,6 +239,7 @@ async def list_courses(session: AsyncSession = Depends(get_session)):
             )
         ).all()
     }
+    freshness_by_course = {c.id: compute_freshness(c.last_reviewed_at) for c in courses}
     return [
         CourseRowOut(
             id=str(c.id), slug=c.slug, title=c.title, subtitle=c.subtitle,
@@ -232,6 +248,9 @@ async def list_courses(session: AsyncSession = Depends(get_session)):
             lesson_count=lesson_counts.get(c.id, 0),
             price_amount=prices.get(c.id, (None, None))[0],
             currency=prices.get(c.id, (None, None))[1],
+            last_reviewed_at=c.last_reviewed_at,
+            freshness_status=freshness_by_course[c.id].status,
+            freshness_warning=freshness_by_course[c.id].message,
         )
         for c in courses
     ]
@@ -317,6 +336,7 @@ async def get_course(course_id: uuid.UUID, session: AsyncSession = Depends(get_s
             await session.execute(select(Product).where(Product.id == product_content.product_id))
         ).scalar_one_or_none()
     readiness_result = compute_readiness(product)
+    course_freshness = compute_freshness(course.last_reviewed_at)
 
     return CourseDetailOut(
         id=str(course.id), slug=course.slug, title=course.title,
@@ -328,6 +348,9 @@ async def get_course(course_id: uuid.UUID, session: AsyncSession = Depends(get_s
         product_id=str(product.id) if product else None,
         price_amount=product.price_amount if product else None,
         currency=product.currency if product else None,
+        last_reviewed_at=course.last_reviewed_at,
+        freshness_status=course_freshness.status,
+        freshness_warning=course_freshness.message,
         modules=[
             ModuleOut(
                 id=str(m.id), title=m.title, description=m.description, sort_order=m.sort_order,
@@ -572,9 +595,36 @@ async def update_course(
     course.title = payload.title
     course.subtitle = payload.subtitle
     course.description = payload.description
+    course.last_reviewed_at = payload.last_reviewed_at
     await record_audit(
         session, actor=admin, action="update_course", target_type="course",
         target_id=course.id, context={"title": course.title},
+    )
+    await session.commit()
+    return await get_course(course_id, session)
+
+
+@router.post("/admin/courses/{course_id}/mark-reviewed", response_model=CourseDetailOut)
+async def mark_course_reviewed(
+    course_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Stamp `last_reviewed_at = now` — the course-side twin of the template endpoint of
+    the same name, and separate from the PUT for the same reason: answering a freshness
+    warning must not be able to rewrite the title on the way through."""
+    course = await get_or_404(session, Course, course_id, "Course")
+
+    previous = course.last_reviewed_at
+    course.last_reviewed_at = datetime.now(timezone.utc)
+    await record_audit(
+        session, actor=admin, action="mark_course_reviewed", target_type="course",
+        target_id=course.id,
+        context={
+            "title": course.title,
+            "previous_reviewed_at": previous.isoformat() if previous else None,
+            "reviewed_at": course.last_reviewed_at.isoformat(),
+        },
     )
     await session.commit()
     return await get_course(course_id, session)

@@ -8,14 +8,16 @@ Non-negotiable #1: deactivation is wired into the entitlements gate
 """
 
 from datetime import datetime, timezone
+import logging
 from typing import Optional
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import require_admin
 from app.db.models import Entitlement, Order, Product, Role, User
 from app.db.session import get_session
@@ -23,6 +25,8 @@ from app.services.audit_service import record_audit
 from app.services.account_service import deactivate_user as deactivate_user_account
 
 from .common import get_or_404
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -75,6 +79,36 @@ class RoleChangeIn(BaseModel):
 
 class DeactivateIn(BaseModel):
     reason: str  # Required for audit trail
+
+
+class UserUpdateIn(BaseModel):
+    """Partial update: every field optional, only the present ones are applied.
+
+    `EmailStr` gives the format validation for free (pydantic returns the project's
+    normal 422 envelope on a malformed address), matching `auth.py`'s RequestResetIn.
+    """
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    role: Optional[str] = None
+    reason: Optional[str] = None
+
+
+class UserUpdateOut(BaseModel):
+    """The updated user, plus the one thing the admin MUST see after an email change.
+
+    `email_auth_synced` is False when the local `users.email` moved but the Supabase
+    auth email did not — see PATCH below. The frontend renders a loud warning on False;
+    it is not an incidental flag.
+    """
+    user: UserOut
+    email_auth_synced: Optional[bool] = None
+    warning: Optional[str] = None
+
+
+class PasswordResetOut(BaseModel):
+    ok: bool
+    sent_to: Optional[str] = None
+    message: str
 
 
 # ── List / search ───────────────────────────────────────────────────────────────
@@ -326,4 +360,285 @@ async def deactivate_user(
         disabled_at=user.disabled_at,
         created_at=user.created_at,
         cursor=user.created_at.isoformat(),
+    )
+
+
+# ── Edit profile (name / email / role) ──────────────────────────────────────────
+
+# Sentinel for "this field is not being changed", distinct from a value of None.
+_UNSET = object()
+
+
+def _to_user_out(user: User) -> UserOut:
+    return UserOut(
+        id=str(user.id),
+        email=user.email,
+        name=user.name,
+        role=user.role.value,
+        last_sign_in_at=user.last_sign_in_at,
+        disabled_at=user.disabled_at,
+        created_at=user.created_at,
+        cursor=user.created_at.isoformat(),
+    )
+
+
+async def _sync_supabase_auth_email(user_id: uuid.UUID, new_email: str) -> bool:
+    """Update the Supabase auth email so it cannot diverge from `users.email`.
+
+    THE POINT OF THIS FUNCTION (read before changing it): `users.id` IS the Supabase
+    auth user id (see db/models/user.py) — the RLS policies compare foreign keys against
+    `auth.uid()` directly. `users.email` is a *local mirror* of a value Supabase owns.
+    Writing only the local column produces a user who signs in with their OLD address
+    while every screen in the admin panel shows the new one — a silent, invisible split
+    that surfaces later as "the password reset went to the wrong inbox".
+
+    So the auth record is the authoritative write and it happens FIRST; the local column
+    is only updated once this succeeded. Returns False if it did not, and the caller
+    then refuses the local write rather than committing half of it.
+
+    `email_confirm=True` marks the new address confirmed immediately: this is an admin
+    acting deliberately on a practitioner's behalf, not the user self-serving a change,
+    so there is no confirmation round-trip to wait on.
+    """
+    from supabase import acreate_client
+
+    admin_client = await acreate_client(settings.supabase_url, settings.supabase_service_role_key)
+    await admin_client.auth.admin.update_user_by_id(
+        str(user_id), {"email": new_email, "email_confirm": True}
+    )
+    return True
+
+
+@router.patch("/admin/users/{user_id}", response_model=UserUpdateOut)
+async def update_user(
+    user_id: uuid.UUID,
+    body: UserUpdateIn,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Edit a practitioner's name, email and/or role in one call.
+
+    Every field is optional; only the ones actually present *and actually different*
+    are written and audited. Role changes routed through here reuse the same two
+    guardrails as POST /admin/users/{id}/role — self-demotion and last-admin — because
+    a second, laxer path to the same mutation would defeat both.
+
+    EMAIL: changing it writes the Supabase auth record first (`_sync_supabase_auth_email`)
+    and the local `users.email` only if that succeeded. If Supabase refuses, the whole
+    request is refused with 502 and nothing is committed — this endpoint will not leave
+    the local email and the auth email pointing at different addresses.
+
+    ORDER MATTERS, and not only for readability: every validation and the external
+    Supabase call happen BEFORE any attribute on `user` is assigned. Assigning first and
+    validating after leaves rejected values sitting dirty on a live session object, where
+    the next commit on that session — this app shares one session per request, and the
+    test suite shares one across the client — would flush a change this endpoint had
+    already refused with a 502. Caught by
+    test_name_change_not_persisted_when_email_sync_fails. Keep the two phases separate.
+    """
+    user = await get_or_404(session, User, user_id, "User")
+    reason = (body.reason or "").strip()
+
+    changes: dict[str, dict[str, Optional[str]]] = {}
+    email_auth_synced: Optional[bool] = None
+    warning: Optional[str] = None
+
+    # ══ Phase 1: validate everything, mutate nothing ════════════════════════════
+
+    # `_UNSET` distinguishes "not being changed" from "being changed to None", which
+    # matters for name: sending "" deliberately clears it, and a plain `None` sentinel
+    # could not tell that apart from the field being absent.
+    pending_role: Optional[Role] = None
+    pending_name: object = _UNSET
+    pending_email: Optional[str] = None
+
+    # ── Role ────────────────────────────────────────────────────────────────────
+    if body.role is not None:
+        try:
+            new_role = Role(body.role)
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail={"error": {"code": "invalid_role", "message": "Role must be 'member' or 'admin'."}},
+            )
+        if new_role != user.role:
+            # Same guardrails as the dedicated role endpoint — see docstring.
+            if user.id == admin.id and new_role == Role.MEMBER:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"error": {"code": "self_demotion", "message": "You cannot remove your own admin role."}},
+                )
+            if new_role == Role.MEMBER and user.role == Role.ADMIN:
+                admins = (await session.execute(select(User).where(User.role == Role.ADMIN))).scalars().all()
+                if len(admins) <= 1:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={"error": {"code": "last_admin", "message": "Cannot demote the last admin. Add another admin first."}},
+                    )
+            pending_role = new_role
+
+    # ── Name ────────────────────────────────────────────────────────────────────
+    if body.name is not None:
+        # "" or whitespace clears the name back to NULL, which is a legitimate edit.
+        new_name = body.name.strip() or None
+        if new_name != user.name:
+            pending_name = new_name
+
+    # ── Email ───────────────────────────────────────────────────────────────────
+    if body.email is not None:
+        new_email = str(body.email).strip().lower()
+        if new_email != user.email.lower():
+            # Uniqueness check against the local table before touching Supabase, so the
+            # common collision fails cheaply and without a half-applied auth write.
+            existing = (await session.execute(
+                select(User).where(User.email.ilike(new_email), User.id != user.id)
+            )).scalars().first()
+            if existing is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"error": {"code": "email_taken", "message": "Another account already uses that email address."}},
+                )
+
+            # Supabase auth is authoritative — it is written FIRST and the local mirror
+            # follows only on success. See _sync_supabase_auth_email.
+            try:
+                await _sync_supabase_auth_email(user.id, new_email)
+                email_auth_synced = True
+            except Exception as exc:
+                logger.error(
+                    "Supabase auth email update failed for user %s (%s -> %s): %s",
+                    user.id, user.email, new_email, exc,
+                )
+                # Refuse the whole request. Writing the local column here is exactly the
+                # divergence this endpoint exists to prevent — and because nothing has
+                # been assigned yet, the name and role in the same request are refused
+                # with it rather than half-applying.
+                raise HTTPException(
+                    status_code=502,
+                    detail={"error": {"code": "auth_email_sync_failed", "message": (
+                        "The email was NOT changed. Supabase authentication could not be "
+                        "updated, and changing only our local record would leave this user "
+                        "signing in with their old address. Nothing was saved."
+                    )}},
+                )
+            pending_email = new_email
+
+    # ══ Phase 2: apply — past this point nothing raises ═════════════════════════
+
+    if pending_role is not None:
+        changes["role"] = {"old": user.role.value, "new": pending_role.value}
+        user.role = pending_role
+
+    if pending_name is not _UNSET:
+        changes["name"] = {"old": user.name, "new": pending_name}  # type: ignore[dict-item]
+        user.name = pending_name  # type: ignore[assignment]
+
+    if pending_email is not None:
+        changes["email"] = {"old": user.email, "new": pending_email}
+        user.email = pending_email
+        warning = (
+            f"Sign-in address changed to {pending_email}. This user must now use the new "
+            f"address to log in — their password is unchanged."
+        )
+
+    if not changes:
+        return UserUpdateOut(user=_to_user_out(user), email_auth_synced=email_auth_synced)
+
+    context: dict = {"changes": changes}
+    if reason:
+        context["reason"] = reason
+    if email_auth_synced is not None:
+        context["email_auth_synced"] = email_auth_synced
+
+    await record_audit(
+        session,
+        actor=admin,
+        action="update_user",
+        target_type="user",
+        target_id=user.id,
+        context=context,
+    )
+    # get_session never commits — see admin/promotions.py.
+    await session.commit()
+
+    return UserUpdateOut(user=_to_user_out(user), email_auth_synced=email_auth_synced, warning=warning)
+
+
+# ── Password reset trigger ──────────────────────────────────────────────────────
+
+
+@router.post("/admin/users/{user_id}/send-password-reset", response_model=PasswordResetOut)
+async def send_user_password_reset(
+    user_id: uuid.UUID,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Email the user a password *reset link*. The admin never sees or sets a password.
+
+    This is deliberately not "admin sets a new password". This app delegates auth to
+    Supabase and stores no password material locally (there is no such column on
+    `users`), so the correct action is the one the user themselves would trigger:
+    generate a recovery link and mail it. The admin learns nothing secret, and the
+    new password is chosen by the account holder in their own browser.
+
+    Reuses the exact mechanism of POST /auth/request-password-reset (api/v1/auth.py):
+    `admin.generate_link()` produces the link WITHOUT sending Supabase's own unbranded
+    email, so it goes out through our Mailjet transport and branded template instead.
+
+    Unlike the public endpoint, this one reports failure honestly — the caller is a
+    trusted admin acting on a known account, so the "never reveal whether the address
+    exists" vagueness that endpoint needs would only hide a real problem here.
+    """
+    user = await get_or_404(session, User, user_id, "User")
+
+    from supabase import acreate_client
+    from app.services.email_service import send_password_reset_email
+
+    try:
+        admin_client = await acreate_client(settings.supabase_url, settings.supabase_service_role_key)
+        redirect_to = f"{settings.frontend_url.rstrip('/')}/reset-password"
+        response = await admin_client.auth.admin.generate_link(
+            {
+                "type": "recovery",
+                "email": user.email,
+                "options": {"redirect_to": redirect_to},
+            }
+        )
+        reset_url = response.properties.action_link
+    except Exception as exc:
+        logger.error("Admin password reset link generation failed for %s: %s", user.email, exc)
+        raise HTTPException(
+            status_code=502,
+            detail={"error": {"code": "reset_link_failed", "message": (
+                "Could not generate a password reset link. No email was sent."
+            )}},
+        )
+
+    sent = await send_password_reset_email(to_email=user.email, reset_url=reset_url)
+    if not sent:
+        # The link exists but the mail did not go out. Say so — silently returning ok
+        # here would have the admin telling the user to check an inbox with nothing in it.
+        logger.error("Password reset link generated for %s but the email did not send.", user.email)
+        raise HTTPException(
+            status_code=502,
+            detail={"error": {"code": "reset_email_failed", "message": (
+                "A reset link was generated but the email could not be sent. "
+                "Check the mail transport configuration."
+            )}},
+        )
+
+    await record_audit(
+        session,
+        actor=admin,
+        action="send_password_reset",
+        target_type="user",
+        target_id=user.id,
+        context={"email": user.email},
+    )
+    await session.commit()
+
+    return PasswordResetOut(
+        ok=True,
+        sent_to=user.email,
+        message=f"Password reset link sent to {user.email}.",
     )

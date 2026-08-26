@@ -40,3 +40,7 @@ class User(Base, TimestampMixin):
     # granted, password reset, security alerts) is NEVER gated by these flags.
     notify_marketing: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
     notify_product_updates: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.true())
+    # Sound notification preference — plays a subtle chime when new notifications
+    # arrive. Defaults to True so existing users hear notifications by default;
+    # the preference page lets them disable it.
+    notify_sound: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.true())

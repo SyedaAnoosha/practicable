@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Loader2, ShieldAlert, UserX } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, KeyRound, Loader2, Pencil, ShieldAlert, UserX } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { Button } from '@/components/ui/Button'
@@ -54,6 +54,16 @@ function formatDate(dateString: string | null): string {
 
 function formatCurrency(cents: number, currency: string): string {
   return `${(cents / 100).toFixed(2)} ${currency}`
+}
+
+/** Pull the backend's error envelope message, matching AdminQuestions/AdminTemplates.
+ *  Falls back to pydantic's array-shaped 422 body before the generic message, so a
+ *  validation failure (a malformed email) says what was wrong instead of "try again". */
+function readError(err: unknown, fallback: string): string {
+  const detail = (err as any)?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) return detail[0]?.msg ?? fallback
+  return detail?.error?.message ?? fallback
 }
 
 // ── Role change dialog ─────────────────────────────────────────────────────────
@@ -173,6 +183,194 @@ function DeactivateDialog({
   )
 }
 
+// ── Edit user dialog ───────────────────────────────────────────────────────────
+
+interface EditUserPayload {
+  name?: string
+  email?: string
+  role?: string
+  reason?: string
+}
+
+function EditUserDialog({
+  user,
+  onClose,
+  onSubmit,
+  onSendReset,
+  isPending,
+  isResetPending,
+  errorMessage,
+  resetStatus,
+}: {
+  user: UserRow
+  onClose: () => void
+  onSubmit: (payload: EditUserPayload) => void
+  onSendReset: () => void
+  isPending: boolean
+  isResetPending: boolean
+  errorMessage: string | null
+  resetStatus: { kind: 'success' | 'error'; message: string } | null
+}) {
+  const [name, setName] = useState(user.name ?? '')
+  const [email, setEmail] = useState(user.email)
+  const [role, setRole] = useState(user.role)
+  const [reason, setReason] = useState('')
+
+  const emailChanged = email.trim().toLowerCase() !== user.email.toLowerCase()
+  const roleChanged = role !== user.role
+  const nameChanged = name.trim() !== (user.name ?? '')
+  const dirty = emailChanged || roleChanged || nameChanged
+
+  // A role change is the one edit here that alters what this person can do, so it
+  // carries the same reason-required expectation as the dedicated Role dialog.
+  const reasonMissing = roleChanged && !reason.trim()
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-lg border border-border bg-background p-6 shadow-lg">
+        <h2 className="text-lg font-semibold text-foreground">Edit user</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Update this practitioner's details. Every change is audited.
+        </p>
+
+        {/* Name */}
+        <div className="mt-4">
+          <label htmlFor="edit-name" className="block text-sm font-medium text-foreground">
+            Name
+          </label>
+          <input
+            id="edit-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="No name set"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        {/* Email */}
+        <div className="mt-4">
+          <label htmlFor="edit-email" className="block text-sm font-medium text-foreground">
+            Email
+          </label>
+          <input
+            id="edit-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          {emailChanged && (
+            /* This is the sign-in address, not just a contact field. The backend updates
+               the Supabase auth record and the local row together or not at all, so this
+               copy states the consequence plainly rather than letting an admin discover
+               it when the user cannot log in. */
+            <p className="mt-2 flex gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+              <span>
+                This is the sign-in address. Changing it updates their Supabase login too —
+                they must use <strong>{email.trim()}</strong> to sign in from now on. Their
+                password is unchanged. If the auth update fails, nothing is saved.
+              </span>
+            </p>
+          )}
+        </div>
+
+        {/* Role */}
+        <div className="mt-4">
+          <label htmlFor="edit-role" className="block text-sm font-medium text-foreground">
+            Role
+          </label>
+          <select
+            id="edit-role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="member">member</option>
+            <option value="admin">admin</option>
+          </select>
+        </div>
+
+        {/* Reason — required for a role change */}
+        {roleChanged && (
+          <div className="mt-4">
+            <label htmlFor="edit-reason" className="block text-sm font-medium text-foreground">
+              Reason (required for role changes)
+            </label>
+            <textarea
+              id="edit-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Why is this role change needed?"
+            />
+          </div>
+        )}
+
+        {errorMessage && (
+          <p className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+            {errorMessage}
+          </p>
+        )}
+
+        {/* Password reset — a link is emailed; no password is ever set or shown here. */}
+        <div className="mt-6 border-t border-border pt-4">
+          <h3 className="text-sm font-medium text-foreground">Password</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Passwords are held by Supabase, not by this app — no one here can read or set
+            one. Send the user a reset link and they choose a new password themselves.
+          </p>
+          <Button
+            className="mt-3"
+            size="sm"
+            variant="secondary"
+            onClick={onSendReset}
+            disabled={isResetPending}
+            loading={isResetPending}
+          >
+            <KeyRound className="size-3" aria-hidden="true" />
+            Send password reset email
+          </Button>
+          {resetStatus && (
+            <p
+              className={
+                resetStatus.kind === 'success'
+                  ? 'mt-2 text-xs text-emerald-600 dark:text-emerald-400'
+                  : 'mt-2 text-xs text-destructive'
+              }
+            >
+              {resetStatus.message}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!dirty || reasonMissing || isPending}
+            loading={isPending}
+            onClick={() =>
+              onSubmit({
+                name: name.trim(),
+                email: email.trim(),
+                role,
+                ...(reason.trim() ? { reason: reason.trim() } : {}),
+              })
+            }
+          >
+            Save changes
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export function AdminUsers() {
@@ -182,6 +380,8 @@ export function AdminUsers() {
   const [detailUser, setDetailUser] = useState<UserDetail | null>(null)
   const [roleTarget, setRoleTarget] = useState<UserRow | null>(null)
   const [deactivateTarget, setDeactivateTarget] = useState<UserRow | null>(null)
+  const [editTarget, setEditTarget] = useState<UserRow | null>(null)
+  const [resetStatus, setResetStatus] = useState<{ kind: 'success' | 'error'; message: string } | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
 
   const { data: users, isLoading } = useQuery({
@@ -207,6 +407,34 @@ export function AdminUsers() {
     },
   })
 
+  const editMutation = useMutation({
+    mutationFn: ({ userId, payload }: { userId: string; payload: EditUserPayload }) =>
+      api.patch<{ user: UserRow; email_auth_synced: boolean | null; warning: string | null }>(
+        `/admin/users/${userId}`,
+        payload,
+      ),
+    onSuccess: () => {
+      setEditTarget(null)
+      setResetStatus(null)
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.users() })
+    },
+  })
+
+  // Triggers an emailed reset LINK. The admin never sees or chooses a password —
+  // Supabase owns the credential and the user sets it themselves from the link.
+  const passwordResetMutation = useMutation({
+    mutationFn: ({ userId }: { userId: string }) =>
+      api.post<{ ok: boolean; sent_to: string | null; message: string }>(
+        `/admin/users/${userId}/send-password-reset`,
+      ),
+    onSuccess: (res) => {
+      setResetStatus({ kind: 'success', message: res.data.message })
+    },
+    onError: (err) => {
+      setResetStatus({ kind: 'error', message: readError(err, 'Could not send the reset email.') })
+    },
+  })
+
   const loadDetail = async (user: UserRow) => {
     setSelectedUser(user)
     setLoadingDetail(true)
@@ -227,7 +455,7 @@ export function AdminUsers() {
       <PageTitle
         eyebrow="Admin"
         title="Users"
-        description="View users, manage roles, and deactivate accounts. All changes are audited."
+        description="View users, edit their details, manage roles, and deactivate accounts. All changes are audited."
       />
 
       {/* Search */}
@@ -294,6 +522,19 @@ export function AdminUsers() {
                   </td>
                   <td className="px-4">
                     <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setResetStatus(null)
+                          editMutation.reset()
+                          passwordResetMutation.reset()
+                          setEditTarget(u)
+                        }}
+                      >
+                        <Pencil className="size-3" aria-hidden="true" />
+                        Edit
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => setRoleTarget(u)}>
                         <ShieldAlert className="size-3" aria-hidden="true" />
                         Role
@@ -386,6 +627,23 @@ export function AdminUsers() {
       )}
 
       {/* Dialogs */}
+      {editTarget && (
+        <EditUserDialog
+          user={editTarget}
+          onClose={() => {
+            setEditTarget(null)
+            setResetStatus(null)
+          }}
+          onSubmit={(payload) => editMutation.mutate({ userId: editTarget.id, payload })}
+          onSendReset={() => passwordResetMutation.mutate({ userId: editTarget.id })}
+          isPending={editMutation.isPending}
+          isResetPending={passwordResetMutation.isPending}
+          errorMessage={
+            editMutation.isError ? readError(editMutation.error, 'Could not save changes.') : null
+          }
+          resetStatus={resetStatus}
+        />
+      )}
       {roleTarget && (
         <RoleChangeDialog
           user={roleTarget}

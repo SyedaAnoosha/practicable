@@ -34,6 +34,7 @@ from app.db.session import get_session
 from app.integrations.mux_client import generate_mux_playback_token
 from app.integrations.storage_client import download_file, generate_presigned_url, upload_file
 from app.services.download_events import record_download_event
+from app.services.assessment_service import course_assessment_gate_satisfied
 from app.services.certificate_service import issue_certificate_if_newly_complete
 from app.services.email_service import send_certificate_issued_email
 from app.services.stamping import get_or_stamp, is_stampable
@@ -632,7 +633,24 @@ async def mark_lesson_complete(
             # so the completion is durable before a certificate is minted. The service
             # uses INSERT ON CONFLICT to be idempotent — a double-click or replay
             # never creates a second row.
+            #
+            # The assessment gate is checked here as an ADDITIONAL condition, never as a
+            # replacement: `course_assessment_gate_satisfied` returns True for a course
+            # with no assessment or an unpublished one, so the original
+            # "100% lessons = certificate" rule is untouched for every existing course.
+            # Only a *published* assessment adds "and passed it".
+            #
+            # A learner who finishes the lessons before passing the quiz is not stranded:
+            # the completion edge is consumed here without issuing, and the passing
+            # submission in content/assessments.py's counterpart check issues instead.
+            # Both paths call the same idempotent service, so whichever happens second
+            # mints the single certificate and the other is a no-op.
+            gate_ok = True
             if not was_complete and is_complete:
+                gate_ok = await course_assessment_gate_satisfied(
+                    session=session, user_id=uuid.UUID(user_id), course_id=module.course_id
+                )
+            if not was_complete and is_complete and gate_ok:
                 course = (
                     await session.execute(
                         select(Course).where(Course.id == module.course_id)

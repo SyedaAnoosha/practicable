@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Text, ForeignKey, Integer, Numeric
+from sqlalchemy import String, Text, ForeignKey, Integer, Numeric, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, IdMixin, PublishStateMixin, TimestampMixin
 import uuid
@@ -40,6 +41,14 @@ class Course(Base, IdMixin, TimestampMixin, PublishStateMixin):
     # COUNT/AVG join per card.
     review_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rating_sum: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # #16: content freshness (migration 035). Nullable, and NULL means "never reviewed"
+    # — a distinct state from "reviewed, but long ago", never backfilled to now() to
+    # silence a warning. No `version` counterpart: a course is consumed in place and is
+    # always the current one, unlike a template the buyer downloads and keeps.
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
     section: Mapped["Section"] = relationship("Section")

@@ -25,6 +25,7 @@ from app.db.models import (
     Lesson,
     LessonProgress,
     Module,
+    Notification,
     Order,
     OrderItem,
     OrderStatus,
@@ -863,25 +864,28 @@ async def update_my_profile(
 class NotificationsIn(BaseModel):
     notify_marketing: bool = False
     notify_product_updates: bool = True
+    notify_sound: bool = True
 
 
-class NotificationsOut(BaseModel):
+class NotificationPrefsOut(BaseModel):
     notify_marketing: bool
     notify_product_updates: bool
+    notify_sound: bool
 
 
-@router.get("/me/account/notifications", response_model=NotificationsOut)
+@router.get("/me/account/notifications", response_model=NotificationPrefsOut)
 async def get_notification_preferences(
     user: User = Depends(get_current_user),
 ):
     """Read the current notification preferences."""
-    return NotificationsOut(
+    return NotificationPrefsOut(
         notify_marketing=user.notify_marketing,
         notify_product_updates=user.notify_product_updates,
+        notify_sound=getattr(user, "notify_sound", True),
     )
 
 
-@router.patch("/me/account/notifications", response_model=NotificationsOut)
+@router.patch("/me/account/notifications", response_model=NotificationPrefsOut)
 async def update_notification_preferences(
     payload: NotificationsIn,
     session: AsyncSession = Depends(get_session),
@@ -891,6 +895,8 @@ async def update_notification_preferences(
     granted, password reset, security alerts) is NEVER gated by these flags."""
     user.notify_marketing = payload.notify_marketing
     user.notify_product_updates = payload.notify_product_updates
+    if hasattr(user, "notify_sound"):
+        user.notify_sound = payload.notify_sound
     await record_audit(
         session,
         actor=user,
@@ -900,13 +906,15 @@ async def update_notification_preferences(
         context={
             "notify_marketing": payload.notify_marketing,
             "notify_product_updates": payload.notify_product_updates,
+            "notify_sound": payload.notify_sound,
         },
     )
     await session.commit()
 
-    return NotificationsOut(
+    return NotificationPrefsOut(
         notify_marketing=user.notify_marketing,
         notify_product_updates=user.notify_product_updates,
+        notify_sound=getattr(user, "notify_sound", True),
     )
 
 
@@ -1224,3 +1232,110 @@ async def download_certificate(
     url = get_certificate_pdf_url(cert)
     await session.commit()  # persist pdf_storage_key if it was just set
     return {"download_url": url, "verification_code": cert.verification_code}
+
+
+# ── #6: Notifications ────────────────────────────────────────────────────────
+
+
+class NotificationOut(BaseModel):
+    id: str
+    notification_type: str
+    entity_type: str
+    entity_id: str
+    title: str
+    message: str
+    read: bool
+    created_at: datetime
+    action_url: Optional[str] = None
+    # Named `meta`, matching the column. `metadata` is reserved on SQLAlchemy's
+    # declarative base and shadowing it here invited the same confusion on the API side
+    # for no gain — the model already had to avoid the name for exactly this reason.
+    meta: Optional[dict] = None
+
+
+class NotificationsOut(BaseModel):
+    notifications: list[NotificationOut]
+    unread_count: int
+
+
+@router.get("/me/notifications", response_model=NotificationsOut)
+async def get_my_notifications(
+    unread_only: bool = False,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """Get notifications for the current user."""
+    from app.services.notification_service import get_user_notifications
+
+    notifications = await get_user_notifications(
+        session=session,
+        user_id=user.id,
+        unread_only=unread_only,
+        limit=limit,
+    )
+
+    # Count unread
+    unread_result = await session.execute(
+        select(func.count(Notification.id)).where(
+            Notification.user_id == user.id,
+            Notification.read.is_(False),
+        )
+    )
+    unread_count = unread_result.scalar() or 0
+
+    return NotificationsOut(
+        notifications=[
+            NotificationOut(
+                id=str(n.id),
+                notification_type=n.notification_type,
+                entity_type=n.entity_type,
+                entity_id=str(n.entity_id),
+                title=n.title,
+                message=n.message,
+                read=n.read,
+                created_at=n.created_at,
+                action_url=n.action_url,
+                meta=n.meta,
+            )
+            for n in notifications
+        ],
+        unread_count=unread_count,
+    )
+
+
+@router.post("/me/notifications/{notification_id}/read")
+async def mark_notification_as_read(
+    notification_id: str,
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """Mark a specific notification as read."""
+    from app.services.notification_service import mark_notification_read
+
+    success = await mark_notification_read(
+        session=session,
+        notification_id=uuid.UUID(notification_id),
+        user_id=user.id,
+    )
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    return {"ok": True}
+
+
+@router.post("/me/notifications/read-all")
+async def mark_all_notifications_as_read(
+    session: AsyncSession = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """Mark all notifications as read for the current user."""
+    from app.services.notification_service import mark_all_notifications_read
+
+    count = await mark_all_notifications_read(
+        session=session,
+        user_id=user.id,
+    )
+
+    return {"ok": True, "marked_read": count}

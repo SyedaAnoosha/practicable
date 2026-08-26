@@ -63,6 +63,12 @@ interface TemplateRow {
   version: string | null
   last_reviewed_at: string | null
   format: string | null
+  // #16: computed server-side (same precedent as the promotions screen's `status`) so
+  // the 12-month threshold is not re-derived here and left to drift from the backend's.
+  // `unknown` (never reviewed) is deliberately distinct from `stale` — different facts,
+  // different actions.
+  freshness_status: 'fresh' | 'stale' | 'unknown'
+  freshness_warning: string | null
 }
 
 const inputClass =
@@ -170,6 +176,16 @@ export function AdminTemplates() {
   const setPublishState = useMutation({
     mutationFn: ({ id, state }: { id: string; state: PublishStateValue }) =>
       api.post(`/admin/templates/${id}/publish`, { published: state === 'published', publish_state: state }),
+    onSuccess: invalidate,
+    onError: (e) => setError(readError(e)),
+  })
+
+  // #16: the one-click answer to a freshness warning. Deliberately its own endpoint
+  // rather than a PUT with a date — confirming a document is still current must not be
+  // able to rewrite the title or the price on the way through, and it must not touch
+  // `version`, which would notify every owner about a change that did not happen.
+  const markReviewed = useMutation({
+    mutationFn: (id: string) => api.post(`/admin/templates/${id}/mark-reviewed`),
     onSuccess: invalidate,
     onError: (e) => setError(readError(e)),
   })
@@ -435,6 +451,17 @@ export function AdminTemplates() {
                         onChange={(state) => setPublishState.mutate({ id: t.id, state })}
                       />
                       {t.is_free && <Badge>Free</Badge>}
+                      {/* #16: two distinct badges, never one merged "needs attention".
+                          `stale` is a document that was reviewed and has since aged;
+                          `unknown` is one nobody has ever reviewed. The admin does
+                          different things about each, so the screen says which it is. */}
+                      {t.freshness_status === 'stale' && (
+                        <Badge variant="warning" className="gap-1">
+                          <AlertTriangle className="size-3" aria-hidden="true" />
+                          Review due
+                        </Badge>
+                      )}
+                      {t.freshness_status === 'unknown' && <Badge variant="muted">Never reviewed</Badge>}
                     </div>
                     {t.has_file ? (
                       <p className="mt-0.5 text-xs text-muted-foreground">
@@ -459,6 +486,23 @@ export function AdminTemplates() {
                       <p className="mt-0.5 flex items-center gap-1.5 text-xs text-amber-600">
                         <AlertTriangle className="size-3.5" aria-hidden="true" />
                         {t.readiness_message}
+                      </p>
+                    )}
+                    {/* The warning sentence and its remedy in one place: the whole point
+                        of #16 is that noticing staleness and acting on it should not be
+                        two separate trips through the admin. */}
+                    {t.freshness_warning && (
+                      <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
+                        {t.freshness_warning}
+                        <button
+                          type="button"
+                          className="underline underline-offset-2 hover:text-foreground disabled:opacity-60"
+                          onClick={() => markReviewed.mutate(t.id)}
+                          disabled={markReviewed.isPending && markReviewed.variables === t.id}
+                        >
+                          Mark reviewed
+                        </button>
                       </p>
                     )}
                     {/* Phase 9A re-verification (2026-08-21, owner-flagged): "Create

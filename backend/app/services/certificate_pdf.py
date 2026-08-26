@@ -68,6 +68,16 @@ CERTIFICATES_PREFIX = "certificates"
 PAGE_WIDTH = 842   # A4 landscape, points
 PAGE_HEIGHT = 595
 
+# Outer margin for page furniture (the brand in the top band, the disclaimer).
+MARGIN = 40
+# Inset of the gold frame from the page edge. The frame replaces the old 80pt
+# navy slab as the thing that contains the composition, at a fraction of the
+# vertical cost.
+FRAME_INSET = 22.0
+
+# Decorative corner ornament size (points).
+_CORNER_SIZE = 18.0
+
 # Helvetica advance widths, in 1/1000 em, for the printable ASCII range 32-126.
 # Text is centred by measuring it, not by guessing at `len(s) * 8` - a guess is
 # wrong by a whole character for every "i" or "W" in a name, and names are the
@@ -227,6 +237,80 @@ def _rect(x: float, y: float, w: float, h: float, colour: str) -> list[str]:
     return ["q", f"{r:.4f} {g:.4f} {b:.4f} rg", f"{x:.2f} {y:.2f} {w:.2f} {h:.2f} re", "f", "Q"]
 
 
+def _stroked_rect(
+    x: float, y: float, w: float, h: float, colour: str, *, line_width: float = 1.0,
+) -> list[str]:
+    """Emit an outlined (not filled) rectangle - the frame around the page.
+
+    Path operators, unlike text operators, are legal outside a text object, so this
+    emits no `BT`/`ET`. It is bracketed in `q`/`Q` so the stroke colour and line
+    width it sets cannot leak into whatever is drawn next.
+    """
+    r, g, b = _hex_to_rgb(colour)
+    return [
+        "q",
+        f"{r:.4f} {g:.4f} {b:.4f} RG",
+        f"{line_width:.2f} w",
+        f"{x:.2f} {y:.2f} {w:.2f} {h:.2f} re",
+        "S",
+        "Q",
+    ]
+
+
+def _centred_rule(y: float, width: float, colour: str, *, thickness: float = 1.0) -> list[str]:
+    """A short horizontal rule centred on the page - a divider between blocks.
+
+    Used instead of a full-width rule so the accent separates without boxing the
+    text in; the whitespace either side is doing as much work as the rule itself.
+    """
+    return _rect((PAGE_WIDTH - width) / 2, y, width, thickness, colour)
+
+
+def _corner_ornament(x: float, y: float, size: float, colour: str, *, rotate: int = 0) -> list[str]:
+    """Draw a small L-shaped corner ornament for the certificate frame.
+
+    Four of these sit inside the gold frame corners to add visual refinement.
+    `rotate` is 0/90/180/270 degrees clockwise.
+    """
+    r, g, b = _hex_to_rgb(colour)
+    s = size
+    # Each corner is two short strokes forming an L shape.
+    # The rotation is handled by swapping which axes the strokes follow.
+    if rotate == 0:      # top-left
+        h1, v1 = (x, y, s, 0), (x, y, 0, -s)
+    elif rotate == 90:   # top-right
+        h1, v1 = (x, y, -s, 0), (x, y, 0, -s)
+    elif rotate == 180:  # bottom-right
+        h1, v1 = (x, y, -s, 0), (x, y, 0, s)
+    else:                # bottom-left
+        h1, v1 = (x, y, s, 0), (x, y, 0, s)
+
+    ops = ["q", f"{r:.4f} {g:.4f} {b:.4f} RG", "1.2 w"]
+    # Horizontal stroke
+    ops += [f"{h1[0]:.2f} {h1[1]:.2f} m", f"{h1[0]+h1[2]:.2f} {h1[1]+h1[3]:.2f} l", "S"]
+    # Vertical stroke
+    ops += [f"{v1[0]:.2f} {v1[1]:.2f} m", f"{v1[0]+v1[2]:.2f} {v1[1]+v1[3]:.2f} l", "S"]
+    ops.append("Q")
+    return ops
+
+
+def _diamond(x: float, y: float, size: float, colour: str) -> list[str]:
+    """A small centred diamond shape used as a decorative divider."""
+    r, g, b = _hex_to_rgb(colour)
+    half = size / 2
+    return [
+        "q",
+        f"{r:.4f} {g:.4f} {b:.4f} rg",
+        f"{x - half:.2f} {y:.2f} m",
+        f"{x:.2f} {y + half:.2f} l",
+        f"{x + half:.2f} {y:.2f} l",
+        f"{x:.2f} {y - half:.2f} l",
+        "h",  # close path
+        "f",  # fill
+        "Q",
+    ]
+
+
 def _verify_url(verification_code: str) -> str:
     """The public verification URL printed on the certificate face."""
     return f"{settings.frontend_url.rstrip('/')}/verify/{verification_code}"
@@ -252,73 +336,106 @@ def _build_certificate_content(
     # Page background - the warm paper tone, not bare white.
     lines += _rect(0, 0, page_width, page_height, PAGE_BG)
 
-    # Header bar - navy, with the brand name.
-    header_h = 80
-    lines += _rect(0, page_height - header_h, page_width, header_h, HEADER_BG)
+    # -- Frame ---------------------------------------------------------------
+    # A slim navy band for the brand, and a thin gold frame that holds the warm
+    # paper on all four sides.
+    band_h = 38.0
+    lines += _rect(0, page_height - band_h, page_width, band_h, HEADER_BG)
     lines += _left_text(
-        BRAND_NAME, x=40, y=page_height - 52, size=22, colour=HEADER_FG, bold=True,
+        BRAND_NAME, x=MARGIN, y=page_height - 25, size=14, colour=HEADER_FG, bold=True,
     )
 
-    # Gold rule under the header.
-    lines += _rect(40, page_height - header_h - 12, page_width - 80, 2, GOLD_STRONG)
+    frame_top = page_height - band_h - FRAME_INSET
+    lines += _stroked_rect(
+        FRAME_INSET,
+        FRAME_INSET,
+        page_width - 2 * FRAME_INSET,
+        frame_top - FRAME_INSET,
+        GOLD_STRONG,
+        line_width=1.5,
+    )
 
-    # Heading - the owner-approved wording.
+    # -- Corner ornaments ----------------------------------------------------
+    # Four small L-shaped gold accents inside the frame corners for visual
+    # refinement.
+    ci = FRAME_INSET + 6  # ornament inset from frame edge
+    cs = _CORNER_SIZE
+    lines += _corner_ornament(ci, frame_top - ci, cs, GOLD_STRONG, rotate=0)       # top-left
+    lines += _corner_ornament(page_width - ci, frame_top - ci, cs, GOLD_STRONG, rotate=90)  # top-right
+    lines += _corner_ornament(page_width - ci, ci, cs, GOLD_STRONG, rotate=180)   # bottom-right
+    lines += _corner_ornament(ci, ci, cs, GOLD_STRONG, rotate=270)                # bottom-left
+
+    # -- Heading block -------------------------------------------------------
+    # Vertical rhythm, top to bottom. Gaps are not uniform: they encode the
+    # hierarchy.
     lines += _centred_text(
-        CERTIFICATE_HEADING, y=page_height - 170, size=28, colour=INK, bold=True,
+        CERTIFICATE_HEADING, y=page_height - 120, size=34, colour=INK, bold=True,
     )
+    # A short gold rule under the heading.
+    lines += _centred_rule(page_height - 142, 100, GOLD_STRONG, thickness=2)
+    # A small diamond ornament below the rule for added elegance.
+    lines += _diamond(PAGE_WIDTH / 2, page_height - 154, 8, GOLD_STRONG)
 
     # "This is to certify that"
     lines += _centred_text(
-        ATTESTATION_LINES[0], y=page_height - 215, size=12, colour=MUTED_INK,
+        ATTESTATION_LINES[0], y=page_height - 198, size=12, colour=MUTED_INK,
     )
 
-    # Learner name - the widest thing on the page, and the only string we do not
-    # control, so it is measured and truncated against a real margin.
+    # -- Learner name, the hero element --------------------------------------
+    # The widest thing on the page and the only string we do not control, so it
+    # is measured and truncated against a real margin.
+    name_max_width = page_width - 160
     lines += _centred_text(
-        learner_name, y=page_height - 258, size=26, colour=INK, bold=True,
-        max_width=page_width - 160,
+        learner_name, y=page_height - 248, size=28, colour=INK, bold=True,
+        max_width=name_max_width,
     )
+    # A hairline under the name.
+    lines += _centred_rule(page_height - 268, name_max_width, MUTED_INK, thickness=0.6)
 
     # "has completed the course" - deliberately not "is certified in".
     lines += _centred_text(
-        ATTESTATION_LINES[1], y=page_height - 296, size=12, colour=MUTED_INK,
+        ATTESTATION_LINES[1], y=page_height - 306, size=12, colour=MUTED_INK,
     )
 
     # Course title.
     lines += _centred_text(
-        course_title, y=page_height - 336, size=18, colour=INK, bold=True,
-        max_width=page_width - 160,
+        course_title, y=page_height - 340, size=20, colour=INK, bold=True,
+        max_width=name_max_width,
     )
+
+    # Small diamond divider before the date.
+    lines += _diamond(PAGE_WIDTH / 2, page_height - 370, 5, GOLD_STRONG)
 
     # Issue date.
     lines += _centred_text(
-        f"Issued {issued_at}", y=page_height - 378, size=11, colour=MUTED_INK,
+        f"Issued {issued_at}", y=page_height - 394, size=11, colour=MUTED_INK,
     )
 
     # -- Signature block, left ----------------------------------------------
-    # A typeset name over a rule. Not a facsimile signature: issuance is automatic,
-    # so a handwritten mark would assert a personal review that never happened.
-    sig_x = 90.0
-    sig_w = 240.0
-    lines += _rect(sig_x, 132, sig_w, 1, MUTED_INK)
-    lines += _left_text(SIGNATORY_NAME, x=sig_x, y=112, size=12, colour=INK, bold=True)
-    lines += _left_text(SIGNATORY_ROLE, x=sig_x, y=97, size=8, colour=MUTED_INK)
+    # A typeset name over a rule. Not a facsimile signature: issuance is
+    # automatic, so a handwritten mark would assert a personal review that never
+    # happened.
+    sig_x = float(MARGIN + 28)
+    sig_w = 250.0
+    foot_rule_y = 155.0
+    lines += _rect(sig_x, foot_rule_y, sig_w, 1, MUTED_INK)
+    lines += _left_text(SIGNATORY_NAME, x=sig_x, y=135, size=12, colour=INK, bold=True)
+    lines += _left_text(SIGNATORY_ROLE, x=sig_x, y=120, size=8, colour=MUTED_INK)
 
     # -- Verification block, right ------------------------------------------
-    ver_x = page_width - 90 - sig_w
-    lines += _rect(ver_x, 132, sig_w, 1, MUTED_INK)
+    ver_x = page_width - (MARGIN + 28) - sig_w
+    lines += _rect(ver_x, foot_rule_y, sig_w, 1, MUTED_INK)
     lines += _left_text(
-        f"Verification code: {verification_code}", x=ver_x, y=112, size=9,
+        f"Verification code: {verification_code}", x=ver_x, y=135, size=9,
         colour=INK, bold=True,
     )
     lines += _left_text(
-        f"Verify at {_verify_url(verification_code)}", x=ver_x, y=97, size=8,
+        f"Verify at {_verify_url(verification_code)}", x=ver_x, y=120, size=8,
         colour=MUTED_INK,
     )
 
-    # Footer rule and the scope disclaimer - on the artefact, not just in the email.
-    lines += _rect(40, 66, page_width - 80, 2, GOLD_STRONG)
-    lines += _centred_text(DISCLAIMER, y=48, size=8, colour=MUTED_INK)
+    # The scope disclaimer.
+    lines += _centred_text(DISCLAIMER, y=42, size=8, colour=MUTED_INK)
 
     return lines
 
@@ -389,7 +506,10 @@ def get_certificate_pdf_url(certificate: Certificate) -> str:
     If the PDF hasn't been generated yet, generate it now (lazy rendering).
     If generation fails, raise - the caller returns 502.
     """
-    if not certificate.pdf_storage_key:
-        render_certificate_pdf(certificate)
+    # Bind the key returned by the renderer rather than re-reading the attribute:
+    # `render_certificate_pdf` sets `pdf_storage_key` on the instance, but the type
+    # of that column is `str | None`, so a re-read is only narrowable by asserting.
+    # Taking the return value keeps the non-null guarantee at the call site.
+    key = certificate.pdf_storage_key or render_certificate_pdf(certificate)
 
-    return generate_presigned_url(certificate.pdf_storage_key, expiry_seconds=3600)
+    return generate_presigned_url(key, expiry_seconds=3600)

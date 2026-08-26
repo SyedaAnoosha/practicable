@@ -245,11 +245,17 @@ async def test_notification_preferences_persist(member_client, member_user, db_s
         json={"notify_marketing": True, "notify_product_updates": False},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json() == {"notify_marketing": True, "notify_product_updates": False}
+    # notify_sound isn't in the PATCH payload, so it round-trips at its default (True)
+    # rather than being cleared — the endpoint only overwrites fields it was sent.
+    assert resp.json() == {
+        "notify_marketing": True, "notify_product_updates": False, "notify_sound": True,
+    }
 
     follow_up = await member_client.get("/me/account/notifications")
     assert follow_up.status_code == 200, follow_up.text
-    assert follow_up.json() == {"notify_marketing": True, "notify_product_updates": False}
+    assert follow_up.json() == {
+        "notify_marketing": True, "notify_product_updates": False, "notify_sound": True,
+    }
 
 
 @pytest.mark.asyncio
@@ -308,7 +314,11 @@ async def test_notification_preferences_patch_is_idempotent(member_client):
 
     assert first.status_code == 200, first.text
     assert second.status_code == 200, second.text
-    assert first.json() == second.json() == payload
+    # notify_sound isn't in payload, so it defaults to True on the response model
+    # both times — the idempotency claim is about repeating the same PATCH, not
+    # about the fields the payload never mentioned.
+    expected = {**payload, "notify_sound": True}
+    assert first.json() == second.json() == expected
 
 
 @pytest.mark.asyncio

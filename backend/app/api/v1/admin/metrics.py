@@ -25,6 +25,7 @@ from app.db.models import (
     ContactMessage,
     Lead,
     DownloadEvent,
+    FilterEvent,
 )
 from app.db.session import get_session
 
@@ -81,6 +82,10 @@ class MetricsOut(BaseModel):
     recommendation_clicks: dict  # {"question": n, "catalogue": n, "total": n}
     # The routed products readers actually follow, most-followed first.
     recommendation_rankings: list  # [{productSlug, clicks}]
+    # Search analytics — most searched questions, zero results, most clicked tags
+    most_searched_questions: list  # [{query, count}]
+    zero_result_questions: list  # [{query, count}]
+    most_clicked_tags: dict  # {"domain": n, "effort": n, "duration": n, "cost": n, "roi_horizon": n, "regulator_pressure": n, "tier": n, "leadership_traits": n}
 
 
 class RevenueSeriesPoint(BaseModel):
@@ -438,6 +443,61 @@ async def _get_recommendation_rankings(session: AsyncSession, limit: int = 10) -
     return [{"productSlug": slug, "clicks": clicks} for slug, clicks in result.all()]
 
 
+async def _get_most_searched_questions(session: AsyncSession, limit: int = 10) -> list:
+    """Most searched questions — aggregates query_text from FilterEvent."""
+    result = await session.execute(
+        select(FilterEvent.query_text, func.count(FilterEvent.id).label("count"))
+        .where(FilterEvent.query_text.isnot(None))
+        .where(FilterEvent.query_text != "")
+        .group_by(FilterEvent.query_text)
+        .order_by(func.count(FilterEvent.id).desc())
+        .limit(limit)
+    )
+    return [{"query": query, "count": count} for query, count in result.all()]
+
+
+async def _get_zero_result_questions(session: AsyncSession, limit: int = 10) -> list:
+    """Questions with zero results — FilterEvent where result_count = 0."""
+    result = await session.execute(
+        select(FilterEvent.query_text, func.count(FilterEvent.id).label("count"))
+        .where(FilterEvent.query_text.isnot(None))
+        .where(FilterEvent.query_text != "")
+        .where(FilterEvent.result_count == 0)
+        .group_by(FilterEvent.query_text)
+        .order_by(func.count(FilterEvent.id).desc())
+        .limit(limit)
+    )
+    return [{"query": query, "count": count} for query, count in result.all()]
+
+
+async def _get_most_clicked_tags(session: AsyncSession) -> dict:
+    """Most clicked tags — counts how often each filter dimension was used."""
+    # Count how often each dimension has a non-null value
+    result = await session.execute(
+        select(
+            func.count(func.nullif(FilterEvent.domain, None)).label("domain"),
+            func.count(func.nullif(FilterEvent.effort, None)).label("effort"),
+            func.count(func.nullif(FilterEvent.duration, None)).label("duration"),
+            func.count(func.nullif(FilterEvent.cost, None)).label("cost"),
+            func.count(func.nullif(FilterEvent.roi_horizon, None)).label("roi_horizon"),
+            func.count(func.nullif(FilterEvent.regulator_pressure, None)).label("regulator_pressure"),
+            func.count(func.nullif(FilterEvent.tier, None)).label("tier"),
+            func.count(func.nullif(FilterEvent.leadership_traits, None)).label("leadership_traits"),
+        )
+    )
+    row = result.one()
+    return {
+        "domain": row.domain or 0,
+        "effort": row.effort or 0,
+        "duration": row.duration or 0,
+        "cost": row.cost or 0,
+        "roi_horizon": row.roi_horizon or 0,
+        "regulator_pressure": row.regulator_pressure or 0,
+        "tier": row.tier or 0,
+        "leadership_traits": row.leadership_traits or 0,
+    }
+
+
 async def _get_revenue_series(
     session: AsyncSession,
     period: str = "daily",
@@ -510,6 +570,9 @@ async def get_metrics(
     course_enrollment_rankings = await _get_course_enrollment_rankings(session)
     recommendation_clicks = await _get_recommendation_clicks(session)
     recommendation_rankings = await _get_recommendation_rankings(session)
+    most_searched_questions = await _get_most_searched_questions(session)
+    zero_result_questions = await _get_zero_result_questions(session)
+    most_clicked_tags = await _get_most_clicked_tags(session)
 
     metrics = [
         second_purchase,
@@ -558,6 +621,9 @@ async def get_metrics(
         "courseEnrollmentRankings": course_enrollment_rankings,
         "recommendationClicks": recommendation_clicks,
         "recommendationRankings": recommendation_rankings,
+        "mostSearchedQuestions": most_searched_questions,
+        "zeroResultQuestions": zero_result_questions,
+        "mostClickedTags": most_clicked_tags,
     }
 
 

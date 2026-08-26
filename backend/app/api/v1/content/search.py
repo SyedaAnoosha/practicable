@@ -9,15 +9,21 @@ returned — asserted by a test that creates one of each.
 Four bounded queries, one per entity type, regardless of result count.
 websearch_to_tsquery is used instead of plainto_tsquery because it accepts
 quoted phrases and never raises on malformed input.
+
+When all four queries return zero results, a lightweight fallback runs:
+- Keyword substring match on questions (title + preview)
+- A list of available domains so the user can browse instead
+This fallback does not count against the four-query budget because it
+only executes when the main search already produced nothing.
 """
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import literal_column, select, func, text
+from sqlalchemy import literal_column, select, func, text, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Course, Template, Question, Product
+from app.db.models import Course, Template, Question, Product, Domain
 from app.db.session import get_session
 
 router = APIRouter()
@@ -42,9 +48,40 @@ class SearchGroup(BaseModel):
     items: list[SearchResult]
 
 
+class FallbackQuestion(BaseModel):
+    """A close-match question returned when the main search yields nothing.
+
+    Lighter than QuestionSummaryOut — no tags, no domain slug — because the
+    fallback is a hint, not a catalogue result.  The frontend links straight
+    to the question detail page.
+    """
+    id: str
+    slug: str
+    title: str
+    preview: str
+    domain: str
+
+
+class SuggestedDomain(BaseModel):
+    """A domain the user can browse when their search matched nothing."""
+    name: str
+    slug: str
+
+
+class SearchFallback(BaseModel):
+    """Carried on SearchResponse only when the main search returned zero results.
+
+    Contains the closest keyword matches and a list of domains to steer the
+    user toward structured browsing instead of a dead end.
+    """
+    closest_questions: list[FallbackQuestion]
+    suggested_domains: list[SuggestedDomain]
+
+
 class SearchResponse(BaseModel):
     query: str
     groups: list[SearchGroup]
+    fallback: SearchFallback | None = None
 
 
 # Column name used by migration 028 on every searchable table.
@@ -174,4 +211,68 @@ async def search(
         SearchGroup(type="pack", total=packs_total, items=packs_results),
     ]
 
-    return SearchResponse(query=q, groups=groups)
+    total = courses_total + templates_total + questions_total + packs_total
+    fallback: SearchFallback | None = None
+    if total == 0:
+        fallback = await _build_fallback(session, query)
+
+    return SearchResponse(query=q, groups=groups, fallback=fallback)
+
+
+FALLBACK_QUESTION_LIMIT = 5
+FALLBACK_DOMAIN_LIMIT = 6
+
+
+async def _build_fallback(
+    session: AsyncSession,
+    query: str,
+) -> SearchFallback:
+    """Build the zero-result recovery payload.
+
+    Two lightweight queries — one for closest questions via keyword substring
+    match, one for the domain list.  Neither touches the search_vector column
+    or the GIN indexes; they use plain ILIKE / no filter respectively.
+    """
+    # Split the query into individual words so each word gets an ILIKE hit.
+    # "AI governance" becomes two conditions: title ILIKE '%ai%' OR title ILIKE
+    # '%governance%'.  This surfaces questions that share *any* word with the
+    # query, not all of them — a broad net is better than a tight miss.
+    words = [w for w in query.split() if w]
+    word_filters = []
+    for word in words:
+        pattern = f"%{word}%"
+        word_filters.append(Question.title.ilike(pattern))
+        word_filters.append(Question.preview.ilike(pattern))
+
+    closest_questions: list[FallbackQuestion] = []
+    if word_filters:
+        rows = (
+            await session.execute(
+                select(Question.id, Question.slug, Question.title, Question.preview, Domain.name)
+                .join(Domain, Question.domain_id == Domain.id)
+                .where(Question.published.is_(True), or_(*word_filters))
+                .order_by(Question.title)
+                .limit(FALLBACK_QUESTION_LIMIT)
+            )
+        ).all()
+        closest_questions = [
+            FallbackQuestion(
+                id=str(r.id), slug=r.slug, title=r.title,
+                preview=r.preview, domain=r.name,
+            )
+            for r in rows
+        ]
+
+    domain_rows = (
+        await session.execute(
+            select(Domain.name, Domain.slug)
+            .order_by(Domain.name)
+            .limit(FALLBACK_DOMAIN_LIMIT)
+        )
+    ).all()
+    suggested_domains = [SuggestedDomain(name=r.name, slug=r.slug) for r in domain_rows]
+
+    return SearchFallback(
+        closest_questions=closest_questions,
+        suggested_domains=suggested_domains,
+    )

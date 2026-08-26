@@ -468,3 +468,30 @@ async def send_certificate_issued_email(
         text=text,
         context=f"certificate issued for {course_title}",
     )
+
+
+# ── Notification email (#6: Template version updates) ────────────────────────
+
+
+async def send_notification_email(
+    *,
+    to_email: str,
+    subject: str,
+    message: str,
+    action_url: str | None = None,
+) -> bool:
+    """To a user: a notification about content updates or other events.
+    Generic notification sender for the notification system (#6)."""
+    html, text = _render(
+        "notification",
+        subject=subject,
+        message=message,
+        action_url=action_url,
+    )
+    return await _send(
+        to_email=to_email,
+        subject=subject,
+        html=html,
+        text=text,
+        context=f"notification email to {to_email}",
+    )

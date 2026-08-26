@@ -1,7 +1,8 @@
 """Admin CRUD for templates, including the downloadable file upload."""
 import asyncio
+import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -14,9 +15,16 @@ from app.core.publish_guard import check_has_macros, check_preview_images
 from app.db.models import Author, Section, Template, User, Product, ProductContent
 from app.db.session import get_session
 from app.integrations.storage_client import delete_file, generate_presigned_upload_url, head_object, upload_file
+from app.services.freshness_service import compute_freshness
+from app.services.notification_service import (
+    create_template_version_notification,
+    deliver_pending_notification_emails,
+)
 from app.services.template_evidence import format_line, resolve_previews
 
 from .common import PublishStateIn, apply_publish_state_or_422, ensure_unique_slug, get_or_404, record_audit, slugify
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -102,6 +110,13 @@ class TemplateOut(BaseModel):
     # compute the ±50%/zero delta — it cannot be inferred client-side without this.
     price_amount: Optional[int] = None
     currency: Optional[str] = None
+    # ── #16: content freshness ────────────────────────────────────────────────────
+    # Two fields, not one: `freshness_status` is what the UI switches on, and it keeps
+    # `unknown` (never reviewed) distinct from `stale` (reviewed, but too long ago) —
+    # different facts the admin acts on differently. `freshness_warning` is the sentence
+    # to show, and is None when there is nothing to warn about.
+    freshness_status: Literal["fresh", "stale", "unknown"] = "unknown"
+    freshness_warning: Optional[str] = None
 
 
 async def _standalone_template_product(session: AsyncSession, template_id: uuid.UUID) -> Optional[Product]:
@@ -160,6 +175,13 @@ async def _to_out(t: Template, session: AsyncSession) -> TemplateOut:
     product = await _standalone_template_product(session, t.id)
     readiness_result = compute_readiness(product)
 
+    # #16: freshness, computed server-side so the admin screen renders a verdict rather
+    # than re-deriving date arithmetic in TypeScript (same precedent as promotions.py's
+    # `status`). Three states — `unknown` is reported for a never-reviewed template
+    # whether or not it is published, because "we have no idea how current this is" is
+    # true of a draft too, and the admin list is where that gets noticed before publish.
+    freshness = compute_freshness(t.last_reviewed_at)
+
     return TemplateOut(
         id=str(t.id), slug=t.slug, title=t.title, description=t.description,
         file_name=t.file_name, file_size_bytes=t.file_size_bytes,
@@ -176,6 +198,8 @@ async def _to_out(t: Template, session: AsyncSession) -> TemplateOut:
         product_id=str(product.id) if product else None,
         price_amount=product.price_amount if product else None,
         currency=product.currency if product else None,
+        freshness_status=freshness.status,
+        freshness_warning=freshness.message,
     )
 
 
@@ -244,6 +268,11 @@ async def update_template(
     admin: User = Depends(require_admin),
 ):
     template = await get_or_404(session, Template, template_id, "Template")
+
+    # #6: Track version change for notifications
+    old_version = template.version
+    new_version = payload.version
+
     template.title = payload.title
     template.description = payload.description
     template.is_free = payload.is_free
@@ -264,6 +293,84 @@ async def update_template(
     await record_audit(
         session, actor=admin, action="update_template", target_type="template",
         target_id=template.id, context={"title": template.title, "is_free": template.is_free},
+    )
+
+    # ── #6: notify owners when the version actually moves ──────────────────────
+    # `new_version and new_version != old_version` is the whole trigger, and both
+    # halves matter. A PUT that leaves `version` alone (None) must not notify, and
+    # neither must one that re-saves the same string — the editor sends every field on
+    # every save, so an unguarded check would email every owner each time an admin
+    # fixed a typo in the description.
+    #
+    # The rows are written INSIDE this transaction, before the commit below, so they
+    # roll back with the version change if anything here fails. The emails go out
+    # after, since a sent email cannot be rolled back.
+    version_changed = bool(new_version) and new_version != old_version
+    notifications_created = 0
+    if version_changed:
+        notifications_created = await create_template_version_notification(
+            session=session,
+            template_id=template.id,
+            old_version=old_version,
+            new_version=new_version,
+        )
+        if notifications_created:
+            await record_audit(
+                session, actor=admin, action="template_version_notification",
+                target_type="template", target_id=template.id,
+                context={
+                    "old_version": old_version,
+                    "new_version": new_version,
+                    "notifications_created": notifications_created,
+                },
+            )
+
+    await session.commit()
+
+    if notifications_created:
+        # Never allowed to fail the update: the version change is already durable and
+        # the admin's save must not report an error because Mailjet was unreachable.
+        # `deliver_pending_notification_emails` already swallows per-recipient failures;
+        # this guard covers the transport being wholly unavailable.
+        try:
+            await deliver_pending_notification_emails(session=session, template_id=template.id)
+        except Exception:  # noqa: BLE001 — see above; the in-app rows still stand
+            logger.exception(
+                "Version-update emails failed for template %s. The notifications "
+                "themselves are committed and remain visible in-app.",
+                template.id,
+            )
+
+    return await _to_out(template, session)
+
+
+@router.post("/admin/templates/{template_id}/mark-reviewed", response_model=TemplateOut)
+async def mark_template_reviewed(
+    template_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    admin: User = Depends(require_admin),
+):
+    """Stamp `last_reviewed_at = now` — the one-click answer to a freshness warning.
+
+    Separate from the general PUT for the same reason `deactivate_promotion` is separate
+    from its PATCH: it is the action taken in response to a warning, and it must not be
+    able to accidentally rewrite the title or the price on the way through. It also does
+    not touch `version`, so confirming a document is still current cannot fire the
+    owner-notification path — re-reading a template and finding it fine is not a new
+    version, and telling every owner otherwise would train them to ignore the notice.
+    """
+    template = await get_or_404(session, Template, template_id, "Template")
+
+    previous = template.last_reviewed_at
+    template.last_reviewed_at = datetime.now(timezone.utc)
+    await record_audit(
+        session, actor=admin, action="mark_template_reviewed", target_type="template",
+        target_id=template.id,
+        context={
+            "title": template.title,
+            "previous_reviewed_at": previous.isoformat() if previous else None,
+            "reviewed_at": template.last_reviewed_at.isoformat(),
+        },
     )
     await session.commit()
     return await _to_out(template, session)

@@ -30,6 +30,10 @@ from app.db.models.review import Review, ReviewState
 from app.db.models.user_note import UserNote
 from app.db.models.bookmark import Bookmark
 from app.db.models.setting import Setting
+from app.db.models.notification import Notification
+from app.db.models.assessment import (
+    Assessment, AssessmentAttempt, AssessmentOption, AssessmentQuestion, AssessmentQuestionType,
+)
 
 __all__ = [
     "Base",
@@ -63,4 +67,7 @@ __all__ = [
     "UserNote",
     "Bookmark",
     "Setting",
+    "Notification",
+    "Assessment", "AssessmentQuestion", "AssessmentQuestionType",
+    "AssessmentOption", "AssessmentAttempt",
 ]
