@@ -1,4 +1,4 @@
-import { type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -33,6 +33,8 @@ import { CourseArt } from '@/components/ui/CourseArt'
 import { ShowMore } from '@/components/ui/ShowMore'
 import { TestimonialSection } from '@/components/ui/Testimonial'
 import { BookmarkButton } from '@/components/ui/BookmarkButton'
+import { useCertificates } from '@/hooks/useCertificates'
+import { downloadCertificate } from '@/lib/utils/downloadCertificate'
 import { useFeaturedReviews } from '@/hooks/useFeaturedReviews'
 import { ReviewForm } from '@/components/ui/ReviewForm'
 
@@ -166,6 +168,8 @@ function moduleDuration(module: ModuleOut): string | null {
 // for figures.
 export function CourseDetail() {
   const { slug } = useParams<{ slug: string }>()
+  const [certificateBusy, setCertificateBusy] = useState(false)
+  const [certificateError, setCertificateError] = useState(false)
 
   const {
     data: course,
@@ -177,6 +181,26 @@ export function CourseDetail() {
     queryFn: () => api.get<CourseDetailData>(`/courses/${slug}`).then((res) => res.data),
     enabled: !!slug,
   })
+
+  // `/courses/{slug}` exposes the verification code but not the certificate id, and the
+  // download endpoint is keyed by id — so match this course's code against the learner's
+  // own certificate list. Only fetched once the course is actually completed, so a
+  // visitor browsing the catalogue never triggers it.
+  const { data: certificates } = useCertificates()
+
+  const handleDownloadCertificate = async () => {
+    const code = course?.certificate_verification_code
+    const cert = certificates?.find((c) => c.verification_code === code)
+    if (!cert) {
+      setCertificateError(true)
+      return
+    }
+    setCertificateBusy(true)
+    setCertificateError(false)
+    const ok = await downloadCertificate(cert.id)
+    setCertificateBusy(false)
+    if (!ok) setCertificateError(true)
+  }
 
   if (isLoading) {
     return (
@@ -416,25 +440,50 @@ export function CourseDetail() {
                   of the "Continue the course" CTA. A completed course with no certificate
                   is an edge case (certificate generation failed) — show Continue so the
                   learner can re-trigger completion. */}
+              {/* `[FIXED 2026-08-25]` "View certificate" used to link to
+                  `/verify/:code` — the PUBLIC verification page, which shows a stranger
+                  checking someone's credential a name/course/date record and no
+                  certificate at all. A learner clicking it on their own completed course
+                  expects their certificate. It now downloads the PDF, the same action
+                  the dashboard's certificate card performs, and the verification page
+                  is offered separately and named for what it actually is. */}
               {course.owned && course.completed && course.certificate_verification_code && (
-                <div className="mt-6 flex items-center gap-3">
+                <div className="mt-6 flex flex-wrap items-center gap-3">
                   <span className="inline-flex items-center gap-2 rounded-full bg-success/15 px-3 py-1.5 text-sm font-medium text-success ring-1 ring-inset ring-success/25">
                     <CircleCheck className="size-4" aria-hidden="true" />
                     Completed
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadCertificate()}
+                    disabled={certificateBusy}
+                    className="text-sm font-medium text-stage-foreground underline decoration-stage-foreground/30 underline-offset-2 transition-colors hover:decoration-stage-foreground/70 disabled:opacity-60"
+                  >
+                    {certificateBusy ? 'Preparing…' : 'Download certificate'}
+                  </button>
                   <Link
                     to={`/verify/${course.certificate_verification_code}`}
-                    className="text-sm font-medium text-stage-foreground underline decoration-stage-foreground/30 underline-offset-2 transition-colors hover:decoration-stage-foreground/70"
+                    className="text-sm text-stage-foreground/70 underline decoration-stage-foreground/20 underline-offset-2 transition-colors hover:text-stage-foreground"
                   >
-                    View certificate
+                    Verification page
                   </Link>
                 </div>
+              )}
+              {certificateError && (
+                <p role="alert" className="mt-2 text-sm text-stage-foreground/80">
+                  Couldn't prepare the certificate just now. Try again in a moment, or
+                  download it from your dashboard.
+                </p>
               )}
               {course.owned && startHref && !course.completed && (
                 <Link to={startHref} className="mt-6 inline-flex">
                   <Button size="lg">Continue the course</Button>
                 </Link>
               )}
+              {/* No course-level "Take Assessment" button here: since migration 038,
+                  assessments are per-module, not per-course, so there is no single
+                  target this page could link to. Each module's assessment is linked
+                  from its own row in Learn.tsx, which knows the specific module id. */}
 
               {/* W4-R20 / ledger row 92 — the fourth state. Without this a refunded
                   buyer saw an ordinary buy page and was never told what happened.
