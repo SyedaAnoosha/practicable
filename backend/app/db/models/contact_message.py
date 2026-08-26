@@ -1,5 +1,6 @@
-from sqlalchemy import String, Text
+from sqlalchemy import String, Text, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
+import uuid
 
 from app.db.base import Base, IdMixin, TimestampMixin
 
@@ -33,3 +34,12 @@ class ContactMessage(Base, IdMixin, TimestampMixin):
     # Whether the owner alert went out. Lets an unattended message be found later —
     # without it, a send failure is only ever a line in a log that has since rotated.
     notified: Mapped[bool] = mapped_column(nullable=False, default=False)
+
+    # #12: User-submitted questions ("Ask Practicable") fields
+    # For "ask_practicable" enquiry_type, store related question/domain for grouping
+    related_question_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("questions.id"), nullable=True)
+    related_domain_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("domains.id"), nullable=True)
+    # Store keywords for similarity matching and grouping
+    keywords: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Count of similar questions (for dedup/priority)
+    similar_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -17,6 +17,7 @@ import {
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { useCertificates } from '@/hooks/useCertificates'
+import { downloadCertificate } from '@/lib/utils/downloadCertificate'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -125,31 +126,9 @@ interface LibraryData {
 //
 // Restructured to: resume first (the verb), then a compact stat row, then a two-column
 // grid for discovery. Same content, roughly 40% of the previous height.
-/**
- * Fetch the certificate's short-lived presigned URL, then open it.
- *
- * Two reasons this is not a plain `<a href download>`:
- *
- *  - `GET /me/certificates/{id}/download` returns JSON (`{download_url}`), not the
- *    file. It renders the PDF on first call and presigns it; the browser must follow
- *    the presigned URL it hands back, not the endpoint itself.
- *  - The endpoint is authenticated. An `<a>` sends no Authorization header, so the
- *    request would 401 — and the previous markup pointed at `/api/v1/…`, which is not
- *    even where the API lives (`VITE_API_BASE_URL` is the origin, with no `/api/v1`
- *    prefix), so it resolved against the SPA origin and returned the index page.
- */
-async function downloadCertificate(certificateId: string) {
-  try {
-    const { data } = await api.get<{ download_url: string }>(
-      `/me/certificates/${certificateId}/download`,
-    )
-    // `noopener` because this is a third-party storage origin.
-    window.open(data.download_url, '_blank', 'noopener,noreferrer')
-  } catch {
-    // Deliberately quiet: a failed download must not throw inside the dashboard. The
-    // learner still has the certificate, and the next click retries the render.
-  }
-}
+// `downloadCertificate` now lives in `@/lib/utils/downloadCertificate` — CourseDetail
+// needs the same behaviour for its completed-course certificate link, and two copies
+// of a presigned-URL flow would be two places to fix when the endpoint changes.
 
 function CertificatesSection() {
   // Via the shared hook rather than an inline useQuery. Both existed, with *different*

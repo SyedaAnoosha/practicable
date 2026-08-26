@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { MotionConfig } from 'motion/react'
 import { queryClient } from '@/lib/query/queryClient'
+import { ToastProvider } from '@/stores/useToastStore'
+import { Toaster } from '@/components/ui/Toast'
 // index.css/App.css were the unmodified create-vite starter boilerplate (its own
 // --text-h colour system, a raw unlayered `h1 { color: var(--text-h) }` rule that
 // silently beat every Tailwind text-foreground utility in the app — Tailwind v4's
@@ -16,9 +18,12 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* Respects prefers-reduced-motion tree-wide (DESIGN.md §45) */}
     <MotionConfig reducedMotion="user">
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
+      <ToastProvider>
+        <QueryClientProvider client={queryClient}>
+          <App />
+          <Toaster />
+        </QueryClientProvider>
+      </ToastProvider>
     </MotionConfig>
   </StrictMode>,
 )

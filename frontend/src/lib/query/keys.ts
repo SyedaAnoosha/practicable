@@ -66,5 +66,7 @@ export const queryKeys = {
     promotions: () => ['admin', 'promotions'] as const,
     settings: () => ['admin', 'settings'] as const,
     media: () => ['admin', 'media'] as const,
+    assessments: () => ['admin', 'assessments'] as const,
+    assessment: (id: string) => ['admin', 'assessment', id] as const,
   },
 } as const

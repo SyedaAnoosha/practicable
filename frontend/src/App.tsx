@@ -13,6 +13,7 @@ import { Home } from '@/pages/Home'
 import { VerifyCertificate } from '@/pages/VerifyCertificate'
 import { SearchPage } from '@/pages/SearchPage'
 import { About } from '@/pages/About'
+import { SystemExplainer } from '@/pages/SystemExplainer'
 import { Contact } from '@/pages/Contact'
 import { NotFound } from '@/pages/NotFound'
 import { RouteError } from '@/pages/RouteError'
@@ -50,6 +51,9 @@ const ProductBuy = lazy(() => import('@/pages/ProductBuy').then((m) => ({ defaul
 const CheckoutSuccess = lazy(() => import('@/pages/CheckoutSuccess').then((m) => ({ default: m.CheckoutSuccess })))
 const CheckoutCancel = lazy(() => import('@/pages/CheckoutCancel').then((m) => ({ default: m.CheckoutCancel })))
 import { Purchases } from '@/pages/Purchases' // eagerly loaded: also imported by AccountPurchases
+const AssessmentPage = lazy(() =>
+  import('@/pages/AssessmentPage').then((m) => ({ default: m.default })),
+)
 const Template = lazy(() => import('@/pages/Template').then((m) => ({ default: m.Template })))
 
 // Admin pages — the largest split. Never loaded for non-admin users.
@@ -67,6 +71,9 @@ const AdminSettings = lazy(() => import('@/pages/admin/AdminSettings').then((m) 
 const AdminPromotions = lazy(() => import('@/pages/admin/AdminPromotions').then((m) => ({ default: m.AdminPromotions })))
 const AdminPacks = lazy(() => import('@/pages/admin/AdminPacks').then((m) => ({ default: m.AdminPacks })))
 const AdminReviews = lazy(() => import('@/pages/admin/AdminReviews').then((m) => ({ default: m.AdminReviews })))
+const AdminAssessments = lazy(() =>
+  import('@/pages/admin/AdminAssessments').then((m) => ({ default: m.AdminAssessments })),
+)
 const LessonWriteScreen = lazy(() =>
   import('@/pages/admin/LessonWriteScreen').then((m) => ({ default: m.LessonBodyWriteScreen })),
 )
@@ -107,6 +114,7 @@ const router = createBrowserRouter([
           { path: '/search', element: <SearchPage /> },
           { path: '/verify/:code', element: <VerifyCertificate /> },
           { path: '/about', element: <About /> },
+          { path: '/system', element: <SystemExplainer /> },
           { path: '/contact', element: <Contact /> },
           // Draft legal pages, marketing chrome like Contact above: reachable from the
           // footer, no account needed to read them.
@@ -178,6 +186,7 @@ const router = createBrowserRouter([
           { path: '/checkout/success', element: <Suspense fallback={<RouteLoading />}><CheckoutSuccess /></Suspense> },
           { path: '/checkout/cancel', element: <Suspense fallback={<RouteLoading />}><CheckoutCancel /></Suspense> },
           { path: '/purchases', element: <Purchases /> },
+          { path: '/modules/:moduleId/assessment', element: <Suspense fallback={<RouteLoading />}><AssessmentPage /></Suspense> },
           // Phase 10: account shell with routed sub-pages (Decision #44)
           {
             path: '/account',
@@ -222,6 +231,7 @@ const router = createBrowserRouter([
           { path: '/admin/settings', element: <Suspense fallback={<RouteLoading />}><AdminSettings /></Suspense> },
           { path: '/admin/promotions', element: <Suspense fallback={<RouteLoading />}><AdminPromotions /></Suspense> },
           { path: '/admin/reviews', element: <Suspense fallback={<RouteLoading />}><AdminReviews /></Suspense> },
+          { path: '/admin/assessments', element: <Suspense fallback={<RouteLoading />}><AdminAssessments /></Suspense> },
         ],
       },
     ],
