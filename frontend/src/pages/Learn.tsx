@@ -5,6 +5,7 @@ import { isAxiosError } from 'axios'
 import {
   ArrowLeft,
   CircleCheck,
+  ClipboardList,
   Download,
   FileText,
   HelpCircle,
@@ -50,6 +51,8 @@ interface SidebarModule {
   sort_order: number
   lessons: SidebarLesson[]
   questions: SidebarQuestion[]
+  has_assessment?: boolean
+  assessment_title?: string | null
 }
 
 interface LessonNav {
@@ -501,9 +504,30 @@ function OutlineList({ lesson, onNavigate }: { lesson: LessonDetail; onNavigate?
                 </Link>
               </li>
             ))}
+            {/* `[FIXED 2026-08-25]` The comment here said "shown for each module that
+                has an assessment" but there was no condition — every module got the row,
+                and following it on a module without one lands on the assessment page's
+                `no_assessment` 404. `has_assessment` now comes from the course outline,
+                so the row appears only where there is something to take. */}
+            {module.has_assessment && (
+              <li>
+                <Link
+                  to={`/modules/${module.id}/assessment`}
+                  onClick={onNavigate}
+                  className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
+                >
+                  <span className="flex size-4 shrink-0 items-center justify-center">
+                    <ClipboardList className="size-4" aria-hidden="true" />
+                  </span>
+                  <span className="truncate">{module.assessment_title || 'Take assessment'}</span>
+                </Link>
+              </li>
+            )}
           </ul>
         </div>
       ))}
+
+
     </nav>
   )
 }

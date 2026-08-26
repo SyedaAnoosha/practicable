@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_user_id_optional
 from app.core.entitlements import ResourceType, resolve_granted_content_ids, resolve_product_ids
 from app.db.models import (
+    Assessment,
     Author,
     Certificate,
     Course,
@@ -93,6 +94,19 @@ class ModuleOut(BaseModel):
     sort_order: int
     lessons: list[LessonOutlineOut]
     questions: list[ModuleQuestionOut]
+    # `[ADDED 2026-08-25]` Whether this module has a *published* assessment.
+    #
+    # Without it the outline had no way to know, so Learn.tsx rendered a "Take
+    # Assessment" row on every module unconditionally — a link to
+    # `/modules/{id}/assessment`, which 404s (`no_assessment`) for every module that
+    # hasn't got one. That is most of them.
+    #
+    # Deliberately a boolean rather than the assessment itself: this is the public
+    # course outline, visible to people who don't own the course, and the paper (even
+    # without `is_correct`) is entitled content. The title is safe and useful — it is
+    # what the row is labelled with — so it ships alongside, but nothing more.
+    has_assessment: bool = False
+    assessment_title: Optional[str] = None
 
 
 class CourseDetailOut(BaseModel):
@@ -445,6 +459,23 @@ async def get_course(
             ModuleQuestionOut(id=str(q.id), slug=q.slug, title=q.title, sort_order=mq.sort_order)
         )
 
+    # Published assessments for every module, once — same batched shape as the module
+    # questions above, so adding the outline's assessment rows costs one query for the
+    # whole page rather than one per module.
+    assessment_by_module: dict = {}
+    if module_ids:
+        for row in (
+            (
+                await session.execute(
+                    select(Assessment.module_id, Assessment.title).where(
+                        Assessment.module_id.in_(module_ids),
+                        Assessment.published.is_(True),
+                    )
+                )
+            ).all()
+        ):
+            assessment_by_module[row[0]] = row[1]
+
     # Ledger row 92: distinguish "never owned" from "owned, then refunded". The gate
     # itself is untouched — `resolve_product_ids` already excludes revoked entitlements,
     # so this is purely about what the page is allowed to SAY, never about access.
@@ -488,6 +519,8 @@ async def get_course(
                 sort_order=module.sort_order,
                 lessons=lesson_outs,
                 questions=module_questions_by_module.get(module.id, []),
+                has_assessment=module.id in assessment_by_module,
+                assessment_title=assessment_by_module.get(module.id),
             )
         )
 
