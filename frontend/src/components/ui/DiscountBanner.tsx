@@ -113,6 +113,12 @@ export function DiscountBanner() {
           )}
         </button>{' '}
         at checkout
+        {/* Stripe refuses a first-order-only code on a returning buyer's second
+            order. Saying so on the banner is cheaper than the support email from
+            someone who copied the code and watched it be rejected. */}
+        {promotion.first_time_transaction && (
+          <span className="text-muted-foreground"> (first order only)</span>
+        )}
       </p>
       {/* The copy confirmation is a visual tick on the button; without a live region a
           screen-reader user gets no feedback that the click did anything. */}
