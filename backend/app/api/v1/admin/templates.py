@@ -305,9 +305,8 @@ async def update_template(
     # The rows are written INSIDE this transaction, before the commit below, so they
     # roll back with the version change if anything here fails. The emails go out
     # after, since a sent email cannot be rolled back.
-    version_changed = bool(new_version) and new_version != old_version
     notifications_created = 0
-    if version_changed:
+    if new_version and new_version != old_version:
         notifications_created = await create_template_version_notification(
             session=session,
             template_id=template.id,

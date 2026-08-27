@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { readError } from '@/lib/utils/readError'
 
 interface PromotionRow {
   id: string
@@ -336,12 +337,12 @@ export function AdminPromotions() {
           </div>
           {createMutation.isError && (
             <p className="mt-2 text-sm text-destructive">
-              {(createMutation.error as any)?.response?.data?.detail?.error?.message || 'Create failed'}
+              {readError(createMutation.error)}
             </p>
           )}
           {updateMutation.isError && (
             <p className="mt-2 text-sm text-destructive">
-              {(updateMutation.error as any)?.response?.data?.detail?.error?.message || 'Update failed'}
+              {readError(updateMutation.error)}
             </p>
           )}
         </div>

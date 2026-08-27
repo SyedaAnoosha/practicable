@@ -219,7 +219,7 @@ async def get_user_notifications(
     query = query.order_by(Notification.created_at.desc()).limit(limit)
 
     result = await session.execute(query)
-    return result.scalars().all()
+    return list(result.scalars().all())
 
 
 async def mark_notification_read(

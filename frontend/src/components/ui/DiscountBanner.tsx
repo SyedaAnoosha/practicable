@@ -25,24 +25,25 @@ export function DiscountBanner() {
     ? `practicable:discount-banner-dismissed:${promotion.code}`
     : 'practicable:discount-banner-dismissed'
 
-  const [dismissed, setDismissed] = useState(() => {
-    if (!promotion) return false
+  const readDismissed = (key: string) => {
     try {
-      return localStorage.getItem(dismissKey) === '1'
+      return localStorage.getItem(key) === '1'
     } catch {
       return false
     }
-  })
+  }
 
-  // Reset dismissed state when the promotion changes (e.g., a new code arrives).
-  useEffect(() => {
-    if (!promotion) return
-    try {
-      setDismissed(localStorage.getItem(dismissKey) === '1')
-    } catch {
-      setDismissed(false)
-    }
-  }, [dismissKey, promotion])
+  const [dismissed, setDismissed] = useState(() => (promotion ? readDismissed(dismissKey) : false))
+
+  // Re-derive dismissed state when the promotion changes (e.g., a new code arrives).
+  // Tracked against the key it was read for — same "derive during render" shape as
+  // CommandPalette's activeIndex, so a key change is reflected on the very render
+  // that introduces it rather than one render later via an effect.
+  const [dismissedFor, setDismissedFor] = useState(dismissKey)
+  if (promotion && dismissedFor !== dismissKey) {
+    setDismissedFor(dismissKey)
+    setDismissed(readDismissed(dismissKey))
+  }
 
   const [copied, setCopied] = useState(false)
 

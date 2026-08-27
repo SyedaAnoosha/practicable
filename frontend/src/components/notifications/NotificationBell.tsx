@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -98,7 +98,10 @@ export function NotificationBell({
   })
 
   const unread = data?.unread_count ?? 0
-  const notifications = data?.notifications ?? []
+  // Memoized so an effect keyed on `notifications` doesn't see a "new" array (and
+  // re-fire) on every render when `data` is undefined — the fallback `[]` would
+  // otherwise be a fresh reference each time.
+  const notifications = useMemo(() => data?.notifications ?? [], [data?.notifications])
 
   // Fetch notification preferences (sound toggle)
   const { data: prefs } = useQuery({

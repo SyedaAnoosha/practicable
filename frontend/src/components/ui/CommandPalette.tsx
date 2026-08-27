@@ -201,7 +201,7 @@ export function CommandPalette({
         onClose()
       }
     },
-    [flatResults, activeIndex, handleSelect, onClose, setActiveIndex],
+    [flatResults, activeIndex, handleSelect, onClose, setActiveIndex, navigate, query],
   )
 
   if (!open) return null

@@ -60,10 +60,12 @@ function formatCurrency(cents: number, currency: string): string {
  *  Falls back to pydantic's array-shaped 422 body before the generic message, so a
  *  validation failure (a malformed email) says what was wrong instead of "try again". */
 function readError(err: unknown, fallback: string): string {
-  const detail = (err as any)?.response?.data?.detail
+  const detail = (
+    err as { response?: { data?: { detail?: unknown } } }
+  )?.response?.data?.detail
   if (typeof detail === 'string') return detail
   if (Array.isArray(detail)) return detail[0]?.msg ?? fallback
-  return detail?.error?.message ?? fallback
+  return (detail as { error?: { message?: string } } | undefined)?.error?.message ?? fallback
 }
 
 // ── Role change dialog ─────────────────────────────────────────────────────────

@@ -52,7 +52,7 @@ class MetricOut(BaseModel):
     the tile (non-negotiable #15: unknown is null, zero is 0, and the two are
     different).
     """
-    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True, by_alias=True)
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
     name: str
     numerator: Optional[int]
@@ -62,7 +62,7 @@ class MetricOut(BaseModel):
 
 class MetricsOut(BaseModel):
     """All metrics for the admin dashboard."""
-    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True, by_alias=True)
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
     metrics: list[MetricOut]
     generated_at: datetime
@@ -90,7 +90,7 @@ class MetricsOut(BaseModel):
 
 class RevenueSeriesPoint(BaseModel):
     """A single point in the revenue time series."""
-    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True, by_alias=True)
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
     date: str  # ISO date string
     revenue_cents: int
@@ -100,7 +100,7 @@ class RevenueSeriesPoint(BaseModel):
 
 class RevenueSeriesOut(BaseModel):
     """Revenue time series response."""
-    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True, by_alias=True)
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
     period: str  # "daily", "weekly", "monthly"
     data: list[RevenueSeriesPoint]

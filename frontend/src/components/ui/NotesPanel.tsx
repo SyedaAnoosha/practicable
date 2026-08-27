@@ -25,13 +25,17 @@ export function NotesPanel({ lessonId, className }: NotesPanelProps) {
   const [body, setBody] = useState(existingNote?.body ?? '')
   const bodyRef = useRef(body)
 
-  // Sync local state when notes load
-  useEffect(() => {
-    if (existingNote) {
-      setBody(existingNote.body)
-      bodyRef.current = existingNote.body
-    }
-  }, [existingNote?.body])
+  // Sync local state when the note loads (or its saved body changes), derived during
+  // render rather than in an effect — tracking the body we last synced from avoids
+  // clobbering in-progress edits on every re-render while still picking up a genuinely
+  // new/changed note in the same render that introduces it. The ref itself is not
+  // touched here (refs can't be written during render) — the effect below picks up
+  // the `body` change and syncs `bodyRef` from it.
+  const [syncedBody, setSyncedBody] = useState(existingNote?.body)
+  if (existingNote && existingNote.body !== syncedBody) {
+    setSyncedBody(existingNote.body)
+    setBody(existingNote.body)
+  }
 
   // Keep ref in sync with state
   useEffect(() => {

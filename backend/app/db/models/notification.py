@@ -3,6 +3,8 @@
 Stores notifications for users who own templates when a new version is available.
 Includes the notification type, target entity, and delivery status.
 """
+from datetime import datetime
+
 from sqlalchemy import String, Text, ForeignKey, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -34,7 +36,7 @@ class Notification(Base, IdMixin, TimestampMixin):
 
     # Whether the notification was delivered via email
     email_delivered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    email_delivered_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    email_delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Optional: link to the relevant page
     action_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
