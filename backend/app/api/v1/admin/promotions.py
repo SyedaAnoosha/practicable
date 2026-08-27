@@ -42,6 +42,9 @@ class PromotionOut(BaseModel):
     starts_at: datetime
     ends_at: datetime | None
     active: bool
+    first_time_transaction: bool
+    minimum_amount: int | None
+    max_redemptions: int | None
     stripe_coupon_id: str | None = None
     stripe_promotion_code_id: str | None = None
     created_by: str | None = None
@@ -60,6 +63,9 @@ class PromotionCreateIn(BaseModel):
     starts_at: datetime
     ends_at: datetime | None = None
     active: bool = True
+    first_time_transaction: bool = False
+    minimum_amount: int | None = None
+    max_redemptions: int | None = None
     sync_to_stripe: bool = False
 
 
@@ -70,6 +76,9 @@ class PromotionUpdateIn(BaseModel):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     active: bool | None = None
+    first_time_transaction: bool | None = None
+    minimum_amount: int | None = None
+    max_redemptions: int | None = None
     sync_to_stripe: bool = False
 
 
@@ -104,6 +113,9 @@ def _promotion_to_out(promo: Promotion) -> dict:
         "starts_at": promo.starts_at,
         "ends_at": promo.ends_at,
         "active": promo.active,
+        "first_time_transaction": promo.first_time_transaction,
+        "minimum_amount": promo.minimum_amount,
+        "max_redemptions": promo.max_redemptions,
         "stripe_coupon_id": promo.stripe_coupon_id,
         "stripe_promotion_code_id": promo.stripe_promotion_code_id,
         "created_by": promo.created_by,
@@ -184,6 +196,9 @@ async def create_promotion(
                 code=payload.code,
                 percent_off=payload.percent_off,
                 expires_at=payload.ends_at,
+                first_time_transaction=payload.first_time_transaction,
+                minimum_amount=payload.minimum_amount,
+                max_redemptions=payload.max_redemptions,
             )
             stripe_coupon_id = coupon_id
             stripe_promotion_code_id = promo_code_id
@@ -210,6 +225,9 @@ async def create_promotion(
         starts_at=payload.starts_at,
         ends_at=payload.ends_at,
         active=payload.active,
+        first_time_transaction=payload.first_time_transaction,
+        minimum_amount=payload.minimum_amount,
+        max_redemptions=payload.max_redemptions,
         stripe_coupon_id=stripe_coupon_id,
         stripe_promotion_code_id=stripe_promotion_code_id,
         created_by=admin.email,
@@ -263,6 +281,12 @@ async def update_promotion(
         promo.ends_at = payload.ends_at
     if payload.active is not None:
         promo.active = payload.active
+    if payload.first_time_transaction is not None:
+        promo.first_time_transaction = payload.first_time_transaction
+    if payload.minimum_amount is not None:
+        promo.minimum_amount = payload.minimum_amount
+    if payload.max_redemptions is not None:
+        promo.max_redemptions = payload.max_redemptions
     await session.flush()
     await session.refresh(promo)
 
@@ -317,3 +341,45 @@ async def deactivate_promotion(
     await session.commit()
 
     return _promotion_to_out(promo)
+
+
+@router.delete("/admin/promotions/{promotion_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_promotion(
+    promotion_id: str,
+    admin: User = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Delete a promotion from the database and Stripe.
+    
+    If the promotion has Stripe IDs, it deactivates the PromotionCode and deletes
+    the Coupon in Stripe.
+    """
+    promo = (await session.execute(
+        select(Promotion).where(Promotion.id == uuid.UUID(promotion_id))
+    )).scalar_one_or_none()
+    
+    if not promo:
+        raise HTTPException(status_code=404, detail="Promotion not found")
+        
+    if promo.stripe_coupon_id and promo.stripe_promotion_code_id:
+        try:
+            stripe_client.delete_promotion_in_stripe(
+                promotion_code_id=promo.stripe_promotion_code_id,
+                coupon_id=promo.stripe_coupon_id,
+            )
+        except stripe.StripeError:
+            # We allow local deletion even if Stripe fails (e.g. already deleted)
+            pass
+
+    await session.delete(promo)
+    
+    await record_audit(
+        session,
+        actor=admin,
+        action="delete_promotion",
+        target_type="promotion",
+        target_id=promo.id,
+        context={"code": promo.code},
+    )
+    
+    await session.commit()

@@ -27,6 +27,9 @@ class PromotionOut(BaseModel):
     message: str
     percent_off: int
     ends_at: datetime | None
+    first_time_transaction: bool
+    minimum_amount: int | None
+    max_redemptions: int | None
 
     model_config = {"from_attributes": True}
 

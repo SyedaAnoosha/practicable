@@ -37,6 +37,9 @@ class Promotion(Base, IdMixin, TimestampMixin):
     stripe_promotion_code_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True,
     )
+    first_time_transaction: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false", default=False)
+    minimum_amount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_redemptions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     __table_args__ = (

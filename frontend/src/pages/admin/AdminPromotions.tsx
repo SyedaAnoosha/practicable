@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Megaphone, Plus, Pencil, PowerOff, Power } from 'lucide-react'
+import { Loader2, Megaphone, Plus, Pencil, PowerOff, Power, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { Button } from '@/components/ui/Button'
@@ -16,6 +16,9 @@ interface PromotionRow {
   starts_at: string
   ends_at: string | null
   active: boolean
+  first_time_transaction: boolean
+  minimum_amount: number | null
+  max_redemptions: number | null
   stripe_coupon_id: string | null
   stripe_promotion_code_id: string | null
   created_by: string | null
@@ -31,6 +34,9 @@ interface PromotionForm {
   starts_at: string
   ends_at: string
   active: boolean
+  first_time_transaction: boolean
+  minimum_amount: string
+  max_redemptions: string
   sync_to_stripe: boolean
 }
 
@@ -41,6 +47,9 @@ const EMPTY_FORM: PromotionForm = {
   starts_at: '',
   ends_at: '',
   active: true,
+  first_time_transaction: false,
+  minimum_amount: '',
+  max_redemptions: '',
   sync_to_stripe: false,
 }
 
@@ -77,6 +86,8 @@ export function AdminPromotions() {
       api.post('/admin/promotions', {
         ...payload,
         ends_at: payload.ends_at || null,
+        minimum_amount: payload.minimum_amount ? parseInt(payload.minimum_amount) * 100 : null,
+        max_redemptions: payload.max_redemptions ? parseInt(payload.max_redemptions) : null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.promotions() })
@@ -89,6 +100,8 @@ export function AdminPromotions() {
       api.patch(`/admin/promotions/${id}`, {
         ...payload,
         ends_at: payload.ends_at || null,
+        minimum_amount: payload.minimum_amount ? parseInt(payload.minimum_amount) * 100 : null,
+        max_redemptions: payload.max_redemptions ? parseInt(payload.max_redemptions) : null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.promotions() })
@@ -110,6 +123,13 @@ export function AdminPromotions() {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/admin/promotions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.promotions() })
+    },
+  })
+
   function resetForm() {
     setForm(EMPTY_FORM)
     setEditingId(null)
@@ -125,6 +145,9 @@ export function AdminPromotions() {
       starts_at: promo.starts_at.slice(0, 16),
       ends_at: promo.ends_at ? promo.ends_at.slice(0, 16) : '',
       active: promo.active,
+      first_time_transaction: promo.first_time_transaction,
+      minimum_amount: promo.minimum_amount ? String(promo.minimum_amount / 100) : '',
+      max_redemptions: promo.max_redemptions ? String(promo.max_redemptions) : '',
       sync_to_stripe: false,
     })
     setShowForm(true)
@@ -135,6 +158,12 @@ export function AdminPromotions() {
       updateMutation.mutate({ ...form, id: editingId })
     } else {
       createMutation.mutate(form)
+    }
+  }
+
+  function handleDelete(promo: PromotionRow) {
+    if (window.confirm("Are you sure you want to delete this promotion from both the system and Stripe?")) {
+      deleteMutation.mutate(promo.id)
     }
   }
 
@@ -239,6 +268,34 @@ export function AdminPromotions() {
                 className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
+            <div>
+              <label htmlFor="promo-min-amount" className="text-xs font-medium text-muted-foreground">
+                Minimum amount ($)
+              </label>
+              <input
+                id="promo-min-amount"
+                type="number"
+                min={1}
+                value={form.minimum_amount}
+                onChange={(e) => setForm({ ...form, minimum_amount: e.target.value })}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="e.g. 50"
+              />
+            </div>
+            <div>
+              <label htmlFor="promo-max-redemptions" className="text-xs font-medium text-muted-foreground">
+                Max redemptions
+              </label>
+              <input
+                id="promo-max-redemptions"
+                type="number"
+                min={1}
+                value={form.max_redemptions}
+                onChange={(e) => setForm({ ...form, max_redemptions: e.target.value })}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Leave blank for unlimited"
+              />
+            </div>
             <div className="flex items-center gap-4 sm:col-span-2">
               <label className="flex items-center gap-2 text-sm text-foreground">
                 <input
@@ -248,6 +305,15 @@ export function AdminPromotions() {
                   className="size-4 rounded border-border"
                 />
                 Active
+              </label>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={form.first_time_transaction}
+                  onChange={(e) => setForm({ ...form, first_time_transaction: e.target.checked })}
+                  className="size-4 rounded border-border"
+                />
+                First-time order only
               </label>
               <label className="flex items-center gap-2 text-sm text-foreground">
                 <input
@@ -300,9 +366,16 @@ export function AdminPromotions() {
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {promo.percent_off}% off — {promo.message}
+                  {promo.first_time_transaction && (
+                    <span className="ml-2 inline-block text-xs font-medium text-amber-500">
+                      (First-time only)
+                    </span>
+                  )}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {formatDT(promo.starts_at)} — {promo.ends_at ? formatDT(promo.ends_at) : 'open-ended'}
+                  {promo.minimum_amount != null && ` • Min $${promo.minimum_amount / 100}`}
+                  {promo.max_redemptions != null && ` • Max ${promo.max_redemptions} uses`}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -328,6 +401,15 @@ export function AdminPromotions() {
                     <Power className="size-3" aria-hidden="true" /> Activate
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleDelete(promo)}
+                  disabled={deleteMutation.isPending}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="size-3" aria-hidden="true" /> Delete
+                </Button>
               </div>
             </div>
           ))}
