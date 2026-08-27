@@ -4,10 +4,10 @@ W5-R1 acceptance #2: GET /promotions/active returns at most one promotion,
 date-filtered in SQL, with no authentication required and no admin-only fields
 in the body.
 
-The response model is an allowlist: only `code`, `message`, `percent_off`, and
-`ends_at`. Not `id`, not `stripe_coupon_id`, not `created_by`. A public
-response model that exposes internal fields is a credential leak disguised
-as a convenience.
+The response model is an allowlist: `code`, `message`, `percent_off`, `ends_at`
+and `first_time_transaction`. Not `id`, not `stripe_coupon_id`, not `created_by`,
+and not the redemption/minimum-amount limits. A public response model that
+exposes internal fields is a credential leak disguised as a convenience.
 """
 from datetime import datetime, timezone
 
@@ -27,9 +27,13 @@ class PromotionOut(BaseModel):
     message: str
     percent_off: int
     ends_at: datetime | None
+    # Included because the banner has to be honest about who the offer is for —
+    # advertising a first-order-only code to a returning buyer who is then refused
+    # at checkout is the complaint this field prevents.
     first_time_transaction: bool
-    minimum_amount: int | None
-    max_redemptions: int | None
+    # `minimum_amount` and `max_redemptions` are deliberately NOT here. Stripe
+    # enforces both at checkout, and "3 redemptions left" is an inventory signal
+    # about the business, not a fact the visitor is owed.
 
     model_config = {"from_attributes": True}
 
@@ -38,8 +42,15 @@ class PromotionOut(BaseModel):
 async def get_active_promotion(
     session: AsyncSession = Depends(get_session),
 ) -> PromotionOut | None:
-    """The one promotion in force right now, or null. Public and unauthenticated —
+    """The one promotion to advertise right now, or null. Public and unauthenticated —
     the banner renders for a visitor who has never signed in.
+
+    `[CHANGED 2026-08-27]` Several promotions may now be active at once (a standing
+    first-order code plus a limited-time sale), so `.limit(1)` is a choice about
+    which to *show*, not a claim that only one is redeemable. The most recently
+    started live promotion wins, which makes a new sale take over the banner from a
+    standing offer without the admin having to deactivate anything. Every other live
+    code still redeems at checkout, where Stripe validates it.
 
     Date filtering happens in SQL, not Python: the server's clock is the authority
     on whether an offer is live, and a client that filtered would let a wrong local

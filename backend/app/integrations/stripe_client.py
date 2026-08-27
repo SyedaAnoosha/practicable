@@ -57,41 +57,53 @@ def create_checkout_session(
         },
     }
 
-    # Discount code — validated via Stripe Promotion Codes. The admin creates
-    # the code in the Stripe dashboard; this just passes it through.
+    # Discount code — the code is *offered*, never force-applied.
+    #
+    # `[CHANGED 2026-08-27]` This used to `del session_kwargs['allow_promotion_codes']`
+    # and pass `discounts=[{'promotion_code': ...}]` instead. That was wrong twice over:
+    #
+    #   1. Stripe rejects `discounts` and `allow_promotion_codes` in the same session,
+    #      so setting a discount REMOVED the "Add promotion code" field from Checkout.
+    #      A buyer with a stale code in localStorage could not enter a different one,
+    #      and a buyer with no code saw the field while a buyer with one did not.
+    #
+    #   2. A pre-attached `discounts[]` entry is applied by fiat — Stripe does NOT
+    #      evaluate the PromotionCode's `restrictions` when the discount is attached
+    #      server-side. That is why WELCOME15, created with
+    #      `restrictions.first_time_transaction = True`, was honoured on a returning
+    #      buyer's second, third and fourth order. The restriction existed in Stripe
+    #      and was simply never consulted.
+    #
+    # Leaving `allow_promotion_codes: True` and passing the code as a *prefill* keeps
+    # Stripe as the single authority on whether a code may be redeemed: first-time-only,
+    # minimum amount, max redemptions and expiry are all enforced there, on every order.
+    # A code that fails its restrictions is refused in Checkout with Stripe's own
+    # message, which is the behaviour the admin configured.
     if discount_code:
-        applied = False
         try:
-            promo_codes = stripe.PromotionCode.list(code=discount_code, active=True)
+            promo_codes = stripe.PromotionCode.list(code=discount_code, active=True, limit=1)
             if promo_codes.data:
-                del session_kwargs['allow_promotion_codes']
-                session_kwargs['discounts'] = [{
-                    'promotion_code': promo_codes.data[0].id,
-                }]
-                applied = True
+                # Surfaced to the success page / dashboard for support, and lets the
+                # buyer see which code was suggested without it being pre-applied.
+                session_kwargs['metadata']['suggested_promo_code'] = discount_code
+            else:
+                # A buyer who was SHOWN a code on the site and then charged full price
+                # has a refund claim, so a code that does not resolve is logged rather
+                # than passing silently. Still not fatal — failing the whole checkout
+                # over a promo code turns a discount problem into a lost sale, and the
+                # promotion-code field is present either way.
+                logger.warning(
+                    "Discount code %r did not resolve to an active Stripe promotion "
+                    "code. If this code is advertised on the site, create it in the "
+                    "Stripe dashboard or remove the banner.",
+                    discount_code,
+                )
         except stripe.StripeError:
             logger.warning(
-                "Stripe rejected the promotion-code lookup for %r; continuing at full price",
+                "Stripe rejected the promotion-code lookup for %r; checkout continues "
+                "with the promotion-code field available",
                 discount_code,
                 exc_info=True,
-            )
-
-        if not applied:
-            # `[CHANGED 2026-08-22]` Previously this passed silently. A buyer who was
-            # SHOWN a code on the site and then charged full price has a refund claim
-            # and a reason to distrust every other number on the page, so a code that
-            # does not apply must be visible rather than merely absent.
-            #
-            # It is still not fatal — failing the whole checkout over a promo code
-            # would turn a discount problem into a lost sale. Instead the checkout
-            # proceeds at full price and the reason is logged for the operator, who is
-            # the only person who can actually fix it (the code lives in the Stripe
-            # dashboard, not in this codebase).
-            logger.warning(
-                "Discount code %r did not resolve to an active Stripe promotion code — "
-                "checkout proceeding at full price. If this code is advertised on the "
-                "site, create it in the Stripe dashboard or remove the banner.",
-                discount_code,
             )
 
     return stripe.checkout.Session.create(**session_kwargs)
@@ -101,6 +113,9 @@ def create_promotion_in_stripe(
     code: str,
     percent_off: int,
     expires_at: datetime | None = None,
+    first_time_transaction: bool = False,
+    minimum_amount: int | None = None,
+    max_redemptions: int | None = None,
 ) -> tuple[str, str]:
     """Create the Coupon and the PromotionCode that references it, returning both ids.
 
@@ -124,6 +139,20 @@ def create_promotion_in_stripe(
         'code': code,
         'active': True,
     }
+    
+    if max_redemptions is not None:
+        promo_code_params['max_redemptions'] = max_redemptions
+        
+    restrictions = {}
+    if first_time_transaction:
+        restrictions['first_time_transaction'] = True
+    if minimum_amount is not None:
+        restrictions['minimum_amount'] = minimum_amount
+        restrictions['minimum_amount_currency'] = 'aud'
+        
+    if restrictions:
+        promo_code_params['restrictions'] = restrictions
+
     if expires_at is not None:
         # The expiry belongs on the PromotionCode — the thing a buyer types — not on
         # the Coupon, whose `redeem_by` governs when the discount may first be
@@ -141,6 +170,57 @@ def create_promotion_in_stripe(
     promo_code = stripe.PromotionCode.create(**promo_code_params)
 
     return coupon.id, promo_code.id
+
+
+def find_promotion_code_by_code(code: str) -> tuple[str, str] | None:
+    """Resolve a typed code to its (promotion_code_id, coupon_id) in Stripe.
+
+    `[ADDED 2026-08-27]` Needed because a promotion can exist in Stripe without this
+    database knowing its ids. WELCOME15 is the live example: it was created by hand in
+    the Stripe dashboard, so its promotions row carries NULL stripe_coupon_id and NULL
+    stripe_promotion_code_id. Deleting that row used to leave the code fully redeemable
+    in Stripe while the admin screen showed it as gone — the deletion looked like it
+    worked and the discount kept being honoured.
+
+    Includes inactive codes: a code being already deactivated is not a reason to leave
+    its coupon behind. Returns None when Stripe has never heard of the code.
+    """
+    for params in ({"code": code, "active": True}, {"code": code, "active": False}):
+        try:
+            found = stripe.PromotionCode.list(limit=1, **params)
+        except stripe.StripeError:
+            return None
+        if found.data:
+            pc = found.data[0]
+            coupon_id = pc.coupon if isinstance(pc.coupon, str) else pc.coupon.id
+            return pc.id, coupon_id
+    return None
+
+
+def delete_promotion_in_stripe(promotion_code_id: str, coupon_id: str) -> None:
+    """Deactivate the PromotionCode and delete the underlying Coupon in Stripe.
+
+    Stripe does not permit completely deleting a PromotionCode (to preserve invoice
+    history), but setting active=False ensures it can no longer be redeemed.
+    We delete the Coupon to clean up the dashboard.
+
+    Deactivating the code comes FIRST and deleting the coupon second. Deleting a coupon
+    does not deactivate the promotion codes pointing at it, so the reverse order would
+    leave a live code attached to a missing coupon if the second call failed.
+    """
+    try:
+        stripe.PromotionCode.modify(promotion_code_id, active=False)
+    except stripe.InvalidRequestError as e:
+        # `http_status` is None on some client-side InvalidRequestErrors, so compare
+        # explicitly rather than letting `!= 404` swallow the unknown case.
+        if e.http_status != 404:
+            raise
+
+    try:
+        stripe.Coupon.delete(coupon_id)
+    except stripe.InvalidRequestError as e:
+        if e.http_status != 404:
+            raise
 
 
 def create_refund(*, payment_intent_id: str, amount: Optional[int] = None) -> stripe.Refund:

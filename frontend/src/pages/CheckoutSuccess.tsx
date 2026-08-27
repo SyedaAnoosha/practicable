@@ -6,6 +6,7 @@ import { api } from '@/lib/api/client'
 import { queryKeys } from '@/lib/query/keys'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useCartStore } from '@/stores/useCartStore'
+import { clearActivePromoCode } from '@/lib/promo'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardHeader } from '@/components/ui/Card'
 import { PageTitle } from '@/components/ui/PageTitle'
@@ -85,6 +86,10 @@ export function CheckoutSuccess() {
         if (products.every((p) => data.product_ids.includes(p.id))) {
           setEntitled(true)
           clearCart()
+          // Same gate as the cart: the suggested promo code is forgotten only once
+          // the whole order is confirmed, so a first-order-only code is not re-sent
+          // on the next checkout.
+          clearActivePromoCode()
           return
         }
       } catch {

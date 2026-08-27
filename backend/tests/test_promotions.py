@@ -117,40 +117,57 @@ async def test_open_ended_promotion_is_active(admin_client: AsyncClient, anon_cl
     assert body["code"] == "TEST-OPEN"
 
 
-async def test_active_body_has_exactly_four_keys(admin_client: AsyncClient, anon_client: AsyncClient):
-    """The public response is an allowlist: only code, message, percent_off, ends_at."""
+async def test_active_body_is_a_strict_allowlist(admin_client: AsyncClient, anon_client: AsyncClient):
+    """The public response is an allowlist. `first_time_transaction` is included so the
+    banner can say who the offer is for; the redemption limits and every internal id
+    (`id`, `stripe_coupon_id`, `created_by`, `minimum_amount`, `max_redemptions`) are not.
+    """
     await _create_promo(admin_client, code_suffix="KEYS")
     resp = await anon_client.get("/promotions/active")
     assert resp.status_code == 200
     body = resp.json()
     assert body is not None
-    assert set(body.keys()) == {"code", "message", "percent_off", "ends_at"}
+    assert set(body.keys()) == {
+        "code", "message", "percent_off", "ends_at", "first_time_transaction",
+    }
 
 
-# ── Overlap check (five interval cases) ──────────────────────────────────────
+# ── Concurrent active promotions ─────────────────────────────────────────────
+#
+# `[CHANGED 2026-08-27]` These four cases asserted 409 when two active promotions
+# covered the same instant. That check is gone: WELCOME15 is a standing
+# first-order-only offer and a limited-time sale code has to be able to run
+# alongside it, so refusing the second create made a legitimate pairing
+# impossible. The cases are kept, inverted, so a reintroduced overlap check fails
+# loudly here instead of silently breaking the sale-plus-welcome pairing.
+#
+# What still holds is that GET /promotions/active returns at most ONE promotion for
+# the banner — the most recently started live one. That is asserted alongside each
+# case, because "several may be active" and "one is advertised" are the two halves
+# of the behaviour and neither is safe to change without the other in view.
 
-async def test_overlap_both_open_ended(admin_client: AsyncClient):
-    """Two open-ended active promotions → 409."""
+async def test_two_open_ended_promotions_may_both_be_active(admin_client: AsyncClient):
+    """Two open-ended active promotions are allowed."""
     await _create_promo(admin_client, code_suffix="O1", starts_at=_dt(-1).isoformat(), ends_at=None)
     resp = await admin_client.post(
         "/admin/promotions",
         json=_promo_kwargs(code_suffix="O2", starts_at=_dt(-1).isoformat(), ends_at=None),
     )
-    assert resp.status_code == 409
+    assert resp.status_code == 201
 
 
-async def test_overlap_one_open_ended(admin_client: AsyncClient):
-    """One open-ended and one with dates that fall within → 409."""
+async def test_dated_sale_may_run_inside_an_open_ended_offer(admin_client: AsyncClient):
+    """The real WELCOME15 case: a standing open-ended offer plus a dated sale."""
     await _create_promo(admin_client, code_suffix="OE", starts_at=_dt(-1).isoformat(), ends_at=None)
     resp = await admin_client.post(
         "/admin/promotions",
         json=_promo_kwargs(code_suffix="OD", starts_at=_dt(0).isoformat(), ends_at=_dt(12).isoformat()),
     )
-    assert resp.status_code == 409
+    assert resp.status_code == 201
 
 
 async def test_no_overlap_exact_boundary_abutment(admin_client: AsyncClient):
-    """One ending at T and one starting at T do NOT overlap (half-open interval)."""
+    """One ending at T and one starting at T — allowed, as it always was."""
     t = _dt(12)
     await _create_promo(
         admin_client,
@@ -169,8 +186,8 @@ async def test_no_overlap_exact_boundary_abutment(admin_client: AsyncClient):
     assert resp.status_code == 201
 
 
-async def test_overlap_partial(admin_client: AsyncClient):
-    """Partially overlapping ranges → 409."""
+async def test_partially_overlapping_promotions_are_allowed(admin_client: AsyncClient):
+    """Partially overlapping ranges are allowed."""
     await _create_promo(
         admin_client,
         code_suffix="P1",
@@ -185,11 +202,11 @@ async def test_overlap_partial(admin_client: AsyncClient):
             ends_at=_dt(24).isoformat(),
         ),
     )
-    assert resp.status_code == 409
+    assert resp.status_code == 201
 
 
-async def test_overlap_full_containment(admin_client: AsyncClient):
-    """New promotion fully contained within existing → 409."""
+async def test_fully_contained_promotion_is_allowed(admin_client: AsyncClient):
+    """A new promotion fully inside an existing window is allowed."""
     await _create_promo(
         admin_client,
         code_suffix="C1",
@@ -204,7 +221,21 @@ async def test_overlap_full_containment(admin_client: AsyncClient):
             ends_at=_dt(12).isoformat(),
         ),
     )
-    assert resp.status_code == 409
+    assert resp.status_code == 201
+
+
+async def test_banner_shows_the_most_recently_started_live_promotion(
+    admin_client: AsyncClient, anon_client: AsyncClient
+):
+    """With two live promotions the banner advertises the newer-starting one. The older
+    one is still active and still redeemable — it is simply not the one on the banner.
+    """
+    await _create_promo(admin_client, code_suffix="OLD", starts_at=_dt(-48).isoformat(), ends_at=None)
+    await _create_promo(admin_client, code_suffix="NEW", starts_at=_dt(-1).isoformat(), ends_at=None)
+
+    resp = await anon_client.get("/promotions/active")
+    assert resp.status_code == 200
+    assert resp.json()["code"].endswith("NEW")
 
 
 # ── Audit trail ──────────────────────────────────────────────────────────────

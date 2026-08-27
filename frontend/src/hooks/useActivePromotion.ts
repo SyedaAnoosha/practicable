@@ -7,6 +7,8 @@ interface ActivePromotion {
   message: string
   percent_off: number
   ends_at: string | null
+  /** True when Stripe will only honour this code on the buyer's first order. */
+  first_time_transaction: boolean
 }
 
 /**
