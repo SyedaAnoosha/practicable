@@ -1,7 +1,7 @@
-"""Tests for Phase 6C admin panel gaps (W4-R13).
+"""Tests for admin panel gaps.
 
 Covers:
-- Three role guardrails (self-demotion, last-admin, reason-required) — each seen red first
+- Three role guardrails (self-demotion, last-admin, reason-required)
 - Deactivated user refused by resolve_product_ids (wired into the gate, not bolted beside it)
 - config-status returns no value (proven by pattern-matching test)
 - Member 403 on every new route
@@ -246,12 +246,10 @@ async def test_config_status_leaks_no_secret(admin_client):
 
 @pytest.mark.asyncio
 async def test_operational_key_lists_stay_in_sync():
-    """Regression coverage for a real gap found during Phase 6B/6C verification
-    (week4_plan.md): `config.py`'s `_operational_keys` and `admin/settings.py`'s
+    """regression: `config.py`'s `_operational_keys` and `admin/settings.py`'s
     `OPERATIONAL_FIELDS` are two independently hand-maintained lists of the same five
-    keys, not one derived from `Settings.model_fields` as step 3 of Phase 6C describes.
-    Currently in sync, but nothing enforced that — a key added to one and not the other
-    would silently desync `resolve_settings_from_db()`'s overlay from what
+    keys. Nothing else enforces they stay in sync — a key added to one and not the
+    other would silently desync `resolve_settings_from_db()`'s overlay from what
     `/admin/config-status` and `/admin/settings` actually expose."""
     from app.api.v1.admin.settings import OPERATIONAL_FIELDS
     from app.core.config import settings
@@ -321,11 +319,8 @@ async def test_admin_can_search_users(admin_client, member_user):
 
 
 # ── Admin user detail view ──────────────────────────────────────────────────────
-# Regression coverage for a real gap found during Phase 6C verification
-# (week4_plan.md): GET /admin/users/{id} had zero test coverage anywhere in the
-# suite despite step 4's explicit "Detail view joins entitlements and orders,
-# both bulk-resolved" requirement. Worked when spot-checked live, but nothing
-# would have caught a regression.
+# regression: GET /admin/users/{id} detail view joins entitlements and orders,
+# both bulk-resolved.
 
 
 @pytest.mark.asyncio

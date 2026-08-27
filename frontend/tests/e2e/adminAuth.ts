@@ -2,13 +2,12 @@ import type { Page } from '@playwright/test'
 import { expect } from '@playwright/test'
 
 /**
- * week4_plan.md Phase 6B step 13 — real admin sign-in for the axe/responsive sweep of
- * /admin/metrics, mirroring gating.spec.ts's established pattern exactly: a real
- * Supabase test account gated on env vars, never seeded automatically (that would write
- * a live row to the owner's real project unattended, which this suite deliberately does
- * not do). Callers must call `test.skip(!hasAdminE2ECreds, adminE2ESkipReason)` inside
- * each test body (not at describe scope — see gating.spec.ts's own comment on why a
- * describe-level skip silently swallows sibling tests).
+ * Real admin sign-in for the axe/responsive sweep of /admin/metrics, mirroring
+ * gating.spec.ts's pattern: a real Supabase test account gated on env vars, never seeded
+ * automatically (that would write a live row to the owner's real project). Callers must
+ * call `test.skip(!hasAdminE2ECreds, adminE2ESkipReason)` inside each test body, not at
+ * describe scope — see gating.spec.ts's comment on why a describe-level skip silently
+ * swallows sibling tests.
  */
 export const hasAdminE2ECreds = Boolean(process.env.E2E_ADMIN_EMAIL && process.env.E2E_ADMIN_PASSWORD)
 
@@ -21,9 +20,7 @@ export async function signInAsAdmin(page: Page): Promise<void> {
   await page.goto('/sign-in')
   // `getByRole('textbox')` rather than `getByLabel(/password/i)`: the field sits beside
   // a "Show password" toggle button, so a bare /password/i label lookup matches two
-  // elements and fails as a strict-mode violation before it ever types anything. This
-  // was only reachable with real credentials set, so the whole admin suite skipped past
-  // it and the broken helper went unnoticed.
+  // elements and fails as a strict-mode violation before it ever types anything.
   await page.getByRole('textbox', { name: /email/i }).fill(process.env.E2E_ADMIN_EMAIL!)
   await page.getByRole('textbox', { name: /^password$/i }).fill(process.env.E2E_ADMIN_PASSWORD!)
   await page.getByRole('button', { name: /^sign in$/i }).click()

@@ -1,27 +1,25 @@
-"""Add lesson_blocks — mixed-content lessons (Product Spec §7.2).
+"""Add lesson_blocks — mixed-content lessons.
 
 Today a lesson is one rigid `lesson_type` (video | reading | download | mixed, but
-`mixed` has never had anywhere to put its content). Product Spec §7.2: "video sits
-within the reading wherever it's useful, rather than being a separate video-only step" —
-a lesson authored as text, then a short video, then more text, then a file, needs an
-ORDERED sequence of typed content, which a single `body`/`download_template_id` pair on
-`lessons` cannot express.
+`mixed` has never had anywhere to put its content). A lesson where video sits within the
+reading wherever it's useful — text, then a short video, then more text, then a file —
+needs an ORDERED sequence of typed content, which a single `body`/`download_template_id`
+pair on `lessons` cannot express.
 
 A table, not a JSON column: blocks are individually addressable and one of them (`file`)
 points at a `templates` row — a foreign key JSON cannot enforce, and BACKEND.md's whole
 argument for this schema is that `product_contents`/entitlement resolution stays a join,
 never a query into an opaque blob.
 
-`lessons.lesson_type` is KEPT, not dropped (week2_plan.md Phase 2 step 2 — deliberate).
-It becomes a display hint (which icon the course outline shows) rather than the content
-contract; dropping it would break the outline, the library's readiness checks, and the
-publish-guard logic all in one migration. `lessons.body` and `download_template_id` are
-also kept, unused by new content going forward, so nothing that already reads them
-breaks before the API layer is updated to read blocks instead.
+`lessons.lesson_type` is KEPT, not dropped. It becomes a display hint (which icon the
+course outline shows) rather than the content contract; dropping it would break the
+outline, the library's readiness checks, and the publish-guard logic all in one
+migration. `lessons.body` and `download_template_id` are also kept, unused by new
+content going forward, so nothing that already reads them breaks before the API layer
+is updated to read blocks instead.
 
-This migration backfills the three lessons that exist today (2026-08-13) into one block
-each, matching their current single-type content exactly — see the render-parity check
-required before this may be considered safe (week2_plan.md Non-negotiable #11).
+This migration backfills the lessons that exist at the time it runs into one block
+each, matching their current single-type content exactly.
 
 Revision ID: 009
 Revises: 008
@@ -52,7 +50,7 @@ def upgrade() -> None:
         sa.Column("block_type", block_type_enum, nullable=False),
         # text/callout only — the author's prose, or the callout's body text.
         sa.Column("text_body", sa.Text(), nullable=True),
-        # text/callout only — optional heading rendered above the prose (§20.3's TextBlock).
+        # text/callout only — optional heading rendered above the prose.
         sa.Column("heading", sa.String(500), nullable=True),
         # video only.
         sa.Column("media_id", sa.UUID(), sa.ForeignKey("media.id"), nullable=True),
@@ -116,10 +114,10 @@ def upgrade() -> None:
             {"id": str(uuid.uuid4()), "lesson_id": lesson_id, "template_id": template_id},
         )
 
-    # `mixed`-type lessons are deliberately NOT backfilled: no lesson has ever been able
-    # to carry more than one content field before this migration, so a `mixed` row today
-    # (none exist as of 2026-08-13) would have nothing coherent to construct a block
-    # from — it would need to be authored fresh in the admin editor, block by block.
+    # `mixed`-type lessons are deliberately NOT backfilled: no lesson could carry more
+    # than one content field before this migration, so a `mixed` row would have nothing
+    # coherent to construct a block from — it must be authored fresh in the admin
+    # editor, block by block.
 
 
 def downgrade() -> None:

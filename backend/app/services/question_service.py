@@ -171,8 +171,8 @@ def score_question(
         score=score,
         active_constraints=active_constraints,
         exact_count=exact_count,
-        # THE FIX (§57.2): exact means every active constraint was satisfied
-        # exactly, not merely that nothing landed in the adjacent bucket.
+        # exact means every active constraint was satisfied exactly, not merely that
+        # nothing landed in the adjacent bucket.
         is_exact=active_constraints > 0 and exact_count == active_constraints,
         misses=misses,
     )

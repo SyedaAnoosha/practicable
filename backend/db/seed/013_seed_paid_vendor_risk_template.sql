@@ -1,30 +1,23 @@
--- The paid template — closing the intern brief's Week 1 requirement.
+-- A standalone paid template.
 --
--- THE GAP THIS FILLS. The brief (Week 1, "the slice") requires "one template behind a
--- paywall". That was true until 2026-08-12, when the Risk Register Template became the
--- free lead magnet on owner instruction. At that point the catalogue had a free
--- template and a paid *course*, but no paid template at all — so the rule "other
--- templates are paid" had zero instances and the paid-template gating path had nothing
--- real to exercise it. This restores that leg of the slice with a second real artefact
--- rather than by reversing the free-template decision.
+-- When the Risk Register Template became the free lead magnet, the catalogue had a free
+-- template and a paid *course*, but no paid template at all — so the paid-template
+-- gating path had nothing real to exercise it. This restores that leg with a second
+-- real artefact rather than by reversing the free-template decision.
 --
 -- WHY THIS FILE, AND WHY NOT A NEW UPLOAD. Six real vendor-risk artefacts were already
--- sitting unused in the Supabase Storage bucket (uploaded 2026-08-10). Using one is
--- consistent with the standing no-placeholder rule — this is a genuine 398 KB working
--- spreadsheet, not a stub — and it needs no new upload step. The remaining five are
--- available for the next templates (docs/pricing.md §3's target catalogue).
+-- sitting unused in the Supabase Storage bucket. Using one is consistent with the
+-- standing no-placeholder rule — this is a genuine 398 KB working spreadsheet, not a
+-- stub — and it needs no new upload step.
 --
--- PRICE. A$39 — docs/pricing.md §1's "more useful professional template" tier
--- (A$39–49), and exactly the figure §3's target catalogue already assigns to the next
--- vendor-risk template. Not a number invented here.
+-- PRICE. A$39 — the "more useful professional template" tier (A$39–49).
 --
 -- WHAT IT GRANTS, DELIBERATELY: the template file and nothing else. It is not attached
 -- to the course, and the course does not include it — unlike the risk register, whose
--- file *is* one of the course's lessons. A standalone paid template is precisely the
--- shape the brief asks for, and precisely what the entitlement suite needs in order to
--- test a paywalled download that no other purchase can unlock.
+-- file *is* one of the course's lessons. This is what the entitlement suite needs in
+-- order to test a paywalled download that no other purchase can unlock.
 --
--- Stripe (test mode) objects created for this, 2026-08-12:
+-- Stripe (test mode) objects for this:
 --   product prod_V3cOLz1yy5jcn6 / price price_1U3V9gLTNkwhOECvDROyQzem (3900 AUD)
 
 -- ── 1. The template row, pointing at the already-uploaded object ─────────────────

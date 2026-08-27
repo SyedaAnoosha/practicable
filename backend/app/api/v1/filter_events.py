@@ -1,4 +1,4 @@
-"""Public filter-events endpoint — week4_plan.md Phase 6B step 3.
+"""Public filter-events endpoint.
 
 POST /filter-events: public, unauthenticated, fire-and-forget, returns 202.
 Validates dimension against the seven known dimensions, rejects anything else with 422.
@@ -26,12 +26,11 @@ class FilterEventIn(BaseModel):
 
     The client sends only the dimension(s) that are active; NULL columns mean "not filtered."
 
-    `model_config`'s `extra="forbid"` is load-bearing, not cosmetic: without it, Pydantic
-    v2 silently drops any field not declared below (its default is `extra="ignore"`), so
-    a bogus/unexpected field sent alongside a real one would be dropped rather than
-    rejected — exactly the "free text is how PII arrives by accident" risk step 3 of
-    week4_plan.md Phase 6B names. The eight fields declared below, together with
-    `extra="forbid"`, are what enforce "reject anything not one of the known dimensions".
+    `model_config`'s `extra="forbid"` is load-bearing: without it Pydantic v2 silently
+    drops any undeclared field (default `extra="ignore"`), so a bogus field sent
+    alongside a real one would be dropped rather than rejected — a way PII arrives by
+    accident. The declared fields plus `extra="forbid"` enforce "reject anything not
+    one of the known dimensions".
     """
     model_config = {"extra": "forbid"}
 
@@ -121,8 +120,8 @@ async def record_filter_event(
 # Recommendation clicks are rarer by nature, so the ceiling is lower.
 _recommendation_limiter = RateLimiter(window_seconds=60, max_requests=15)
 
-# The two routing surfaces §20.5 and §20.6 define. Anything else is a client bug and is
-# refused rather than recorded, so the metric cannot be polluted by a typo'd constant.
+# The two valid routing surfaces. Anything else is a client bug and is refused rather
+# than recorded, so the metric cannot be polluted by a typo'd constant.
 RECOMMENDATION_SURFACES = ("question", "catalogue")
 
 

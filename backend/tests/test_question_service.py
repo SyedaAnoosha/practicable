@@ -1,11 +1,11 @@
 """Reads tests/fixtures/scoring_cases.json — the same file frontend/src/lib/
 scoring.test.ts reads — and asserts app/services/question_service.py agrees with
-every case (Non-negotiable #10). Not part of the gating suite: this is scoring
-correctness, not an entitlement boundary.
+every case. Not part of the gating suite: this is scoring correctness, not an
+entitlement boundary.
 
-week2_plan.md Phase 3 step 2/§57.6's explicit list is covered here: the v1 "one
-exact + one far" bug, one exact + one adjacent, zero active filters, an unknown tag
-value, and multi-select partial overlap — plus several more real-shape cases.
+Cases covered: the "one exact + one far" bug, one exact + one adjacent, zero active
+filters, an unknown tag value, and multi-select partial overlap — plus several more
+real-shape cases.
 """
 import json
 from pathlib import Path
@@ -82,7 +82,7 @@ def test_scoring_case(case: dict):
 
 
 # ── Partition-level behaviour — not fixture-driven, since it's about the LIST of
-# questions and their ordering, not one question's score in isolation. §57.6's
+# questions and their ordering, not one question's score in isolation. Covers
 # "zero active filters -> everything exact, original order preserved" specifically.
 
 

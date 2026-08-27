@@ -33,9 +33,9 @@ def generate_presigned_url(key: str, expiry_seconds: int = 60) -> str:
 
 
 def generate_presigned_upload_url(*, key: str, content_type: str, expiry_seconds: int = 300) -> str:
-    """A presigned PUT URL the browser writes directly to (week3_plan.md Phase 5 step
-    2), so a large template pack no longer has to be buffered in memory and proxied
-    through this API (`upload_file`'s MAX_UPLOAD_BYTES ceiling).
+    """A presigned PUT URL the browser writes directly to, so a large template pack no
+    longer has to be buffered in memory and proxied through this API (`upload_file`'s
+    MAX_UPLOAD_BYTES ceiling).
 
     `upload_file`'s own docstring records the original reasoning for keeping writes
     behind an admin-guarded endpoint ("this bucket holds paid artefacts"). That still

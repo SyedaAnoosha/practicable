@@ -1,19 +1,13 @@
-"""Regression coverage for a real bug found during Phase 6B verification
-(week4_plan.md): migration 014 created `download_events` and the model existed,
-and `/admin/metrics`'s `download_links_issued` metric read from it — but nothing
-ever wrote to it. The three real presigned-URL call sites named in step 4b
-(`content/templates.py`'s two routes, `content/lessons.py`'s lesson-download
-route) never inserted a row, so the metric was permanently 0 in production
-despite `test_metrics.py::test_download_links_issued` passing (that test
-inserts `DownloadEvent` rows directly via the fixture, never through a real
-download call, so it could not have caught this).
+"""regression: `/admin/metrics`'s `download_links_issued` metric reads from
+`download_events`, but the presigned-URL call sites did not write to it, so the
+metric was permanently 0 in production. `test_metrics.py::test_download_links_issued`
+could not catch this — it inserts `DownloadEvent` rows directly via the fixture,
+never through a real download call.
 
-A fourth real call site — `/lesson-blocks/{id}/download-url` — has appeared
-since the plan's 3-site list was written; step 4b's own instruction ("if a
-fourth call site has appeared, it is recorded too") applies to it as well.
-
-Fixed by calling `record_download_event()` (app/services/download_events.py)
-at all four sites, immediately after a presigned URL is actually minted.
+These drive real download calls at all four presigned-URL sites
+(`content/templates.py`'s two routes, `content/lessons.py`'s lesson-download route,
+and `/lesson-blocks/{id}/download-url`) and assert `record_download_event()`
+(app/services/download_events.py) writes a row each time.
 """
 import uuid
 

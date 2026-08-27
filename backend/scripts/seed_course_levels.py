@@ -1,22 +1,14 @@
 """Backfill `Course.level` on courses that were created before migration 025.
 
-`[FIXED 2026-08-23]` Three bugs meant this script had never once run to completion,
-which is why the two oldest courses still had a null level long after it was written:
+Notes on what this script does not do:
 
-  1. It imported `async_session` from `app.db.session`. That name does not exist —
-     the factory is `AsyncSessionLocal` — so the script died at import, every time.
-  2. The lesson count selected from `Lesson`/`Module` and then tried to correlate the
-     course with a bare `.where(Course.id == course_id)` against an unjoined `Course`,
-     which cross-joins the whole courses table instead of filtering. The count is now
-     taken through the `Module.course_id` join alone.
-  3. It also wrote a *computed* video duration into `estimated_duration_minutes`. That
-     column is the **authored** figure, and the read path (app/api/v1/content/courses.py)
-     deliberately prefers it over measured video time because it covers reading time no
-     encoder can see. Writing a computed number there would have silently promoted a
-     4-minute video sum over a 120-minute authored value and made the precedence
-     unrecoverable. Duration is no longer written here at all: where a course has no
-     authored figure, the read path computes one from media at request time, and
-     `scripts/backfill_media_durations.py` makes sure that media has a real length.
+  - The lesson count is taken through the `Module.course_id` join alone; correlating an
+    unjoined `Course` cross-joins the whole courses table instead of filtering.
+  - Duration is not written here. `estimated_duration_minutes` is the authored figure,
+    and the read path (app/api/v1/content/courses.py) deliberately prefers it over
+    measured video time because it covers reading time no encoder can see. Where a
+    course has no authored figure, the read path computes one from media at request
+    time, and `scripts/backfill_media_durations.py` ensures media has a real length.
 
 A course with no published lessons is skipped rather than defaulted: the heuristic
 reads lesson count, and zero lessons is an absence of evidence, not evidence of a

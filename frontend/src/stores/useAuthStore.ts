@@ -10,7 +10,7 @@ interface AuthState {
   signOut: () => void
 }
 
-// DESIGN.md §80: holds session state read by MemberLayout's guard and by the Axios
+// Holds session state read by MemberLayout's guard and by the Axios
 // interceptor (lib/api/client.ts). Server data (questions, entitlements, ...) never
 // lives here — that's TanStack Query's job (lib/query/queryClient.ts).
 export const useAuthStore = create<AuthState>((set) => ({

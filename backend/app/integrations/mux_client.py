@@ -16,13 +16,9 @@ def generate_mux_playback_token(playback_id: str, expiry_minutes: int = 30) -> s
     Keys) — not HS256 against mux_token_secret, which is a separate credential for Mux
     API calls. The wrong algorithm produces a token that looks valid but Mux rejects.
 
-    Phase 8 (8D-1): the token path this file and `admin/media.py` build exists at all
-    because this was checked, not assumed — verified 2026-08-21 by calling `get_asset()`
-    directly against 4 real Mux asset ids already in the live `media` table (not
-    synthetic ones). Every one came back `playback_ids: [{"policy": "signed"}]`, e.g.
-    asset `00R00wZ6tVNFHvhJ3501YQD49007Mfwm00jHZTh025BbMaVnI`. Had any come back
-    `public`, the whole token-fetch machinery in this file and `admin/media.py` would
-    have been unnecessary work for that asset.
+    The token path this file and `admin/media.py` build exists because Mux assets in
+    this project are created with `playback_ids: [{"policy": "signed"}]`; a `public`
+    asset would need no token-fetch machinery at all.
     """
     if not settings.mux_signing_key_id or not settings.mux_signing_key_private:
         raise RuntimeError(
@@ -56,9 +52,9 @@ def _auth() -> tuple[str, str]:
 
 
 def create_direct_upload() -> dict:
-    """week3_plan.md Phase 5 step 1 — the admin never sees a Mux secret and the
-    frontend never calls Mux directly: this is the ONE place MUX_TOKEN_ID/SECRET are
-    used to talk to Mux's Video API. Returns Mux's own `{id, url}` — `id` is what
+    """The admin never sees a Mux secret and the frontend never calls Mux directly:
+    this is the ONE place MUX_TOKEN_ID/SECRET are used to talk to Mux's Video API.
+    Returns Mux's own `{id, url}` — `id` is what
     `get_upload_status` below polls, `url` is what the browser PUTs the video file to,
     directly, bypassing this backend entirely for the actual bytes.
 

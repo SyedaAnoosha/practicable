@@ -31,19 +31,16 @@ const KEYWORD_INDEX: Array<[string, { color: string; icon: LucideIcon }]> = Obje
  * A domain not in the map falls back to the brand primary rather than throwing — the
  * page still works, just without colour differentiation.
  *
- * `[FIXED 2026-08-21]` Courses were hitting that fallback every time, and the symptom
- * was visible in the capture: two identical near-black cards where the duotone should
- * have ramped a domain tone into the stage. Cause is a **second taxonomy** — questions
- * and packs carry `domain.name` (`Risk (Enterprise & op.)`, a key here), while a course
- * carries `section.name` from the separate `sections` table, whose only row is
- * `Risk Management`. No key matched, so every course resolved to `--primary` and the
- * "duotone" ramped navy into navy.
+ * Courses would otherwise hit that fallback every time: there is a second taxonomy —
+ * questions and packs carry `domain.name` (`Risk (Enterprise & op.)`, a key here),
+ * while a course carries `section.name` from the separate `sections` table (e.g.
+ * `Risk Management`). No key matches, so every course resolves to `--primary` and the
+ * "duotone" ramps navy into navy.
  *
- * The match is widened rather than the vocabularies merged. Merging them is a backend
- * decision about what a section *is* (a course shelf, not a domain) and it is not this
- * redesign's to make — see REDESIGN_SUMMARY.md's known limitations. Widening is exact
- * match first, then the leading keyword, so `Risk Management` → risk and
- * `Cyber Security` → cyber, while an unrelated section still lands on the fallback.
+ * The match is widened rather than the vocabularies merged (merging is a backend
+ * decision about what a section *is*). Widening is exact match first, then the leading
+ * keyword, so `Risk Management` → risk and `Cyber Security` → cyber, while an unrelated
+ * section still lands on the fallback.
  */
 export function domainVisual(domainName: string) {
   const exact = DOMAIN_VISUALS[domainName]

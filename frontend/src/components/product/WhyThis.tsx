@@ -6,7 +6,7 @@ interface WhyThisProps {
   className?: string
 }
 
-/** Phase 8F (W4-R16) — the argument for why this product is worth the price.
+/** The argument for why this product is worth the price.
  *  Placed below EvidencePanel on /buy/:slug, /templates/:templateId and
  *  /store/packs/:slug. Every claim traces to a column or a guard; the copy
  *  deck in labels.ts is the permitted vocabulary. Zero social-proof claims. */

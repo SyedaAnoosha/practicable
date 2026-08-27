@@ -30,8 +30,8 @@ class ProductOut(BaseModel):
     price_amount: int
     currency: str
     contents: list[ProductContentOut]
-    # Evidence layer — W4-R1. Fields are nullable: absent = not yet set.
-    # The frontend EvidencePanel renders nothing for null fields (absence rule §20.1).
+    # Evidence layer. Fields are nullable: absent = not yet set, and the frontend
+    # EvidencePanel renders nothing for a null field.
     licence: Optional[str] = None
     search_title: Optional[str] = None
     version: Optional[str] = None
@@ -39,7 +39,7 @@ class ProductOut(BaseModel):
     is_bundle: bool = False
     # Present only when this product is exactly one template (see
     # _resolve_contents_bulk) — a multi-item product has no single page count to show,
-    # so these stay null (absence rule, §20.1) rather than picking one item arbitrarily.
+    # so these stay null rather than picking one item arbitrarily.
     page_count: Optional[int] = None
     sheet_count: Optional[int] = None
     is_editable: Optional[bool] = None
@@ -59,13 +59,8 @@ async def _resolve_contents_bulk(
     Each type's route is computed here, once, rather than guessed from `content_type` in
     the frontend.
 
-    `[FIXED]` This used to be a per-product, per-content-row loop of awaited queries —
-    one round trip to look up the row, plus (for a lesson) up to two more to walk
-    module → course for the /learn href. Each round trip to Postgres here costs on the
-    order of hundreds of ms, so a product with a handful of contents cost multiple
-    seconds; `list_products` made that worse by repeating the whole thing per product,
-    serially. This resolves every type in one bulk query each, then assembles every
-    product's content list from in-memory maps — no query count that scales with the
+    Resolves every type in one bulk query each, then assembles every product's
+    content list from in-memory maps — no query count that scales with the
     catalogue's size.
     """
     if not products:
@@ -136,11 +131,10 @@ async def _resolve_contents_bulk(
             ProductContentOut(content_type=pc.content_type, label=label or pc.content_type, href=href)
         )
 
-    # W4-R1's evidence facts (page count, previews, ...) live on `templates`, and only
-    # mean something unambiguous when a product IS a single template — a multi-item
-    # bundle has no one page count to show. Products.py's own absence rule handles a
-    # bundle gracefully: it's simply not in this map, so ProductOut's evidence fields
-    # stay null and EvidencePanel renders nothing extra for it.
+    # Evidence facts (page count, previews, ...) live on `templates` and only mean
+    # something unambiguous when a product IS a single template — a multi-item bundle
+    # has no one page count to show, so it's simply not in this map and ProductOut's
+    # evidence fields stay null.
     contents_by_product_type: dict[str, list[str]] = {str(p.id): [] for p in products}
     for pc in all_contents:
         contents_by_product_type[str(pc.product_id)].append(pc.content_type)
@@ -212,7 +206,7 @@ async def list_products_for_questions(
     """Products that include any of the given questions, ranked by price (cheapest first).
     
     Catalogue twin to /questions/{slug}/related-products. Used for catalogue page
-    situation-based product recommendations (week4_plan.md W4-R9).
+    situation-based product recommendations.
     """
     if not ids:
         return []

@@ -1,4 +1,4 @@
-"""Tests for W5-R1 — Admin control over promotions.
+"""Tests for admin control over promotions.
 
 Covers:
 - GET /promotions/active: date-window logic, active flag, response allowlist
@@ -134,12 +134,12 @@ async def test_active_body_is_a_strict_allowlist(admin_client: AsyncClient, anon
 
 # ── Concurrent active promotions ─────────────────────────────────────────────
 #
-# `[CHANGED 2026-08-27]` These four cases asserted 409 when two active promotions
-# covered the same instant. That check is gone: WELCOME15 is a standing
-# first-order-only offer and a limited-time sale code has to be able to run
-# alongside it, so refusing the second create made a legitimate pairing
-# impossible. The cases are kept, inverted, so a reintroduced overlap check fails
-# loudly here instead of silently breaking the sale-plus-welcome pairing.
+# These four cases used to assert 409 when two active promotions covered the same
+# instant. That check is gone: a standing first-order-only offer and a limited-time
+# sale code have to be able to run alongside each other, so refusing the second
+# create made a legitimate pairing impossible. The cases are kept, inverted, so a
+# reintroduced overlap check fails loudly here instead of silently breaking the
+# sale-plus-welcome pairing.
 #
 # What still holds is that GET /promotions/active returns at most ONE promotion for
 # the banner — the most recently started live one. That is asserted alongside each

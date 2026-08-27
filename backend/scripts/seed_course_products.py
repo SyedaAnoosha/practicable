@@ -13,8 +13,8 @@ WHAT EACH PRODUCT GRANTS.
   product with only the course row renders a price and then unlocks nothing - the same
   class of mistake db/seed/006 calls out for its question_set row.
 
-PRICING (owner decision, 2026-08-23) - scaled by published lesson count, anchored on the
-existing A$99 / 12-lesson `building-an-effective-risk-register-course`:
+PRICING - scaled by published lesson count, anchored on the existing A$99 / 12-lesson
+`building-an-effective-risk-register-course`:
     enterprise-risk-management-essentials       10 lessons   A$99
     business-continuity-and-crisis-management    9 lessons   A$89
     third-party-and-vendor-risk-management       6 lessons   A$69

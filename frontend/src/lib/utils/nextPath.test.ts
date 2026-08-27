@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_AFTER_AUTH, resolveNextPath, safeNextPath, signInUrlFor } from './nextPath'
 
 // `next` arrives from the URL and is therefore attacker-controlled. These tests exist to
-// pin the open-redirect boundary (USER_FLOW_AUDIT.md §2.6), not merely to exercise the
-// happy path — an unvalidated `next` would turn our own sign-in form into a phishing
-// hop that runs on the genuine domain.
+// pin the open-redirect boundary, not merely to exercise the happy path — an
+// unvalidated `next` would turn our own sign-in form into a phishing hop that runs on
+// the genuine domain.
 describe('safeNextPath', () => {
   it('accepts ordinary same-document paths', () => {
     expect(safeNextPath('/buy/risk-register-bundle')).toBe('/buy/risk-register-bundle')

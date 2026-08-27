@@ -1,18 +1,17 @@
 import { test, expect, type Page } from '@playwright/test'
 
 /**
- * `[ADDED 2026-08-22]` The admin half of the whole-surface screen sweep.
+ * The admin half of the whole-surface screen sweep (`screen-overview.spec.ts` covers the
+ * public routes).
  *
- * `screen-overview.spec.ts` covers the public routes; nothing covered the admin ones,
- * and the admin panel is where several of this redesign's worst defects surfaced — raw
- * `snake_case` metric names shown to a person, revenue printed in cents, a sidebar that
- * scrolled horizontally with overlapping icons, raw `<p>` tags rendered as text in the
- * lesson writer. Every one of those was found by a human opening the page.
+ * The admin panel is where several of the worst defects have surfaced — raw `snake_case`
+ * metric names shown to a person, revenue printed in cents, a sidebar that scrolled
+ * horizontally with overlapping icons, raw `<p>` tags rendered as text in the lesson
+ * writer — all things a human catches by opening the page. This sweep asserts those.
  *
- * Auth is stubbed rather than driven through a real sign-in, deliberately:
- * `adminAuth.ts` needs `E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD` against the owner's real
- * Supabase project, which is not available unattended and which this suite must not
- * require to be useful.
+ * Auth is stubbed rather than driven through a real sign-in, deliberately: `adminAuth.ts`
+ * needs `E2E_ADMIN_EMAIL`/`E2E_ADMIN_PASSWORD` against the owner's real Supabase project,
+ * which is not available unattended and which this suite must not require to be useful.
  *
  * The stub replaces the app's own `lib/auth/supabase.ts` module as Vite serves it, so
  * `getSession`/`onAuthStateChange` hand back a session and `AdminLayout`'s guard is
@@ -213,12 +212,11 @@ async function assertSoundScreen(page: Page, label: string, collected: Collected
     /Hey developer|Unexpected Application Error/i,
   )
 
-  /* `[ADDED 2026-08-22]` The product's own error boundary must not be what renders.
-     This caught a real crash the other assertions all walked straight past: when
-     AdminMetrics threw, react-router swapped in `RouteError`, which has exactly one
-     `<h1>`, plenty of text, no overflow and no `pageerror` — so every check below
-     passed on a page that had actually blown up. A boundary is the right thing to
-     have and the wrong thing to see. */
+  /* The product's own error boundary must not be what renders. When a route component
+     throws, react-router swaps in `RouteError`, which has exactly one `<h1>`, plenty of
+     text, no overflow and no `pageerror` — so every check below would pass on a page that
+     had actually blown up. A boundary is the right thing to have and the wrong thing to
+     see. */
   expect(bodyText, `${label}: rendered the error boundary instead of the screen`).not.toMatch(
     /Something went wrong at our end/i,
   )

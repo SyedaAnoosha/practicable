@@ -1,8 +1,8 @@
 """Admin leads reader — read-only, newest first, with CSV export.
 
-Phase 6C (W4-R13 step 7): /admin/leads reads the leads table so the owner can
-see who signed up for the free lead magnet. CSV export reuses admin/orders.py's
-existing export shape rather than a second implementation.
+/admin/leads reads the leads table so the owner can see who signed up for the
+free lead magnet. CSV export reuses admin/orders.py's export shape rather than a
+second implementation.
 """
 
 import csv

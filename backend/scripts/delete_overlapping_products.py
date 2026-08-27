@@ -10,8 +10,8 @@ Both sold content an already-published product sells, at a lower price:
                                                         operational) question pack (A$49)
 
 Publishing either would have put the same artefact on sale twice at two prices, which is
-what `check_content_overlap` exists to stop. The owner's call (2026-08-23) was to delete
-them rather than keep them as permanently-unpublishable rows.
+what `check_content_overlap` exists to stop. They are deleted rather than kept as
+permanently-unpublishable rows.
 
 SAFETY. Deleting a product is only safe when nothing references it, so this script
 refuses rather than cascades. Before removing anything it checks, per product:

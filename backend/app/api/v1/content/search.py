@@ -1,4 +1,4 @@
-"""Public full-text search endpoint (W5-R3).
+"""Public full-text search endpoint.
 
 GET /search?q=… returns results across courses, templates, questions and packs
 in one response, grouped by type, ranked by ts_rank_cd.
@@ -110,12 +110,9 @@ async def _search_entity(
     # Build the column list: always id, slug, title, rank, plus the total.
     #
     # The total comes from a COUNT(*) OVER () window rather than a second COUNT
-    # query. A separate count would double the query budget to eight — §2.3.4 of
-    # week5_plan.md budgets four, one per entity type, and that is the number the
-    # query-count test asserts. The window is computed over the full matching set
-    # *before* LIMIT applies, so it still counts every match, not just the five
-    # returned. It rides along on rows already being fetched, so it costs no extra
-    # round trip.
+    # query, keeping this to four queries (one per entity type). The window is
+    # computed over the full matching set *before* LIMIT applies, so it still counts
+    # every match, and it rides along on rows already being fetched.
     rank_expr = func.ts_rank_cd(sv, tsq).label("rank")
     columns = [
         model.id.label("id"),

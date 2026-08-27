@@ -1,14 +1,10 @@
-"""`access_ended_at` on course detail — W4-R20 step 7, ledger row 92.
+"""`access_ended_at` on course detail.
 
-Row 92 was the one open gap in Phase 9B: the DoD claimed "/library, the dashboard and
-course detail all reflect it", and two of those three were genuinely true — both read
-through `resolve_product_ids`, which already excludes a revoked entitlement, so a
-refunded course simply stops appearing.
-
-Course detail was the exception, and silently so. It is a *public* page: a refunded
-buyer opening it did not get a 403 or an empty state, they got the ordinary buy page
-back, with no acknowledgement that they had ever owned it. That reads as the site having
-lost their purchase.
+/library and the dashboard both read through `resolve_product_ids`, which already
+excludes a revoked entitlement, so a refunded course simply stops appearing there.
+Course detail is the exception: it is a *public* page, so a refunded buyer opening it
+gets the ordinary buy page back with no acknowledgement that they ever owned it —
+which reads as the site having lost their purchase.
 
 These tests pin the three cases apart, because the whole value of the field is that it
 distinguishes them:
@@ -16,9 +12,6 @@ distinguishes them:
   never bought      -> access_ended_at is None   (a stranger must learn nothing)
   currently owns    -> access_ended_at is None   (owned=True is the state, not this)
   bought, refunded  -> access_ended_at is set    (the fourth state, finally said)
-
-Seen red first: `access_ended_at` did not exist on `CourseDetailOut` before this change,
-so every assertion below failed on a missing key.
 """
 from datetime import datetime, timedelta, timezone
 

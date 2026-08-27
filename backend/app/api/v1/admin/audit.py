@@ -1,8 +1,8 @@
 """Admin audit log reader — read-only, newest first.
 
-Phase 6C (W4-R13 step 7): /admin/audit reads the audit_log table so the owner
-can see who changed what without SQL. The append-only audit trail already exists
-(audit_service.py); this endpoint just reads it.
+/admin/audit reads the audit_log table so the owner can see who changed what
+without SQL. The append-only audit trail already exists (audit_service.py); this
+endpoint just reads it.
 """
 
 from datetime import datetime

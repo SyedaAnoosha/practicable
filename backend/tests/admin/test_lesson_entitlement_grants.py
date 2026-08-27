@@ -1,9 +1,9 @@
-"""grant_course_lessons and its two call sites (found live 2026-08-21).
+"""grant_course_lessons and its two call sites.
 
-A buyer who owned a course saw a lesson locked — root cause and full reasoning in
-grant_course_lessons' own docstring (admin/courses.py). This covers the function
-directly (idempotency, empty-course, no-product-yet) rather than only through the
-full purchase flow test_course_purchase_e2e.py now also exercises end to end.
+regression: a buyer who owned a course could see a lesson locked — root cause and
+full reasoning in grant_course_lessons' own docstring (admin/courses.py). This
+covers the function directly (idempotency, empty-course, no-product-yet) rather
+than only through the full purchase flow test_course_purchase_e2e.py exercises.
 """
 import uuid
 

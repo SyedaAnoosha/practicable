@@ -1,9 +1,8 @@
-"""Shared in-memory rate limiter — extracted from filter_events.py per week4_plan.md
-Phase 10 §3: \"Extract the rate limiter first. Five endpoints in this phase need it.\"
+"""Shared in-memory rate limiter used by several endpoints.
 
 A counter in memory, keyed by string (user id or IP), not a row in the database.
 No IP is stored; no user data is logged. A failed check logs the key and action name,
-not the IP or any other identifying detail (Phase 6B's privacy constraint holds).
+not the IP or any other identifying detail.
 """
 import logging
 from collections import defaultdict

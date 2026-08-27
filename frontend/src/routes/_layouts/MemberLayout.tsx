@@ -24,10 +24,10 @@ export function FullPageSpinner() {
 // Member navigation as a persistent sidebar rather than a horizontal bar, so every
 // section is one click away from anywhere in the member area.
 //
-// Grouped under headings `[CHANGED 2026-08-13, owner direction]` rather than run as one
-// flat list. Five undifferentiated links make the reader work out the difference between
-// "things I own" and "things I could own" from the labels alone; the headings say it.
-// The split is the same one My Library exists to make (DESIGN.md §30.4).
+// Grouped under headings rather than run as one flat list. Five undifferentiated links
+// make the reader work out the difference between "things I own" and "things I could
+// own" from the labels alone; the headings say it. The split is the same one My Library
+// exists to make.
 const NAV_SECTIONS = [
   {
     heading: 'Your work',
@@ -56,8 +56,8 @@ const NAV_SECTIONS = [
 /**
  * One rail row.
  *
- * `[ADDED 2026-08-22, owner direction]` Collapsed, the rail shows icons only and the
- * label appears on hover. Two details that make that safe rather than merely smaller:
+ * Collapsed, the rail shows icons only and the label appears on hover. Two details that
+ * make that safe rather than merely smaller:
  *
  *  1. **The label is always in the DOM**, hidden with `sr-only` when collapsed rather
  *     than removed. An icon-only nav whose labels do not exist is unusable with a
@@ -116,8 +116,8 @@ function RailLink({
  *  tracked) minus the 24px hairline rule — in a 256px column the rule eats a third of
  *  the line and reads as a divider rather than as part of the label.
  *
- *  DESIGN.md §6.1 puts every other string in this product in sentence case; the eyebrow
- *  is the one deliberate exception, and this is that device. */
+ *  Every other string in this product is sentence case; the eyebrow is the one
+ *  deliberate exception, and this is that device. */
 function RailSectionHeading({ children, collapsed }: { children: React.ReactNode; collapsed?: boolean }) {
   // Collapsed, the heading becomes a rule: a 64px column cannot hold "Your work" at
   // 0.16em tracking, and truncating it to "You…" is worse than a divider. The text
@@ -186,24 +186,19 @@ function SidebarNav({ onNavigate, collapsed = false }: { onNavigate?: () => void
 
 function SidebarBrand({ collapsed, onToggleCollapse }: { collapsed: boolean; onToggleCollapse?: () => void }) {
   return (
-    /* `[FIXED 2026-08-22]` Collapsed, this row was `justify-center` while the toggle
-       below carried `ml-auto` — so in a 64px column the brand mark was jammed against
-       the left edge and the chevron against the right, with neither centred and the two
-       nearly touching. They are stacked when collapsed: mark above, toggle below, both
-       centred, which is what the rest of the collapsed rail does. */
+    /* Collapsed, this row stacks: mark above, toggle below, both centred, matching the
+       rest of the collapsed rail. Laid out with `justify-center` and the toggle's
+       `ml-auto` instead, a 64px column jams the brand mark against the left edge and
+       the chevron against the right. */
       <div className={cn('flex py-6', collapsed ? 'flex-col items-center gap-2 px-0' : 'items-center px-6')}>
       <Link
         to="/dashboard"
         className="flex min-w-0 items-center gap-2 font-sans text-base font-semibold tracking-tight text-stage-foreground"
       >
-        {/* `[FIXED 2026-08-22]` The brand mark read as a dim olive smudge rather than
-            gold. Three things compounded at this size: `--gold` (#C6A961) is a muted
-            champagne chosen for rules and gradient stops, `size-2.5` is only 10px, and
-            an inset `ring-stage-foreground/20` laid a pale wash over the whole of that
-            10px — on a small solid the inset ring is a large fraction of the visible
-            area, so it desaturated the fill instead of edging it.
-            Now 12px with the ring *outside* the fill, so the gold is unmodified. The
-            ring colour is stated literally rather than as `--gold-strong`, because that
+        {/* 12px with the ring *outside* the fill, so the gold is unmodified: at 10px
+            with an inset `ring-stage-foreground/20`, the ring is a large fraction of the
+            visible area and desaturates the fill to a dim olive smudge instead of edging
+            it. The ring colour is stated literally rather than as `--gold-strong`, because that
             token flips to a dark brown (#7C5C14) in the light theme — and this rail is
             the dark stage in BOTH themes, so a theme-reactive token would go muddy on
             exactly the surface it needs to read on. */}
@@ -266,15 +261,10 @@ function SidebarAccount({ collapsed }: { collapsed: boolean }) {
         </RailTooltip>
       </div>
 
-      {/* Identity only.
-       *
-       * `[CHANGED 2026-08-25, owner direction]` Cart, notifications, theme and sign-out
-       * used to sit in this row. They now live in AppHeader's top-right cluster, in the
-       * same place in both the member and admin shells. Keeping a second copy here would
-       * mean two bells with two unread badges to keep in sync, and it was this row —
-       * four ~36px controls inside a 64px collapsed rail — that produced the crowding
-       * the 2026-08-22 stacking fix was working around. With only the avatar left, that
-       * problem is gone rather than mitigated. */}
+      {/* Identity only. Cart, notifications, theme and sign-out live in AppHeader's
+       * top-right cluster, in the same place in both the member and admin shells. A
+       * second copy here would mean two bells with two unread badges to keep in sync,
+       * and four ~36px controls inside a 64px collapsed rail crowd badly. */}
       <div
         className={cn(
           'flex items-center rounded-lg py-2',
@@ -357,10 +347,8 @@ export function MemberChrome() {
         <SidebarAccount collapsed={collapsed} />
       </aside>
 
-      {/* Mobile: a full-height sheet, same pattern as MarketingLayout's mobile menu
-          (§17.1) — a slide-over triggered from the top bar, not a squeezed sidebar
-          (§24.2 rules that out for the learning outline specifically; the same logic
-          holds for the section-level nav). */}
+      {/* Mobile: a full-height sheet, same pattern as MarketingLayout's mobile menu —
+          a slide-over triggered from the top bar, not a squeezed sidebar. */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} aria-hidden="true" />
@@ -400,12 +388,10 @@ export function MemberChrome() {
           on the learning outline. `overflow: clip` cuts the paint without that side
           effect, and clipping one axis does not force the other to `auto`. */}
       <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
-        {/* `[CHANGED 2026-08-25, owner direction]` This was `md:hidden` — a mobile-only
-            bar. It is now the one persistent header on every signed-in page, carrying
-            cart, notifications, theme and the account menu at top right on all
-            breakpoints. The brand mark stays mobile-only, because on desktop the rail
-            already shows it and repeating it puts the word "Practicable" twice on one
-            screen. */}
+        {/* The one persistent header on every signed-in page, carrying cart,
+            notifications, theme and the account menu at top right on all breakpoints.
+            The brand mark stays mobile-only, because on desktop the rail already shows
+            it and repeating it puts the word "Practicable" twice on one screen. */}
         <AppHeader onOpenMenu={() => setMobileOpen(true)} onOpenSearch={() => setPaletteOpen(true)}>
           <Link
             to="/dashboard"
@@ -435,7 +421,7 @@ export default function MemberLayout() {
   const location = useLocation()
 
   if (loading) return <FullPageSpinner />
-  // `[CHANGED 2026-08-21, USER_FLOW_AUDIT.md §2]` Carry where they were going.
+  // Carry where they were going.
   // /buy/:slug sits behind this guard, so a logged-out click on any of the 16 buy CTAs
   // used to land on /sign-in and then, unconditionally, on an empty /dashboard — losing
   // the product on the revenue path. `signInUrlFor` validates the destination before it

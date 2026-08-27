@@ -1,12 +1,7 @@
-"""Coverage for `POST /recommendation-events` (week4_plan.md W4-R4 item 6, ledger row 29).
+"""Coverage for `POST /recommendation-events`.
 
-W4-R4 asks for a `recommendation_clicked` event so §22's claim — that routing a reader
-from a question to a product actually helps — is measured rather than asserted. Ledger
-row 29 recorded it absent from both `frontend/src/lib` and the backend.
-
-These tests were written against the endpoint's stated contract and each was confirmed
-failing before the endpoint existed (there was no route at all, so every one 404'd),
-which is the "seen red first" discipline W4-R9 requires of anything that ships.
+The `recommendation_clicked` event lets us measure whether routing a reader from a
+question to a product actually helps, rather than assert it.
 
 The privacy assertion at the bottom is the load-bearing one: the table is deliberately
 anonymous, and a later well-meaning "just add user_id so we can segment" would turn an
@@ -26,7 +21,7 @@ async def _count(db_session) -> int:
 
 @pytest.mark.asyncio
 async def test_question_surface_records_the_pair(anon_client: AsyncClient, db_session):
-    """The question surface (§20.5 RoutedProducts) records both ends of the routing."""
+    """The question surface (RoutedProducts) records both ends of the routing."""
     before = await _count(db_session)
     resp = await anon_client.post(
         "/recommendation-events",
@@ -52,7 +47,7 @@ async def test_question_surface_records_the_pair(anon_client: AsyncClient, db_se
 
 @pytest.mark.asyncio
 async def test_catalogue_surface_records_without_a_question(anon_client: AsyncClient, db_session):
-    """The catalogue surface (§20.6 SituationProducts) routes from a filter result set,
+    """The catalogue surface (SituationProducts) routes from a filter result set,
     not one question, so `question_slug` is legitimately absent — and the row must be
     accepted rather than refused, because inventing a question would make the metric
     lie about where the reader came from."""

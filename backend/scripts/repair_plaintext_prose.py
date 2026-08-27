@@ -1,7 +1,4 @@
-"""Repair `prose_sanitized` rows that hold raw plain text (found live 2026-08-22).
-
-The bug, in the owner's words: *"if i am selecting h2, bullets, bold nothing is shown in
-the actual reading lesson."*
+"""Repair `prose_sanitized` rows that hold raw plain text.
 
 `prose_sanitized` is rendered with `dangerouslySetInnerHTML`, and `Learn.tsx` switches to
 that path the moment the column is non-null. So a body that reached the sanitizer as

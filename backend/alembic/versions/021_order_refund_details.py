@@ -1,4 +1,4 @@
-"""Phase 9B (W4-R20): Add buyer-initiated refund detail columns to orders.
+"""Add buyer-initiated refund detail columns to orders.
 
 buyer_refund_amount_cents, buyer_refunded_at, buyer_refund_reason_code,
 buyer_refund_reason_text — nullable, only populated when a buyer initiates

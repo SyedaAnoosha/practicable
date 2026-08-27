@@ -1,9 +1,8 @@
-"""Add prose_sanitized column to lessons table (Phase 8 8E).
+"""Add prose_sanitized column to lessons table.
 
-Phase 8 (8E): Rich text round trip for lesson prose.
-Adds nullable prose_sanitized column to lessons table to store sanitized HTML content.
-The original prose column remains for editing, while prose_sanitized is the safe version
-displayed to users.
+Rich text round trip for lesson prose. Adds nullable prose_sanitized column to store
+sanitized HTML content. The original prose column remains for editing, while
+prose_sanitized is the safe version displayed to users.
 
 Revision ID: 017
 Revises: 016

@@ -1,4 +1,4 @@
-"""Tests for W5-R2 — Certificates on course completion.
+"""Tests for certificates on course completion.
 
 Covers:
 - Completing the last lesson issues exactly one certificate
@@ -346,7 +346,7 @@ async def test_uncompleting_then_recompleting_still_issues_one(
 async def test_pdf_render_failure_does_not_cost_the_completion(
     db_session: AsyncSession,
 ):
-    """§2.2.3: a failed render must never cost someone the completion they performed.
+    """A failed render must never cost someone the completion they performed.
 
     Issue and render are deliberately separated — the row is written on the request
     path, the PDF is rendered lazily on first fetch. This drives the whole completion

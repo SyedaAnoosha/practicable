@@ -1,6 +1,6 @@
-"""HTML sanitization for lesson prose (Phase 8 8E).
+"""HTML sanitization for lesson prose.
 
-Storage format decision (2026-08-20): sanitized HTML, not Tiptap JSON.
+Storage format: sanitized HTML, not Tiptap JSON.
 Reason: HTML needs only one renderer (the browser), while Tiptap JSON would
 need a custom renderer on the client *and* a second for any future email/PDF
 path.  One format, one consumer.
@@ -13,9 +13,9 @@ this use case and already a project dependency.  If performance becomes a
 measured concern, nh3 can replace bleach inside this module's public API
 without changing any caller.
 
-Heading-level policy (week4_plan.md §8E-4):
+Heading-level policy:
   A lesson body's ``<h1>`` would compete with the page's own ``PageTitle h1``,
-  which axe flags and §22 forbids.  The toolbar's "H1" button therefore emits
+  which axe flags.  The toolbar's "H1" button therefore emits
   ``<h2>``, and the sanitizer strips ``<h1>``, ``<h5>``, ``<h6>`` — only
   ``h2``, ``h3``, ``h4`` survive.
 """
@@ -36,19 +36,17 @@ except ImportError:
 
 
 # ── Allow-lists ───────────────────────────────────────────────────────────────
-# week4_plan.md §8E-3: explicit allow-list.  Everything else is stripped.
+# Explicit allow-list.  Everything else is stripped.
 
 ALLOWED_TAGS: set[str] = {
-    # Headings — capped at h2-h4 (§8E-4).  h1 competes with PageTitle;
+    # Headings — capped at h2-h4.  h1 competes with PageTitle;
     # h5/h6 are not in the design type scale.
     "h2", "h3", "h4",
     # Text formatting
     "strong", "b", "em", "i", "u", "s", "sub", "sup",
     # Lists
     "ul", "ol", "li",
-    # Block elements — `blockquote` was already allow-listed here before the
-    # editor toolbar gained a button to produce it (2026-08-21); only the
-    # toolbar side of that pairing was missing.
+    # Block elements
     "p", "br", "blockquote", "hr",
     # Tables
     "table", "thead", "tbody", "tr", "th", "td",
@@ -70,9 +68,6 @@ ALLOWED_PROTOCOLS: frozenset[str] = frozenset({"http", "https", "mailto"})
 # ── Public API ────────────────────────────────────────────────────────────────
 
 # ── Plain text arriving where HTML was expected ───────────────────────────────
-# Found live 2026-08-22 (owner report: "if i am selecting h2, bullets, bold nothing is
-# shown in the actual reading lesson").
-#
 # `prose_sanitized` is rendered with `dangerouslySetInnerHTML`, and `Learn.tsx` switches
 # to that path the moment the column is non-null. So a body that reaches this function as
 # **plain text** — pasted straight in, or written before the editor existed — is stored
@@ -137,7 +132,7 @@ def sanitize_html(html: Optional[str]) -> Optional[str]:
 
     Server-side because a client-side sanitizer protects nobody from a direct
     API call — and the admin API is the one an attacker with a stolen admin
-    session would use (§8E-3).
+    session would use.
 
     Rules:
       * Only ALLOWED_TAGS survive; everything else is stripped (not escaped).

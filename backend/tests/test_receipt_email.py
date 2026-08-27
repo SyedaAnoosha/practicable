@@ -1,6 +1,6 @@
-"""The receipt email's version-stamp line (week4_plan.md §20.9, Phase 2 step 4) and the
-ABN-absence guarantee (decision #31). Direct template-rendering tests — no network, no
-DB — since `_render` is pure given its context dict.
+"""The receipt email's version-stamp line and the ABN-absence guarantee. Direct
+template-rendering tests — no network, no DB — since `_render` is pure given its
+context dict.
 """
 from datetime import datetime, timezone
 
@@ -20,7 +20,7 @@ def test_format_version_stamp_date_only():
 
 
 def test_format_version_stamp_neither_set_is_none():
-    """The absence rule (week4_plan.md §20.1): nothing renders, never a placeholder."""
+    """The absence rule: nothing renders, never a placeholder."""
     assert _format_version_stamp(None, None) is None
 
 
@@ -64,8 +64,8 @@ def test_receipt_omits_version_stamp_when_unset():
 
 
 def test_receipt_never_contains_abn_string():
-    """Decision #31 (week4_plan.md §8.1, resolved 2026-08-20): no ABN field exists
-    anywhere in this app. Set or unset seller_legal_name, the string never appears."""
+    """No ABN field exists anywhere in this app. Set or unset seller_legal_name, the
+    string never appears."""
     for seller_name in (None, "Effective Risk Management"):
         html, text = _render(
             "receipt",

@@ -1,6 +1,6 @@
 """Certificate issuance service — called from the lesson-completion path.
 
-W5-R2: On the false→true transition of CourseProgress.completed, exactly one
+On the false→true transition of CourseProgress.completed, exactly one
 Certificate row is created. Idempotent by UNIQUE(user_id, course_id): a
 replayed request hits the constraint and is treated as success, not as an error.
 

@@ -19,9 +19,9 @@ def create_checkout_session(
     product_ids: list[str],
     discount_code: str | None = None,
 ) -> stripe.checkout.Session:
-    """Create a Stripe Checkout session for one or more products (week3_plan.md
-    W3-R11 — a cart checkout is N line items in ONE session; a direct "Buy" is the
-    same call with a one-item list, not a separate code path).
+    """Create a Stripe Checkout session for one or more products. A cart checkout is N
+    line items in ONE session; a direct "Buy" is the same call with a one-item list, not
+    a separate code path.
 
     Both user_id and product_ids go into metadata — the webhook handler
     (app/api/v1/commerce/webhooks.py) reads both back out of
@@ -31,7 +31,7 @@ def create_checkout_session(
     500-character-per-value ceiling while needing no separate parser on the read side
     beyond `.split(',')`.
 
-    W4-R2: invoice_creation and billing_address_collection enable tax-invoice-quality
+    invoice_creation and billing_address_collection enable tax-invoice-quality
     receipts for business buyers who need to expense purchases.
     """
     customers = stripe.Customer.list(email=user_email, limit=1)
@@ -57,22 +57,19 @@ def create_checkout_session(
         },
     }
 
-    # Discount code — the code is *offered*, never force-applied.
-    #
-    # `[CHANGED 2026-08-27]` This used to `del session_kwargs['allow_promotion_codes']`
-    # and pass `discounts=[{'promotion_code': ...}]` instead. That was wrong twice over:
+    # Discount code — the code is *offered*, never force-applied. The alternative,
+    # pre-attaching `discounts=[{'promotion_code': ...}]`, is wrong twice over:
     #
     #   1. Stripe rejects `discounts` and `allow_promotion_codes` in the same session,
-    #      so setting a discount REMOVED the "Add promotion code" field from Checkout.
+    #      so setting a discount REMOVES the "Add promotion code" field from Checkout.
     #      A buyer with a stale code in localStorage could not enter a different one,
     #      and a buyer with no code saw the field while a buyer with one did not.
     #
     #   2. A pre-attached `discounts[]` entry is applied by fiat — Stripe does NOT
     #      evaluate the PromotionCode's `restrictions` when the discount is attached
-    #      server-side. That is why WELCOME15, created with
-    #      `restrictions.first_time_transaction = True`, was honoured on a returning
-    #      buyer's second, third and fourth order. The restriction existed in Stripe
-    #      and was simply never consulted.
+    #      server-side. A code with `restrictions.first_time_transaction = True` would be
+    #      honoured on a returning buyer's every order; the restriction exists in Stripe
+    #      but is never consulted.
     #
     # Leaving `allow_promotion_codes: True` and passing the code as a *prefill* keeps
     # Stripe as the single authority on whether a code may be redeemed: first-time-only,
@@ -175,12 +172,11 @@ def create_promotion_in_stripe(
 def find_promotion_code_by_code(code: str) -> tuple[str, str] | None:
     """Resolve a typed code to its (promotion_code_id, coupon_id) in Stripe.
 
-    `[ADDED 2026-08-27]` Needed because a promotion can exist in Stripe without this
-    database knowing its ids. WELCOME15 is the live example: it was created by hand in
-    the Stripe dashboard, so its promotions row carries NULL stripe_coupon_id and NULL
-    stripe_promotion_code_id. Deleting that row used to leave the code fully redeemable
-    in Stripe while the admin screen showed it as gone — the deletion looked like it
-    worked and the discount kept being honoured.
+    Needed because a promotion can exist in Stripe without this database knowing its ids
+    — e.g. a code created by hand in the Stripe dashboard, whose promotions row carries
+    NULL stripe_coupon_id and NULL stripe_promotion_code_id. Without this resolution,
+    deleting that row leaves the code fully redeemable in Stripe while the admin screen
+    shows it as gone.
 
     Includes inactive codes: a code being already deactivated is not a reason to leave
     its coupon behind. Returns None when Stripe has never heard of the code.
@@ -224,13 +220,11 @@ def delete_promotion_in_stripe(promotion_code_id: str, coupon_id: str) -> None:
 
 
 def create_refund(*, payment_intent_id: str, amount: Optional[int] = None) -> stripe.Refund:
-    """Refund of a completed payment. `amount` omitted (the admin path, week3_plan.md
-    W3-R5) refunds the full charge — this was the only path that existed until Phase
-    9B, whose §9B step 5 adds the one other decision the owner actually asked for: a
-    buyer's self-serve partial refund keeps 15%, so passes `amount` (the 85% portion,
-    computed by `_compute_refund_amount` in me.py) explicitly. Still not a place to
-    invent a new money decision — both callers pass an amount this codebase's own
-    policy already computed; this function just forwards it.
+    """Refund of a completed payment. `amount` omitted (the admin path) refunds the full
+    charge; a buyer's self-serve partial refund keeps 15%, so passes `amount` (the 85%
+    portion, computed by `_compute_refund_amount` in me.py) explicitly. Not a place to
+    invent a new money decision — both callers pass an amount this codebase's own policy
+    already computed; this function just forwards it.
     """
     if amount is not None:
         return stripe.Refund.create(payment_intent=payment_intent_id, amount=amount)
@@ -254,9 +248,8 @@ def create_price(
 ) -> tuple[str, str]:
     """Create a Stripe Price and Product, returning both IDs.
 
-    Phase 8 (8A): Creates both the Stripe Product and Price in one call.
-    The Product ID is stored for future price changes (8B), while the Price ID
-    is what actually charges a card.
+    Creates both the Stripe Product and Price in one call. The Product ID is stored for
+    future price changes, while the Price ID is what actually charges a card.
 
     Args:
         unit_amount: Price in cents (e.g., 9900 for A$99.00)
@@ -288,8 +281,8 @@ def create_price_under_product(
 ) -> str:
     """Create a new Stripe Price under an existing Product.
 
-    Phase 8 (8B-3): Used for price changes - creates a new Price under the
-    same Stripe Product, preserving the Product ID.
+    Used for price changes - creates a new Price under the same Stripe Product,
+    preserving the Product ID.
 
     Args:
         unit_amount: Price in cents (e.g., 9900 for A$99.00)
@@ -313,8 +306,8 @@ def create_price_under_product(
 def archive_price(price_id: str) -> None:
     """Archive a Stripe Price (set active=False).
 
-    Phase 8 (8B-3): Called after a successful price change to deactivate the old price.
-    This is done last (after database commit) per the specified order of operations.
+    Called after a successful price change to deactivate the old price. Done last
+    (after database commit) per the specified order of operations.
 
     Args:
         price_id: Stripe Price ID to archive

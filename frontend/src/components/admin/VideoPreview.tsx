@@ -9,9 +9,9 @@ type MuxPlayerProps = {
   autoPlay?: boolean
 }
 
-// Phase 8 (8D-5): "Failure text says which failure it is — no token, asset not ready,
-// asset id unknown to Mux, player script failed to load." Four distinct messages, not
-// one generic "Failed to load video player" covering all of them.
+// Failure text says which failure it is — no token, asset not ready, asset id unknown
+// to Mux, player script failed to load. Four distinct messages, not one generic
+// "Failed to load video player" covering all of them.
 const STATE_MESSAGES: Record<Exclude<PlaybackState, 'ready'>, string> = {
   encoding: 'Video is still encoding — Mux takes a few minutes after upload.',
   asset_error: "Mux couldn't encode this video. Try re-uploading it.",
@@ -22,7 +22,7 @@ interface VideoPreviewProps {
   playbackId?: string
   playbackToken?: string
   className?: string
-  /** Phase 8 (8D-3/8D-5): the live state from useAdminPlaybackToken, when known. */
+  /** The live state from useAdminPlaybackToken, when known. */
   state?: PlaybackState
   message?: string
   /** True while the token/state request is still in flight. */

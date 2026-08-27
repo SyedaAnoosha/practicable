@@ -1,8 +1,7 @@
-"""Tests for admin/media.py — week4_plan.md Phase 8 (8D).
+"""Tests for admin/media.py.
 
-Covers what had zero coverage before this pass: the media library list endpoint
-(8D-4's third TokenizedVideoPreview placement) and the four distinct playback-token
-states (8D-3/8D-5) — ready, encoding, asset_error, asset_unknown.
+Covers the media library list endpoint and the four distinct playback-token
+states — ready, encoding, asset_error, asset_unknown.
 """
 import uuid
 from unittest.mock import MagicMock, patch

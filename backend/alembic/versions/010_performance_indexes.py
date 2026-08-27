@@ -1,34 +1,24 @@
-"""Performance indexes and money/access uniqueness constraints (week3_plan.md W3-R9).
+"""Performance indexes and money/access uniqueness constraints.
 
-BACKEND.md's N+1 removal (handover.md §1) fixed how many queries run per request; it did
-not fix how each one executes. Checked against the schema on 2026-08-15: the entire
-database had three explicit indexes plus primary keys and `UNIQUE(slug)` constraints —
-**every foreign key was unindexed**, including `entitlements.user_id`, which is read on
-literally every gated request (`app/core/entitlements.py:resolve_product_ids`).
+Indexes every foreign key that is read on the hot path — notably `entitlements.user_id`,
+read on every gated request (`app/core/entitlements.py:resolve_product_ids`). See
+`docs/db_index_evidence.md` for the before/after `EXPLAIN (ANALYZE, BUFFERS)` output
+justifying each one at synthetic scale; they are added before the catalogue grows into
+needing them.
 
-Every index below is measured, not guessed — see `docs/db_index_evidence.md` for the
-full before/after `EXPLAIN (ANALYZE, BUFFERS)` output each one is justified against,
-captured at a synthetic 20k-user/40k-entitlement scale (today's real data is far too
-small for any index to change a plan, which is exactly the point: these are added
-*before* the catalogue grows into needing them, per non-negotiable #14).
+Two candidate indexes are deliberately NOT created here:
+- `ix_qlt_question` (question_leadership_traits) — the planner never chooses it: the one
+  call site (`_load_leadership_traits`) always queries essentially the whole
+  published-questions set, where a sequential scan is unbeatable.
+- `ix_entitlements_user_live` (partial, covering, `WHERE revoked_at IS NULL`) — depends
+  on `entitlements.revoked_at`, added in migration `011`. The plain `ix_entitlements_user`
+  below is the interim index, superseded and dropped in `011` in favour of the partial
+  one, so the schema never carries two indexes on the same leading column.
 
-Two indexes named in week3_plan.md §26.1 are deliberately **not** created here:
-- `ix_qlt_question` (question_leadership_traits) — measured, and the planner correctly
-  never chooses it: the one real call site (`_load_leadership_traits`) always queries
-  for traits belonging to essentially the whole published-questions set, where a
-  sequential scan is unbeatable. Dropped rather than kept "for comfort."
-- `ix_entitlements_user_live` (the partial, covering, `WHERE revoked_at IS NULL`
-  version) — depends on `entitlements.revoked_at`, added in migration `011`
-  (week3_plan.md §26.4). The plain `ix_entitlements_user` below is the interim index,
-  superseded and dropped in `011` in favour of the partial one, so the schema never
-  carries two indexes on the same leading column.
-
-`CREATE INDEX CONCURRENTLY` cannot run inside a transaction — Alembic wraps every
-migration in one by default, so the index-creation half runs inside an explicit
-autocommit block (week3_plan.md §27.2) and is verified afterwards for any index left
-`INVALID` by a failed concurrent build. The constraint half runs in the migration's
-normal transactional block, after the (idempotent, and — checked live on 2026-08-15,
-currently a no-op) duplicate-cleanup deletes §26.3 requires running first.
+`CREATE INDEX CONCURRENTLY` cannot run inside a transaction, so the index-creation half
+runs in an explicit autocommit block and is verified afterwards for any index left
+`INVALID` by a failed concurrent build. The constraint half runs in the normal
+transactional block, after the duplicate-cleanup deletes it depends on.
 
 Revision ID: 010
 Revises: 009
@@ -91,9 +81,9 @@ _CONCURRENT_INDEXES = [
     (
         "ix_orders_created", "orders", [sa.text("created_at DESC")],
         {},
-        "Query 5 — admin/orders.py's default sort. Measured: no plan change against today's "
-        "unpaginated query (docs/db_index_evidence.md), kept as prerequisite infrastructure "
-        "for the keyset pagination week3_plan.md §27.3 names /admin/orders for.",
+        "Query 5 — admin/orders.py's default sort. No plan change against today's unpaginated "
+        "query (docs/db_index_evidence.md); kept as prerequisite infrastructure for keyset "
+        "pagination on /admin/orders.",
     ),
     (
         "ix_order_items_order", "order_items", ["order_id"],
@@ -129,7 +119,7 @@ _CONCURRENT_INDEXES = [
     (
         "ix_question_relations_question", "question_relations", ["question_id"],
         {},
-        "Question detail page join — populates \"related questions\" (W3-R4).",
+        "Question detail page join — populates \"related questions\".",
     ),
     (
         "ix_module_questions_module", "module_questions", ["module_id"],
@@ -143,8 +133,8 @@ _CONCURRENT_INDEXES = [
     ),
 ]
 
-# The four money/access pairs non-negotiable #13 moves from "guaranteed by careful
-# coding" to "guaranteed by the database" (week3_plan.md §26.2).
+# The four money/access pairs moved from "guaranteed by careful coding" to "guaranteed
+# by the database".
 _UNIQUE_CONSTRAINTS = [
     ("uq_entitlements_user_product", "entitlements", ["user_id", "product_id"]),
     ("uq_orders_stripe_session", "orders", ["stripe_session_id"]),
@@ -152,12 +142,9 @@ _UNIQUE_CONSTRAINTS = [
     ("uq_course_progress_user_course", "course_progress", ["user_id", "course_id"]),
 ]
 
-# §26.3 — a UNIQUE build fails at the end of a full scan if data already violates it.
-# Idempotent: checked live on 2026-08-15 against the real database and found zero
-# duplicate groups on all four pairs, so this is a no-op today. Kept in the migration
-# (not just run ad hoc and discarded) so the same safety applies wherever this runs next
-# — including, eventually, Render's production database, whose data this migration
-# cannot assume matches what was checked in development.
+# A UNIQUE build fails at the end of a full scan if data already violates it. These
+# deletes are idempotent and a no-op against clean data; kept in the migration so the
+# same safety applies wherever it runs next, including production.
 _DUPLICATE_CLEANUP = [
     """
     DELETE FROM entitlements e USING (
@@ -188,15 +175,15 @@ _DUPLICATE_CLEANUP = [
 
 def upgrade() -> None:
     # ── Indexes — CONCURRENTLY, so this never blocks writes on a table people are
-    # reading (week3_plan.md §27.2). Cannot run inside Alembic's default transaction.
+    # reading. Cannot run inside Alembic's default transaction.
     with op.get_context().autocommit_block():
         for name, table, columns, kwargs, comment in _CONCURRENT_INDEXES:
             op.create_index(name, table, columns, postgresql_concurrently=True, **kwargs)
             op.execute(sa.text(f"COMMENT ON INDEX {name} IS :c").bindparams(c=comment))
 
     # A CONCURRENTLY build can fail and leave an INVALID index behind without raising —
-    # verified explicitly rather than assumed (week3_plan.md §27.2), so a broken build
-    # fails this migration loudly instead of shipping a silently-useless index.
+    # verify explicitly so a broken build fails this migration loudly instead of
+    # shipping a silently-useless index.
     conn = op.get_bind()
     invalid = conn.execute(
         sa.text(
@@ -208,16 +195,16 @@ def upgrade() -> None:
     if invalid:
         raise RuntimeError(
             f"CREATE INDEX CONCURRENTLY left INVALID index(es): {[r[0] for r in invalid]}. "
-            "Drop and re-run — see week3_plan.md §27.2."
+            "Drop and re-run."
         )
 
     # ── Duplicate cleanup, before the constraints that would otherwise fail to build
-    # on top of any duplicate this finds (§26.3). Back in Alembic's normal transactional
-    # DDL here — CONCURRENTLY's autocommit block has already exited.
+    # on top of any duplicate this finds. Back in Alembic's normal transactional DDL
+    # here — CONCURRENTLY's autocommit block has already exited.
     for stmt in _DUPLICATE_CLEANUP:
         op.execute(stmt)
 
-    # ── The four uniqueness constraints (§26.2, non-negotiable #13).
+    # ── The four uniqueness constraints.
     for name, table, columns in _UNIQUE_CONSTRAINTS:
         op.create_unique_constraint(name, table, columns)
 

@@ -1,13 +1,11 @@
-"""Bookmark model for W5-R5 — saved content references.
+"""Bookmark model — saved content references.
 
 Polymorphic content_id (like Review), no FK constraint.
 
 `CreatedAtMixin`, NOT `TimestampMixin`: a bookmark has no editable field, so it is
-created and deleted but never updated, and §III.5 of week5_plan.md specifies
-`created_at` alone. `TimestampMixin` would add an `updated_at` the table does not
-have — and did, until this was found: every INSERT failed on the missing column,
-and the endpoint's broad `except` reported that as "already bookmarked", so a
-learner's *first* bookmark on any item came back 409.
+created and deleted but never updated, and the table has `created_at` alone.
+`TimestampMixin` would add an `updated_at` the table does not have, and every INSERT
+would fail on the missing column.
 """
 import uuid
 from sqlalchemy import CheckConstraint, ForeignKey, String, UniqueConstraint

@@ -1,6 +1,6 @@
 """Admin CRUD for courses, their modules, and their lessons — including attaching a
-Mux video and a downloadable file to a lesson, and (week2_plan.md Phase 2) an ordered
-sequence of content blocks for mixed-content lessons.
+Mux video and a downloadable file to a lesson, and an ordered sequence of content
+blocks for mixed-content lessons.
 """
 import asyncio
 import uuid
@@ -46,7 +46,7 @@ class CourseWriteIn(BaseModel):
     title: str = Field(min_length=1, max_length=500)
     description: str = Field(min_length=1)
     subtitle: Optional[str] = Field(default=None, max_length=500)
-    # #16: editable in the course editor for parity with the template editor, which has
+    # Editable in the course editor for parity with the template editor, which has
     # carried it since migration 013.
     last_reviewed_at: Optional[datetime] = None
 
@@ -58,13 +58,13 @@ class LessonBlockOut(BaseModel):
     # text / callout only.
     heading: Optional[str]
     text_body: Optional[str]
-    prose_sanitized: Optional[str] = None  # Phase 8 (8E): sanitized HTML, null for plain text
+    prose_sanitized: Optional[str] = None  # sanitized HTML, null for plain text
     # video only — the underlying Mux id, so the editor can show whether it's attached.
     media_id: Optional[str]
     mux_playback_id: Optional[str]
-    # Phase 8 (8D-3): lets the preview check the asset's *live* Mux encoding status —
-    # Media.status in the DB is set optimistically at attach time and isn't kept in
-    # sync with Mux afterward, so it can't answer "is this still encoding?" on its own.
+    # Lets the preview check the asset's *live* Mux encoding status — Media.status in
+    # the DB is set optimistically at attach time and isn't kept in sync with Mux
+    # afterward, so it can't answer "is this still encoding?" on its own.
     mux_asset_id: Optional[str]
     # file only.
     template_id: Optional[str]
@@ -83,7 +83,7 @@ class LessonOut(BaseModel):
     publish_state: str
     download_template_id: Optional[str]
     mux_playback_id: Optional[str]
-    # Phase 8 (8D-3): see LessonBlockOut.mux_asset_id — same reasoning.
+    # See LessonBlockOut.mux_asset_id — same reasoning.
     mux_asset_id: Optional[str]
     # A video lesson with no Mux asset renders an empty player after purchase — surfaced
     # so the editor can block publishing it.
@@ -110,13 +110,12 @@ class CourseRowOut(BaseModel):
     publish_state: str
     module_count: int
     lesson_count: int
-    # Found 2026-08-21 (Phase 9A re-verification, owner-flagged usability gap): the
-    # list view showed no price at all — an admin had to open every course to see
-    # what it charges. Same fields CourseDetailOut already carries; None until
-    # "Make purchasable" has been called, same as the detail page.
+    # Price on the list view so an admin doesn't have to open every course to see
+    # what it charges. None until "Make purchasable" has been called, same as the
+    # detail page.
     price_amount: Optional[int] = None
     currency: Optional[str] = None
-    # #16: same computed freshness the template list carries, so a stale course is
+    # Same computed freshness the template list carries, so a stale course is
     # visible in the list without opening each one.
     last_reviewed_at: Optional[datetime] = None
     freshness_status: Literal["fresh", "stale", "unknown"] = "unknown"
@@ -133,18 +132,18 @@ class CourseDetailOut(BaseModel):
     publish_state: str
     cover_image_url: Optional[str] = None
     modules: list[ModuleOut]
-    # Phase 8 (8A-6): server-derived readiness, same states/messages a bare product
-    # would carry — computed here from the course's linked product (if any), via
-    # `compute_readiness` (publish_guard.py), so the editor can show why a course
-    # isn't purchasable without a second round trip to /admin/products.
+    # Server-derived readiness, same states/messages a bare product would carry —
+    # computed from the course's linked product (if any) via `compute_readiness`
+    # (publish_guard.py), so the editor can show why a course isn't purchasable
+    # without a second round trip to /admin/products.
     readiness: Literal["no_product", "price_unset", "stripe_price_unresolved", "unpublished", "ready"]
     readiness_message: str
     product_id: Optional[str] = None
-    # Phase 8 (8B-7): the price-change confirmation step needs the *current* price to
-    # compute the ±50%/zero delta — it cannot be inferred client-side without this.
+    # The price-change confirmation step needs the *current* price to compute the
+    # ±50%/zero delta — it cannot be inferred client-side without this.
     price_amount: Optional[int] = None
     currency: Optional[str] = None
-    # #16: content freshness — the raw timestamp so the editor can render the date input,
+    # Content freshness — the raw timestamp so the editor can render the date input,
     # plus the computed verdict so the warning banner does not re-derive it.
     last_reviewed_at: Optional[datetime] = None
     freshness_status: Literal["fresh", "stale", "unknown"] = "unknown"
@@ -318,8 +317,8 @@ async def get_course(course_id: uuid.UUID, session: AsyncSession = Depends(get_s
         except Exception:  # noqa: BLE001
             pass
 
-    # Phase 8 (8A-6): resolve the course's linked product (None until "Make
-    # purchasable" has been called) and derive readiness from it.
+    # Resolve the course's linked product (None until "Make purchasable" has been
+    # called) and derive readiness from it.
     from app.core.publish_guard import compute_readiness
 
     product_content = (
@@ -369,20 +368,14 @@ async def grant_course_lessons(
 ) -> int:
     """Grant every lesson in a course to the course's own product.
 
-    Found live 2026-08-21: a lesson added to an already-published, already-purchased
-    course showed locked to a buyer who owned the course. Root cause traced end to
-    end — `_lesson_entitled` (content/lessons.py) and `require_entitlement`
+    `_lesson_entitled` (content/lessons.py) and `require_entitlement`
     (core/entitlements.py) both gate lesson access on a per-lesson `ProductContent`
     row (`content_type="lesson"`, `content_id=<lesson.id>`), never on the course-level
-    `content_type="course"` row `create_course_product` writes below. Grepped the
-    entire backend: no production code path — not `create_course_product`, not
-    `create_lesson`, not any migration — had ever written a `content_type="lesson"`
-    row; only test fixtures did. So this wasn't specific to a newly-added lesson —
-    every lesson in every course only ever unlocked if someone created that row by
-    hand outside this code. This function is the fix, called from both
-    `create_course_product` (grants every lesson that exists when the course becomes
-    purchasable) and `create_lesson` (grants a lesson added afterward, if the course
-    already has a product) — see the calls at each site for which gap each one closes.
+    `content_type="course"` row `create_course_product` writes. So those per-lesson
+    rows must be written explicitly: this is called from `create_course_product`
+    (grants every lesson that exists when the course becomes purchasable) and
+    `create_lesson` (grants a lesson added afterward, if the course already has a
+    product).
 
     Idempotent by construction: checks which of this course's lessons this exact
     product has already granted, in one query, and only inserts the ones missing — safe
@@ -425,14 +418,10 @@ async def grant_course_lessons(
 
 
 class CreateProductIn(BaseModel):
-    # Found 2026-08-21 (owner-flagged): "Create Product" was a separate, unnecessary
-    # step before a course could be priced at all — the admin clicked one button to
-    # get a product, then a second control to actually set its price. Removed from
-    # the UI; this endpoint now takes the admin's own price directly (the frontend's
-    # price control calls this first, transparently, the first time a price is set
-    # on a course with no product yet — see AdminCourses.tsx). Both fields optional
-    # so any other caller of this endpoint keeps working unchanged at the old A$99
-    # default.
+    # This endpoint takes the admin's own price directly: the frontend's price control
+    # calls it the first time a price is set on a course with no product yet (see
+    # AdminCourses.tsx). Both fields optional so any other caller keeps working at the
+    # old A$99 default.
     price_amount: Optional[int] = Field(default=None, gt=0)
     currency: str = Field(default="AUD", min_length=3, max_length=3)
 
@@ -446,15 +435,11 @@ async def create_course_product(
 ):
     """Create a product associated with this course, making it purchasable.
 
-    Phase 8 (8A): Creates a real Stripe Price and Product, removing the placeholder.
-    Stripe is called first; if it fails, no database row is created.
-    Transaction safety ensures a half-success state cannot exist.
+    Creates a real Stripe Price and Product. Stripe is called first; if it fails, no
+    database row is created, so a half-success state cannot exist.
 
-    Price: the caller's own `price_amount`/`currency` if given (Phase 9A
-    re-verification: the admin sets this directly now, no separate step), else the
-    A$99 default this endpoint has always had.
-    - Slug: derived from course title
-    - Licence: standard
+    Price: the caller's own `price_amount`/`currency` if given, else the A$99 default.
+    Slug is derived from the course title; licence is standard.
     """
     from app.db.models.product import Licence
     from app.integrations.stripe_client import create_price
@@ -512,7 +497,7 @@ async def create_course_product(
         name=f"{course.title} (Course)",
         description=course.description,
         stripe_price_id=stripe_price_id,  # Real Stripe Price ID, not placeholder
-        stripe_product_id=stripe_product_id,  # Phase 8B: so a later price change reuses this Product
+        stripe_product_id=stripe_product_id,  # so a later price change reuses this Product
         price_amount=price_amount,
         currency=currency,
         licence=Licence.STANDARD,
@@ -652,7 +637,6 @@ async def set_course_published(
 
 
 # ── Cover image upload ───────────────────────────────────────────────────────────
-# week4_plan.md Phase 3 step 6 — courses need preview images like Coursera/edX/Udemy.
 # Same presigned-upload pattern as templates: validate type/size, issue a URL, let
 # the browser write directly, confirm via HEAD, update the row.
 
@@ -884,20 +868,17 @@ async def create_lesson(
         slug=await ensure_unique_slug(session, Lesson, slugify(payload.title)),
         title=payload.title, description=payload.description,
         lesson_type=payload.lesson_type, body=payload.body,
-        prose_sanitized=sanitize_html(payload.body),  # Phase 8 (8E)
+        prose_sanitized=sanitize_html(payload.body),
         download_template_id=payload.download_template_id,
         module_id=module.id, sort_order=sort_order, published=False,
     )
     session.add(lesson)
     await session.flush()
 
-    # Found live 2026-08-21: a lesson added to a course that's already purchasable
-    # showed locked to a buyer who owned the course — grant_course_lessons' docstring
-    # has the full root cause. If this course already has a product, grant the new
-    # lesson to it now rather than leaving it stranded until someone thinks to run the
-    # backfill script again. A course with no product yet has nothing to grant against
-    # — create_course_product's own call to grant_course_lessons covers it once one
-    # exists.
+    # If this course already has a product, grant the new lesson to it now rather than
+    # leaving it stranded — otherwise a buyer who owns the course sees the new lesson
+    # locked (see grant_course_lessons' docstring). A course with no product yet has
+    # nothing to grant against; create_course_product covers it once one exists.
     course_product = (
         await session.execute(
             select(ProductContent.product_id).where(
@@ -931,7 +912,7 @@ async def update_lesson(
     lesson.description = payload.description
     lesson.lesson_type = payload.lesson_type
     lesson.body = payload.body
-    lesson.prose_sanitized = sanitize_html(payload.body)  # Phase 8 (8E)
+    lesson.prose_sanitized = sanitize_html(payload.body)
     lesson.download_template_id = payload.download_template_id
     if payload.sort_order is not None:
         lesson.sort_order = payload.sort_order
@@ -1079,7 +1060,7 @@ async def create_lesson_block(
     block = LessonBlock(
         lesson_id=lesson.id, sort_order=sort_order, block_type=payload.block_type,
         heading=payload.heading, text_body=payload.text_body,
-        prose_sanitized=sanitize_html(payload.text_body),  # Phase 8 (8E)
+        prose_sanitized=sanitize_html(payload.text_body),
         template_id=payload.template_id,
     )
     session.add(block)
@@ -1105,7 +1086,7 @@ async def update_lesson_block(
     block.block_type = payload.block_type
     block.heading = payload.heading
     block.text_body = payload.text_body
-    block.prose_sanitized = sanitize_html(payload.text_body)  # Phase 8 (8E)
+    block.prose_sanitized = sanitize_html(payload.text_body)
     block.template_id = payload.template_id
     await record_audit(
         session, actor=admin, action="update_lesson_block", target_type="lesson_block",

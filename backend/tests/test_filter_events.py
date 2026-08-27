@@ -1,14 +1,9 @@
-"""Regression coverage for `POST /filter-events` (week4_plan.md Phase 6B step 3).
+"""Regression coverage for `POST /filter-events`.
 
-Found genuinely untested during Phase 6B verification: the route existed but had
-zero test coverage anywhere in the suite, so the "seen red first" DoD claim for
-this phase could not have been true for it. Also found the validation the plan
-describes ("rejects anything else with a 422") wasn't actually enforced — the
-`FilterEventIn` model had no `extra="forbid"`, so Pydantic v2's default
-(`extra="ignore"`) silently dropped any field not in the eight declared ones
-rather than rejecting the request; a bogus field sent alongside one real
-dimension was silently accepted with 202, not 422. Fixed by adding
-`model_config = {"extra": "forbid"}` to the model.
+regression: `FilterEventIn` needs `model_config = {"extra": "forbid"}` so a bogus
+field sent alongside one real dimension is rejected with 422. Without it, Pydantic
+v2's default (`extra="ignore"`) silently dropped the unknown field and accepted the
+request with 202.
 """
 import pytest
 from httpx import AsyncClient

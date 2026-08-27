@@ -10,9 +10,9 @@ import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { getActivePromoCode } from '@/lib/promo'
 import { Button } from '@/components/ui/Button'
 
-// week3_plan.md W3-R11 — a drawer, same slide-over pattern MarketingLayout's mobile
-// menu and MemberLayout's mobile sheet already use (overlay + right-docked panel,
-// Escape-to-close, autoFocus on the close button), rather than a new one-off pattern.
+// A drawer, same slide-over pattern MarketingLayout's mobile menu and MemberLayout's
+// mobile sheet already use (overlay + right-docked panel, Escape-to-close, autoFocus
+// on the close button), rather than a new one-off pattern.
 export function CartDrawer() {
   const isOpen = useCartStore((s) => s.isOpen)
   const close = useCartStore((s) => s.close)
@@ -46,9 +46,9 @@ export function CartDrawer() {
       // .assign(), not `.href =` — the react-hooks/immutability rule flags a property
       // write to the module-level `window` global as if it were outer-scope mutation;
       // the method call is the same navigation with no such false positive.
-      // `[CHANGED 2026-08-21, USER_FLOW_AUDIT.md §3]` Come back to the page the drawer
-      // was opened over. The cart itself survives regardless (localStorage), but
-      // returning to /dashboard made the visitor re-find the page and reopen the drawer.
+      // Come back to the page the drawer was opened over. The cart itself survives
+      // regardless (localStorage), but returning to /dashboard would make the visitor
+      // re-find the page and reopen the drawer.
       window.location.assign(signInUrlFor(`${window.location.pathname}${window.location.search}`))
       return
     }

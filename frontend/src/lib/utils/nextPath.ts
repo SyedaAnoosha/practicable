@@ -1,11 +1,10 @@
 /**
  * The post-authentication return path.
  *
- * `[ADDED 2026-08-21, design-research/USER_FLOW_AUDIT.md §2]` Before this, MemberLayout's
- * guard redirected a logged-out visitor to /sign-in with no record of where they were
- * going, and SignIn/SignUp navigated unconditionally to /dashboard. A reader who clicked
- * any of the 16 buy CTAs was therefore delivered to an empty dashboard with the product
- * they wanted forgotten — on the revenue path.
+ * Without this, MemberLayout's guard would redirect a logged-out visitor to /sign-in
+ * with no record of where they were going, and SignIn/SignUp would navigate
+ * unconditionally to /dashboard — so a reader who clicked a buy CTA lands on an empty
+ * dashboard with the product they wanted forgotten.
  *
  * Carried as a `?next=` QUERY PARAMETER rather than router state on purpose: CartDrawer
  * signs a visitor in via `window.location.assign('/sign-in')`, a full document load that

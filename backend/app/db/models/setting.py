@@ -1,4 +1,4 @@
-"""Operational settings key-value store (Phase 6C / W4-R13).
+"""Operational settings key-value store.
 
 This table stores ONLY non-secret operational configuration. Secrets are never
 stored here — they live in env vars exclusively, with no code path by which a

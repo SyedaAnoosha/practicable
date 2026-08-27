@@ -1,9 +1,9 @@
-"""Review submission endpoint (W5-R4).
+"""Review submission endpoint.
 
 POST /reviews — submit a review for content the user has purchased.
-Entitlement-gated through ``has_access_to``. Body sanitised through
-``html_sanitizer``. ``state = pending`` on write, always — there is
-no path by which a submission is born approved.
+Entitlement-gated through ``has_access_to``; body stripped to plain text.
+Reviews are born approved (the entitlement gate is the safeguard); moderation
+is reactive via the admin delete endpoint.
 """
 from __future__ import annotations
 
@@ -25,8 +25,6 @@ from app.db.session import get_session
 router = APIRouter()
 
 
-# week5_plan.md §2.4 / §4.6 — the Stage B gate, and this is its authority.
-#
 # Below this many approved reviews an item ships `rating: null` and the card renders
 # no rating element at all (not "no reviews yet", which reads worse than silence).
 # The threshold lives here rather than only in the client because a rating the
@@ -49,7 +47,7 @@ _COUNTER_MODEL = {
 
 
 def aggregate_rating(review_count: Optional[int], rating_sum: Optional[int]) -> Optional[float]:
-    """The Stage B aggregate for one item, or None below the threshold.
+    """The aggregate rating for one item, or None below MIN_REVIEWS_FOR_AGGREGATE.
 
     Lives here rather than in each catalogue endpoint because the gate is a product
     rule, not a per-endpoint one: courses, templates and packs must all hide the
@@ -103,7 +101,7 @@ async def get_content_rating(
     session: AsyncSession = Depends(get_session),
 ):
     """Public, unauthenticated. The aggregate rating for one content item, or null
-    below the Stage B threshold (§2.4).
+    below MIN_REVIEWS_FOR_AGGREGATE.
 
     Reads the denormalised `review_count` / `rating_sum` columns rather than
     aggregating `reviews` — a COUNT/AVG per card is the N+1 shape those columns
@@ -152,13 +150,11 @@ async def get_featured_reviews(
     """Public, unauthenticated. Approved, featured reviews.
 
     With `content_type` + `content_id`, returns that item's testimonials — what the
-    content detail pages have always asked for (W5-R4 Stage A).
+    content detail pages ask for.
 
-    `[CHANGED 2026-08-25, owner direction]` Both are now optional. Omitting them
-    returns featured reviews across the whole catalogue, which is what the landing
-    page's testimonial section needs: the home page is not about one product, and
-    hard-coding some course's id there would silently break the section the day that
-    course was unpublished.
+    Both are optional. Omitting them returns featured reviews across the whole
+    catalogue, which is what the landing page's testimonial section needs: hard-coding
+    some course's id there would break the section the day that course was unpublished.
 
     `is_featured` remains the gate in both modes. Reviews are approved on submission
     now, so "approved" alone is no longer a curation signal — featuring is the
@@ -250,9 +246,9 @@ async def submit_review(
 ):
     """Submit a review for purchased content.
 
-    The review is published immediately (see the `[CHANGED 2026-08-25]` note at the
-    insert below): only a buyer can review, so moderation is reactive — an admin
-    deletes a bad review — rather than a queue every honest review waits behind.
+    The review is published immediately: only a buyer can review, so moderation is
+    reactive — an admin deletes a bad review — rather than a queue every honest
+    review waits behind.
 
     One review per user per content item, enforced by a UNIQUE constraint.
     A duplicate submission returns 409.
@@ -295,17 +291,10 @@ async def submit_review(
 
     # 3. Sanitise body — strip tags to PLAIN TEXT, do not sanitise as rich HTML.
     #
-    # `[CHANGED 2026-08-27]` This called `sanitize_html`, which is the rich-text-editor
-    # sanitiser: it deliberately promotes plain text to real paragraphs, so a review
-    # typed as "I definitely loved using it!" was STORED as
-    # "<p>I definitely loved using it!</p>". Testimonial.tsx renders the body as
-    # `{review.body}` — plain JSX text, which React escapes — so the reviewer's words
-    # appeared on the page with visible <p> tags around them.
-    #
-    # A review is a plain-text field with no editor behind it, so the tags are stripped
-    # rather than allowed. `strip_tags` also handles the hostile case: a body containing
-    # markup is flattened to its text, so nothing can be injected through this field
-    # whichever way it is later rendered.
+    # A review is a plain-text field with no editor behind it. `sanitize_html` would
+    # promote plain text to `<p>` paragraphs that then show as literal tags. `strip_tags`
+    # also flattens any markup in a hostile body, so nothing can be injected through
+    # this field whichever way it is later rendered.
     body = strip_tags(req.body).strip() if req.body else None
     # A body of nothing but markup strips to an empty string; store NULL rather than ""
     # so "has a written review" stays a single check for every reader of this column.
@@ -322,14 +311,9 @@ async def submit_review(
 
     # 5. Insert — UNIQUE constraint catches duplicates
     #
-    # `[CHANGED 2026-08-25, owner direction]` "allow user to see their ratings and
-    # reviews without admin accepting rejecting it, but give the admin hold to delete
-    # the reviews."
-    #
-    # Reviews are now born APPROVED rather than PENDING. The entitlement gate above is
-    # what makes that safe: only someone who actually bought the item can review it, so
-    # this is not an open comment box. Moderation becomes reactive — an admin removes a
-    # bad review — instead of a queue every honest review waits behind.
+    # Reviews are born APPROVED rather than PENDING. The entitlement gate above makes
+    # that safe: only someone who bought the item can review it, so this is not an open
+    # comment box. Moderation is reactive — an admin removes a bad review.
     review = Review(
         user_id=user.id,
         content_type=req.content_type,

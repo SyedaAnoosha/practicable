@@ -1,5 +1,4 @@
-// week4_plan.md Phase 8 (8B-7): "A confirmation step for a change over ±50% or to
-// zero, naming both figures."
+// A confirmation step for a change over ±50% or to zero, naming both figures.
 import { describe, expect, it } from 'vitest'
 import { priceChangeConfirmMessage, priceChangeNeedsConfirm } from './priceChangeConfirm'
 

@@ -36,7 +36,7 @@ class Course(Base, IdMixin, TimestampMixin, PublishStateMixin):
     level: Mapped[str | None] = mapped_column(String(50), nullable=True)
     estimated_duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    # W5-R4: denormalised review counters (migration 029). Updated in the same
+    # Denormalised review counters (migration 029). Updated in the same
     # transaction as moderation transitions so the catalogue never needs a
     # COUNT/AVG join per card.
     review_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -35,7 +35,7 @@ class Question(Base, IdMixin, TimestampMixin, PublishStateMixin):
     # this column automatically — see that mixin's docstring.
     published: Mapped[bool] = mapped_column(default=False)
 
-    # The homepage's curated picks (week3_plan.md §20.6). `featured_sort` is nullable —
+    # The homepage's curated picks. `featured_sort` is nullable —
     # NULL reads as "featured, order unset" rather than a false zero that would force
     # every newly-featured question to the front of the row ahead of ones an editor
     # deliberately placed earlier.

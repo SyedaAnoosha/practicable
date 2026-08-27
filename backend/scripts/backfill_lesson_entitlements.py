@@ -1,17 +1,12 @@
-"""Backfill missing per-lesson entitlement grants (found live 2026-08-21).
+"""Backfill missing per-lesson entitlement grants.
 
-A buyer who owns a course showed a lesson as locked. Root cause, traced end to end:
-every lesson-access check (`_lesson_entitled` in content/lessons.py,
+Every lesson-access check (`_lesson_entitled` in content/lessons.py,
 `require_entitlement` in core/entitlements.py) gates on a per-lesson `ProductContent`
 row (`content_type="lesson"`, `content_id=<lesson.id>`) — never on the course-level
-`content_type="course"` row `create_course_product` writes. Grepped the entire
-backend: no production code path ever wrote a `content_type="lesson"` row; only test
-fixtures did. So this was never specific to a newly-added lesson — every lesson in
-every course only unlocked if that row existed from something outside this codebase
-(a manual DB write, an old seeding pass). `create_course_product` and `create_lesson`
-now call `grant_course_lessons` (admin/courses.py) so this doesn't recur going
-forward; this script is the one-time repair for courses that already have a product
-and are missing grants for some or all of their lessons.
+`content_type="course"` row `create_course_product` writes. `create_course_product`
+and `create_lesson` now call `grant_course_lessons` (admin/courses.py) so this doesn't
+recur; this script is the one-time repair for courses that already have a product and
+are missing grants for some or all of their lessons.
 
 Idempotent: reuses `grant_course_lessons`, which only inserts rows that don't already
 exist — safe to run more than once.
@@ -36,13 +31,9 @@ from app.db.session import AsyncSessionLocal
 
 
 async def backfill(apply: bool) -> None:
-    # Found running this script for real 2026-08-22: get_session() is a FastAPI
-    # dependency generator (`yield`-based), not an async context manager on its own —
-    # `async with get_session()` raises TypeError before a single query runs. Every
-    # script in this directory that copied that pattern (backfill_stripe_product_ids.py,
-    # repair_double_escaped_prose.py) has the same latent bug and had never actually
-    # been executed end-to-end before this was caught. grant_admin.py had the correct
-    # pattern already — AsyncSessionLocal() directly, the session factory itself.
+    # get_session() is a FastAPI dependency generator (`yield`-based), not an async
+    # context manager — `async with get_session()` raises TypeError before a single
+    # query runs. Use AsyncSessionLocal() directly, the session factory itself.
     async with AsyncSessionLocal() as session:
         course_products = (
             await session.execute(

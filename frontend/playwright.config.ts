@@ -1,9 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// week2_plan.md Phase 1 step 1 / step 8. Chromium only for now — the gating suite and
-// the axe sweep need one real browser exercising the real token path (§25's "prefer the
-// dependency override for unit/integration; use real sign-in for the Playwright pass"),
-// not cross-browser coverage, which is a Week 4 concern (§42.9).
+// Chromium only — the gating suite and the axe sweep need one real browser exercising
+// the real token path, not cross-browser coverage.
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false, // the gating suite shares seeded fixtures; parallel runs would race them

@@ -83,10 +83,9 @@ class QuestionSummaryOut(BaseModel):
     # display name, which the owner can reword without breaking a bookmarked filter URL.
     domain_slug: str
     tags: List[TagOut]
-    # The homepage's curated picks (week3_plan.md §20.6). Carried on every summary
-    # response (not a separate `?featured=true`-only field set) so `Home.tsx` can derive
-    # its featured row from the one `/questions/index` fetch it already makes for
-    # everything else on the page, at no extra round trip.
+    # The homepage's curated picks. Carried on every summary response (not a separate
+    # `?featured=true`-only field set) so `Home.tsx` derives its featured row from the
+    # one `/questions/index` fetch it already makes, at no extra round trip.
     featured: bool = False
     featured_sort: Optional[int] = None
 
@@ -104,7 +103,7 @@ class QuestionOut(BaseModel):
     # Drives the product upsell card only; unrelated to whether `body` is present.
     gated: bool
     related_content: List[RelatedProductOut]
-    # Up to 3 related questions (§21.1).
+    # Up to 3 related questions.
     related_questions: List[QuestionSummaryOut]
     # Course lesson(s) this question leads into, with entitlement state so the
     # frontend can show "included" vs locked without a second round trip.
@@ -197,8 +196,8 @@ async def list_questions_index(
     free to read, so no entitlement check is needed. `QuestionsCatalogue.tsx` fetches
     this once and does all filtering/scoring/live-counting against it client-side.
 
-    `?featured=true` (week3_plan.md §20.6 / Phase 5 step 6) narrows to the owner's
-    curated homepage picks, ordered by `featured_sort` (nulls last, so a featured
+    `?featured=true` narrows to the owner's curated homepage picks, ordered by
+    `featured_sort` (nulls last, so a featured
     question with no explicit order still appears rather than vanishing). `Home.tsx`
     doesn't call this directly — it already holds the full list from its own
     unfiltered fetch and filters client-side — but the parameter exists as first-class
@@ -336,8 +335,8 @@ async def get_related_products(
 ):
     """Products that include this question, ranked by price (cheapest first).
     
-    Fixed query count: one join on product_contents. Used for question detail page
-    upsell panel (week4_plan.md W4-R8).
+    Fixed query count: one join on product_contents. Used for the question detail
+    page upsell panel.
     """
     # Fetch question
     result = await session.execute(

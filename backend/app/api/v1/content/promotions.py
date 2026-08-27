@@ -1,8 +1,7 @@
 """Public promotion endpoint — returns the one active promotion for the banner.
 
-W5-R1 acceptance #2: GET /promotions/active returns at most one promotion,
-date-filtered in SQL, with no authentication required and no admin-only fields
-in the body.
+GET /promotions/active returns at most one promotion, date-filtered in SQL, with
+no authentication required and no admin-only fields in the body.
 
 The response model is an allowlist: `code`, `message`, `percent_off`, `ends_at`
 and `first_time_transaction`. Not `id`, not `stripe_coupon_id`, not `created_by`,
@@ -45,12 +44,11 @@ async def get_active_promotion(
     """The one promotion to advertise right now, or null. Public and unauthenticated —
     the banner renders for a visitor who has never signed in.
 
-    `[CHANGED 2026-08-27]` Several promotions may now be active at once (a standing
-    first-order code plus a limited-time sale), so `.limit(1)` is a choice about
-    which to *show*, not a claim that only one is redeemable. The most recently
-    started live promotion wins, which makes a new sale take over the banner from a
-    standing offer without the admin having to deactivate anything. Every other live
-    code still redeems at checkout, where Stripe validates it.
+    Several promotions may be active at once (a standing first-order code plus a
+    limited-time sale), so `.limit(1)` chooses which to *show*, not which is
+    redeemable. The most recently started live promotion wins, so a new sale takes
+    over the banner without the admin deactivating anything. Every other live code
+    still redeems at checkout, where Stripe validates it.
 
     Date filtering happens in SQL, not Python: the server's clock is the authority
     on whether an offer is live, and a client that filtered would let a wrong local

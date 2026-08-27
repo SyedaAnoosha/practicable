@@ -4,7 +4,7 @@ import { ChevronDown, FileText, GraduationCap, Layers, Package, Tags } from 'luc
 import { cn } from '@/lib/utils/cn'
 
 /**
- * Phase 8 (8G-3): The Products dropdown menu in the marketing header.
+ * The Products dropdown menu in the marketing header.
  *
  * A disclosure button controlling a list of links — NOT a role="menu" menubar.
  * ARIA's menu pattern is for application commands; it demands arrow-key semantics
@@ -16,8 +16,8 @@ import { cn } from '@/lib/utils/cn'
  * Escape closes and returns focus to the trigger. Tab moves through items and closes
  * on exit. Outside click closes. Active state when any child route is active.
  *
- * Motion: opacity + 4px rise, 150ms --ease-standard (§17.1).
- * Under prefers-reduced-motion: opacity only, no transform (§17.4).
+ * Motion: opacity + 4px rise, 150ms --ease-standard.
+ * Under prefers-reduced-motion: opacity only, no transform.
  */
 
 const PRODUCT_ITEMS = [
@@ -34,12 +34,10 @@ export function ProductsMenu() {
   const menuRef = useRef<HTMLDivElement>(null)
   const openTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Found 2026-08-21: real pointer devices (and Playwright's `.click()`, which moves
-  // the mouse to the element before clicking, exactly like a real user) hover the
-  // trigger before clicking it — hover opened the menu first, then the click's
-  // `setOpen(v => !v)` toggle closed the very thing hover just opened, so "click is
-  // the contract" (§8G-4) never actually worked with a mouse. Tracked separately so
-  // a click always means "stay open, this was deliberate," never "undo the hover."
+  // Real pointer devices hover the trigger before clicking it — hover opens the menu
+  // first, then a `setOpen(v => !v)` toggle would close the very thing hover just
+  // opened. Tracked separately so a click always means "stay open, this was
+  // deliberate," never "undo the hover."
   const openedByClickRef = useRef(false)
 
   // Close on Escape, return focus to trigger

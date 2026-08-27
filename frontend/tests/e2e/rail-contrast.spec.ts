@@ -1,18 +1,13 @@
 import { test, expect } from '@playwright/test'
 
 /**
- * `.stage-aurora--rail` — the rendered-pixel check.
+ * `.stage-aurora--rail` — the rendered-pixel contrast check.
  *
- * `theme.css` has carried `[UNVERIFIED — needs a rendered-pixel check]` on this class
- * since 2026-08-13, and week4_plan.md §16.2 / Phase 5 step 5 name exactly what closes it:
- *
- *   > Sample the nav labels (which render at 80%) and the account row (70%) at 1440x900
- *   > in BOTH themes before this is treated as audited.
- *
- * §7.5.3 is the reason this cannot be closed with arithmetic. Token-level maths said
- * "safe" for the auth panel while the real composited paragraph sat at 4.36:1 — the
- * aurora is seven stacked gradient layers multiplied by `--aurora-opacity` over
- * `--stage`, and the only honest backdrop is the one the compositor actually produced.
+ * The rail's aurora backdrop cannot be verified with token-level arithmetic: it is seven
+ * stacked gradient layers multiplied by `--aurora-opacity` over `--stage`, and the only
+ * honest backdrop is the one the compositor actually produced (DESIGN.md §7.5.3). Sample
+ * the nav labels (which render at 80%) and the account row (70%) at 1440x900 in both
+ * themes.
  *
  * So this reads real pixels. It screenshots the rail, decodes the PNG in the browser via
  * a canvas, and samples the backdrop at the exact y where each text run lands — then
@@ -118,9 +113,7 @@ const TEXT_RUNS = [
 ] as const
 
 // The rail's text is 11px-14px — small text in every run, so 4.5:1 is the bar
-// throughout (WCAG 2.1 §1.4.3). No run here qualifies for the 3:1 large-text
-// allowance, and the plan's own §7.5.3 note is explicit that this class's claims are
-// only meaningful measured, so nothing is graded on the easier threshold.
+// throughout (WCAG 2.1 §1.4.3). No run here qualifies for the 3:1 large-text allowance.
 const AA_SMALL = 4.5
 // WCAG 2.1 §1.4.11: non-text UI boundaries (the rail edge, the account rule, the toggle
 // outline) are graded at 3:1, not 4.5:1 — they must be visible, not readable.
@@ -166,9 +159,9 @@ for (const theme of ['light', 'dark'] as const) {
         'text-stage-foreground/70',
         'text-stage-foreground/65',
         'text-stage-foreground/55',
-        // The §1.4.11 fix this spec drove. Pinned so that reverting the border in the
-        // component fails HERE, loudly, instead of the spec quietly grading a `/45`
-        // transcription while the app ships `/20`.
+        // Pinned so that reverting the border alpha in the component fails HERE, loudly,
+        // instead of the spec quietly grading a `/45` transcription while the app ships
+        // something dimmer (a §1.4.11 non-text contrast regression).
         'border-stage-foreground/45',
         'w-64',
       ]) {
@@ -223,27 +216,16 @@ for (const theme of ['light', 'dark'] as const) {
       runBoxes.push({ label: run.label, alpha: run.alpha, boxes })
     }
 
-    // The backdrop is sampled from a render with every glyph hidden.
-    //
-    // The first version of this test screenshotted the rail as-is and took the lightest
-    // pixel inside each text box. That is wrong, and wrong in the direction that hides
-    // failures: the lightest pixel inside a run of light text IS the text stroke, so it
-    // reported backdrops like rgb(184, 191, 201) on a plane whose darkest token is
-    // #02060E, and then "measured" the text against itself (1.35:1).
-    //
-    // Hiding the glyphs with `color: transparent` leaves every box, border, fill and
-    // gradient exactly where it was — the compositor produces the identical backdrop,
-    // minus the ink. That is the surface the text actually sits on.
-    // Borders and outlines go too, for the same reason the glyphs do: a control's own
-    // 1px edge is not the surface its label sits on. Background fills are KEPT — the
-    // avatar's `bg-stage-foreground/12` genuinely is the backdrop under its initial, and
-    // dropping it would flatter the result.
-    //
-    // Hiding the border is what a rectangular inset could not do. A 2px inset still
-    // clipped the corner arcs of `rounded-md`, and raising the border from /20 to /45
-    // made that leak worse — the /70 group's "backdrop" jumped from rgb(43, 65, 97) to
-    // rgb(77, 95, 119) purely because the brighter edge bled into the sample, which
-    // would have read as a contrast REGRESSION caused by an accessibility fix.
+    // The backdrop is sampled from a render with every glyph hidden. Sampling the raw
+    // screenshot would pick up the text stroke itself as the "backdrop" (the lightest
+    // pixel inside a run of light text is the ink), measuring the text against itself.
+    // `color: transparent` leaves every box, border, fill and gradient in place — the
+    // compositor produces the identical backdrop, minus the ink.
+    // Borders and outlines are hidden too: a control's own 1px edge is not the surface
+    // its label sits on, and a rectangular inset cannot exclude it without also clipping
+    // the corner arcs of `rounded-md` and letting a bright edge bleed into the sample.
+    // Background fills are KEPT — the avatar's `bg-stage-foreground/12` genuinely is the
+    // backdrop under its initial.
     await page.addStyleTag({
       content:
         '#rail, #rail * { color: transparent !important; text-shadow: none !important; ' +
@@ -283,18 +265,11 @@ for (const theme of ['light', 'dark'] as const) {
         return runs.map((run) => {
           let worst: { rgb: [number, number, number]; lum: number; x: number; y: number } | null = null
           for (const b of run.boxes) {
-            // Sample the full band the text occupies, at device pixels.
-            // A 1px anti-aliasing guard, nothing more. The borders themselves are
-            // already gone (see the style override above), so this only drops the
-            // half-covered edge pixels a fractional layout position leaves behind.
-            //
-            // History worth keeping, because it is the failure this whole check almost
-            // shipped with: the first version had no inset and no border override, and
-            // reported the theme toggle's own `border-stage-foreground/20` as its
-            // backdrop — rgb(61, 81, 110) against rgb(14, 32, 62) for the identical
-            // button 36px away on the same smooth gradient. A 5x luminance jump inside
-            // one row is not something a radial gradient does; that discrepancy is what
-            // exposed it.
+            // Sample the full band the text occupies, at device pixels, with a 1px
+            // anti-aliasing guard. The borders are already gone (see the style override
+            // above), so this only drops the half-covered edge pixels a fractional layout
+            // position leaves behind — without it, a control's own bright edge can leak
+            // into the sample and read as the backdrop.
             const inset = 1 * dpr
             const x0 = Math.max(0, Math.round(b.x * dpr + inset))
             const x1 = Math.min(canvas.width, Math.round((b.x + b.w) * dpr - inset))
@@ -363,9 +338,8 @@ for (const theme of ['light', 'dark'] as const) {
     //     the only visual evidence that a control is there at all. §1.4.11 applies, at 3:1.
     const borders = [
       {
-        // Was `/20` and measured 1.72:1 light / 1.80:1 dark — a real §1.4.11 failure,
-        // seen red here before `MemberLayout.tsx` was changed. `/45` is the first step
-        // that clears 3:1 in BOTH themes.
+        // `/45` is the first alpha that clears §1.4.11's 3:1 in BOTH themes; a dimmer
+        // border (e.g. `/20`, ~1.7:1) is a real non-text contrast failure and fails here.
         label: 'theme toggle outline (border-stage-foreground/45) — the only thing marking it a control',
         alpha: 0.45,
         graded: true,
@@ -393,9 +367,8 @@ for (const theme of ['light', 'dark'] as const) {
       if (b.graded && r < AA_NONTEXT) failures.push(line)
     }
 
-    // Always print, pass or fail — a contrast check whose numbers are only visible on
-    // failure cannot close an `[UNVERIFIED]` marker, because the marker is asking for
-    // the numbers themselves.
+    // Always print, pass or fail — this check exists to put the measured contrast
+    // numbers on record, so they must be visible on a passing run too.
     console.log(`\n.stage-aurora--rail @ 1440x900, ${theme} theme:\n  ` + report.join('\n  ') + '\n')
 
     expect(failures, `\n${failures.join('\n')}\n`).toEqual([])

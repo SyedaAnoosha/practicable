@@ -1,7 +1,5 @@
-// Found live 2026-08-21: the admin "Write" modal handed Tiptap a raw plain-text lesson
-// body as `content` — Tiptap expects HTML, so every paragraph break collapsed into a
-// single wall-of-text block (seen directly in the admin UI: a multi-paragraph lesson
-// with numbered lists rendered as one unbroken run-on paragraph). This is the fix.
+// Handing Tiptap a raw plain-text lesson body as `content` collapses every paragraph
+// break into a single wall-of-text block, because Tiptap expects HTML. This is the fix.
 import { describe, expect, it } from 'vitest'
 import { plainTextToEditorHtml } from './plainTextToEditorHtml'
 
@@ -23,9 +21,8 @@ describe('plainTextToEditorHtml', () => {
   })
 
   it('escapes HTML special characters instead of reinterpreting them as tags', () => {
-    // week4_plan.md §8E step 2's own rule for the migration itself — "no backfill
-    // reinterprets old text as HTML, an existing body containing a < would silently
-    // change meaning" — applied here to the editor's load path too.
+    // Don't reinterpret old text as HTML: an existing body containing a < would
+    // otherwise silently change meaning.
     const input = 'Risk < Reward & the "as low as reasonably practicable" test'
     const result = plainTextToEditorHtml(input)
     expect(result).toContain('&lt;')

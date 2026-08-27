@@ -22,10 +22,8 @@ export default function AuthLayout() {
     <div className="flex min-h-screen w-full flex-col lg:flex-row">
       {/* ── Left: brand panel ──
           A real <header> landmark, not a bare div: axe's landmark-one-main/region rules
-          (week4_plan.md Phase 0 step 3 — surfaced by adding /checkout/success, whose
-          signed-out redirect target this layout is, to accessibility.spec.ts) flagged the
-          wordmark, back link and headline as page content contained by no landmark at
-          all. */}
+          flag the wordmark, back link and headline as page content contained by no
+          landmark at all otherwise. */}
       <header className="relative isolate flex min-h-[38vh] w-full flex-col justify-between overflow-hidden bg-stage p-8 text-stage-foreground sm:p-10 lg:min-h-screen lg:w-1/2">
         {/* auth-08 fills this panel with a hosted photograph. `.stage-aurora`
             (theme.css) replaces it with the same composition drawn in blue — no image

@@ -29,9 +29,9 @@ class Entitlement(Base, IdMixin, TimestampMixin):
     # Optional expiry for temporary access.
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # week3_plan.md W3-R5 — a refund revokes rather than deletes: the row (and its
-    # audit trail) survives, `revoked_at` is what the gate checks. `revoked_reason` is
-    # required by the refund endpoint, never inferred.
+    # A refund revokes rather than deletes: the row (and its audit trail) survives,
+    # `revoked_at` is what the gate checks. `revoked_reason` is required by the refund
+    # endpoint, never inferred.
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 

@@ -1,4 +1,4 @@
-"""Add full-text search vectors and GIN indexes for site search (W5-R3).
+"""Add full-text search vectors and GIN indexes for site search.
 
 Four generated tsvector columns and four GIN indexes. Generated columns,
 not trigger-maintained — a trigger is a second place the truth lives and a

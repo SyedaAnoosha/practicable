@@ -1,6 +1,5 @@
-// week4_plan.md W4-R9 item 3 — the first real frontend unit tests beyond scoring.ts.
-// formatCurrency is named explicitly as a pure-function candidate with real logic and
-// no DOM. Assertions strip locale-dependent symbol/grouping (Intl.NumberFormat's
+// formatCurrency is a pure function with real logic and no DOM. Assertions strip
+// locale-dependent symbol/grouping (Intl.NumberFormat's
 // output varies by the test runner's default locale) and check the digit string it
 // produced instead — that's the part this function is actually responsible for
 // getting right; the symbol placement is Intl's job, not ours.
@@ -32,8 +31,8 @@ describe('formatCurrency', () => {
 
   it('respects the currency argument rather than hard-coding one', () => {
     // Same amount, two ISO codes — Intl.NumberFormat renders a different symbol/code
-    // for each, so a formatter that ignored `currency` (DESIGN.md §28.2's "never
-    // hard-code a symbol") would produce identical output for both. It must not.
+    // for each, so a formatter that ignored `currency` (i.e. hard-coded a symbol)
+    // would produce identical output for both. It must not.
     expect(formatCurrency(1000, 'AUD')).not.toBe(formatCurrency(1000, 'USD'))
   })
 

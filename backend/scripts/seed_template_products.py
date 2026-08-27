@@ -1,12 +1,11 @@
 """Give each unsold published template its own product, so it stops reading
 "Not yet for sale" in the templates catalogue.
 
-OWNER RULE (2026-08-23, clarified): a TEMPLATE may be sold as a single file — that is
-what a template is. A PACK is what must hold more than one template, and a pack may only
-be a single file when what it sells is a questions PDF (as `risk-enterprise-op-question-
-pack` does). The earlier `delete_single_file_products.py` applied the file-count rule to
-every product regardless of type, which was too broad: it removed the single-file
-TEMPLATE products too, and that is why these templates lost their price.
+OWNER RULE: a TEMPLATE may be sold as a single file — that is what a template is. A PACK
+is what must hold more than one template, and a pack may only be a single file when what
+it sells is a questions PDF (as `risk-enterprise-op-question-pack` does).
+`delete_single_file_products.py` applies the file-count rule to every product regardless
+of type, which also removes single-file TEMPLATE products; this restores them.
 
 This restores a product per template. It does NOT recreate the deleted packs.
 
@@ -22,20 +21,16 @@ WHY THESE PRICES.
   "Not yet for sale", and one of them has no file attached at all (0 bytes, empty
   file_name). Pricing content that does not exist is not something a script should do.
 
-A KNOWN CONSEQUENCE, STATED PLAINLY.
+KNOWN CONSEQUENCE.
   `app/api/v1/content/packs.py::_pack_product_ids` classifies ANY published product with
-  at least one `template` row as a pack. These single-template products therefore satisfy
-  that predicate and will appear on the packs surface alongside the real multi-template
-  packs — which is precisely the shape the owner's rule says a pack must not have. The
-  fix is a real distinction between "template product" and "pack" in that classifier
-  (today it is inferred, not declared, and the module's own docstring says a pack is "a
-  shape, not a type"). That is an API change, out of scope for a seed script, and is
-  flagged rather than worked around here.
+  at least one `template` row as a pack, so these single-template products would appear
+  on the packs surface alongside real multi-template packs — the shape the owner's rule
+  says a pack must not have. A real "template product" vs "pack" distinction in that
+  classifier is an API change, out of scope for a seed script.
 
   Products are created UNPUBLISHED for that reason: an unpublished product still gives
-  the template its price in the catalogue, without adding a bogus entry to the packs
-  page. Publishing them is a deliberate follow-up, once the classifier distinguishes the
-  two shapes.
+  the template its price in the catalogue without adding a bogus entry to the packs
+  page. Publish them once the classifier distinguishes the two shapes.
 
 Re-runnable: matched on slug, so a second run updates nothing and creates nothing.
 

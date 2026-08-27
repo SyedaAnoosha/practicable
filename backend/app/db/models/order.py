@@ -30,7 +30,7 @@ class Order(Base, IdMixin, TimestampMixin):
     total_amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     
-    # Phase 9B (W4-R20): buyer-initiated partial refund details.
+    # Buyer-initiated partial refund details.
     # Nullable — only populated when a buyer self-serves a refund.
     buyer_refund_amount_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
     buyer_refunded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -30,12 +30,12 @@ class User(Base, TimestampMixin):
     # Feeds the admin metrics "active users" query (app/api/v1/admin/metrics.py).
     last_sign_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Phase 6C: soft-deactivation. Wired into the entitlements gate
-    # (core/entitlements.py) so a deactivated user's existing entitlements are
-    # refused at the same choke point as every other access check.
+    # Soft-deactivation. Wired into the entitlements gate (core/entitlements.py) so a
+    # deactivated user's existing entitlements are refused at the same choke point as
+    # every other access check.
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Phase 10E: notification preferences (week4_plan.md §10E step 1).
+    # Notification preferences.
     # Two named columns, not a JSONB blob. Transactional mail (receipt, access
     # granted, password reset, security alerts) is NEVER gated by these flags.
     notify_marketing: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())

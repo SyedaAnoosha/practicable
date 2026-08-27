@@ -1,4 +1,4 @@
-"""Public certificate verification endpoint (W5-R2).
+"""Public certificate verification endpoint.
 
 GET /verify/{verification_code} is public, unauthenticated, and returns
 learner name, course title, issue date and revocation state. No email,

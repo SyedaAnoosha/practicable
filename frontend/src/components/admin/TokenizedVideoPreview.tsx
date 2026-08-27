@@ -2,8 +2,8 @@ import { useAdminPlaybackToken } from '@/hooks/useAdminPlaybackToken'
 import { VideoPreview } from './VideoPreview'
 
 /**
- * Phase 8 (8D-2/8D-3/8D-5): VideoPreview that automatically fetches the admin
- * playback token and the asset's live Mux encoding state.
+ * VideoPreview that automatically fetches the admin playback token and the asset's
+ * live Mux encoding state.
  *
  * The raw VideoPreview accepts the token/state as props, but every admin call site
  * would need to independently fetch them. This wrapper fetches from

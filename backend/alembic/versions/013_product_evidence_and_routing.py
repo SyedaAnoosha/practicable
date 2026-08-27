@@ -1,19 +1,16 @@
-"""Product evidence layer, routing, licence, bundle declaration (week4_plan.md W4-R1–R4).
+"""Product evidence layer, routing, licence, bundle declaration.
 
 Adds to `templates`: page_count, sheet_count, is_editable, has_macros, min_office_version,
 preview_image_keys (JSONB), version, last_reviewed_at.
 
 Adds to `products`: licence (enum), search_title, version, last_reviewed_at, is_bundle.
 
-Adds index `ix_product_contents_type_content` for the reverse-direction routing query
-(W4-R4: given content IDs, which products grant them) — measured with EXPLAIN before
-creation, per non-negotiable #11.
+Adds index `ix_product_contents_type_content` for the reverse-direction routing query:
+migration `010` indexed `product_contents` for product_id lookups (the gate's direction);
+routing runs it backwards — given content ids, which products grant them — and that
+direction had no index.
 
-Migration `010` indexed `product_contents` for product_id lookups (the gate's direction).
-W4-R4's routing query runs it backwards — given content ids, which products grant them.
-That direction has no index. This migration adds it.
-
-Five deliberate choices documented in week4_plan.md §25:
+Deliberate shape choices:
 - page_count AND sheet_count, not one size_metric (PDF has pages, spreadsheet has sheets)
 - is_editable nullable, has_macros NOT NULL DEFAULT false (safety property)
 - preview_image_keys as JSONB, not a join table (ordered, small, always read whole)
@@ -21,7 +18,6 @@ Five deliberate choices documented in week4_plan.md §25:
 - is_bundle on products, not inferred (a bundle is a declaration, not a row count)
 
 Backfill: existing published rows get version='1.0', last_reviewed_at=created_at.
-This backfill is an assertion the owner must confirm — it is not a statement of fact.
 
 Revision ID: 013
 Revises: 012
@@ -38,7 +34,7 @@ depends_on = None
 _LICENCE_ENUM_NAME = "licence"
 _LICENCE_VALUES = ("standard", "client_delivery", "multi_client")
 
-# New index for the routing reverse-direction query (W4-R4).
+# New index for the routing reverse-direction query.
 # product_contents is indexed for product_id lookups (gate direction, migration 010
 # ix_product_contents_product_type). This adds the reverse: content_type, content_id →
 # which products grant this content.
@@ -48,7 +44,7 @@ _NEW_CONCURRENT_INDEXES = [
         "product_contents",
         ["content_type", "content_id", "product_id"],
         {},
-        "W4-R4 routing reverse-direction: given content ids, find granting products. "
+        "Routing reverse-direction: given content ids, find granting products. "
         "product_id included so the planner gets it without a heap fetch.",
     ),
     (
@@ -56,7 +52,7 @@ _NEW_CONCURRENT_INDEXES = [
         "products",
         ["slug"],
         {"postgresql_where": sa.text("published = true")},
-        "W4-R4: published product lookups by slug. Partial because unpublished products "
+        "Published product lookups by slug. Partial because unpublished products "
         "never appear in the routing output.",
     ),
 ]
@@ -67,7 +63,7 @@ def upgrade() -> None:
     licence_enum = postgresql.ENUM(*_LICENCE_VALUES, name=_LICENCE_ENUM_NAME)
     licence_enum.create(op.get_bind(), checkfirst=True)
 
-    # ── templates: pre-purchase evidence fields (W4-R1) ─────────────────────────
+    # ── templates: pre-purchase evidence fields ─────────────────────────
     op.add_column("templates", sa.Column("page_count", sa.Integer(), nullable=True))
     op.add_column("templates", sa.Column("sheet_count", sa.Integer(), nullable=True))
     op.add_column("templates", sa.Column("is_editable", sa.Boolean(), nullable=True))
@@ -153,7 +149,7 @@ def upgrade() -> None:
     if invalid:
         raise RuntimeError(
             f"CREATE INDEX CONCURRENTLY left INVALID index(es): {[r[0] for r in invalid]}. "
-            "Drop and re-run — see week3_plan.md §27.2."
+            "Drop and re-run."
         )
 
 

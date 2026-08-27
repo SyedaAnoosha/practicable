@@ -1,5 +1,5 @@
 /**
- * `[ADDED 2026-08-22]` Type shims for `@splidejs/react-splide`.
+ * Type shims for `@splidejs/react-splide`.
  *
  * The package DOES ship declarations (`dist/types/index.d.ts`, referenced by its
  * top-level `"types"` field), but its `"exports"` map has no `types` condition:

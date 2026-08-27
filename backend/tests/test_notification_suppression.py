@@ -1,16 +1,10 @@
-"""Opt-out actually suppresses, and transactional mail never is (Phase 10 §10E).
+"""Opt-out actually suppresses product-update mail, and transactional mail never is.
 
-§10E's acceptance list has three lines. Two were satisfied (the toggles persist; the page
-states that transactional mail always arrives). The third — *"Suppression of opted-out mail
-proven by a test"* — was not: `send_product_update_email` carried the gate and nothing
-exercised it.
+A preference toggle that persists but does not actually gate the send is worse than no
+toggle at all, because the page tells the reader they have opted out and the mail keeps
+arriving.
 
-That is the wrong half to leave untested. A preference toggle that persists but does not
-actually gate the send is worse than no toggle at all, because the page tells the reader
-they have opted out and the mail keeps arriving.
-
-The second half matters just as much in the other direction, and is the reason the
-non-negotiable exists: a receipt, an access grant, a password reset, a security alert and a
+The other half: a receipt, an access grant, a password reset, a security alert and a
 refund confirmation are records of something that happened to the reader's money or
 account. None may ever be suppressed by a marketing preference. These tests assert the
 suppression is scoped to exactly one function and cannot leak into the others.
@@ -30,7 +24,7 @@ from app.services import email_service
 
 @pytest.mark.asyncio
 async def test_product_update_is_suppressed_when_opted_out():
-    """The line §10E asked for: opted out means the send does not happen at all."""
+    """Opted out means the send does not happen at all."""
     with patch.object(email_service, "_send", new=AsyncMock(return_value=True)) as sender:
         sent = await email_service.send_product_update_email(
             to_email="reader@example.com",
@@ -86,7 +80,7 @@ def test_transactional_senders_take_no_preference_flag(func_name: str):
     for forbidden in ("notify_marketing", "notify_product_updates", "preferences", "opted_in"):
         assert forbidden not in params, (
             f"{func_name} accepts {forbidden!r} — transactional mail must never be "
-            "suppressible by a preference (Phase 10 §10E step 3)"
+            "suppressible by a preference"
         )
 
 
@@ -105,16 +99,16 @@ def test_only_one_sender_is_preference_gated():
     assert gated == ["send_product_update_email"], gated
 
 
-# ── §10A: the alert fires on all three doors, not two ────────────────────────────────
+# ── The security alert fires on all three doors, not two ────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_name_change_fires_a_security_alert(member_client, member_user):
-    """§10A: *"Security alert email fires on name, email and password change."*
+    """Security alert email fires on name change, not just email and password change.
 
-    Password and email both fired it. **Name did not** (found 2026-08-22) — `PATCH
-    /me/profile` wrote its audit row and returned silently. Changing the display name is
-    one of the first things an account takeover does, because it is the cheapest way to
-    make later messages look legitimate, so it is exactly the door the alert should cover.
+    regression: `PATCH /me/profile` wrote its audit row and returned silently without
+    firing the alert. Changing the display name is one of the first things an account
+    takeover does, because it is the cheapest way to make later messages look
+    legitimate, so it is exactly the door the alert should cover.
     """
     with patch.object(
         me_module, "send_security_alert_email", new=AsyncMock(return_value=True)

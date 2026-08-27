@@ -1,8 +1,7 @@
 """Delete products that sell exactly one file and carry no questions.
 
-OWNER RULE (2026-08-23): "a pack is not a template — a pack must have more than one
-file. Remove any product with only one file. Only one file is allowed when there are
-questions involved."
+OWNER RULE: a pack is not a template — a pack must have more than one file. Remove any
+product with only one file. Only one file is allowed when there are questions involved.
 
 So a file-selling product survives only if it has >= 2 `template` rows, or has >= 1
 `question_set` row alongside its single template. Everything else goes.
@@ -19,8 +18,7 @@ WHAT THIS DELETES, AND THE COST.
     risk-assessment-template          A$39   1 template
     tprm-due-diligence-checklist      A$35   1 template
 
-  Sold (destructive — owner confirmed 2026-08-23 after the consequences were spelled
-  out, and confirmed again when told the FKs are ON DELETE NO ACTION):
+  Sold (destructive — the FKs are ON DELETE NO ACTION):
     quality-risk-management-presentation  A$25  completed order 2026-08-19, 1 entitlement
     vendor-risk-assessment-scorecard      A$39  refunded  order 2026-08-14, 1 entitlement
 

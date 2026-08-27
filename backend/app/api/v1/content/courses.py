@@ -61,9 +61,9 @@ class CourseSummaryOut(BaseModel):
     level: Optional[str] = None
     estimated_duration_minutes: Optional[int] = None
     product: Optional[RelatedProductOut]
-    # W5-R4 Stage B. `rating` is null below MIN_REVIEWS_FOR_AGGREGATE — served from
-    # the denormalised counters on the row, so a catalogue of N cards stays one query
-    # rather than N calls to /reviews/rating.
+    # `rating` is null below MIN_REVIEWS_FOR_AGGREGATE — served from the denormalised
+    # counters on the row, so a catalogue of N cards stays one query rather than N
+    # calls to /reviews/rating.
     rating: Optional[float] = None
     review_count: int = 0
 
@@ -94,17 +94,10 @@ class ModuleOut(BaseModel):
     sort_order: int
     lessons: list[LessonOutlineOut]
     questions: list[ModuleQuestionOut]
-    # `[ADDED 2026-08-25]` Whether this module has a *published* assessment.
-    #
-    # Without it the outline had no way to know, so Learn.tsx rendered a "Take
-    # Assessment" row on every module unconditionally — a link to
-    # `/modules/{id}/assessment`, which 404s (`no_assessment`) for every module that
-    # hasn't got one. That is most of them.
-    #
-    # Deliberately a boolean rather than the assessment itself: this is the public
-    # course outline, visible to people who don't own the course, and the paper (even
-    # without `is_correct`) is entitled content. The title is safe and useful — it is
-    # what the row is labelled with — so it ships alongside, but nothing more.
+    # Whether this module has a *published* assessment, so the outline doesn't render
+    # a "Take Assessment" row that 404s. Deliberately a boolean rather than the
+    # assessment itself: this is the public outline, and the paper is entitled
+    # content. The title is safe to show, so it ships alongside, but nothing more.
     has_assessment: bool = False
     assessment_title: Optional[str] = None
 
@@ -117,11 +110,8 @@ class CourseDetailOut(BaseModel):
     description: str
     section: str
     author_name: str
-    # `[ADDED 2026-08-22, Redesing_decisions.md B5]` The bio has existed on the Author
-    # model since the schema was written but was never serialised, so the frontend had
-    # a name and nothing to establish WHY that name should be trusted — which is the
-    # entire point of naming them. Additive and optional: existing clients ignore it,
-    # and the author row is already loaded, so this costs no extra query.
+    # The bio establishes why the named author should be trusted. Optional, and the
+    # author row is already loaded, so this costs no extra query.
     author_bio: Optional[str] = None
     owned: bool
     lesson_count: int
@@ -129,17 +119,16 @@ class CourseDetailOut(BaseModel):
     cover_image_url: Optional[str] = None
     modules: list[ModuleOut]
     related_products: list[RelatedProductOut]
-    # W4-R20 / ledger row 92: when a buyer's access to THIS course ended because their
-    # order was refunded. Null in every other case, including a course never bought.
-    # Without it, a refunded buyer silently sees an ordinary buy page and is never told
-    # what happened — §20.10's "the four states" with the fourth state missing.
+    # When a buyer's access to THIS course ended because their order was refunded.
+    # Null in every other case, including a course never bought — so a refunded buyer
+    # is told what happened rather than seeing an ordinary buy page.
     access_ended_at: Optional[str] = None
-    # W5-R2: whether this reader has completed the course, and their certificate code
-    # if one was issued. The page uses this to show a completion badge and a link to
-    # the certificate, instead of the "Continue the course" CTA.
+    # Whether this reader has completed the course, and their certificate code if one
+    # was issued. The page shows a completion badge and certificate link instead of
+    # the "Continue the course" CTA.
     completed: bool = False
     certificate_verification_code: Optional[str] = None
-    # W5-R4 Stage B. Same as CourseSummaryOut — null below the display threshold.
+    # Same as CourseSummaryOut — null below the display threshold.
     rating: Optional[float] = None
     review_count: int = 0
 
@@ -155,13 +144,8 @@ async def list_courses(
     """The course catalogue — public. `owned` is a real entitlement check, so a card
     never shows a price on something the visitor already holds.
 
-    `[FIXED]` This used to issue 3 queries per course (section, modules, lessons) plus,
-    per lesson, a full `has_access_to` round trip (itself 2 queries) until an owned one
-    was found, plus a product lookup per course — a query count proportional to the
-    whole catalogue's course/lesson total, run serially. Each round trip to Postgres
-    here costs on the order of hundreds of ms, so this page alone could take seconds.
-    Everything below is now a fixed handful of bulk queries regardless of how many
-    courses or lessons exist, with the per-course/per-lesson work done in memory.
+    Uses a fixed handful of bulk queries regardless of how many courses or lessons
+    exist, with the per-course/per-lesson work done in memory.
     """
     result = await session.execute(
         select(Course).where(Course.published.is_(True)).order_by(Course.created_at)
@@ -244,31 +228,16 @@ async def list_courses(
         media_rows = await session.execute(
             select(Media.lesson_id, Media.duration_seconds).where(Media.lesson_id.in_(media_lesson_ids))
         )
-        # `[FIXED 2026-08-22]` `Media.duration_seconds` is nullable — a video row exists
-        # as soon as it is uploaded, but its duration is only known once the encoder has
-        # probed it. Keeping the None here meant the sum below did `int + None` and the
-        # whole /courses endpoint returned a 500, so one un-probed video took down the
-        # entire catalogue. Unknown durations are dropped instead: a course then reports
-        # the duration of the lessons whose length we actually know, which is honest and
-        # renders, rather than nothing at all.
+        # `Media.duration_seconds` is nullable — a video row exists as soon as it is
+        # uploaded, but its duration is only known once the encoder has probed it.
+        # Unknown durations are dropped so the sum below can't do `int + None`; a
+        # course then reports the duration of the lessons whose length is known.
         duration_by_lesson = {lid: dur for lid, dur in media_rows.all() if dur is not None}
 
-    # `[FIXED 2026-08-22]` Two unit/source bugs lived in this block.
-    #
-    # 1. `Media.duration_seconds` is *seconds*, but the sum was assigned straight to
-    #    `estimated_duration_minutes` and compared against `min_duration`/`max_duration`,
-    #    both documented as minutes. A course with three minutes of video reported "184"
-    #    to the catalogue card and the FactStrip — a 60x overstatement, and the duration
-    #    filter was silently comparing seconds to minutes so it matched almost nothing.
-    #    Seconds are now divided down (rounded up, so a 40-second lesson is "1 min"
-    #    rather than vanishing to 0).
-    #
-    # 2. `Course.estimated_duration_minutes` — an authored column that the seed scripts
-    #    populate on every course — was never read. Reading-only courses have no Media
-    #    rows at all, so all five seeded reading courses returned `null` duration despite
-    #    having the value set. The authored figure is the better number where it exists:
-    #    it covers reading time, which no encoder can measure. Computed video time is
-    #    kept as the fallback for courses that were never given one.
+    # Duration is in minutes. `Media.duration_seconds` is seconds, so it's divided
+    # down (rounded up, so a 40-second lesson is "1 min" rather than 0). The authored
+    # `Course.estimated_duration_minutes` is preferred where set — it covers reading
+    # time, which no encoder can measure; computed video time is the fallback.
     video_seconds_by_course: dict = {}
     for lesson in lessons:
         assert lesson.module_id is not None
@@ -295,10 +264,9 @@ async def list_courses(
             if duration_by_course.get(c.id, 0) >= min_duration
         ]
     if max_duration is not None:
-        # `[FIXED 2026-08-22]` `.get(c.id, 0)` meant a course with *unknown* duration
-        # scored 0 and therefore satisfied every "under N minutes" filter — the courses
-        # we know least about were the ones most confidently shown as short. Unknown now
-        # fails the upper bound, matching how min_duration already treats it.
+        # A course with unknown duration fails the upper bound rather than scoring 0
+        # and satisfying every "under N minutes" filter — matching how min_duration
+        # already treats it.
         filtered_courses = [
             c for c in filtered_courses
             if c.id in duration_by_course and duration_by_course[c.id] <= max_duration
@@ -364,12 +332,8 @@ async def get_course(
     """The course product page. Every lesson is listed with a type icon and lock state
     whether or not the visitor owns the course.
 
-    `[FIXED]` This used to issue one query for lessons, one for media, and one
-    `has_access_to` round trip (itself 2 queries) PER LESSON, plus one module-questions
-    query per module — all serial. Each round trip costs on the order of hundreds of ms
-    against this DB, so a multi-module course could take seconds to load. Below,
-    lessons/media/module-questions/entitlement are each resolved in one bulk query for
-    the whole course, and the per-module assembly loop does no I/O.
+    Lessons/media/module-questions/entitlement are each resolved in one bulk query
+    for the whole course, and the per-module assembly loop does no I/O.
     """
     result = await session.execute(select(Course).where(Course.slug == slug, Course.published.is_(True)))
     course = result.scalar_one_or_none()
@@ -575,8 +539,8 @@ async def get_course(
         except Exception:  # noqa: BLE001
             pass
 
-    # W5-R2: check for a certificate. One query, only for a signed-in reader
-    # who owns the course — an anonymous or non-owner never has a certificate.
+    # Check for a certificate. One query, only for a signed-in reader who owns the
+    # course — an anonymous or non-owner never has a certificate.
     completed = False
     cert_verification_code: Optional[str] = None
     if user_id and owned:

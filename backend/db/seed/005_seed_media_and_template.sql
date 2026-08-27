@@ -1,4 +1,4 @@
--- The real Mux video and the real template file (week1_plan.md decision #7), pulled
+-- The real Mux video and the real template file, pulled
 -- from the Mux API (GET /video/v1/assets) and Supabase Storage's S3 API
 -- (list_objects_v2) directly rather than typed in by hand — see the asset/bucket
 -- listing this was generated from. Run after 004_seed_course_skeleton.sql.

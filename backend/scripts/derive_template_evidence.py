@@ -1,12 +1,10 @@
-"""Derive the pre-purchase evidence facts from the real template files (W4-R1, ledger row 23).
+"""Derive the pre-purchase evidence facts from the real template files.
 
 Why this exists
 ---------------
-EvidencePanel (week4_plan.md §20.1) is built on an absence rule: a fact whose column is
-unset does not render. On 2026-08-22 every published template had page_count,
-sheet_count and is_editable NULL, so the panel rendered format/version/licence and
-nothing about the artefact itself — the ninety seconds before payment W4-R1 exists to
-fill were blank.
+EvidencePanel is built on an absence rule: a fact whose column is unset does not render.
+When page_count, sheet_count and is_editable are NULL, the panel renders
+format/version/licence and nothing about the artefact itself.
 
 The facts are not editorial. They are properties of the file already sitting in Storage,
 so this script measures them rather than asking anyone to type them:
@@ -20,7 +18,7 @@ so this script measures them rather than asking anyone to type them:
 
 Nothing here fabricates. If a file cannot be opened or a fact cannot be measured, the
 column is left NULL and the row is reported as skipped — a blank row on the buy page is
-honest; an invented one is the exact failure W4-R1's absence rule was written against.
+honest; an invented one is the failure the absence rule was written against.
 
 Usage (from backend/):
     python scripts/derive_template_evidence.py            # report only, writes nothing
@@ -47,7 +45,7 @@ from app.integrations.storage_client import download_file  # noqa: E402
 
 # Formats whose native form the buyer can edit. PDF is deliberately absent: a PDF is
 # readable everywhere and editable nowhere without extra software, and claiming
-# otherwise on a buy page is the kind of small overclaim W4-R1 exists to prevent.
+# otherwise on a buy page is a small overclaim.
 EDITABLE_EXTENSIONS = {".xlsx", ".xlsm", ".docx", ".pptx", ".ppt", ".xls", ".doc"}
 
 # Office-version floors, by container generation. OOXML (the "x" formats) needs 2007+;

@@ -1,4 +1,4 @@
-"""Records `download_events` rows — week4_plan.md Phase 6B step 4b.
+"""Records `download_events` rows.
 
 Called at the exact call sites that mint a presigned download URL for a
 template or lesson file, and nowhere else. No `user_id`: same privacy

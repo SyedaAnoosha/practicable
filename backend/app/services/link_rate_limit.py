@@ -1,7 +1,7 @@
-"""Soft rate limiter for download link minting (Phase 8F step 11).
+"""Soft rate limiter for download link minting.
 
 Per user per template per hour, in memory. Logs when exceeded but never
-blocks a legitimate download.  No IP stored (8C's and 6B's rule).
+blocks a legitimate download.  No IP stored.
 
 The limit is advisory — a real attacker would just wait or rotate sessions.
 Its purpose is to surface automated scraping in logs, not to enforce a

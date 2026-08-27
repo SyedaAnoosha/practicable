@@ -1,5 +1,5 @@
 /**
- * Client-side filter event recording — week4_plan.md Phase 6B step 4.
+ * Client-side filter event recording.
  *
  * Called from QuestionsCatalogue.tsx where filter_applied already fires.
  * Failure is silent and never blocks a filter tap.

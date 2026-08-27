@@ -9,7 +9,7 @@ if (!API_BASE) {
   throw new Error('VITE_API_BASE_URL is not set. Copy .env.local.example to .env.local.')
 }
 
-// The only Axios instance in the app (DESIGN.md §81) — no other file calls FastAPI
+// The only Axios instance in the app — no other file calls FastAPI
 // with raw fetch. Two responsibilities live here and nowhere else: attaching the
 // Supabase JWT, and reacting to a 401 by clearing session state.
 export const api = axios.create({

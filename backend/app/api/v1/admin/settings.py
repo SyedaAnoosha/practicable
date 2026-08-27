@@ -1,8 +1,8 @@
 """Admin settings — operational fields and configuration status panel.
 
-Phase 6C (W4-R13 steps 3, 8): /admin/config-status returns {name, required, is_set}
-per setting derived from Settings.model_fields, NEVER a value. /admin/settings
-allows editing operational fields only.
+/admin/config-status returns {name, required, is_set} per setting derived from
+Settings.model_fields, NEVER a value. /admin/settings allows editing operational
+fields only.
 
 Secrets are never returned, masked or otherwise — a test asserts the response body
 contains no key material (sk_, rk_, phc_, SG., JWT prefix patterns).

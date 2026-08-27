@@ -1,19 +1,17 @@
 import { test, expect } from '@playwright/test'
 
 /**
- * week3_plan.md Phase 6 step 4 / DESIGN.md §49.2 — "every list and card component is
- * tested against a fixture set that deliberately includes" a 140-character title, a
- * one-word title, a question with only the required tags, a 2,400-word body, a course
- * with 12 modules and 60 lessons, and a 42-character author name.
+ * DESIGN.md §49.2 — every list and card component tested against a fixture set that
+ * deliberately includes a 140-character title, a one-word title, a question with only the
+ * required tags, a 2,400-word body, a course with 12 modules and 60 lessons, and a
+ * 42-character author name.
  *
- * These are synthetic on purpose, not inserted into the real catalogue: §49.1's "real
- * content, always" rule means the live database never carries placeholder rows, so the
- * fixtures live here instead — DESIGN.md §49.2's own words, "these live in the repo as
- * fixtures" — and reach the page via `page.route()` interception rather than a real
- * round trip. Checked because the real catalogue, at time of writing, never approaches
- * any of these extremes (`SELECT max(length(title))` on live `questions` returns 49,
- * not 140) — a passing axe sweep and a clean `tsc` on real content prove nothing about
- * what happens when a genuinely long title or a 60-lesson course ships later.
+ * These are synthetic on purpose, not inserted into the real catalogue (§49.1's "real
+ * content, always" rule means the live database never carries placeholder rows), and
+ * reach the page via `page.route()` interception rather than a real round trip. The real
+ * catalogue never approaches these extremes, so an axe sweep and a clean `tsc` on real
+ * content prove nothing about what happens when a genuinely long title or a 60-lesson
+ * course ships later.
  *
  * `MAX_SCROLL_TOLERANCE_PX` allows a few px of slack for scrollbar-width rounding
  * across browsers — the assertion is "no layout-breaking overflow", not zero-pixel
@@ -158,14 +156,12 @@ test.describe('DESIGN.md §49.2 stress fixtures — 375px, no horizontal overflo
     await expectNoHorizontalOverflow(page)
   })
 
-  // week4_plan.md W4-R1 acceptance: "The panel renders correctly at 375px with a
-  // 140-character product name and a 42-character author name — no overflow, no
-  // clipped preview." `EvidencePanel` had never been exercised by this file at all
-  // until Phase 3 — this is that fixture. A 1x1 transparent GIF stands in for the two
-  // preview images so the assertion is about layout, not about a real Storage round
-  // trip. `/templates/:id` rather than `/buy/:slug` — both render the same
-  // `EvidencePanel`, but `/buy/:slug` sits behind the signed-in layout (App.tsx) and
-  // this suite is deliberately anonymous, same as every other test in this file.
+  // `EvidencePanel` at 375px with a 140-character product name and a 42-character author
+  // name — no overflow, no clipped preview. A 1x1 transparent GIF stands in for the two
+  // preview images so the assertion is about layout, not a real Storage round trip.
+  // `/templates/:id` rather than `/buy/:slug` — both render the same `EvidencePanel`, but
+  // `/buy/:slug` sits behind the signed-in layout (App.tsx) and this suite is
+  // deliberately anonymous.
   const TRANSPARENT_GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 
   test('template detail: a 140-char title, full evidence facts and two previews', async ({ page }) => {

@@ -3,9 +3,6 @@ Storage S3-compatible endpoint — same rule as `test_template_uploads.py`: the 
 guarding what a public catalogue page renders as `<img src>` is verified against real
 infrastructure, not a stand-in.
 
-week4_plan.md Phase 3 step 8 `[[REQUESTED 20-08-2026]]`: "Allow to upload images for
-courses as well... shown in similar way like Coursera, edX and Udemy."
-
 Real bytes are PUT directly to Storage (bypassing the app, exactly as a browser would
 via the presigned URL) and always cleaned up in a `finally`, since `db_session`'s
 transaction rollback (conftest.py) reverts the Postgres row but has no reach into the

@@ -1,4 +1,4 @@
--- Overlap audit script (week4_plan.md W4-R3).
+-- Overlap audit script.
 -- Run against production at any time without a deploy to find shared content between
 -- published products.
 --
@@ -31,7 +31,7 @@ JOIN products p2
     AND p2.is_bundle = false
 ORDER BY p1.name, pc1.content_type, pc1.content_id;
 
--- Expected result for the current catalogue (2026-08-19):
+-- Expected result for the current catalogue:
 -- Zero rows. The bundle in db/seed/016_seed_bundle.sql is excluded by is_bundle=false
 -- filter above, which is correct — a bundle is explicitly permitted to overlap.
 --

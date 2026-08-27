@@ -1,9 +1,8 @@
-"""Add stripe_product_id to products table (Phase 8 8B).
+"""Add stripe_product_id to products table.
 
-Phase 8 (8B): Price control for every course and template.
-Adds nullable stripe_product_id column to products table to store the Stripe Product ID
-returned by create_price(). This enables future price changes (8B-3) by allowing reuse
-of the same Stripe Product when creating new Prices.
+Price control for every course and template. Adds nullable stripe_product_id column to
+store the Stripe Product ID returned by create_price(). Enables future price changes by
+allowing reuse of the same Stripe Product when creating new Prices.
 
 Nullable because the backfill can genuinely fail for a seeded row, and a NOT NULL column
 would force a lie into it.

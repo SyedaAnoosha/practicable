@@ -1,4 +1,4 @@
-"""Add courses.last_reviewed_at for the content freshness system (#16).
+"""Add courses.last_reviewed_at for the content freshness system.
 
 Templates already carry `version` and `last_reviewed_at` (migration 013). Courses carried
 neither, so the freshness warning docs/improvements.md §16 asks for could only ever cover

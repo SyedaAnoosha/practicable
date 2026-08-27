@@ -1,4 +1,4 @@
-"""Render a spreadsheet's real first screenful as a preview image (W4-R1, ledger row 24).
+"""Render a spreadsheet's real first screenful as a preview image.
 
 Why this is not a mockup
 ------------------------
@@ -7,8 +7,8 @@ padded or rearranged: the column order, the header row and the cell text are the
 own. What is *not* reproduced is the source workbook's visual styling — openpyxl cannot
 resolve theme-indexed fills to RGB without the theme part, and a half-reproduced style
 looks like a rendering bug rather than the artefact. So the content is drawn in this
-platform's own table treatment (theme.css §12.2 light tokens), which is also how the same
-data would look inside a lesson on this site.
+platform's own table treatment (theme.css light tokens), which is also how the same data
+would look inside a lesson on this site.
 
 That is a deliberate, stated trade: **the data is the artefact's, the styling is ours.**
 The alt text says so, so a buyer is never told they are looking at the file's own design.
@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from io import BytesIO
 
-# theme.css §12.2 — the light plane, the only plane a preview JPEG can be in (an image
-# cannot respond to `prefers-color-scheme`, and light is the neutral ground the gallery
-# thumbnails sit on in both themes).
+# theme.css light plane, the only plane a preview JPEG can be in (an image cannot respond
+# to `prefers-color-scheme`, and light is the neutral ground the gallery thumbnails sit
+# on in both themes).
 INK = (28, 23, 18)             # --foreground  #1C1712
 MUTED_INK = (109, 96, 82)      # --muted-foreground
 CARD = (255, 255, 255)         # --card
@@ -127,9 +127,9 @@ def _is_boilerplate_sheet(name: str) -> bool:
 def render_sheet_previews(blob: bytes, limit: int = 2) -> list[tuple[bytes, str, int]]:
     """Up to `limit` previews, one per content sheet.
 
-    W4-R1 asks for at least two previews. This returns a second one only where a second
-    *content* sheet actually exists — see this module's own note. Fewer than `limit` is a
-    correct answer for a single-sheet workbook, not a failure to be padded.
+    Returns a second preview only where a second *content* sheet actually exists. Fewer
+    than `limit` is a correct answer for a single-sheet workbook, not a failure to be
+    padded.
     """
     from openpyxl import load_workbook
 

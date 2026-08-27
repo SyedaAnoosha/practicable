@@ -79,9 +79,8 @@ class PackSummaryOut(BaseModel):
     template_id: Optional[str]
     file_name: Optional[str]
     file_size_bytes: Optional[int]
-    # Evidence layer — W4-R1. page_count..previews come from the pack's bundled
-    # template row (the PDF) — a pack with no template row yet has none of these set,
-    # same absence rule as everywhere else on this page (EvidencePanel §20.1).
+    # Evidence layer. page_count..previews come from the pack's bundled template row
+    # (the PDF); a pack with no template row yet has none of these set.
     licence: Optional[str] = None
     search_title: Optional[str] = None
     version: Optional[str] = None
@@ -94,8 +93,8 @@ class PackSummaryOut(BaseModel):
     min_office_version: Optional[str] = None
     previews: list[PreviewOut] = []
     format: Optional[str] = None
-    # W5-R4 Stage B. Null below MIN_REVIEWS_FOR_AGGREGATE. A pack's counters live on
-    # its Product row, which is what `_COUNTER_MODEL["pack"]` writes to.
+    # Null below MIN_REVIEWS_FOR_AGGREGATE. A pack's counters live on its Product row,
+    # which is what `_COUNTER_MODEL["pack"]` writes to.
     rating: Optional[float] = None
     review_count: int = 0
 
@@ -109,26 +108,12 @@ async def _pack_product_ids(session: AsyncSession) -> set[uuid.UUID]:
     """Published products that are actually pack-shaped: more than one template, or a
     single template sold alongside questions.
 
-    `[CHANGED 2026-08-22, owner direction]` This also required a `question_set` row.
-    Questions are no longer part of what makes something a pack (see the matching change
-    in `admin/packs.py`), and leaving the requirement here would have been the quieter
-    half of the same bug: an admin could create and publish a question-less pack, and it
-    would then simply never appear in the catalogue, with nothing anywhere saying why.
-
-    `[FIXED 2026-08-23, owner rule]` "A pack is not a template — a pack must have more
-    than one file. A pack can only be one file when what it sells is a questions PDF."
-
-    The predicate was "has at least one template row", which is the shape of *every*
-    file-selling product, a single-file template product included. So a plain template
-    product — one template, one price, nothing else — satisfied it and appeared on the
-    packs surface as though it were a pack. The two shapes were indistinguishable here
-    because a pack is inferred rather than declared (see this module's opening note: a
-    pack is "a *shape*, not a type"), and the inference was simply too loose.
-
-    The rule is now expressed as written: >= 2 templates makes a pack, and exactly 1
-    template makes a pack only when a question_set row comes with it — which is what
-    `risk-enterprise-op-question-pack` is, a single typeset PDF of questions. A lone
-    template falls through to the templates catalogue, where it belongs.
+    A pack is inferred from its shape, not declared, so the predicate must not match
+    a plain single-file template product. The rule: >= 2 templates makes a pack, and
+    exactly 1 template makes a pack only when a question_set row comes with it (a
+    single typeset PDF of questions). A lone template falls through to the templates
+    catalogue, where it belongs. Questions are not otherwise part of what makes
+    something a pack (matching `admin/packs.py`).
 
     Counting is done in one grouped query rather than per-product, keeping this the
     fixed number of round trips the packs endpoints were built around.

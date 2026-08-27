@@ -1,13 +1,10 @@
-"""Phase 10 (§10A/§10B/§10E/§10F): Tests for the self-serve account endpoints.
+"""Tests for the self-serve account endpoints: /me/profile PATCH,
+/me/account/notifications, /me/account/password-change, /me/account/email-changed,
+/me/account/export, and /me/account/close.
 
-Found 2026-08-21 (Phase 10 re-verification): every DoD line for this phase claimed
-"seen red first" test coverage, but zero test files existed anywhere in the repo for
-any of /me/profile PATCH, /me/account/notifications, /me/account/password-change,
-/me/account/email-changed, /me/account/export, or /me/account/close — confirmed by
-grep, zero hits on any endpoint name or route. This is that missing coverage,
-prioritised toward the two highest-severity claims the DoD makes: the data export
-"scoped strictly to the requesting user" (a leak here is a real privacy breach) and
-closure's interaction with the entitlements gate + no-hard-delete guarantee.
+Prioritised toward the two highest-severity guarantees: the data export scoped
+strictly to the requesting user (a leak here is a real privacy breach), and
+closure's interaction with the entitlements gate plus the no-hard-delete rule.
 """
 import json
 import uuid
@@ -79,7 +76,7 @@ async def test_export_includes_the_requesting_users_own_order(member_client, mem
 
 @pytest.mark.asyncio
 async def test_close_account_sets_disabled_at_not_a_delete(member_client, member_user, db_session):
-    """§10F: closure is deactivation, never a hard delete."""
+    """Closure is deactivation, never a hard delete."""
     resp = await member_client.post("/me/account/close")
     assert resp.status_code == 200, resp.text
 
@@ -102,9 +99,9 @@ async def test_close_account_is_idempotent_not_a_double_fire(member_client, memb
 
 @pytest.mark.asyncio
 async def test_closed_account_fails_the_entitlements_gate(member_client, member_user, db_session):
-    """§10F's own required test, verbatim: 'a deactivated user is refused by the
-    gate.' Via resolve_product_ids, the same function the gate itself calls —
-    not a re-implementation of the gate's logic."""
+    """A deactivated user is refused by the gate. Via resolve_product_ids, the
+    same function the gate itself calls — not a re-implementation of the gate's
+    logic."""
     from app.core.entitlements import resolve_product_ids
 
     product = Product(
@@ -128,7 +125,7 @@ async def test_closed_account_fails_the_entitlements_gate(member_client, member_
 
 @pytest.mark.asyncio
 async def test_closed_accounts_orders_are_not_deleted(member_client, member_user, db_session):
-    """§10F step 7: 'a deactivated user's orders remain intact.'"""
+    """A deactivated user's orders remain intact."""
     product = Product(
         id=uuid.uuid4(), slug=f"p-{uuid.uuid4().hex[:8]}", name="Retained Order Product",
         description="d", stripe_price_id="price_test", price_amount=4900, currency="AUD",
@@ -144,18 +141,17 @@ async def test_closed_accounts_orders_are_not_deleted(member_client, member_user
     assert resp.status_code == 200, resp.text
 
     surviving_order = (await db_session.execute(select(Order).where(Order.id == order.id))).scalar_one_or_none()
-    assert surviving_order is not None, "Closure must not delete order records — financial retention (Research §7.6)"
+    assert surviving_order is not None, "Closure must not delete order records — financial retention"
 
 
 @pytest.mark.asyncio
 async def test_close_account_with_a_stale_token_is_refused(member_user):
-    """Found 2026-08-22 (owner-flagged): /me/account/close previously required only
-    a valid session — the password gate lived entirely in AccountDataPrivacy.tsx's
-    choice to call signInWithPassword first, which a direct API call bypasses
-    completely. require_recent_reauth closes this server-side using the JWT's `iat` —
-    fresh only immediately after a real signInWithPassword. This constructs a token
-    stamped 10 minutes old (outside the 5-minute freshness window) to prove a stale
-    token is refused, not just a missing one.
+    """regression: /me/account/close must enforce recent reauth server-side, not
+    rely on the frontend calling signInWithPassword first (a direct API call
+    bypasses that). require_recent_reauth checks the JWT's `iat`, fresh only just
+    after a real signInWithPassword. This constructs a token stamped 10 minutes old
+    (outside the 5-minute freshness window) to prove a stale token is refused, not
+    just a missing one.
     """
     stale_token = VerifiedToken(
         user_id=str(member_user.id),
@@ -213,9 +209,7 @@ async def test_close_account_with_a_fresh_token_succeeds(member_user):
 
 @pytest.mark.asyncio
 async def test_export_is_rate_limited(member_client):
-    """§10F step 1: 'Rate-limited.' Untested before this pass — confirms the
-    _account_rate_limiter actually gates this endpoint, not just the ones with a
-    dedicated closure/password-change test already covering it indirectly."""
+    """Confirms _account_rate_limiter actually gates this endpoint."""
     responses = [await member_client.post("/me/account/export") for _ in range(11)]
     statuses = [r.status_code for r in responses]
     assert 429 in statuses, f"Expected a 429 among 11 rapid requests, got {statuses}"
@@ -223,11 +217,10 @@ async def test_export_is_rate_limited(member_client):
 
 @pytest.mark.asyncio
 async def test_no_hard_delete_path_exists_anywhere_for_a_user_account(member_client, member_user, db_session):
-    """§10F step 7: 'no Delete Account button hard-deletes anything.' No behavioral
-    test can prove a negative UI claim by itself, so this pairs a backend check (the
-    user row survives close_my_account, full stop — no code path removes it) with
-    the frontend's own structural test (AccountDataPrivacy.deleteButton.test.tsx)
-    that greps for the literal absence of a hard-delete control."""
+    """No code path hard-deletes a user account. Pairs a backend check (the user
+    row survives close_my_account, full stop) with the frontend's own structural
+    test (AccountDataPrivacy.deleteButton.test.tsx) that greps for the absence of a
+    hard-delete control."""
     close_resp = await member_client.post("/me/account/close")
     assert close_resp.status_code == 200, close_resp.text
 
@@ -239,7 +232,7 @@ async def test_no_hard_delete_path_exists_anywhere_for_a_user_account(member_cli
 
 @pytest.mark.asyncio
 async def test_notification_preferences_persist(member_client, member_user, db_session):
-    """§10E: preferences persist across the GET/PATCH round trip."""
+    """Preferences persist across the GET/PATCH round trip."""
     resp = await member_client.patch(
         "/me/account/notifications",
         json={"notify_marketing": True, "notify_product_updates": False},
@@ -260,8 +253,7 @@ async def test_notification_preferences_persist(member_client, member_user, db_s
 
 @pytest.mark.asyncio
 async def test_notification_preferences_default_marketing_off_updates_on(member_client):
-    """§10E step 4: no pre-ticked marketing consent; product-update mail defaults
-    on, visibly toggleable."""
+    """No pre-ticked marketing consent; product-update mail defaults on."""
     resp = await member_client.get("/me/account/notifications")
     assert resp.status_code == 200, resp.text
     assert resp.json()["notify_marketing"] is False
@@ -270,8 +262,7 @@ async def test_notification_preferences_default_marketing_off_updates_on(member_
 
 @pytest.mark.asyncio
 async def test_notification_preferences_reject_non_boolean_values(member_client):
-    """§10E step 5: 'non-boolean values rejected' — the one DoD line with no test
-    at all before this pass."""
+    """Non-boolean preference values are rejected."""
     resp = await member_client.patch(
         "/me/account/notifications",
         json={"notify_marketing": "not-a-real-boolean", "notify_product_updates": False},
@@ -281,8 +272,7 @@ async def test_notification_preferences_reject_non_boolean_values(member_client)
 
 @pytest.mark.asyncio
 async def test_notification_preferences_update_writes_an_audit_row(member_client, member_user, db_session):
-    """§10E step 2: 'PATCH /me/account/notifications — booleans only, audited,
-    idempotent' — the audited half was never actually tested."""
+    """PATCH /me/account/notifications writes an audit row."""
     from app.db.models import AuditLog
 
     resp = await member_client.patch(
@@ -306,8 +296,8 @@ async def test_notification_preferences_update_writes_an_audit_row(member_client
 
 @pytest.mark.asyncio
 async def test_notification_preferences_patch_is_idempotent(member_client):
-    """§10E step 2: sending the same values twice must not error or double-apply
-    anything — a plain field overwrite, safe to repeat."""
+    """Sending the same values twice must not error or double-apply anything — a
+    plain field overwrite, safe to repeat."""
     payload = {"notify_marketing": True, "notify_product_updates": False}
     first = await member_client.patch("/me/account/notifications", json=payload)
     second = await member_client.patch("/me/account/notifications", json=payload)
@@ -323,11 +313,10 @@ async def test_notification_preferences_patch_is_idempotent(member_client):
 
 @pytest.mark.asyncio
 async def test_email_change_hook_syncs_email_and_writes_an_audit_row(member_client, member_user, db_session):
-    """§10A step 3: 'After Supabase confirms the new email, the frontend calls this
-    to sync users.email, write an audit row, fire the security alert email.' This
-    endpoint itself had zero test coverage before this pass, despite being the exact
-    hook RootLayout.tsx's onAuthStateChange now calls (see
-    RootLayout.emailChange.test.tsx for the frontend half)."""
+    """After Supabase confirms the new email, the frontend calls this to sync
+    users.email and write an audit row. This is the hook RootLayout.tsx's
+    onAuthStateChange calls (see RootLayout.emailChange.test.tsx for the frontend
+    half)."""
     from app.db.models import AuditLog
 
     new_email = f"changed-{uuid.uuid4().hex[:8]}@example.test"
@@ -351,9 +340,8 @@ async def test_email_change_hook_syncs_email_and_writes_an_audit_row(member_clie
 
 @pytest.mark.asyncio
 async def test_email_change_hook_is_rate_limited(member_client):
-    """§10A/§10F pattern: every account-mutation hook in this file shares
-    _account_rate_limiter — this one had no test confirming it actually applies
-    here too."""
+    """The email-change hook shares _account_rate_limiter with the other
+    account-mutation hooks."""
     responses = [
         await member_client.post("/me/account/email-changed", json={"new_email": f"e{i}@example.test"})
         for i in range(11)
@@ -364,8 +352,8 @@ async def test_email_change_hook_is_rate_limited(member_client):
 
 @pytest.mark.asyncio
 async def test_password_change_hook_writes_an_audit_row(member_client, member_user, db_session):
-    """§10B: 'success ... writes an audit row' — the one thing a Supabase-side
-    password change never reaches on its own."""
+    """A successful password change writes an audit row — the one thing a
+    Supabase-side password change never reaches on its own."""
     from app.db.models import AuditLog
 
     resp = await member_client.post("/me/account/password-change")
@@ -382,7 +370,7 @@ async def test_password_change_hook_writes_an_audit_row(member_client, member_us
 
 @pytest.mark.asyncio
 async def test_profile_name_update_persists_and_validates(member_client, member_user, db_session):
-    """§10A step 2: PATCH /me/profile writes full_name, validated, audited."""
+    """PATCH /me/profile writes full_name, validated, audited."""
     resp = await member_client.patch("/me/profile", json={"full_name": "A New Name"})
     assert resp.status_code == 200, resp.text
     assert resp.json()["name"] == "A New Name"
@@ -393,26 +381,21 @@ async def test_profile_name_update_persists_and_validates(member_client, member_
 
 @pytest.mark.asyncio
 async def test_profile_name_update_refuses_empty(member_client):
-    """§10A step 2: empty name refused."""
+    """Empty name refused."""
     resp = await member_client.patch("/me/profile", json={"full_name": ""})
     assert resp.status_code == 422, resp.text
 
 
 @pytest.mark.asyncio
 async def test_profile_name_update_refuses_over_100_chars(member_client):
-    """§10A step 2: >100 chars refused."""
+    """Names over 100 chars refused."""
     resp = await member_client.patch("/me/profile", json={"full_name": "x" * 101})
     assert resp.status_code == 422, resp.text
 
 
-# ── §10E step 5's own required test, verbatim ───────────────────────────────────
-# "a marketing send is suppressed when notify_marketing is false" — found 2026-08-22:
-# untestable as written because no product-update/marketing sender existed anywhere
-# in email_service.py at all (confirmed by grep — zero matches on either preference
-# column in that file). send_product_update_email is that sender, gated on the
-# caller's own notify_product_updates flag; these test the gate directly rather than
-# through Mailjet, since the gate's own early return is what's under test — no
-# network call happens on either branch.
+# send_product_update_email is gated on the caller's own notify_product_updates
+# flag; these test the gate directly rather than through Mailjet, since the gate's
+# own early return is what's under test — no network call happens on either branch.
 
 
 @pytest.mark.asyncio
@@ -420,10 +403,7 @@ async def test_product_update_email_suppressed_when_preference_is_false():
     """`_send` is mocked here so the only variable under test is the gate itself —
     an unmocked version would pass for the wrong reason in this environment (no
     Mailjet credentials means the real network call also returns False, on either
-    branch, which would silently hide a missing gate). Found exactly this way,
-    2026-08-22: the first version of this test used the real `_send` and stayed
-    green after the gate was deliberately deleted in a red-first check — rewritten
-    to mock `_send` once that false pass was caught."""
+    branch, which would silently hide a missing gate)."""
     from unittest.mock import patch
     from app.services.email_service import send_product_update_email
 
@@ -456,8 +436,8 @@ async def test_product_update_email_sends_when_preference_is_true():
 
 @pytest.mark.asyncio
 async def test_transactional_receipt_email_has_no_preference_parameter_to_suppress_it():
-    """§10E step 3 / step 5: transactional mail is NEVER gated by these flags. Proven
-    structurally — send_receipt_email and send_access_granted_email take no
+    """Transactional mail is never gated by these flags. Proven structurally —
+    send_receipt_email and send_access_granted_email take no
     notify_marketing/notify_product_updates parameter at all, so there is no flag
     inside either function capable of suppressing them, by construction."""
     import inspect

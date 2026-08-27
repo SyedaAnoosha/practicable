@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test'
 
 /**
- * W5-R3, Phase 3 — keyboard-only navigation of the search results listbox.
+ * Keyboard-only navigation of the search results listbox.
  *
- * The plan's acceptance line (§2.3.5) is that the search field "is keyboard reachable,
- * has an accessible name, announces result counts to a live region, and Enter with no
- * selection lands on a full /search?q= page". Every one of those is invisible to the
- * unit suite: jsdom will happily report a `role="listbox"` that no key press can reach,
- * and a `role="status"` that never receives text.
+ * The search field must be keyboard reachable, have an accessible name, announce result
+ * counts to a live region, and Enter with no selection must land on a full /search?q=
+ * page. Every one of those is invisible to the unit suite: jsdom will happily report a
+ * `role="listbox"` that no key press can reach, and a `role="status"` that never receives
+ * text.
  *
  * So this drives the real browser with the keyboard alone — no click ever happens after
  * the palette opens. That is the point: someone navigating by keyboard must be able to

@@ -1,25 +1,21 @@
-"""Editorial and publish states (week3_plan.md W3-R6, Phase 5 step 4).
+"""Editorial and publish states.
 
 Adds a four-state `publish_state` (draft | in_review | published | archived) to the five
 editorial tables — questions, courses, lessons, templates, products — replacing the old
-binary "draft vs published" the boolean `published` column could express on its own.
+binary "draft vs published".
 
-The boolean stays, per Phase 5 step 4's explicit instruction: "Keep the boolean as a
-generated/derived read for now... so the 53 existing tests and every read path keep
-working." It is pinned to `publish_state` with a CHECK constraint
+The boolean `published` stays as a derived read so existing tests and read paths keep
+working. It is pinned to `publish_state` with a CHECK constraint
 (`published = (publish_state = 'published')`) rather than a Postgres GENERATED column,
 because several `db/seed/*.sql` scripts insert `published` directly in raw `INSERT`
-statements — a GENERATED column rejects any INSERT that names it at all, which would
-break every one of those scripts outright. A CHECK constraint gives the same guarantee
-(nothing can end up with `published = true` and `publish_state != 'published'`) while
-failing loudly — a constraint violation, not silent drift — the moment a future writer
-sets one without the other. Application code (the three admin `/publish` endpoints)
-is updated in the same change to set both together; see `app/api/v1/admin/{questions,
-courses,templates}.py`.
+statements and a GENERATED column rejects any INSERT that names it. The CHECK gives the
+same guarantee while failing loudly the moment a writer sets one without the other.
+The three admin `/publish` endpoints set both together; see
+`app/api/v1/admin/{questions,courses,templates}.py`.
 
 Also adds `questions.featured` + `questions.featured_sort` for the homepage's curated
-picks (Phase 5 step 6) — nullable sort, since NULL reads as "featured, order unset"
-rather than a false zero forcing every newly-featured question to the front of the row.
+picks — nullable sort, since NULL reads as "featured, order unset" rather than a false
+zero forcing every newly-featured question to the front of the row.
 
 Revision ID: 012
 Revises: 011

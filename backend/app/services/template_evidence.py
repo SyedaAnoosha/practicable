@@ -1,4 +1,4 @@
-"""Shared helpers for W4-R1's evidence layer — turning a `Template` row into what a
+"""Shared helpers for the evidence layer — turning a `Template` row into what a
 public page is actually allowed to render.
 
 Used by every public surface that shows a template's evidence: the template detail
@@ -31,7 +31,7 @@ def resolve_previews(preview_images: list | None) -> list[PreviewOut]:
     """`template.preview_image_keys` holds `{"key": ..., "alt": ...}` objects (JSONB).
     Older rows — or a row touched before this field had a shape — may still hold bare
     key strings; tolerated here as an empty alt rather than a 500, since a template
-    missing alt text is a content gap (§20.2), not a crash.
+    missing alt text is a content gap, not a crash.
     """
     out: list[PreviewOut] = []
     for item in preview_images or []:
@@ -46,9 +46,8 @@ def resolve_previews(preview_images: list | None) -> list[PreviewOut]:
 
 
 def format_line(file_name: str | None, file_count: int = 1) -> str | None:
-    """`.xlsx · 1 file` (§20.1's mockup) — read off the real uploaded file's extension,
-    never typed per product (W4-R1 item 6: "rendered from the columns, never typed per
-    product"). None when there's no file yet, so the row simply doesn't render
+    """`.xlsx · 1 file` — read off the real uploaded file's extension, never typed per
+    product. None when there's no file yet, so the row simply doesn't render
     (EvidencePanel's absence rule) rather than showing a blank extension.
     """
     if not file_name or "." not in file_name:

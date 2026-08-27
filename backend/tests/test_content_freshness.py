@@ -275,8 +275,9 @@ async def test_opted_out_owner_gets_neither_a_row_nor_an_email(
     """`notify_product_updates=False` means no product-update notice, on any channel.
 
     A version bump is not transactional — nothing has happened to this reader's money or
-    account — so §10E's rule applies. Suppressing only the email while writing the in-app
-    row anyway would honour the opt-out on the channel that is easiest to check.
+    account — so the opt-out applies to every channel. Suppressing only the email while
+    writing the in-app row anyway would honour the opt-out on the channel that is
+    easiest to check.
     """
     entitled_user.notify_product_updates = False
     await grant(entitled_user, content_graph.template_product)

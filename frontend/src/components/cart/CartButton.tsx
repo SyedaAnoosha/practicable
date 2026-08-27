@@ -26,7 +26,7 @@ export function CartButton({ className, on = 'surface' }: { className?: string; 
           className={cn(
             'absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full text-[10px] font-semibold tabular-nums',
             // `--accent` flips between themes and is only safe on a surface that flips
-            // with it (DESIGN.md §7.6) — MemberLayout's sidebar is a `--stage` plane
+            // with it — MemberLayout's sidebar is a `--stage` plane
             // that never flips, so it takes the gold pairing StatusDot already
             // established as stage-safe instead.
             on === 'stage' ? 'bg-gold text-stage' : 'bg-accent text-accent-foreground',

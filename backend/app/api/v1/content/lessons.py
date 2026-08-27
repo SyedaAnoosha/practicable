@@ -136,7 +136,7 @@ class LessonBlockOut(BaseModel):
     # text / callout only.
     heading: Optional[str] = None
     text_body: Optional[str] = None
-    prose_sanitized: Optional[str] = None  # Phase 8 (8E): sanitized HTML, null for plain text
+    prose_sanitized: Optional[str] = None  # sanitized HTML, null for plain text
     # video only — readiness, nothing else; the token comes from its own endpoint.
     video_ready: Optional[bool] = None
     # file only — mirrors LessonDownloadOut; the URL comes from its own endpoint.
@@ -152,7 +152,7 @@ class LessonDetailOut(BaseModel):
     description: Optional[str]
     lesson_type: str
     body: Optional[str]
-    prose_sanitized: Optional[str] = None  # Phase 8 (8E): sanitized HTML, null for plain-text lessons
+    prose_sanitized: Optional[str] = None  # sanitized HTML, null for plain-text lessons
     download: Optional[LessonDownloadOut]
     blocks: list[LessonBlockOut]
     has_video: bool
@@ -465,12 +465,12 @@ async def get_lesson_download_url(
                 },
             )
 
-    # Phase 8F step 11: soft rate-limit on link minting. Logs, never blocks.
+    # Soft rate-limit on link minting. Logs, never blocks.
     if user is not None:
         check_link_rate(str(user.id), str(template.id))
 
-    # Phase 8F (W4-R16): Stamp paid downloads with buyer info.
-    # Free templates are never stamped (rule 3); unstampable types served unchanged (rule 2).
+    # Stamp paid downloads with buyer info.
+    # Free templates are never stamped; unstampable types are served unchanged.
     if not template.is_free and user is not None and is_stampable(template.file_name):
         original_bytes = await asyncio.to_thread(download_file, template.storage_key)
         if original_bytes:
@@ -629,7 +629,7 @@ async def mark_lesson_complete(
                     course_progress.completed_at = now
             await session.commit()
 
-            # W5-R2: Issue a certificate on the false→true edge. Called after commit
+            # Issue a certificate on the false→true edge. Called after commit
             # so the completion is durable before a certificate is minted. The service
             # uses INSERT ON CONFLICT to be idempotent — a double-click or replay
             # never creates a second row.

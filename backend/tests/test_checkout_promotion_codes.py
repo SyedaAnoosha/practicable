@@ -1,8 +1,8 @@
 """The promotion-code half of the Checkout session.
 
-`[ADDED 2026-08-27]` Both bugs these cover were live in production and neither had
-a test, because every existing promotion test stops at our own API and never looks
-at the kwargs handed to Stripe.
+regression: both bugs these cover were live in production and neither had a test,
+because every existing promotion test stops at our own API and never looks at the
+kwargs handed to Stripe.
 
 1. Setting a discount used to `del session_kwargs['allow_promotion_codes']` and pass
    `discounts=[...]` instead, because Stripe rejects both keys in one session. The
@@ -119,10 +119,9 @@ def test_no_discount_code_still_offers_the_field():
 
 # ── Resolving a dashboard-created code for deletion ──────────────────────────
 #
-# `[ADDED 2026-08-27]` WELCOME15 exists in Stripe with
-# `restrictions.first_time_transaction = True` but its promotions row carries NULL
-# stripe ids, because it was created by hand in the dashboard. Deleting that row used
-# to skip Stripe entirely, removing the banner while the code stayed redeemable.
+# regression: a code created by hand in the Stripe dashboard has NULL stripe ids on
+# its promotions row. Deleting that row used to skip Stripe entirely, removing the
+# banner while the code stayed redeemable.
 
 def test_find_promotion_code_resolves_an_active_code():
     with patch.object(stripe_client, "stripe") as mock_stripe:

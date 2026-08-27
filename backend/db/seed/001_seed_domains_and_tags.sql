@@ -1,4 +1,4 @@
--- Seed domains (Decision #2 from week1_plan.md)
+-- Seed domains
 INSERT INTO domains (id, name, slug, description, created_at, updated_at) VALUES
   ('550e8400-e29b-41d4-a716-446655440000', 'Risk (Enterprise & op.)', 'risk-enterprise-op', 'Enterprise and operational risk management', NOW(), NOW()),
   ('550e8400-e29b-41d4-a716-446655440001', 'Cyber (Tech & security)', 'cyber-tech-security', 'Cybersecurity and technology risk', NOW(), NOW()),
@@ -7,7 +7,7 @@ INSERT INTO domains (id, name, slug, description, created_at, updated_at) VALUES
   ('550e8400-e29b-41d4-a716-446655440004', 'AI (Governance)', 'ai-governance', 'AI governance and emerging technology', NOW(), NOW())
 ON CONFLICT (slug) DO NOTHING;
 
--- Seed tag values (Decision #3 from week1_plan.md). `id` is normally a Python-side
+-- Seed tag values. `id` is normally a Python-side
 -- default (app/db/base.py IdMixin's default=uuid4) applied by the SQLAlchemy ORM, not
 -- a server-side column default — a raw SQL INSERT like this one has to supply it
 -- itself, hence gen_random_uuid() on every row below.
@@ -37,8 +37,8 @@ INSERT INTO tag_values (id, tag_dimension, value, display_label, sort_order, cre
 ON CONFLICT (tag_dimension, value) DO NOTHING;
 
 -- ROI Horizon (formerly payback; renamed and reconciled to match the real 100-question
--- content exactly per week1_plan.md decision #3. "Strategic" deliberately also exists as
--- a Tier value and a Leadership trait — an accepted overlap, kept dimension-scoped here.)
+-- content exactly. "Strategic" deliberately also exists as a Tier value and a Leadership
+-- trait — an accepted overlap, kept dimension-scoped here.)
 INSERT INTO tag_values (id, tag_dimension, value, display_label, sort_order, created_at, updated_at) VALUES
   (gen_random_uuid(), 'roi_horizon', 'quick', 'Quick', 1, NOW(), NOW()),
   (gen_random_uuid(), 'roi_horizon', 'mid', 'Mid', 2, NOW(), NOW()),

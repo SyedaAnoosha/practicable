@@ -1,4 +1,4 @@
--- Q001 — the one real question (week1_plan.md decision #6). Foreign keys are resolved
+-- Q001 — the one real question. Foreign keys are resolved
 -- by subquery against 001_seed_domains_and_tags.sql's rows rather than pasted-in UUIDs
 -- looked up by hand in Supabase Studio — run 001 first, this is not idempotent-safe to
 -- run before it (the subqueries would just resolve to NULL).

@@ -1,10 +1,7 @@
 """Publish guard tests — overlap, bundle pricing, macros, preview requirements.
 
-week4_plan.md Phase 1, W4-R3.
-
-Non-negotiable #9: every test here is confirmed failing without the guard (seen red
-first), then passing with it. The guard functions are pure; the HTTP tests drive the
-endpoint that wires them so the test covers both the logic and the wiring.
+The guard functions are pure; the HTTP tests drive the endpoint that wires them so
+the test covers both the logic and the wiring.
 
 Five cases, each isolated:
   1. check_content_overlap refuses a second product sharing content with a published one
@@ -311,7 +308,7 @@ def test_two_previews_passes():
 
 
 # ---------------------------------------------------------------------------
-# 6. check_stripe_price — Phase 8 (8A-7) Stripe price validation guard
+# 6. check_stripe_price — Stripe price validation guard
 # ---------------------------------------------------------------------------
 
 def test_stripe_price_placeholder_refused():

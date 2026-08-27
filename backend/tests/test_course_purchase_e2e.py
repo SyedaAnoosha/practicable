@@ -1,10 +1,8 @@
-"""End-to-end purchase test — week4_plan.md Phase 8A step 8.
+"""End-to-end purchase test.
 
-The deliverable test: create a course through the admin API, make it purchasable,
-set a price, publish, run a Stripe test-mode checkout (mocked), deliver the webhook,
-assert the entitlement exists and the lesson is readable.
-
-This test answers the owner instruction: "New courses aren't purchasable."
+Create a course through the admin API, make it purchasable, set a price, publish,
+run a Stripe test-mode checkout (mocked), deliver the webhook, assert the
+entitlement exists and the lesson is readable.
 """
 import uuid
 from unittest.mock import patch, MagicMock
@@ -50,8 +48,8 @@ async def test_course_purchase_e2e(
 
     # ── Step 1b: Admin adds a module and a lesson BEFORE the course is purchasable —
     # so create-product's own grant (grant_course_lessons) is exercised, not just
-    # create_lesson's. A second lesson is added AFTER create-product below, which is
-    # the exact scenario the 2026-08-21 owner report found broken.
+    # create_lesson's. A second lesson is added AFTER create-product below, the
+    # regression scenario: a lesson added post-purchase must not show locked.
     resp = await admin_client.post(f"/admin/courses/{course_id}/modules", json={"title": "Module 1"})
     assert resp.status_code == 201, resp.text
     module_id = resp.json()["modules"][0]["id"]
@@ -102,9 +100,9 @@ async def test_course_purchase_e2e(
     assert product.published is False  # Starts unpublished
 
     # ── Step 2b: Admin adds a SECOND lesson AFTER the course is already purchasable —
-    # this is the exact owner-reported scenario (2026-08-21): a lesson added to an
-    # already-published, already-purchased course showed locked to a buyer who owned
-    # the course. create_lesson's own grant_course_lessons call is what this exercises.
+    # regression: a lesson added to an already-published, already-purchased course
+    # showed locked to a buyer who owned the course. create_lesson's own
+    # grant_course_lessons call is what this exercises.
     resp = await admin_client.post(
         f"/admin/modules/{module_id}/lessons",
         json={"title": "Lesson added after purchase", "lesson_type": "reading", "body": "after"},
@@ -219,11 +217,10 @@ async def test_course_purchase_e2e(
     assert order.stripe_session_id == stripe_session_id
 
     # ── Step 8: Buyer can read the gated lesson ───────────────────────────────
-    # Found live 2026-08-21: this assertion previously read `g.course` — content_graph's
-    # OWN pre-built course, granted via a completely different product (`lesson_product`,
-    # set up by the fixture itself) — not "E2E Purchase Test Course", the course this
-    # test actually just purchased. It never checked that THIS purchase unlocked
-    # anything. Fixed to add a real lesson to the purchased course and check it by name.
+    # This checks a lesson on the course THIS test just purchased, by name — not
+    # content_graph's pre-built course, which is granted via a different product
+    # (`lesson_product`) set up by the fixture and would pass without this purchase
+    # unlocking anything.
     resp = await member_client.get(f"/courses/{course_data['slug']}")
     assert resp.status_code == 200, resp.text
     lessons = resp.json().get("modules", [{}])[0].get("lessons", [])
@@ -245,7 +242,7 @@ async def test_course_purchase_creates_no_row_on_stripe_failure(
     db_session,
     content_graph,
 ):
-    """Phase 8A step 4: If Stripe fails during product creation, no product row is created."""
+    """If Stripe fails during product creation, no product row is created."""
     import stripe as stripe_lib
 
     # Create a course
@@ -534,13 +531,9 @@ async def test_pack_purchase_e2e(
     db_session,
     content_graph,
 ):
-    """week4_plan.md §9A step 7: the same end-to-end purchase path proven for courses
-    and templates, run a third time for a pack — create in admin -> make purchasable ->
-    set price -> publish -> Stripe test-mode checkout -> webhook -> entitlement ->
-    content opens. Found missing 2026-08-21: test_course_purchase_e2e.py covered course
-    and template only; the DoD line claiming "3 tests... course, template, pack" had no
-    pack coverage anywhere in the repo (confirmed by grep — zero "pack" matches in this
-    file before this test).
+    """The same end-to-end purchase path proven for courses and templates, run a
+    third time for a pack — create in admin -> make purchasable -> set price ->
+    publish -> Stripe test-mode checkout -> webhook -> entitlement -> content opens.
 
     Unlike course/template, pack creation is a single call (POST /admin/packs) that
     creates the Stripe price and the Product row together, and requires >=1 template
@@ -708,14 +701,12 @@ async def test_pack_purchase_e2e(
 async def test_template_in_a_pack_does_not_crash_the_templates_list(
     admin_client, db_session, content_graph,
 ):
-    """Found live 2026-08-21, mid-Phase-9A-re-verification: a template that is BOTH
-    sold standalone AND included in a pack has two ProductContent rows referencing
-    it — admin/templates.py's _to_out used scalar_one_or_none() assuming exactly one,
-    which crashed GET /admin/templates with MultipleResultsFound the moment a real
-    template ended up in both states (observed directly on the dev server's own
-    /admin/templates page, not just in a test). The same bad assumption also broke
-    POST /admin/templates/{id}/create-product's own "does a product already exist"
-    check the same way. This proves both call sites survive the overlap.
+    """regression: a template that is BOTH sold standalone AND included in a pack
+    has two ProductContent rows referencing it. admin/templates.py's _to_out used
+    scalar_one_or_none() assuming exactly one, which crashed GET /admin/templates
+    with MultipleResultsFound once a template was in both states. The same bad
+    assumption also broke POST /admin/templates/{id}/create-product's "does a
+    product already exist" check. This proves both call sites survive the overlap.
     """
     g = content_graph
 

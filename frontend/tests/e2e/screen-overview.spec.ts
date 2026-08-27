@@ -1,19 +1,14 @@
 import { test, expect, type Page } from '@playwright/test'
 
 /**
- * `[ADDED 2026-08-22]` A whole-surface sweep of the real, live public screens.
+ * A whole-surface sweep of the real, live public screens.
  *
- * The existing e2e suites each check one property in depth (axe on a11y, widths on
- * responsive, entitlement on gating). None of them answers the question that kept
- * producing user-visible defects through this redesign: *does every screen actually
- * render something sensible when you open it*. Three separate bugs shipped past
- * tsc, eslint and 235 unit tests because nothing ever loaded the page:
- *
- *   - `ErrorState`, `AuthorCard` and `LockedState` were built, documented as done, and
- *     had zero call sites.
- *   - `/templates/:id` ran to 3,213px in a single narrow column while every sibling
- *     product page used a sticky two-column rail.
- *   - Course cards rendered a bare `<span />` where the price belongs.
+ * The other e2e suites each check one property in depth (axe on a11y, widths on
+ * responsive, entitlement on gating). None of them answers "does every screen actually
+ * render something sensible when you open it" — the question behind bugs that ship past
+ * tsc, eslint and the unit suite because nothing ever loaded the page: components with
+ * zero call sites, a detail page running to thousands of px in a single narrow column,
+ * a card rendering a bare `<span />` where the price belongs.
  *
  * So this file asserts the cheap, high-signal things a human notices in the first
  * second of looking at a screen, across every public route at once:
@@ -22,9 +17,8 @@ import { test, expect, type Page } from '@playwright/test'
  *   2. Exactly one `<h1>`, and it is not empty — the single most common redesign slip.
  *   3. No horizontal scroll.
  *   4. No uncaught console errors or failed requests while the screen settles.
- *   5. Page height stays within a sane number of viewports — the regression that
- *      produced the `/questions` and `/templates/:id` fixes.
- *   6. No raw HTML tags leaking as visible text (the LessonWriteScreen `<p>` bug).
+ *   5. Page height stays within a sane number of viewports.
+ *   6. No raw HTML tags leaking as visible text.
  *   7. No obviously-unstyled placeholder text ("undefined", "NaN", "[object Object]").
  *
  * Read-only, anonymous, against the live backend — same rule as responsive-widths.
@@ -32,9 +26,9 @@ import { test, expect, type Page } from '@playwright/test'
 
 const VIEWPORT = { width: 1440, height: 900 }
 
-/** Above this, a page is a scroll marathon rather than a screen. Tuned to the routes
- *  below: the home page is a deliberate long-form marketing surface and the question
- *  index is a long list, so they carry their own higher budgets. */
+/** Above this, a page is a scroll marathon rather than a screen. The home page is a
+ *  deliberate long-form marketing surface and the question index is a long list, so they
+ *  carry their own higher budgets. */
 const DEFAULT_MAX_VIEWPORTS = 4
 
 interface RouteCase {
@@ -73,7 +67,7 @@ const ROUTES: RouteCase[] = [
 ]
 
 /** Unmatched URLs must reach the product's own not-found page, never react-router's
- *  built-in developer screen — which is what shipped until this sweep caught it. */
+ *  built-in developer screen. */
 const NOT_FOUND_PATH = '/this-route-does-not-exist-2026'
 
 /** Console/network noise that is not a defect in the thing under test. */
@@ -226,10 +220,9 @@ test.describe('screen overview — unmatched URLs', () => {
   test.use({ viewport: VIEWPORT })
 
   test('an unknown URL reaches the product 404, not the framework error screen', async ({ page }) => {
-    /* Until this sweep, the router had no catch-all and no errorElement, so any typo,
-       stale link or old bookmark rendered react-router's developer screen — literally
-       "Unexpected Application Error! ... Hey developer, You can provide a way better UX
-       than this..." — to whoever was using the site. */
+    /* Without a router catch-all and errorElement, any typo, stale link or old bookmark
+       renders react-router's developer screen ("Unexpected Application Error! ... Hey
+       developer...") to whoever is using the site. */
     const collected = collect(page)
     await page.goto(NOT_FOUND_PATH, { waitUntil: 'domcontentloaded' })
     await settle(page)
@@ -255,8 +248,8 @@ test.describe('screen overview — unmatched URLs', () => {
 
 /**
  * Product detail pages, resolved from the live catalogue rather than hard-coded slugs,
- * so the sweep keeps working as content changes. These are the surfaces the redesign
- * touched most (D6 two-column rails, EvidencePanel, FactStrip, buy CTA).
+ * so the sweep keeps working as content changes. These carry the two-column rails,
+ * EvidencePanel, FactStrip and buy CTA.
  */
 test.describe('screen overview — product detail pages', () => {
   test.use({ viewport: VIEWPORT })
@@ -296,21 +289,18 @@ test.describe('screen overview — product detail pages', () => {
       }))
       expect(scrollWidth, `${target}: horizontal overflow`).toBeLessThanOrEqual(clientWidth + 2)
 
-      /* D6: the two-column sticky-rail layout means a product page should never be a
-         scroll marathon. `/templates/:id` measured 3.6 viewports before its rebuild and
-         the 60-question pack measured 7.0 before its list was paged.
-         The budget is 4.5 rather than 3 because the largest pack legitimately lands at
-         4.0 once its question list is collapsed — the rail stays stuck to the viewport
-         throughout, which was the actual defect, and is asserted separately below. */
+      /* The two-column sticky-rail layout means a product page should never be a scroll
+         marathon. The budget is 4.5 rather than 3 because the largest pack legitimately
+         lands at 4.0 once its question list is collapsed — the rail staying stuck to the
+         viewport throughout is asserted separately below. */
       expect(
         scrollHeight / VIEWPORT.height,
         `${target}: ${scrollHeight}px = ${(scrollHeight / VIEWPORT.height).toFixed(1)} viewports`,
       ).toBeLessThanOrEqual(4.5)
 
       /* The property that actually matters on a long product page: the buy/download
-         control follows the reader down. A rail that scrolls away is the bug the pack
-         page had — its CTA sat ~2,000px into a 2,416px sticky column, so it was never
-         on screen when a reader wanted it. */
+         control follows the reader down. A rail that scrolls away puts the CTA off screen
+         when a reader wants it. */
       const railScrolls = await page.evaluate(() => {
         const aside = document.querySelector('aside')
         if (!aside) return null

@@ -1,9 +1,7 @@
-"""Admin lesson-block CRUD and the block-level publish guard (week2_plan.md Phase 2
-steps 6/7). Not part of the gating suite (tests/gating/) — this exercises editorial
-CRUD correctness, not an entitlement boundary — but new logic that decides whether a
-paid course goes live with broken content deserves to be run once, for real, before
-being trusted. Every assertion here has been observed to fail when the guard/reorder
-logic it checks was deliberately broken, then restored (Non-negotiable #9).
+"""Admin lesson-block CRUD and the block-level publish guard. Not part of the
+gating suite (tests/gating/) — this exercises editorial CRUD correctness, not an
+entitlement boundary — but the logic here decides whether a paid course goes live
+with broken content.
 """
 import pytest
 from httpx import AsyncClient

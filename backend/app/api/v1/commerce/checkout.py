@@ -16,8 +16,8 @@ router = APIRouter()
 
 
 class CheckoutRequest(BaseModel):
-    # week3_plan.md W3-R11 — a cart is the general case a direct "Buy" is a one-item
-    # list of. min_length=1 so an empty cart can't reach Stripe at all.
+    # A cart is the general case; a direct "Buy" is a one-item list of it.
+    # min_length=1 so an empty cart can't reach Stripe at all.
     product_ids: list[str] = Field(min_length=1)
     # Optional promo code for a discount (validated server-side via Stripe).
     discount_code: str | None = None
@@ -26,8 +26,8 @@ class CheckoutRequest(BaseModel):
 async def _already_fully_owned(*, product: Product, user_id: uuid.UUID, session: AsyncSession) -> bool:
     """True if every piece of content this product would grant is already covered by
     an entitlement the buyer holds — via this exact product, another product, or (for
-    the bundle) both its parts bought separately. week3_plan.md Phase 3 step 5: refuse
-    before payment, not after it — a refund is strictly more expensive than a 409.
+    the bundle) both its parts bought separately. Refuse before payment, not after
+    it — a refund is strictly more expensive than a 409.
 
     A product with no product_contents rows at all (shouldn't happen for anything
     published, but nothing here assumes it can't) is never considered "already owned" —
@@ -55,9 +55,9 @@ async def _already_fully_owned(*, product: Product, user_id: uuid.UUID, session:
         try:
             rt = ResourceType(content_type)
         except ValueError:
-            # Phase 8A: 'course' is not a gated resource type — skip ownership check
-            # for content types that aren't in ResourceType. The course product grants
-            # access to lessons via product_contents, not directly.
+            # 'course' is not a gated resource type — skip ownership check for content
+            # types that aren't in ResourceType. The course product grants access to
+            # lessons via product_contents, not directly.
             continue
         granted = await resolve_granted_content_ids(
             product_ids=owned_product_ids, resource_type=rt, session=session
@@ -74,7 +74,7 @@ async def create_checkout(
     user: User = Depends(get_current_user),
 ):
     """Create a Stripe Checkout session for the current user — one or more products in
-    one session (week3_plan.md W3-R11). Takes OUR product ids, not Stripe price ids —
+    one session. Takes OUR product ids, not Stripe price ids —
     the client shouldn't need to know Stripe's identifiers. product_ids also has to
     reach the webhook via metadata (app/api/v1/commerce/webhooks.py reads it back out
     of session.metadata.product_ids to know which products to grant).

@@ -1,10 +1,10 @@
 /**
- * W5-R4: Reviews constants.
+ * Reviews constants.
  *
- * MIN_REVIEWS_FOR_AGGREGATE is the gate for Stage B — below this threshold
+ * MIN_REVIEWS_FOR_AGGREGATE is the aggregate-rating gate — below this threshold
  * the API returns `rating: null` and the card renders no rating element at all.
  * When the Nth review on an item is approved, stars appear for that item
- * with no deploy (§2.4).
+ * with no deploy.
  *
  * The backend is the authority: `MIN_REVIEWS_FOR_AGGREGATE` in
  * `app/api/v1/content/reviews.py` applies the same gate before serialising, so

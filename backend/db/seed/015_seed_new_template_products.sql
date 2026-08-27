@@ -1,39 +1,31 @@
--- Week 3 Phase 3 step 1 — four new paid template products, closing the
--- "≥6 published products spanning all three content types" acceptance line
--- (docs/week3_plan.md W3-R2).
+-- Four new paid template products.
 --
 -- WHERE EACH FILE CAME FROM.
 --
--- (a) Two of the six vendor-risk files that sat unused since 2026-08-10, already
---     vetted by the owner (decision #28, docs/week3_plan.md §8.4): the fifth was used
---     for the Vendor Risk Assessment Scorecard (db/seed/013); these two close out the
---     set (the sixth, the sample-due-diligence-plan PDF, is used only to generate this
---     checklist's preview images — the sold artefact is the .xlsx it's a PDF export of):
+-- (a) Two of the six vendor-risk files that sat unused, already vetted by the owner:
+--     the fifth was used for the Vendor Risk Assessment Scorecard (db/seed/013); these
+--     two close out the set (the sixth, the sample-due-diligence-plan PDF, is used only
+--     to generate this checklist's preview images — the sold artefact is the .xlsx it's
+--     a PDF export of):
 --       · IC-Sample-Vendor-Risk-Due-Diligence-Plan-10772.xlsx  → TPRM Due Diligence
 --         Checklist (standalone, A$49 — "professional checklist" tier)
 --       · IC-Vendor-Risk-Assessment-10772_PDF.pdf +
 --         IC-Vendor-Evaluation-with-Scorecard-10772.xlsx        → Complete TPRM
 --         Template Pack (two files, one product, A$99 — "multi-file pack" tier)
---     Content verified before pricing (pymupdf/openpyxl, this session): the due
---     diligence plan is a task tracker (collect/screen/assess, with owner/dates), the
---     risk assessment PDF is a 15-item rated risk checklist, the evaluation scorecard
---     is a per-vendor scoring form — genuinely distinct from each other and from the
---     already-sold Vendor Risk Comparison scorecard (013), not the same content resold
---     under a new name.
+--     The due diligence plan is a task tracker (collect/screen/assess, with
+--     owner/dates), the risk assessment PDF is a 15-item rated risk checklist, the
+--     evaluation scorecard is a per-vendor scoring form — genuinely distinct from each
+--     other and from the already-sold Vendor Risk Comparison scorecard (013).
 --
--- (b) Two templates uploaded and published today (2026-08-15) via the admin panel
---     while testing the upload-bug fix (handover.md §1), left with no product —
---     `risk-assessment-template` (an 18-page worked risk-assessment example; opening it
---     showed a NEBOSH Unit IG2 assessment layout, a different provenance than the six
---     vendor-risk files) and `quality-risk-management-presentation-...` (a legacy .ppt,
---     content unverifiable — python-pptx cannot read the pre-OOXML format). Owner
---     confirmed ownership/licence to sell both, live, this session — see the question
---     asked before this file was written. Priced conservatively: A$39 for the
---     worked-example PDF (verified depth, "professional template" tier), A$29 for the
---     presentation (unverified depth, "simple template" tier — never price ahead of
---     what was actually confirmed).
+-- (b) Two templates uploaded and published via the admin panel, left with no product —
+--     `risk-assessment-template` (an 18-page worked risk-assessment example; a NEBOSH
+--     Unit IG2 assessment layout, a different provenance than the six vendor-risk files)
+--     and `quality-risk-management-presentation-...` (a legacy .ppt, content
+--     unverifiable — python-pptx cannot read the pre-OOXML format). Priced
+--     conservatively: A$39 for the worked-example PDF ("professional template" tier),
+--     A$29 for the presentation (unverified depth, "simple template" tier).
 --
--- Stripe (test mode) objects created for this, 2026-08-15:
+-- Stripe (test mode) objects for this:
 --   TPRM Due Diligence Checklist          prod_V4sefyZCp31A3g / price_1U4itYLTNkwhOECvuFXVls9H  (4900 AUD)
 --   Complete TPRM Template Pack           prod_V4seTzhjvcNbIc / price_1U4itZLTNkwhOECvbZXHPGp6  (9900 AUD)
 --   Risk Assessment Template              prod_V4seBVxIADDjhp / price_1U4itaLTNkwhOECvAByCHGAB  (3900 AUD)
@@ -150,7 +142,7 @@ WHERE p.slug = 'complete-tprm-template-pack' AND t.slug = 'vendor-evaluation-wit
     WHERE pc.product_id = p.id AND pc.content_type = 'template' AND pc.content_id = t.id
   );
 
--- ── (b1) Risk Assessment Template — existing row, uploaded 2026-08-15, no product ──
+-- ── (b1) Risk Assessment Template — existing row, no product ──
 INSERT INTO products (id, slug, name, description, stripe_price_id, price_amount, currency, published, created_at, updated_at)
 SELECT
   gen_random_uuid(),

@@ -1,7 +1,7 @@
 """Password reset — the request half. The reset itself (choosing a new password) never
 touches this backend: Supabase's client-side `updateUser` handles it directly once the
-browser holds the recovery session the emailed link establishes (RS 6.3 — FastAPI only
-verifies Supabase JWTs, it never issues or mutates sessions itself).
+browser holds the recovery session the emailed link establishes (FastAPI only verifies
+Supabase JWTs, it never issues or mutates sessions itself).
 
 Why this endpoint exists instead of calling `supabase.auth.resetPasswordForEmail()`
 straight from the frontend: that call sends Supabase's own built-in email, which is
@@ -9,7 +9,7 @@ unbranded and — until Mailjet is configured as Supabase's SMTP relay in its ow
 dashboard, a separate manual step — goes out over Supabase's default mailer rather than
 through our transport. `admin.generate_link()` produces the identical link *without*
 sending anything, so this route can mail it ourselves via `password_reset.html.j2` and
-Mailjet, consistent with the other five (week3_plan.md W3-R1 Phase 1).
+Mailjet, consistent with the other transactional emails.
 """
 
 import logging

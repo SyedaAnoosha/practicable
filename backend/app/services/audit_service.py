@@ -35,10 +35,10 @@ async def record_audit(
     version history.
 
     `actor` is `None` for the one case this product has no admin identity to record: a
-    refund issued from the Stripe dashboard rather than `/admin/orders` (week3_plan.md
-    W3-R5's `charge.refunded` webhook path) — Stripe is the actor, not a user in this
-    system, and `audit_log.actor_user_id` is nullable for exactly this case. Every other
-    call site keeps passing a real `User`.
+    refund issued from the Stripe dashboard rather than `/admin/orders` (the
+    `charge.refunded` webhook path) — Stripe is the actor, not a user in this system, and
+    `audit_log.actor_user_id` is nullable for exactly this case. Every other call site
+    keeps passing a real `User`.
     """
     payload = None
     if context is not None:
@@ -63,10 +63,9 @@ async def record_admin_bypass(
 ) -> None:
     """Record an admin reading gated content without holding an entitlement for it.
 
-    `BACKEND.md` §4.3 lists "no admin bypass without an audit row" under **Never**, and
-    until now `entitlements.py` carried it as a `# TODO`. An admin who can read every
-    paid lesson and mint every signed URL leaving no trace is precisely the hole the
-    `audit_log` table was created to close.
+    `BACKEND.md` §4.3 lists "no admin bypass without an audit row" under **Never**. An
+    admin who can read every paid lesson and mint every signed URL leaving no trace is
+    precisely the hole the `audit_log` table was created to close.
 
     This one commits, unlike `record_audit`. The gate runs before the endpoint does any
     other work (§4.1), so nothing else is pending on the session at this point, and the

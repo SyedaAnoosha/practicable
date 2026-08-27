@@ -45,9 +45,9 @@ ALLOWED_MIME_TYPES = {
     "application/zip",
 }
 
-# week4_plan.md W4-R1 / Phase 2 step 1: PreviewGallery needs real document-page images,
-# not the document format itself — a distinct, much smaller allow-list from the file
-# upload above. Capped well under MAX_UPLOAD_BYTES; a "preview" is one rendered page.
+# PreviewGallery needs real document-page images, not the document format itself — a
+# distinct, much smaller allow-list from the file upload above. Capped well under
+# MAX_UPLOAD_BYTES; a "preview" is one rendered page.
 ALLOWED_PREVIEW_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 MAX_PREVIEW_UPLOAD_BYTES = 8 * 1024 * 1024
 
@@ -67,7 +67,7 @@ class TemplateWriteIn(BaseModel):
     description: str = Field(min_length=1)
     # Defaults to False so a template is never given away by omitting a field.
     is_free: bool = False
-    # ── W4-R1: evidence fields (optional on create/update, validated at publish) ─
+    # ── Evidence fields (optional on create/update, validated at publish) ──────
     page_count: Optional[int] = None
     sheet_count: Optional[int] = None
     is_editable: Optional[bool] = None
@@ -91,7 +91,7 @@ class TemplateOut(BaseModel):
     # False until a file has been uploaded; the editor uses it to block publishing, which
     # would otherwise put a buyable product on the site whose download 404s after payment.
     has_file: bool
-    # ── W4-R1: evidence fields ────────────────────────────────────────────────────
+    # ── Evidence fields ──────────────────────────────────────────────────────────
     page_count: Optional[int] = None
     sheet_count: Optional[int] = None
     is_editable: Optional[bool] = None
@@ -101,16 +101,16 @@ class TemplateOut(BaseModel):
     version: Optional[str] = None
     last_reviewed_at: Optional[datetime] = None
     format: Optional[str] = None
-    # Phase 8 (8A-6): server-derived readiness, same states a bare ProductOut would
-    # carry — None/no_product for a free template, which has no product at all.
+    # Server-derived readiness, same states a bare ProductOut would carry —
+    # None/no_product for a free template, which has no product at all.
     readiness: Literal["no_product", "price_unset", "stripe_price_unresolved", "unpublished", "ready"]
     readiness_message: str
     product_id: Optional[str] = None
-    # Phase 8 (8B-7): the price-change confirmation step needs the *current* price to
-    # compute the ±50%/zero delta — it cannot be inferred client-side without this.
+    # The price-change confirmation step needs the *current* price to compute the
+    # ±50%/zero delta — it cannot be inferred client-side without this.
     price_amount: Optional[int] = None
     currency: Optional[str] = None
-    # ── #16: content freshness ────────────────────────────────────────────────────
+    # ── Content freshness ────────────────────────────────────────────────────────
     # Two fields, not one: `freshness_status` is what the UI switches on, and it keeps
     # `unknown` (never reviewed) distinct from `stale` (reviewed, but too long ago) —
     # different facts the admin acts on differently. `freshness_warning` is the sentence
@@ -125,8 +125,8 @@ async def _standalone_template_product(session: AsyncSession, template_id: uuid.
     includes the template alongside a question_set. A template can be referenced by
     both kinds of ProductContent row at once; this picks the standalone one
     specifically, the only one this file's readiness/price display concerns itself
-    with. See the 2026-08-21 comment at this function's call site for how the
-    MultipleResultsFound crash this replaces was found.
+    with. See the comment at this function's call site for why scalar_one_or_none
+    would otherwise raise MultipleResultsFound.
     """
     # Products that carry a question_set content row are packs, never standalone
     # template products — excluding them up front is what makes the remaining
@@ -159,27 +159,22 @@ async def _to_out(t: Template, session: AsyncSession) -> TemplateOut:
             continue
         previews.append(PreviewImageOut(storage_key=key, url=resolve_previews([{"key": key, "alt": alt}])[0].url, alt=alt))
 
-    # Phase 8 (8A-6): resolve the template's linked product (None until "Make
-    # purchasable" has been called, and always None for a free template) and
-    # derive readiness from it — same helper courses use, so the two agree.
+    # Resolve the template's linked product (None until "Make purchasable" has been
+    # called, and always None for a free template) and derive readiness from it —
+    # same helper courses use, so the two agree.
     from app.core.publish_guard import compute_readiness
 
-    # Found 2026-08-21 (Phase 9A re-verification): a template can legitimately be
-    # referenced by TWO ProductContent rows now — its own standalone product (this
-    # endpoint's create-product) AND a pack that includes it (POST /admin/packs) —
-    # `scalar_one_or_none()` here crashed with MultipleResultsFound the moment a
-    # template was in a pack, 500ing the whole list. This is the standalone
-    # template's own product specifically: the one ProductContent row whose product
-    # has no sibling question_set row (a pack's product always has one; a standalone
-    # template product never does).
+    # A template can be referenced by two ProductContent rows — its own standalone
+    # product and a pack that includes it — so this picks the standalone one (the
+    # ProductContent row whose product has no sibling question_set row); a plain
+    # scalar_one_or_none() would raise MultipleResultsFound.
     product = await _standalone_template_product(session, t.id)
     readiness_result = compute_readiness(product)
 
-    # #16: freshness, computed server-side so the admin screen renders a verdict rather
-    # than re-deriving date arithmetic in TypeScript (same precedent as promotions.py's
-    # `status`). Three states — `unknown` is reported for a never-reviewed template
-    # whether or not it is published, because "we have no idea how current this is" is
-    # true of a draft too, and the admin list is where that gets noticed before publish.
+    # Freshness, computed server-side so the admin screen renders a verdict rather
+    # than re-deriving date arithmetic in TypeScript. Three states — `unknown` is
+    # reported for a never-reviewed template whether or not it is published, so a
+    # draft's staleness gets noticed before publish.
     freshness = compute_freshness(t.last_reviewed_at)
 
     return TemplateOut(
@@ -269,7 +264,7 @@ async def update_template(
 ):
     template = await get_or_404(session, Template, template_id, "Template")
 
-    # #6: Track version change for notifications
+    # Track version change for notifications
     old_version = template.version
     new_version = payload.version
 
@@ -277,7 +272,7 @@ async def update_template(
     template.description = payload.description
     template.is_free = payload.is_free
     # Slug is not regenerated on retitle, so shared URLs keep working.
-    # ── W4-R1 evidence fields ──────────────────────────────────────────────────
+    # ── Evidence fields ──────────────────────────────────────────────────────────
     template.page_count = payload.page_count
     template.sheet_count = payload.sheet_count
     template.is_editable = payload.is_editable
@@ -295,7 +290,7 @@ async def update_template(
         target_id=template.id, context={"title": template.title, "is_free": template.is_free},
     )
 
-    # ── #6: notify owners when the version actually moves ──────────────────────
+    # ── Notify owners when the version actually moves ─────────────────────────
     # `new_version and new_version != old_version` is the whole trigger, and both
     # halves matter. A PUT that leaves `version` alone (None) must not notify, and
     # neither must one that re-saves the same string — the editor sends every field on
@@ -449,9 +444,9 @@ class UploadUrlIn(BaseModel):
     file_name: str = Field(min_length=1, max_length=255)
     content_type: str
     file_size_bytes: int = Field(gt=0)
-    # week4_plan.md Phase 2 step 1: the presigned path serves two different things —
-    # the sold document itself, and a rendered preview page of it for PreviewGallery.
-    # Same mechanism, different validation and a different write target on confirm.
+    # The presigned path serves two things — the sold document itself, and a rendered
+    # preview page of it for PreviewGallery. Same mechanism, different validation and a
+    # different write target on confirm.
     kind: Literal["file", "preview"] = "file"
 
 
@@ -468,17 +463,16 @@ async def create_template_upload_url(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """week3_plan.md Phase 5 step 2 — a presigned Storage PUT url the browser writes
-    directly to, so a large template pack no longer has to be buffered in memory and
-    proxied through this API. Type and size are validated here, BEFORE a URL is even
-    issued — stated to the editor before a file is chosen, not discovered after a
-    failed upload (§20.4). `upload_template_file` above still exists for anything that
-    calls it directly; this is the path `UploadField` uses.
+    """A presigned Storage PUT url the browser writes directly to, so a large template
+    pack no longer has to be buffered in memory and proxied through this API. Type and
+    size are validated here, BEFORE a URL is issued, so the editor is told before a
+    file is chosen rather than after a failed upload. `upload_template_file` above
+    still exists for anything that calls it directly; this is the path `UploadField`
+    uses.
 
-    `kind='preview'` (week4_plan.md W4-R1) is the same presigned mechanism against the
-    same bucket, validated as an image rather than a document, and written into
-    `preview_image_keys` rather than replacing the sold file — see `confirm_template_
-    upload` below.
+    `kind='preview'` is the same presigned mechanism against the same bucket, validated
+    as an image rather than a document, and written into `preview_image_keys` rather
+    than replacing the sold file — see `confirm_template_upload` below.
     """
     await get_or_404(session, Template, template_id, "Template")  # 404s a bad id early
 
@@ -511,8 +505,8 @@ class UploadConfirmIn(BaseModel):
     file_name: str = Field(min_length=1, max_length=255)
     kind: Literal["file", "preview"] = "file"
     # Required for kind='preview' only (validated below, not via a bare Field(...),
-    # since kind='file' never supplies or needs one). §20.2: "alt text is a
-    # requirement, not a nicety" — enforced here, not left to the admin's memory.
+    # since kind='file' never supplies or needs one). Alt text is enforced here, not
+    # left to the admin's memory.
     alt: Optional[str] = Field(default=None, max_length=300)
 
 
@@ -530,7 +524,7 @@ async def confirm_template_upload(
 
     `kind='preview'` skips all of that replace-and-delete behaviour: it appends the
     confirmed key to `preview_image_keys` instead of touching the sold file at all,
-    since a template can (and per W4-R1 must, to publish paid) carry more than one.
+    since a template can carry more than one preview.
     """
     template = await get_or_404(session, Template, template_id, "Template")
 
@@ -640,11 +634,9 @@ async def remove_template_preview(
 
 
 class CreateTemplateProductIn(BaseModel):
-    # Found 2026-08-21 (owner-flagged): same fix as courses.py's CreateProductIn —
-    # "Create Product" was a separate, unnecessary step before a price could be set
-    # at all. Removed from the UI; the price control now calls this first,
-    # transparently, on a template with no product yet. Both optional so any other
-    # caller keeps working at the old A$49 default.
+    # Same shape as courses.py's CreateProductIn: the price control calls this on a
+    # template with no product yet. Both optional so any other caller keeps working at
+    # the old A$49 default.
     price_amount: Optional[int] = Field(default=None, gt=0)
     currency: str = Field(default="AUD", min_length=3, max_length=3)
 
@@ -658,14 +650,11 @@ async def create_template_product(
 ):
     """Create a product associated with this template, making it purchasable.
 
-    Phase 8 (8A): Creates a real Stripe Price and Product, removing the placeholder.
-    Stripe is called first; if it fails, no database row is created.
-    Transaction safety ensures a half-success state cannot exist.
+    Creates a real Stripe Price and Product. Stripe is called first; if it fails, no
+    database row is created, so a half-success state cannot exist.
 
-    Price: the caller's own `price_amount`/`currency` if given (Phase 9A
-    re-verification), else the A$49 default this endpoint has always had.
-    - Slug: derived from template title
-    - Licence: standard
+    Price: the caller's own `price_amount`/`currency` if given, else the A$49 default.
+    Slug is derived from the template title; licence is standard.
     """
     from app.db.models.product import Licence
     from app.integrations.stripe_client import create_price
@@ -719,7 +708,7 @@ async def create_template_product(
         name=template.title,
         description=template.description,
         stripe_price_id=stripe_price_id,  # Real Stripe Price ID, not placeholder
-        stripe_product_id=stripe_product_id,  # Phase 8B: so a later price change reuses this Product
+        stripe_product_id=stripe_product_id,  # so a later price change reuses this Product
         price_amount=price_amount,
         currency=currency,
         licence=Licence.STANDARD,
@@ -770,7 +759,7 @@ async def set_published(
                 }
             },
         )
-    # ── W4-R1 publish guards ───────────────────────────────────────────────────
+    # ── Publish guards ───────────────────────────────────────────────────────────
     if payload.published:
         if check_has_macros(template):
             raise HTTPException(

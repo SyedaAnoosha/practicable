@@ -1,12 +1,10 @@
-"""Backfill stripe_product_id from existing stripe_price_id values (Phase 8 8B-2).
+"""Backfill stripe_product_id from existing stripe_price_id values.
 
-Phase 8 (8B): Price control for every course and template.
-This script resolves each existing stripe_price_id via stripe.Price.retrieve(id).product
-to populate the new stripe_product_id column added in migration 016.
+Resolves each existing stripe_price_id via stripe.Price.retrieve(id).product to populate
+the stripe_product_id column added in migration 016.
 
-Ids that do not resolve are printed as a list to fix by hand, not defaulted, not skipped silently.
-Run it and record the output; the seeded catalogue is where 013's backfill already had to be
-flagged as an assertion rather than a fact.
+Ids that do not resolve are printed as a list to fix by hand, not defaulted, not skipped
+silently.
 
 Usage:
     python -m scripts.backfill_stripe_product_ids
@@ -17,7 +15,7 @@ from pathlib import Path
 
 # Run as `python scripts/backfill_stripe_product_ids.py` from `backend/`. Without this the
 # script dies on `ModuleNotFoundError: No module named 'app'` — the other scripts in this
-# directory already carry the same line (2026-08-22).
+# directory already carry the same line.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import stripe
@@ -34,9 +32,8 @@ async def backfill_stripe_product_ids():
     stripe.api_key = settings.stripe_secret_key
 
     # `get_session` is a FastAPI dependency (an async *generator*), not a context
-    # manager — `async with get_session()` raised TypeError, so this script had never
-    # actually run. Build a session directly instead, the way every other script here
-    # does (2026-08-22).
+    # manager — `async with get_session()` raises TypeError. Build a session directly
+    # instead, the way every other script here does.
     engine = create_async_engine(_asyncpg_url(settings.database_url))
     Session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

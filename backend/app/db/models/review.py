@@ -1,4 +1,4 @@
-"""Review model for W5-R4 — Reviews and ratings.
+"""Review model — reviews and ratings.
 
 A polymorphic review tied to courses, templates, or packs. The ``content_id``
 column has no FK constraint because it references different tables depending

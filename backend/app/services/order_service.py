@@ -17,10 +17,9 @@ async def create_order_from_checkout(
 ) -> Order:
     """Create an order from a completed Stripe checkout session.
 
-    week3_plan.md W3-R11 — a cart checkout is the general case a single-product
-    checkout is now a special case of (`product_ids` is a one-item list there). One
-    order, N order_items, N entitlements, still one transaction: non-negotiable #3
-    requires entitlement checks to stay server-side and resolved through
+    A cart checkout is the general case; a single-product checkout is a special case of
+    it (`product_ids` is a one-item list there). One order, N order_items, N entitlements,
+    still one transaction. Entitlement checks stay server-side and resolve through
     `resolve_product_ids()` regardless of how many products a single order granted, and
     that path reads `entitlements` however many rows this call leaves behind.
 
@@ -35,7 +34,7 @@ async def create_order_from_checkout(
     result = await session.execute(select(Product).where(Product.id.in_(product_uuids)))
     products_by_id = {p.id: p for p in result.scalars().all()}
 
-    # week4_plan.md W4-R9: a product id in webhook metadata that no product row backs —
+    # A product id in webhook metadata that no product row backs —
     # a stale id, a bad write, a tampered session — must fail loudly before any write
     # is attempted. Checked here, before `order`/`OrderItem`/`Entitlement` are even
     # constructed: letting this reach a flush instead raises a FK-violation
@@ -66,8 +65,8 @@ async def create_order_from_checkout(
     # touching the constraint in the common case.
     #
     # The whole ROW is loaded, not just the product_id, and revoked rows are kept rather
-    # than filtered out — both deliberate, and both load-bearing after the bug found on
-    # 2026-08-22 (`tests/test_repurchase_after_refund.py`):
+    # than filtered out — both deliberate, and both load-bearing
+    # (`tests/test_repurchase_after_refund.py`):
     #
     #   A refund sets `revoked_at`; it never deletes the row, because the audit trail has
     #   to survive. The unique constraint then means a re-purchase CANNOT insert a second

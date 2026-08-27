@@ -1,15 +1,10 @@
 """Keyset pagination on GET /admin/users.
 
-Regression coverage for a real bug found during Phase 6C verification
-(week4_plan.md): unlike admin/orders.py's cursor bug (Phase 5 §26.3, already
-fixed), this endpoint never parsed the cursor at all — `cursor` was passed
-straight into `User.created_at < cursor` as a raw string. This crashed with an
-unhandled 500 (`operator does not exist: timestamp with time zone <
-character varying`) for BOTH a malformed cursor AND a genuinely well-formed
-one (i.e. the exact value the endpoint's own `cursor` field emits, which is
-what a real "Load more" click sends) — worse than the orders.py bug, which
-only crashed on malformed input. Fixed by parsing with
-`datetime.fromisoformat()` before using it, same pattern as orders.py.
+regression: this endpoint must parse the cursor with `datetime.fromisoformat()`
+before using it in `User.created_at < cursor` (same pattern as admin/orders.py).
+Passing the raw string through crashed with an unhandled 500 for both a malformed
+cursor and a genuinely well-formed one (the exact value the endpoint's own
+`cursor` field emits, which is what a real "Load more" click sends).
 """
 import httpx
 import pytest

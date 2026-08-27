@@ -1,4 +1,4 @@
-"""Download event model — week4_plan.md Phase 6B step 4b.
+"""Download event model.
 
 Migration 014_filter_events creates this table alongside filter_events.
 Identical privacy constraint: no user_id, no session id, no IP.

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str
     supabase_jwt_audience: str = "authenticated"
     stripe_secret_key: str
-    # `[ADDED 2026-08-22]` A Stripe *restricted* key (`rk_…`), scoped to a subset of the
+    # A Stripe *restricted* key (`rk_…`), scoped to a subset of the
     # API rather than granting full account access. Declared so it is a documented,
     # typed setting rather than something `extra = "ignore"` silently swallows — an
     # undeclared credential in .env reads as dead config and eventually gets deleted.
@@ -37,9 +37,8 @@ class Settings(BaseSettings):
     supabase_storage_secret_access_key: str
     supabase_storage_bucket_name: str
     # ── Email ────────────────────────────────────────────────────────────────────
-    # Mailjet is the only transport (week3_plan.md W3-R1) — restored 2026-08-15 after
-    # being removed by choice, not because it failed (docs/email.md, docs/gmail.md §9).
-    # It reaches an arbitrary real recipient over REST (port 443), which survives
+    # Mailjet is the only transport. It reaches an arbitrary real recipient over REST
+    # (port 443), which survives
     # Render's outbound-587 block that kills Gmail/Brevo SMTP outright. Any leftover
     # GMAIL_*/BREVO_*/RESEND_* variables in a .env or hosting dashboard are inert (see
     # `extra = "ignore"` below) and should be deleted, not just ignored.
@@ -61,12 +60,12 @@ class Settings(BaseSettings):
     # must be set to the real Vercel URL in Render's environment, same treatment as
     # ALLOWED_ORIGIN below.
     frontend_url: str = "http://localhost:5173"
-    # ── Invoice / Tax receipt (W4-R2) ─────────────────────────────────────────────
+    # ── Invoice / Tax receipt ────────────────────────────────────────────────────
     # Empty by default so the app boots without it. The owner has no ABN to publish —
     # the entity is not GST-registered — so no ABN field exists anywhere in this app;
     # the invoice block states the seller name only, never a placeholder number.
     seller_legal_name: str = ""
-    # ── Operational settings (Phase 6C / W4-R13) ───────────────────────────────
+    # ── Operational settings ─────────────────────────────────────────────────────
     # Keys that can be overridden by the settings DB table. Secrets are NEVER here —
     # they live in env with no DB path, so no database row can ever supply a key.
     _operational_keys: list[str] = [
@@ -100,7 +99,7 @@ settings = Settings()  # type: ignore[call-arg]
 async def resolve_settings_from_db() -> None:
     """Overlay DB settings onto the env-backed `settings` object.
 
-    Phase 6C (W4-R13): operational keys can be overridden by the `settings` table.
+    Operational keys can be overridden by the `settings` table.
     Called once at startup (or on demand from the admin settings endpoint). Secrets
     are never resolved from the DB — they have no path here.
     """

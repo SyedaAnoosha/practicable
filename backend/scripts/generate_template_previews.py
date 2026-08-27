@@ -1,19 +1,17 @@
-"""Render real preview images from the template files themselves (W4-R1, ledger row 24).
+"""Render real preview images from the template files themselves.
 
 Why this exists
 ---------------
-W4-R1 asks for "two preview images per paid template" so a buyer can see the artefact
-before paying. On 2026-08-22 `preview_image_keys` was `[]` on every template, so
-`PreviewGallery` never rendered and the buy page asked for money against a description
-alone.
+Each paid template needs two preview images so a buyer can see the artefact before
+paying. When `preview_image_keys` is `[]`, `PreviewGallery` never renders and the buy
+page asks for money against a description alone.
 
 What this does, and what it refuses to do
 -----------------------------------------
 A preview must be the actual artefact. Every pixel here comes from the real file in
 Storage — it never draws a mock, never renders a logo card, never substitutes a stock
 image. Where a format cannot be rendered at all, it writes nothing and says so: an
-absent gallery is honest, and a fabricated one is precisely the overclaim W4-R1's
-absence rule exists to prevent.
+absent gallery is honest, and a fabricated one is an overclaim.
 
   PDF   → two *representative* pages rendered at ~110 DPI, JPEG, long edge ≤1400px
   XLSX  → the real opening screenful of the first visible sheet, composed in this
@@ -66,8 +64,8 @@ from app.integrations.storage_client import download_file, upload_file  # noqa: 
 
 from _sheet_preview import render_sheet_previews  # noqa: E402
 
-# Two pages is what §20.2 specifies, and it is also the honest maximum: more pages of a
-# paid artefact given away free stops being a preview and starts being the product.
+# Two pages is the honest maximum: more pages of a paid artefact given away free stops
+# being a preview and starts being the product.
 PREVIEW_PAGE_COUNT = 2
 
 # ~110 DPI against a 72pt/inch page. Legible enough to judge the artefact on a retina

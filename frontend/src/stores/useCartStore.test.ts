@@ -1,4 +1,3 @@
-// week4_plan.md W4-R9 item 3.
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useCartStore } from './useCartStore'
 
@@ -23,8 +22,8 @@ describe('useCartStore', () => {
   })
 
   it('adding the same id twice is a no-op, not a second line', () => {
-    // week3_plan.md W3-R11's own comment: the cart holds distinct products, not
-    // quantities — there is no "buy this twice" for a lifetime-access purchase.
+    // The cart holds distinct products, not quantities — there is no "buy this twice"
+    // for a lifetime-access purchase.
     useCartStore.getState().addItem(itemA)
     useCartStore.getState().addItem(itemA)
     expect(useCartStore.getState().items).toHaveLength(1)

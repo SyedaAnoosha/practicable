@@ -1,14 +1,10 @@
 """Keyset pagination on GET /admin/orders.
 
-Regression coverage for a real bug found during Phase 5 verification
-(week4_plan.md): the malformed-cursor guard wrapped a bare assignment
-(`cursor_date = cursor`) in a `try/except ValueError`, which can never raise —
-so a malformed cursor skipped the "ignore and return from start" the code's
-own comment promised, reached asyncpg as a raw string compared against a
-timestamptz column, and crashed with an unhandled 500
-(`operator does not exist: timestamp with time zone < character varying`).
-Fixed by actually parsing the cursor with `datetime.fromisoformat()` before
-using it, so the except clause is reachable.
+regression: the cursor must be parsed with `datetime.fromisoformat()` before use,
+so the malformed-cursor `except ValueError` guard is actually reachable. A bare
+`cursor_date = cursor` assignment never raises, so a malformed cursor reached
+asyncpg as a raw string compared against a timestamptz column and crashed with an
+unhandled 500.
 """
 import uuid
 
@@ -54,11 +50,9 @@ async def _create_order_row(db_session, *, price: int = 4900):
 async def test_orders_tied_on_the_same_timestamp_are_not_silently_dropped_across_pages(
     admin_client: httpx.AsyncClient, db_session
 ):
-    """Phase 10 (§10C re-verification, 2026-08-22): DESIGN.md §26.3 requires
-    `(created_at, id)` as the cursor, exactly because a created_at-only cursor
-    drops the rest of a tied batch instead of a clean skip/repeat. Proven first
-    against /me/orders (test_purchases_receipt.py) with the identical query shape,
-    then fixed here too since this endpoint had the same gap."""
+    """DESIGN.md §26.3 requires `(created_at, id)` as the cursor, exactly because a
+    created_at-only cursor drops the rest of a tied batch instead of a clean
+    skip/repeat. Same query shape as /me/orders (test_purchases_receipt.py)."""
     created = [await _create_order_row(db_session) for _ in range(3)]
     order_ids = {str(order.id) for order, _item in created}
 

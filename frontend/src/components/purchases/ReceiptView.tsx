@@ -21,8 +21,7 @@ interface Receipt {
   seller_legal_name: string | null
 }
 
-/** Phase 10 (§10C re-verification, 2026-08-22): the `[GAP]` the plan itself flagged
- * — no Stripe invoice id is ever persisted on an order, so this regenerates a receipt
+/** No Stripe invoice id is ever persisted on an order, so this regenerates a receipt
  * from the order's own data instead of linking a Stripe invoice that may not exist.
  * Order id is the honest reference here — never a fabricated invoice number. Inline
  * panel under the order row, same expand-in-place pattern the refund flow already

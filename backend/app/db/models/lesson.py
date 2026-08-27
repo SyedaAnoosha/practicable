@@ -29,7 +29,7 @@ class Lesson(Base, IdMixin, TimestampMixin, PublishStateMixin):
     # The reading lesson type's content. Null for video/download-only lessons.
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Phase 8 (8E): Sanitized version of prose for safe display.
+    # Sanitized version of prose for safe display.
     # The original body is kept for editing; this field stores the sanitized HTML.
     prose_sanitized: Mapped[str | None] = mapped_column(Text, nullable=True)
 

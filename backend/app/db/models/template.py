@@ -39,7 +39,7 @@ class Template(Base, IdMixin, TimestampMixin, PublishStateMixin):
     # unpriced template is a draft, not a giveaway.
     is_free: Mapped[bool] = mapped_column(default=False, nullable=False)
 
-    # ── W4-R1: pre-purchase evidence layer (migration 013) ──────────────────────
+    # ── Pre-purchase evidence layer (migration 013) ────────────────────────────
     # page_count AND sheet_count: a PDF has pages, a spreadsheet has sheets.
     # Two nullable columns beat one column plus a discriminator.
     page_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -61,7 +61,7 @@ class Template(Base, IdMixin, TimestampMixin, PublishStateMixin):
         DateTime(timezone=True), nullable=True
     )
 
-    # W5-R4: denormalised review counters (migration 029)
+    # Denormalised review counters (migration 029)
     review_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rating_sum: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 

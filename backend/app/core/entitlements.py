@@ -34,14 +34,14 @@ async def resolve_product_ids(*, user_id: UUID, session: AsyncSession) -> set[UU
     """Every product_id this user currently holds a live entitlement for — not expired,
     and not revoked, and the user is not deactivated.
 
-    week3_plan.md W3-R5 / non-negotiable #3: revocation is enforced HERE, in the query
-    every gated request already runs, not in a second check bolted on beside it —
-    `Entitlement.revoked_at.is_(None)` is the entire diff a refund makes to the gate.
-    Migration 011's `ix_entitlements_user_live` is a partial index over exactly this
-    predicate, so this added filter costs nothing extra at the database level.
+    Revocation is enforced HERE, in the query every gated request already runs, not in a
+    second check bolted on beside it — `Entitlement.revoked_at.is_(None)` is the entire
+    diff a refund makes to the gate. Migration 011's `ix_entitlements_user_live` is a
+    partial index over exactly this predicate, so this added filter costs nothing extra
+    at the database level.
 
-    Phase 6C (W4-R13): deactivated users (disabled_at IS NOT NULL) are refused here,
-    in the same choke point, not by a second check bolted beside it."""
+    Deactivated users (disabled_at IS NOT NULL) are refused here, in the same choke
+    point, not by a second check bolted beside it."""
     now = datetime.now(timezone.utc)
     result = await session.execute(
         select(Entitlement.product_id)
@@ -59,27 +59,14 @@ async def resolve_product_ids(*, user_id: UUID, session: AsyncSession) -> set[UU
 def _lessons_of_granted_courses(product_ids: set[UUID]):
     """SELECT of every lesson id belonging to a course granted by `product_ids`.
 
-    `[FIXED 2026-08-23, owner rule]` "A lesson added after someone has purchased must be
-    granted to them — they do not repurchase. Someone who has not purchased still has to
-    buy the course."
+    Owner rule: a lesson added after someone has purchased must be granted to them — they
+    do not repurchase. Someone who has not purchased still has to buy the course.
 
-    Access was resolved ONLY against explicit `product_contents` rows of type `lesson`,
-    written once at seed/creation time. The `course` row that sits beside them granted
-    nothing: `ResourceType` had no COURSE member and nothing ever expanded a course grant
-    into its lessons, so that row was decorative as far as the gate was concerned.
-
-    The consequence was silent and permanent. Add a lesson to a course and every existing
-    buyer is locked out of it — they paid for the course, the new lesson has no
-    product_contents row naming them, and no amount of re-checking creates one. The only
-    repairs were a manual backfill script or a repurchase, and nothing in the product
-    surfaced the problem. `risk-register-fundamentals` was already in this state: 4
-    published lessons, 3 granted.
-
-    Membership is now derived from the course structure at request time instead of from a
-    frozen list. A product that grants a course grants that course's lessons, whenever
-    they were added — which is what buying a course has always meant. Explicit `lesson`
-    rows still work exactly as before, so a product can still sell an individual lesson
-    without selling its course, and the two paths union.
+    Membership is derived from the course structure at request time rather than from a
+    frozen list of explicit `product_contents` rows of type `lesson`. A product that
+    grants a course grants that course's lessons, whenever they were added. Explicit
+    `lesson` rows still work exactly as before, so a product can still sell an individual
+    lesson without selling its course, and the two paths union.
 
     Deriving rather than backfilling also means a lesson MOVED between courses follows
     its new course, and a lesson deleted stops being granted, with no rows to reconcile.
@@ -170,18 +157,13 @@ async def has_access_to_or_admin(
     of through that factory — `app/api/v1/content/lessons.py`'s playback-token,
     download-url and complete routes, and `templates.py`'s download-url route.
 
-    `[FOUND AND FIXED, 2026-08-13]` Those routes called `has_access_to` directly, which
-    has no concept of role at all — an admin with no purchase got the same 403 as any
-    other unentitled member, and (before this existed) there was no way for them to reach
-    the audited bypass path even if the routes HAD special-cased `Role.ADMIN`, because the
-    audit write lived only inside `require_entitlement`'s closure. This is `BACKEND.md`
-    §1.1's "dispersion" failure mode, found while writing the gating suite's admin-bypass
-    test: it asserted a row that the *first* fix (closing the `# TODO` in
-    `require_entitlement`) did not actually produce, because these four routes never call
-    `require_entitlement` in the first place. A full migration onto that dependency
-    factory is tracked as follow-up — it expects a path parameter literally named
-    `resource_id`, which none of these four routes use, so renaming them is a slightly
-    larger, separate change. This closes the audit gap now without that renaming.
+    Those routes call `has_access_to` directly, which has no concept of role — without
+    this, an admin with no purchase gets the same 403 as any unentitled member and never
+    reaches the audited bypass path, since the audit write lives only inside
+    `require_entitlement`'s closure. This is `BACKEND.md` §1.1's "dispersion" failure
+    mode. A full migration onto the `require_entitlement` dependency factory is follow-up
+    work: it expects a path parameter literally named `resource_id`, which none of these
+    routes use. This closes the audit gap without that renaming.
     """
     if user.role == Role.ADMIN:
         await record_admin_bypass(session, actor=user, resource_type=resource_type.value, resource_id=resource_id)

@@ -10,6 +10,8 @@ A real Supabase JWKS endpoint isn't reachable offline, so this mints its own ES2
 key pair and patches `_jwks_client.get_signing_key_from_jwt` to return its public half —
 `_decode`'s own verification logic (signature, expiry, audience, the `sub` claim) then
 runs completely unmodified against tokens this file controls end to end.
+
+Covers a tampered JWT, an expired JWT, and a garbage token.
 """
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace

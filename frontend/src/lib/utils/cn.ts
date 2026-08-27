@@ -45,7 +45,7 @@ const twMerge = extendTailwindMerge({
   },
 })
 
-// The only way to conditionally apply Tailwind classes (DESIGN.md §7.2).
+// The only way to conditionally apply Tailwind classes.
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }

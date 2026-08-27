@@ -1,6 +1,6 @@
 """Promotion model — admin-controlled discount codes with date scheduling.
 
-W5-R1: The discount path already reaches Stripe end to end. This model adds the
+The discount path already reaches Stripe end to end. This model adds the
 control surface: an admin creates a promotion with a code, percent-off, and date
 window; the public endpoint returns the one active promotion for the banner;
 the checkout path resolves the code against Stripe as it already does.

@@ -1,4 +1,4 @@
-// Centralised query keys (DESIGN.md §79) so cache keys can't drift between call sites.
+// Centralised query keys so cache keys can't drift between call sites.
 export const queryKeys = {
   questions: {
     list: () => ['questions', 'list'] as const,
@@ -14,13 +14,13 @@ export const queryKeys = {
     downloadUrl: (lessonId: string) => ['lessons', 'download-url', lessonId] as const,
     inCourse: (courseSlug: string, lessonSlug: string) => ['lessons', 'in-course', courseSlug, lessonSlug] as const,
   },
-  // A mixed-content lesson can carry more than one video/file block (week2_plan.md
-  // Phase 2), each minting its own token/URL from its own block id — same shape as
-  // `lessons` above, keyed by block id instead of lesson id.
+  // A mixed-content lesson can carry more than one video/file block, each minting its
+  // own token/URL from its own block id — same shape as `lessons` above, keyed by
+  // block id instead of lesson id.
   lessonBlocks: {
     playbackToken: (blockId: string) => ['lesson-blocks', 'playback', blockId] as const,
   },
-  // Domain packs (week2_plan.md W2-R6). Keyed by product slug, not template id — a
+  // Domain packs. Keyed by product slug, not template id — a
   // pack is addressed by the product that sells it; its PDF is an implementation
   // detail the detail response happens to carry.
   packs: {

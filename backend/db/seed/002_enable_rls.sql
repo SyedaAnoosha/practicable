@@ -1,4 +1,4 @@
--- Enable Row-Level Security on user-data tables (Day 1 non-negotiable)
+-- Enable Row-Level Security on user-data tables
 
 -- Users: Users can only see their own profile (except admins)
 -- users.id IS the Supabase auth user id directly (see app/db/models/user.py) — there

@@ -31,10 +31,10 @@ def str_enum(enum_cls: type[_E], *, name: str, **kw) -> SQLEnum:
     return SQLEnum(enum_cls, name=name, values_callable=lambda e: [m.value for m in e], **kw)
 
 class PublishState(str, enum.Enum):
-    """Shared by questions/courses/lessons/templates/products (migration 012,
-    week3_plan.md Phase 5 step 4) — one enum, not five near-identical ones, since a
-    lesson's `in_review` and a template's `in_review` mean the same thing and a typo'd
-    fifth spelling on one table is exactly the drift a shared type rules out."""
+    """Shared by questions/courses/lessons/templates/products (migration 012) — one
+    enum, not five near-identical ones, since a lesson's `in_review` and a template's
+    `in_review` mean the same thing and a typo'd fifth spelling on one table is exactly
+    the drift a shared type rules out."""
     DRAFT = "draft"
     IN_REVIEW = "in_review"
     PUBLISHED = "published"
@@ -44,10 +44,9 @@ class PublishStateMixin:
     """Adds `publish_state` (migration 012) to any model that already has a `published`
     boolean, and keeps the two in sync automatically — so no existing write site (a
     test fixture, a seed script's ORM path, an endpoint nobody touched this phase) has
-    to know the new column exists. This is what actually delivers Phase 5 step 4's
-    explicit requirement — "so the 53 existing tests and every read path keep
-    working" — the migration's CHECK constraint alone only *rejects* a bad write, it
-    doesn't make the old ones correct.
+    to know the new column exists, so existing tests and every read path keep working.
+    The migration's CHECK constraint alone only *rejects* a bad write, it doesn't make
+    the old ones correct.
 
     `entity.published = True/False`, however it's set (constructor kwarg or a plain
     attribute assignment, anywhere in the codebase, at any time), derives

@@ -17,12 +17,11 @@
 
 @theme inline {
   --color-background: var(--background);
-  /* `[ADDED 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md M2 "band rhythm"]`
-     The alternating band plane. The research audit's finding was that every interior
-     page is one unbroken ivory field with hairlines — no plane changes, so nothing
-     segments a long scroll. This is the second plane; `--stage` remains the third
-     (dark) one. Sits between --background and --muted in luminance so a band reads as
-     a distinct surface without reading as "disabled". */
+  /* The alternating band plane. Without it, every interior page is one unbroken ivory
+     field with hairlines — no plane changes, so nothing segments a long scroll. This
+     is the second plane; `--stage` remains the third (dark) one. Sits between
+     --background and --muted in luminance so a band reads as a distinct surface
+     without reading as "disabled". */
   --color-background-2: var(--background-2);
   --color-background-3: var(--background-3);
   --color-foreground: var(--foreground);
@@ -64,14 +63,14 @@
   /* Champagne gold — the secondary brand colour (see :root). Three shades, and
      which one you reach for is decided by contrast, not by taste:
        gold        decorative only (rules, gradient stops, tile fills) — never text
-       gold-strong the text-safe shade (§7.5.1) — labels, icons, small type
+       gold-strong the text-safe shade — labels, icons, small type
        gold-soft   a surface wash, for tinting a card or a tile background */
   --color-gold: var(--gold);
   --color-gold-strong: var(--gold-strong);
   --color-gold-soft: var(--gold-soft);
-  /* `[ADDED 2026-08-20]` A gold hairline for use ON the dark stage plane, where
-     `--border` (a warm light hairline tuned for ivory) disappears. Decorative only,
-     like `--gold` itself — never a text colour. */
+  /* A gold hairline for use ON the dark stage plane, where `--border` (a warm light
+     hairline tuned for ivory) disappears. Decorative only, like `--gold` itself —
+     never a text colour. */
   --color-gold-border: var(--gold-border);
 
   /* Domain signature colours — registered as Tailwind utilities (text-domain-risk,
@@ -125,44 +124,15 @@
 
   /* Fluid clamp() type scale. Each entry carries its own line-height and letter-spacing
      so text-display / text-h1 / … need no per-component inline styles. */
-  /* `[CHANGED 2026-08-15, week3_plan.md Phase 6 (typography/whitespace pass)]` Every
-     rung shrunk ~25-30%, owner direction ("reduce heading sizes considerably") — the
-     August 2026 art-direction pass had pushed the scale toward a display-heavy,
-     editorial-poster feel; this pulls it back toward a denser, more reference-document
-     register that matches the "private bank meets editorial publisher" brief without
-     the oversized headlines. Line-height/letter-spacing ratios are unchanged — only
-     the size roots move — so the vertical rhythm rules elsewhere in this file (§ the
-     heading-to-body spacing comments) still hold at the new sizes. */
-  /* `[CHANGED 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md M1 "restore the
-     voice"]` The top three rungs only are returned toward hero scale. The 2026-08-15
-     pass above shrank EVERY rung 25–30% to pull the product back from a display-heavy
-     poster feel — correct for the reading rungs, and they keep those values. But it
-     also left `--text-display` topping out at 44px, which is supporting-player size for
-     a desktop marketing headline, and the competitor capture (Coursera 36px H1 inside a
-     1340px column; Udemy 32px inside 1180px; MasterClass 60px+) showed Practicable's
-     hero reading quieter than every platform it competes with.
+  /* The reading rungs (h3, h4, lead, body, read, sm, xs) sit in a denser
+     reference-document register — deliberately not display-heavy. Line-height and
+     letter-spacing ratios are constant across the scale; only the size roots move,
+     so the vertical rhythm rules elsewhere in this file still hold.
 
-     Deliberately NOT touched: h3, h4, lead, body, read, sm, xs. The reference-document
-     register the 08-15 pass was protecting lives in those rungs, and the audit found the
-     blandness in composition (flat planes, thin cards) rather than in reading size.
-     Line-height/letter-spacing ratios are unchanged — only the size roots move. */
-  /* `[CHANGED 2026-08-22, REDESIGN_SUMMARY.md 4 / D1.2]` Display reaches hero scale at
-     desktop WITHOUT growing on mobile. The Framer reference set runs 72-110px at 1440;
-     we topped out at 68px, and that gap was the largest measurable one against the
-     brief.
-
-     The move is a STEEPER SLOPE, not a raised floor. Naively raising the whole clamp to
-     a 96px cap (the first proposal) also lifts the 390px rung 44px -> 50px, which wraps
-     the real hero headline ("Have a difficult risk question? Start there.", the only
-     `text-display` call site) from three lines to four and adds ~70px of mobile height.
-     Solving blandness with vertical length is explicitly forbidden, so the minimum is
-     held and only the vw term moves.
-
-     Measured against that real string at max-w-[16ch], not lorem ipsum:
-        390px -> 42px, 3 lines      1024px -> 72px, 3 lines
-        768px -> 59px, 3 lines      1440px -> 93px, 3 lines
-       1680px -> 96px (cap), 3 lines
-     Line count is constant across every breakpoint; only the size grows. */
+     `--text-display` uses a steeper slope rather than a raised floor: the minimum is
+     held so the mobile hero headline stays at three lines, and only the vw term grows
+     it toward hero scale on desktop (96px cap). Measured against the real hero string
+     at max-w-[16ch], line count is constant across every breakpoint. */
   --text-display: clamp(2.625rem, 1.3rem + 5vw, 6rem);
   --text-display--line-height: 1.04;
   --text-display--letter-spacing: -0.03em;
@@ -172,15 +142,15 @@
   --text-h2: clamp(1.5rem, 1.28rem + 1.1vw, 2.375rem);
   --text-h2--line-height: 1.2;
   --text-h2--letter-spacing: -0.015em;
-  /* `[ADDED 2026-08-22, D1.2]` The Utomic device: an oversized outline word sitting
-     BEHIND real content. Decoration only — every consumer must set `aria-hidden="true"`
+  /* The oversized outline word sitting BEHIND real content. Decoration only — every
+     consumer must set `aria-hidden="true"`
      and it must never be the only place a word appears. Capped at 180px and floored low
      enough that it never forces horizontal overflow on a 390px screen. */
   --text-outline: clamp(4rem, 1rem + 13vw, 11.25rem);
   --text-outline--line-height: 0.86;
   --text-outline--letter-spacing: -0.04em;
-  /* `[ADDED 2026-08-20, M5 "metadata richness"]` The fact-strip and stat-tile figure.
-     Always paired with `tabular-nums` and, by house rule, the mono face — a number that
+  /* The fact-strip and stat-tile figure. Always paired with `tabular-nums` and, by
+     house rule, the mono face — a number that
      carries a decision (a count, a duration, a percentage, a price) is data, and
      `--font-mono` was chosen to read as data. */
   --text-stat: clamp(1.5rem, 1.2rem + 1vw, 2rem);
@@ -196,11 +166,10 @@
   --text-lead--line-height: 1.5;
   --text-body: 1rem;
   --text-body--line-height: 1.55;
-  /* 18px, not 17px `[CHANGED 2026-08-13]`. Two reasons, both about the new serif:
-     Newsreader carries a smaller x-height than Source Serif 4, so 17px of it read
-     visibly smaller than the 16px sans beside it — the opposite of the optical match
-     this token exists to hold. And the owner's page review called out that too much
-     of the product is set small to be confidently scannable. 18px fixes both. */
+  /* 18px, not 17px: Newsreader carries a smaller x-height than Source Serif 4, so 17px
+     of it reads visibly smaller than the 16px sans beside it — the opposite of the
+     optical match this token exists to hold. 18px also keeps body copy confidently
+     scannable. */
   --text-read: 1.125rem;
   --text-read--line-height: 1.7;
   --text-sm: 0.875rem;
@@ -208,7 +177,7 @@
   --text-xs: 0.75rem;
   --text-xs--line-height: 1.4;
 
-  /* Motion tokens — see §39 */
+  /* Motion tokens */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-entrance: cubic-bezier(0, 0, 0, 1);
   --ease-exit: cubic-bezier(0.3, 0, 1, 1);
@@ -217,19 +186,18 @@
 :root {
   /* Surfaces — warm ivory, not violet-white: the paper this brand is printed on */
   --background: #FBF9F4;
-  /* `[ADDED 2026-08-20, M2]` The alternating band plane. Chosen by luminance, not by
-     eye: it sits between --background (#FBF9F4) and --muted (#F1ECE1), so a band reads
-     as a distinct surface without borrowing --muted's meaning ("quiet/disabled fill").
+  /* The alternating band plane. Chosen by luminance, not by eye: it sits between
+     --background (#FBF9F4) and --muted (#F1ECE1), so a band reads as a distinct
+     surface without borrowing --muted's meaning ("quiet/disabled fill").
      Measured on this plane: --foreground 14.9:1, --muted-foreground 4.61:1,
      --gold-strong 5.12:1, --accent 5.79:1 — every text token that lands on a band
      clears 4.5:1, so no per-band contrast exception is needed. */
   --background-2: #F4EFE4;
-  /* `[ADDED 2026-08-22, owner direction]` A third plane: pale blue rather than warm.
-     The question section originally continued the dark stage under the hero, which
-     read as one indistinct dark mass — the hero's own aurora bled into it and the
-     section boundary disappeared. A LIGHT plane is the fix, but ivory and
-     --background-2 are both warm and both already spoken for in the band rhythm, so
-     neither separates this section from the ones below it.
+  /* A third plane: pale blue rather than warm. The question section must not continue
+     the dark stage under the hero — that reads as one indistinct dark mass, the hero's
+     aurora bleeds into it and the section boundary disappears. A LIGHT plane is the
+     fix, but ivory and --background-2 are both warm and both already spoken for in the
+     band rhythm, so neither separates this section from the ones below it.
 
      This is the cool counterpart, drawn from the --primary/--accent family so it does
      not introduce a third hue family (the palette rule holds — it is a tint of blue we
@@ -261,9 +229,8 @@
   --primary-foreground: #F7F2E9;
   /* The dark full-bleed plane the hero and footer stand on. A SEPARATE token from
      --primary on purpose: --primary inverts between themes (navy in light, a light
-     #6FA8DC in dark), so `bg-primary` on a full-bleed stage turned the hero and
-     footer PALE in dark mode — reported 2026-08-12. --stage means "dark" in both
-     themes and never flips.
+     #6FA8DC in dark), so `bg-primary` on a full-bleed stage would turn the hero and
+     footer PALE in dark mode. --stage means "dark" in both themes and never flips.
      Measured: stage-foreground on stage is 14.39:1 light / 17.08:1 dark, and the
      alpha steps used on it (75/65/55%) clear 5.2:1 at their weakest. */
   --stage: #10213E;
@@ -280,16 +247,13 @@
   --stage-glow-2: #1F6FC4;       /* azure — the body of the ramp */
   --stage-glow-3: #8ED2FB;       /* sky, near-white — the corner core only (1.48:1, never under text) */
 
-  /* `[ADDED 2026-08-22, REDESIGN_SUMMARY.md 3.3 / D1.5]` Glass surfaces — panels that
-     float OVER the stage plane rather than sitting in a bordered box on a flat field
-     (the Galilee device).
+  /* Glass surfaces — panels that float OVER the stage plane rather than sitting in a
+     bordered box on a flat field.
 
-     `[CORRECTED against the strategy doc]` 3.3 specified the fill as an alpha of
-     `--stage-foreground` (a LIGHT wash). Measured, that inverts the intent: over the
-     aurora's bright corner (`--stage-glow-3`, #8ED2FB) a light fill RAISES the
-     backdrop's luminance and drives `--stage-foreground` text DOWN to 1.43:1 — worse
-     than the 1.48:1 bare hazard the plan set out to fix. A light-on-light scrim cannot
-     protect light text.
+     The fill must NOT be a light wash: over the aurora's bright corner
+     (`--stage-glow-3`, #8ED2FB) a light fill RAISES the backdrop's luminance and drives
+     `--stage-foreground` text DOWN to 1.43:1. A light-on-light scrim cannot protect
+     light text.
 
      The fill is therefore a DARK scrim (`--stage-deep`), which is also what the
      existing `.stage-aurora` layer-1 scrim already does for the same reason. Measured
@@ -301,7 +265,7 @@
      66% clears 4.5:1 even at the single brightest point of the aurora, so a panel may
      drift anywhere over the plane without a per-position exception. The EDGE stays a
      light alpha — it is a hairline, never a text backdrop, and it is what reads as
-     glass. Raw white is banned (7.6), so the edge is an alpha of --stage-foreground. */
+     glass. Raw white is banned, so the edge is an alpha of --stage-foreground. */
   --glass-fill: color-mix(in srgb, var(--stage-deep) 66%, transparent);
   --glass-edge: color-mix(in srgb, var(--stage-foreground) 18%, transparent);
   --glass-blur: 12px;
@@ -318,10 +282,10 @@
      --gold-soft, so gold text is safe anywhere without a per-surface check. */
   --gold-strong: #7C5C14;
   --gold-soft: #F3E9D2;          /* champagne wash — tinted card/tile surfaces */
-  /* `[ADDED 2026-08-20]` Gold hairline for the dark stage plane. --border is a warm
-     LIGHT hairline tuned for ivory and vanishes on --stage; this is its counterpart, so
-     a stage band can carry a visible edge without reaching for a raw white alpha
-     (banned, §7.6). Decorative only — never text. */
+  /* Gold hairline for the dark stage plane. --border is a warm LIGHT hairline tuned for
+     ivory and vanishes on --stage; this is its counterpart, so a stage band can carry a
+     visible edge without reaching for a raw white alpha (banned). Decorative only —
+     never text. */
   --gold-border: #E3D3AC;
 
   /* Quiet */
@@ -330,7 +294,7 @@
 
   /* Lines and fields — warm hairlines instead of grey-violet */
   --border: #E6DFD0;
-  --border-strong: #998E78;     /* 3.2:1 on card — state-bearing borders (§7.6) */
+  --border-strong: #998E78;     /* 3.2:1 on card — state-bearing borders */
   --input: #E6DFD0;
   --ring: #1B4E8C;               /* deep blue focus ring — ~5.7:1 on ivory */
 
@@ -346,14 +310,10 @@
   --primary-edge: color-mix(in srgb, var(--primary-foreground) 16%, transparent);
   --secondary-strong: #E5D7B6;
 
-  /* `[CHANGED 2026-08-22, REDESIGN_SUMMARY.md 3.2 / D1.1]` Five genuinely separate
-     hues, replacing five shades of blue.
-
-     The previous set spanned 204-221 degrees — a 17-degree spread across five colours
-     called "signature". A mixed-domain grid read as one undifferentiated blue field:
-     the system paid the full cost of colour-coding and delivered none of the benefit.
-     Now 28/147/186/218/261 — a 233-degree spread. Navy is kept as the brand anchor
-     and the darkest rung.
+  /* Five genuinely separate hues (28/147/186/218/261 — a 233-degree spread), not five
+     shades of blue: a narrow spread makes a mixed-domain grid read as one
+     undifferentiated field, paying the full cost of colour-coding for none of the
+     benefit. Navy is kept as the brand anchor and the darkest rung.
 
      Ordered as a LUMINANCE LADDER as well as a hue wheel (greyscale 7/20/26/28/30),
      because luminance is the one channel no dichromacy distorts. The 4.5:1 floor on
@@ -383,25 +343,24 @@
   --domain-resilience: #1C6B3F;   /* green  147 */
   --domain-cyber: #136B75;        /* teal   186 — lightest rung */
 
-  /* Sidebar — blue, not champagne `[CHANGED 2026-08-12]`.
-     Still a quieter plane than the ivory ground, but now in the primary family rather
+  /* Sidebar — blue, not champagne.
+     Still a quieter plane than the ivory ground, but in the primary family rather
      than the secondary one. The member chrome is the app's structural frame, and
      structure reads as blue everywhere else here (nav, focus, the five domains); gold
      is for warmth and emphasis, which a persistent rail does not need.
 
      `--sidebar` was chosen to sit the same distance from the page ground as the
-     champagne it replaces — 1.107:1 against --background vs the old 1.104:1 — so the
-     layout's visual weight is unchanged and only the hue moves.
+     champagne it replaces — 1.107:1 against --background vs 1.104:1 — so the layout's
+     visual weight is unchanged and only the hue moves.
 
-     Measured, not eyeballed (relative luminance, alpha composited against the plane
-     the text actually sits on — the nav labels render at 60–80% opacity):
+     Measured (relative luminance, alpha composited against the plane the text actually
+     sits on — the nav labels render at 60–80% opacity):
        sidebar-foreground on sidebar          11.09:1
-         same @70% (nav labels)                4.75:1   was 3.96:1 in champagne
-         same @60% (quietest label)            3.64:1   was 3.13:1
+         same @70% (nav labels)                4.75:1
+         same @60% (quietest label)            3.64:1
        accent-foreground on accent (active)   11.21:1
        primary-foreground on primary          14.39:1
-     The 70% case is the one that matters and the one the old palette failed; this is
-     the reason not to pick these by eye. */
+     The 70% case is the one that matters — don't pick these by eye. */
   --sidebar: #E0E8F3;
   --sidebar-foreground: #1A2E4A;
   --sidebar-primary: #10213E;
@@ -411,13 +370,12 @@
   --sidebar-border: #BDCEE5;
   --sidebar-ring: #1B4E8C;
 
-  /* Charts — exempt from the palette constraint. `/admin/metrics` (week4_plan.md
-     §20.7a) reads --chart-1/--chart-2 for revenue/orders.
+  /* Charts — exempt from the palette constraint. `/admin/metrics` reads
+     --chart-1/--chart-2 for revenue/orders.
 
-     `[REPAIRED 2026-08-20, Phase 5 / §12.6]` --chart-1 and --chart-2 were previously
-     navy/steel in light and gold in dark — different hue families per theme, the same
-     defect class as --primary on a --stage plane (handover.md §1). Repaired: one hue
-     family per token across both themes, derived from existing brand blues.
+     One hue family per token across both themes, derived from existing brand blues —
+     not navy/steel in light and gold in dark, which would be different hue families
+     per theme (the same defect class as --primary on a --stage plane).
        --chart-1 (navy):  #10213E light / #7AAED4 dark — same navy-blue family
          light on --card (#FFFFFF): 17.63:1  |  dark on --card (#1B1710): 7.09:1
        --chart-2 (steel): #1D6FA5 light / #5EA3D4 dark — same steel-blue family
@@ -432,11 +390,8 @@
 
   /* Type — three faces that tell ONE story: a newspaper's brand grotesque, a
      newspaper's reading serif, and a mono with enough character to read as a choice.
-     `[CHANGED 2026-08-13 — owner direction]` The previous set (Bricolage Grotesque /
-     Source Serif 4 / JetBrains Mono) was replaced because it had drifted into the
-     default palette every AI mockup reaches for. Source Serif 4 and JetBrains Mono were
-     named explicitly; Bricolage went with them because a grotesque chosen for its
-     opsz axis, sitting beside two replaced faces, no longer belonged to a system.
+     Bricolage Grotesque / Source Serif 4 / JetBrains Mono are deliberately NOT used —
+     that set had drifted into the default palette every AI mockup reaches for.
 
      Georgia and Times New Roman are gone from the fallback stack for the same reason —
      they were only ever visible during a FOUT, but a named fallback is still a choice.
@@ -510,9 +465,8 @@
     line-height: 1.4;
     font-weight: 500;
     text-transform: uppercase;
-    /* 0.16em, not 0.2em `[CHANGED 2026-08-13]`: Azeret Mono sets appreciably wider than
-       JetBrains Mono did, so the tracking that made the old mono read as a deliberate
-       device made this one read as spaced-out letters. */
+    /* 0.16em, not 0.2em: Azeret Mono sets appreciably wide, so wider tracking reads as
+       spaced-out letters rather than as a deliberate device. */
     letter-spacing: 0.16em;
     color: var(--muted-foreground);
   }
@@ -668,8 +622,7 @@
     --aurora-core: 108% 155%;
   }
 
-  /* Rail tuning — the member sidebar `[ADDED 2026-08-13, owner direction: "similar
-     gradient like hero in sidebar too"]`.
+  /* Rail tuning — the member sidebar carries the same aurora gradient as the hero.
 
      The rail is the hardest shape the aurora has been asked to fill, and for a reason
      the other three consumers do not have: it is ~256px wide and a full viewport tall,
@@ -686,29 +639,24 @@
        3. dims harder than the footer (0.42 vs 0.5), because the same absolute brightness
           occupies far more of a 256px column than of a full-width band.
 
-     `[VERIFIED 2026-08-22 — rendered-pixel check, tests/e2e/rail-contrast.spec.ts]`
-     Carried `[UNVERIFIED]` from 2026-08-13 until this pass. The numbers were reasoned,
-     not sampled; they are now sampled, at 1440x900 in BOTH themes, from the composited
-     PNG with glyphs and borders hidden so the backdrop is the surface the text actually
-     sits on rather than the ink on top of it. Worst-case backdrop per run, light / dark:
+     Contrast is sampled (1440x900, both themes) from the composited PNG with glyphs and
+     borders hidden, so the backdrop is the surface the text actually sits on. Worst-case
+     backdrop per run, light / dark:
 
        nav labels          /80   9.23:1 / 10.73:1
        account name        /85  11.40:1 / 12.47:1
        cart + theme toggle /70   7.03:1 /  8.11:1
        sign-out            /65   5.50:1 /  6.71:1
-       section headings    /55   5.33:1 /  5.63:1   (all vs 4.5:1, WCAG 2.1 §1.4.3)
+       section headings    /55   5.33:1 /  5.63:1   (all vs WCAG 4.5:1)
 
-     The reasoning held for every text run — the `50% 128%` core and the 0.42 dim do keep
-     the bloom out from under the copy. The luminance profile confirms the mechanism
-     rather than just the outcome: mean L climbs 0.0092 -> 0.0183 top to bottom, peaking
-     at x~98%, so the bright corner really is below and right of the column.
+     The `50% 128%` core and the 0.42 dim keep the bloom out from under the copy: mean L
+     climbs 0.0092 -> 0.0183 top to bottom, peaking at x~98%.
 
-     One thing the reasoning missed, and it was a control rather than copy: the theme
-     toggle's `border-stage-foreground/20` measured **1.72:1 light / 1.80:1 dark**. That
-     button has no fill and an `aria-hidden` glyph, so its border is the only mark that a
-     control is there — WCAG 2.1 §1.4.11 territory, 3:1. Raised to `/45` (3.77:1 / 4.07:1)
-     in `MemberLayout.tsx`. The rail's own `border-r` and account rule measure ~1.5:1 and
-     were deliberately left: they are region separators, which §1.4.11 exempts. */
+     The theme toggle's `border-stage-foreground/20` measured 1.72:1 light / 1.80:1 dark.
+     That button has no fill and an `aria-hidden` glyph, so its border is the only mark
+     that a control is there — WCAG 1.4.11, 3:1. Raised to `/45` (3.77:1 / 4.07:1) in
+     `MemberLayout.tsx`. The rail's own `border-r` and account rule measure ~1.5:1 and
+     are deliberately left: they are region separators, which 1.4.11 exempts. */
   .stage-aurora--rail {
     --aurora-opacity: 0.42;
     --aurora-core: 50% 128%;
@@ -757,7 +705,7 @@
     animation: fade-rise 0.5s var(--ease-entrance) both;
   }
 
-  /* The house hover-lift (§39.3: "2px, no scale"). Consolidates the identical
+  /* The house hover-lift: 2px, no scale. Consolidates the identical
      `hover:-translate-y-0.5 hover:shadow-md` string duplicated across QuestionCard,
      the dashboard cards, etc., so the distance can never silently drift per call site. */
   .hover-lift {
@@ -769,9 +717,8 @@
   }
 
   /* ── Ambient drift ────────────────────────────────────────────────────────
-     `[ADDED 2026-08-22, REDESIGN_SUMMARY.md §5.2]` The only continuously-moving thing
-     in the product, and it is always a BACKGROUND layer — Verity's light sweep and
-     Utomic's gradient drift are the reference. Never applied to, or near, text.
+     The only continuously-moving thing in the product, and it is always a BACKGROUND
+     layer. Never applied to, or near, text.
 
      Implemented as a slow drift of the aurora's core position rather than a transform
      of the whole layer: moving the gradient's origin keeps the composition's edges
@@ -800,8 +747,8 @@
   }
 
   /* ── Glass surfaces ───────────────────────────────────────────────────────
-     `[ADDED 2026-08-22, D1.5]` A panel that floats over the stage plane. Only ever
-     used ON `--stage` (or the aurora): on the ivory ground a dark scrim is not glass,
+     A panel that floats over the stage plane. Only ever used ON `--stage` (or the
+     aurora): on the ivory ground a dark scrim is not glass,
      it is a black box. See the token comments for the contrast measurements — the fill
      is dark by measurement, not by taste.
 
@@ -819,15 +766,11 @@
     }
   }
 
-  /* ── M2: band rhythm ──────────────────────────────────────────────────────
-     `[ADDED 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md §8.2b]`
-
-     The research audit's headline structural finding: every interior page is one
-     unbroken ivory field with hairline borders, so nothing segments a long scroll and
-     every section carries the same visual weight as every other. Competitors solve this
-     with plane changes — Udemy's charcoal course header, edX's tinted panels,
-     MasterClass's dark ground. Practicable already owns the dark plane (`--stage`); what
-     it lacked was the quiet middle plane between ivory and navy.
+  /* ── Band rhythm ──────────────────────────────────────────────────────────
+     Without band planes, every interior page is one unbroken ivory field with hairline
+     borders, so nothing segments a long scroll and every section carries the same
+     visual weight. `--stage` is the dark plane; `.band` is the quiet middle plane
+     between ivory and navy.
 
      `.band` is that plane. Full-bleed is the consumer's job (the same
      `left-1/2 w-screen -translate-x-1/2` idiom the page washes use), because a band
@@ -836,10 +779,10 @@
     background-color: var(--background-2);
   }
 
-  /* `[ADDED 2026-08-22]` The cool band. Same full-bleed rules as `.band`; used where a
-     section needs to separate from BOTH the ivory ground and the warm band — chiefly
-     the question section directly under the hero, which previously continued the stage
-     and merged into it. */
+  /* The cool band. Same full-bleed rules as `.band`; used where a section needs to
+     separate from BOTH the ivory ground and the warm band — chiefly the question
+     section directly under the hero, which must not continue the stage and merge into
+     it. */
   .band-cool {
     background-color: var(--background-3);
   }
@@ -888,19 +831,16 @@
      a theme swap because every stop is a token. An uploaded `cover_image_url` still
      wins where one exists — this is the floor, not the ceiling. */
   .art-duotone {
-    /* `[FIXED 2026-08-21]` The first build of this ramped `--tone` straight into
-       `--stage` and rendered as a flat near-black panel — visible in the capture as two
-       identical cards. Two causes, both real: courses were resolving to `--primary`
-       (see domainVisuals.ts), and even once that was fixed the light-theme domain
-       tokens are *deep* blues — `--domain-risk` is #142E5C against `--stage` #10213E,
-       a ramp of about one step. The domain palette was tuned as small accents on a
-       light page, not as fill on a dark plane.
+    /* `--tone` must not ramp straight into `--stage` — it renders as a flat near-black
+       panel. The light-theme domain tokens are *deep* blues (`--domain-risk` is #142E5C
+       against `--stage` #10213E, a ramp of about one step): the domain palette was tuned
+       as small accents on a light page, not as fill on a dark plane.
 
        So the artwork lifts the tone before using it rather than re-tuning the domain
        tokens, which would repaint every question card. `--art-tone` mixes the domain
        colour toward `--stage-glow-2`/`-3`, the aurora ramp's upper rungs — the same
        decorative-only family `.stage-aurora` climbs to, which is why they are free to
-       run bright (§12's note: they are kept out of the text column by construction).
+       run bright (kept out of the text column by construction).
        That gives the ramp somewhere to travel while keeping each domain distinguishable,
        since the domain hue still supplies most of the mix. Decorative only: no text is
        ever placed on this plane, so no contrast floor applies — the icon tile carries
@@ -933,15 +873,15 @@
   /* Pairs with `.hover-lift` on cards that set `--card-domain-color` (QuestionCard):
      the lift shadow tints toward the card's own domain colour instead of a flat
      neutral grey. Decorative shadow colour only, so it needs no contrast audit — the
-     domain palette is already part of the token layer (§5.3), not a one-off hex. */
+     domain palette is already part of the token layer, not a one-off hex. */
   .hover-lift-domain:hover {
     box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--card-domain-color, var(--accent)) 35%, transparent);
   }
 
-  /* Phase 8 (8E-6): Rich text rendering for lesson prose. Maps HTML elements
-     onto the existing type scale tokens — NOT @tailwindcss/typography, whose
-     defaults would introduce a second type scale beside §13.1's. The same class
-     styles the editor pane, so what the author sees is what the reader gets. */
+  /* Rich text rendering for lesson prose. Maps HTML elements onto the existing type
+     scale tokens — NOT @tailwindcss/typography, whose defaults would introduce a second
+     type scale. The same class styles the editor pane, so what the author sees is what
+     the reader gets. */
   .rich-text {
     h2 {
       font-size: var(--text-h2);
@@ -1057,10 +997,10 @@
   }
 }
 
-/* Editor-pane only (Phase 8E / owner report 2026-08-22). `.rich-text` is shared between
-   the reading page and the editor so the author sees what the reader gets; this rule is
-   the exception, because it is about WRITING and is meaningless on the reading page.
-   Scoped to `.ProseMirror`, the class Tiptap puts on its editable element. */
+/* Editor-pane only. `.rich-text` is shared between the reading page and the editor so
+   the author sees what the reader gets; this rule is the exception, because it is about
+   WRITING and is meaningless on the reading page. Scoped to `.ProseMirror`, the class
+   Tiptap puts on its editable element. */
 @layer components {
   /* An empty <p> collapses to zero height, so pressing Enter to start a new paragraph
      looked like it did nothing — the caret disappeared until a character was typed. */
@@ -1071,7 +1011,7 @@
 }
 
 @layer utilities {
-  /* `[ADDED 2026-08-22]` Hide a scroll container's scrollbar without disabling scroll.
+  /* Hide a scroll container's scrollbar without disabling scroll.
      Used by the collapsed sidebar rails: those are 64px wide, and a classic Windows
      scrollbar takes ~15px of that — nearly a quarter of the column — which shoved the
      icons off centre and read as a broken layout rather than as a scrollbar.
@@ -1087,7 +1027,7 @@
     height: 0;
   }
 
-  /* `[ADDED 2026-08-22]` Splide, dressed to match the product.
+  /* Splide, dressed to match the product.
      The library ships only structural CSS (`css/core`), which is deliberate — these
      rules supply the look. Kept here rather than inline so the carousel matches the
      rest of the page's motion and spacing tokens instead of restating them per usage. */
@@ -1116,12 +1056,10 @@
     display: flex;
     height: auto;
   }
-  /* `[FIXED 2026-08-23]` This block used to be `.splide__slide > * { width: 100% }`.
-     Combined with `autoWidth`, it was circular: Splide measured the slide, the child
-     was then stretched to that measurement, and cards declaring `w-48 sm:w-56`
-     (192/224px) rendered at 207px, 405px and 284px in the same row — one pack card
-     filled the entire width. The card's own width class is the authority; the slide
-     must size to the card, never the other way round. */
+  /* Must not be `.splide__slide > * { width: 100% }`: combined with `autoWidth` that is
+     circular — Splide measures the slide, the child is stretched to that measurement,
+     and cards declaring `w-48 sm:w-56` render at inconsistent widths in the same row.
+     The card's own width class is the authority; the slide must size to the card. */
   .practicable-splide .splide__slide > * {
     flex: 0 0 auto;
   }
@@ -1148,13 +1086,13 @@
 .dark {
   /* Surfaces — espresso rather than blue-black: a warm night */
   --background: #141008;
-  /* `[ADDED 2026-08-20, M2]` The band plane, dark. In the light theme a band is
-     DARKER than the ground; here it must be LIGHTER, or the band would read as a hole
-     rather than a raised plane. Measured on it: --foreground 13.8:1,
+  /* The band plane, dark. In the light theme a band is DARKER than the ground; here it
+     must be LIGHTER, or the band would read as a hole rather than a raised plane.
+     Measured on it: --foreground 13.8:1,
      --muted-foreground 5.94:1, --gold-strong 9.72:1 — all clear. */
   --background-2: #1A150D;
-  /* `[ADDED 2026-08-22]` The pale-blue plane's dark counterpart. In the light theme
-     this plane is DARKER than the ground; here it must be LIGHTER, or a cool section
+  /* The pale-blue plane's dark counterpart. In the light theme this plane is DARKER
+     than the ground; here it must be LIGHTER, or a cool section
      on a warm espresso ground reads as a hole rather than a surface. Measured:
      --foreground 14.34:1, --muted-foreground 6.17:1, worst domain tone 5.86:1. */
   --background-3: #161E2B;
@@ -1217,9 +1155,9 @@
   --primary-edge: color-mix(in srgb, var(--primary-foreground) 18%, transparent);
   --secondary-strong: #2E271B;
 
-  /* `[CHANGED 2026-08-22, D1.1]` Dark counterparts to the re-hued light set. Derived
-     and measured per hue, NOT auto-lightened — an algorithmic lift pushes teal and
-     green past each other in luminance and collapses the ladder.
+  /* Dark counterparts to the light domain set. Derived and measured per hue, NOT
+     auto-lightened — an algorithmic lift pushes teal and green past each other in
+     luminance and collapses the ladder.
 
      Measured against the espresso planes:
                     bg #141008   card #1B1710   band #1E1A12   hue
@@ -1235,10 +1173,9 @@
   --domain-resilience: #4FB584;   /* green  151 */
   --domain-cyber: #4FB3C4;        /* teal   189 */
 
-  /* Sidebar — blue, matching the light theme's move off champagne `[CHANGED 2026-08-12]`.
-     The warm near-black plane (#161209) and its warm-grey text went with it; keeping
-     them would have left the dark theme's rail reading gold while the light theme's
-     read blue, which is the same token meaning two different things.
+  /* Sidebar — blue, matching the light theme (not champagne). A warm near-black plane
+     with warm-grey text would leave the dark theme's rail reading gold while the light
+     theme's reads blue, which is the same token meaning two different things.
 
      Measured the same way as the light theme, alpha composited:
        sidebar-foreground on sidebar           8.53:1
@@ -1254,10 +1191,9 @@
   --sidebar-border: #22314A;
   --sidebar-ring: #8FC1EA;
 
-  /* Charts. --chart-1/--chart-2 repaired (§12.6) to same hue families as light theme:
-     navy and steel-blue respectively, lightened for espresso --card (#1B1710).
-     --chart-4 given its own dark-mode value (was #5C6B4F, identical to :root's — see
-     the comment there); olive/sage hue family; 5.96:1 against --card. */
+  /* Charts. --chart-1/--chart-2 use the same hue families as the light theme: navy and
+     steel-blue respectively, lightened for espresso --card (#1B1710). --chart-4 has its
+     own dark-mode value (olive/sage hue family, 5.96:1 against --card). */
   --chart-1: #7AAED4;
   --chart-2: #5EA3D4;
   --chart-3: #E55252;
@@ -1269,7 +1205,7 @@
   --shadow-tint: 0 0 0;
 }
 
-/* `[ADDED 2026-08-22]` Ambient drift — see `.ambient-drift`. Travel is deliberately
+/* Ambient drift — see `.ambient-drift`. Travel is deliberately
    small (6% of the plane) so it registers as atmosphere rather than as something
    moving; at 12% it reads as a sliding background and competes with the text. */
 @keyframes ambient-drift {
@@ -1297,7 +1233,7 @@
 }
 
 /* ── Reduced motion ────────────────────────────────────────────────────────
-   WCAG 2.1 §2.3.3: disable non-essential animations for users who prefer
+   WCAG 2.3.3: disable non-essential animations for users who prefer
    reduced motion. This covers:
    - Tailwind's animate-spin, animate-pulse, animate-ping utilities
    - Custom keyframes (shake, ambient-drift)

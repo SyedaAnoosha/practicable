@@ -1,10 +1,10 @@
 """Admin user management — list, search, role change, deactivation.
 
-Phase 6C (W4-R13): the admin can view users, change roles (with guardrails),
-and deactivate accounts — all without SQL and with an audit trail.
+The admin can view users, change roles (with guardrails), and deactivate
+accounts — all without SQL and with an audit trail.
 
-Non-negotiable #1: deactivation is wired into the entitlements gate
-(core/entitlements.py), not bolted beside it.
+Deactivation is wired into the entitlements gate (core/entitlements.py), not
+bolted beside it.
 """
 
 from datetime import datetime, timezone
@@ -121,19 +121,16 @@ async def list_users(
     limit: int = Query(default=50, le=200),
     session: AsyncSession = Depends(get_session),
 ):
-    """All users, newest first, keyset-paginated like /admin/orders (§26.3).
+    """All users, newest first, keyset-paginated like /admin/orders.
 
     Query count: 1. No per-row lookups.
     """
     q = select(User).order_by(User.created_at.desc())
     if cursor:
-        # `[FIXED]` Same real bug found and fixed in admin/orders.py (week4_plan.md
-        # Phase 5 §26.3): passing `cursor` straight into the comparison sends a raw
-        # string to asyncpg against a timestamptz column, crashing with an unhandled
-        # 500 (`operator does not exist: timestamp with time zone < character
-        # varying`) — for a genuinely well-formed cursor, not just a malformed one,
-        # since nothing here ever parsed it. Parsing first is what makes a malformed
-        # cursor degrade to "return from the start" instead of crashing either way.
+        # Parse the cursor before comparing: a raw string sent to asyncpg against a
+        # timestamptz column errors ("operator does not exist: ... < character
+        # varying"). Parsing first lets a malformed cursor degrade to "return from
+        # the start" rather than crashing.
         try:
             cursor_date = datetime.fromisoformat(cursor)
             q = q.where(User.created_at < cursor_date)
@@ -239,7 +236,7 @@ async def change_user_role(
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
 ):
-    """Change a user's role with three guardrails (Phase 6C / W4-R13 step 5):
+    """Change a user's role with three guardrails:
 
     1. Self-demotion: an admin cannot remove their own admin role.
     2. Last-admin: cannot demote the last admin.
@@ -314,10 +311,8 @@ async def deactivate_user(
 ):
     """Deactivate a user via the shared `deactivate_user` service
     (app/services/account_service.py — also used by the self-serve
-    POST /me/account/close, per week4_plan.md §10F step 2's "do not add a second
-    mechanism" instruction). Wired into the entitlements gate
-    (core/entitlements.py resolve_product_ids) rather than bolted beside it —
-    non-negotiable #1.
+    POST /me/account/close, so there is one mechanism). Wired into the entitlements
+    gate (core/entitlements.py resolve_product_ids) rather than bolted beside it.
 
     An admin cannot deactivate themselves (same guardrail as self-demotion).
     """
@@ -443,7 +438,7 @@ async def update_user(
     email_auth_synced: Optional[bool] = None
     warning: Optional[str] = None
 
-    # ══ Phase 1: validate everything, mutate nothing ════════════════════════════
+    # ══ Validate everything, mutate nothing ════════════════════════════════════
 
     # `_UNSET` distinguishes "not being changed" from "being changed to None", which
     # matters for name: sending "" deliberately clears it, and a plain `None` sentinel
@@ -523,7 +518,7 @@ async def update_user(
                 )
             pending_email = new_email
 
-    # ══ Phase 2: apply — past this point nothing raises ═════════════════════════
+    # ══ Apply — past this point nothing raises ═════════════════════════════════
 
     if pending_role is not None:
         changes["role"] = {"old": user.role.value, "new": pending_role.value}

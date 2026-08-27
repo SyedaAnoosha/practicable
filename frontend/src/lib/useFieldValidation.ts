@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 
-/** week2_plan.md §20.8 / W2-R9 — "Inline validation on blur, not on submit, and a
- * valid field is never cleared because another failed."
+/** Inline validation on blur, not on submit, and a valid field is never cleared
+ * because another failed.
  *
  * Deliberately dependency-free rather than reaching for `react-hook-form`/`zod`
  * (both installed, neither used anywhere in the codebase yet): every admin editor

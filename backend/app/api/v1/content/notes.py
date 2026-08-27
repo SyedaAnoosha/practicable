@@ -1,4 +1,4 @@
-"""Notes endpoints for W5-R5.
+"""Notes endpoints.
 
 PUT    /me/notes/{lesson_id}  — upsert (one note per lesson, edited in place)
 GET    /me/notes              — list all notes for the current user

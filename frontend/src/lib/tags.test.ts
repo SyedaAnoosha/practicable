@@ -1,4 +1,3 @@
-// week4_plan.md W4-R9 item 3.
 import { describe, expect, it } from 'vitest'
 import { TAG_VARIANT, cardTags } from './tags'
 
@@ -10,7 +9,7 @@ interface Tag {
 const tag = (dimension: string, value = 'x'): Tag => ({ dimension, value })
 
 describe('cardTags', () => {
-  it('excludes leadership_traits — detail page only, per §20.2', () => {
+  it('excludes leadership_traits — detail page only', () => {
     const tags = [tag('leadership_traits'), tag('duration'), tag('cost')]
     const result = cardTags(tags)
     expect(result.some((t) => t.dimension === 'leadership_traits')).toBe(false)

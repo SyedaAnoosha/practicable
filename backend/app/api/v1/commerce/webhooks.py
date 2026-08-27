@@ -60,8 +60,8 @@ async def stripe_webhook(
     if event['type'] == 'checkout.session.completed':
         session_data = event['data']['object']
         user_id = session_data.get('metadata', {}).get('user_id')
-        # week3_plan.md W3-R11 — comma-joined, same encoding stripe_client.py wrote it
-        # with. A single-product "Buy" is a one-item list here, not a separate shape.
+        # Comma-joined, same encoding stripe_client.py wrote it with. A single-product
+        # "Buy" is a one-item list here, not a separate shape.
         product_ids_raw = session_data.get('metadata', {}).get('product_ids', '')
         product_ids = [pid for pid in product_ids_raw.split(',') if pid]
 
@@ -102,26 +102,14 @@ async def stripe_webhook(
 
                 if user:
                     product_names = [p.name for p in products]
-                    # week4_plan.md §20.9: the receipt states each product's own
-                    # version/last_reviewed_at, same fact as the buy page's VersionStamp.
+                    # The receipt states each product's own version/last_reviewed_at,
+                    # same fact as the buy page's VersionStamp.
                     product_versions = [(p.version, p.last_reviewed_at) for p in products]
-                    # W4-R2: the human-readable invoice number for the receipt.
-                    #
-                    # This read `session_data['invoice']['number']`, which assumed an
-                    # expanded object. A webhook payload never carries one: Stripe sends
-                    # `invoice` as a bare id string (or null), and nothing here requests
-                    # `expand`. So it raised `AttributeError: 'str' object has no
-                    # attribute 'get'` on every completed checkout — and because it sits
-                    # above the sends, the receipt, the sale alert and every
-                    # access-granted email were skipped with it. The order and the
-                    # entitlements were already committed by then, so the buyer was
-                    # charged, given access, and told nothing.
-                    #
-                    # The number lives on the Invoice, so fetching it needs a second
-                    # call. That call is best-effort by design: an invoice number is a
-                    # nicety on a receipt (`me.py` already documents an absent one as a
-                    # supported state), and no failure reaching Stripe for it may ever
-                    # again cost the buyer their email.
+                    # The human-readable invoice number for the receipt. A webhook
+                    # payload carries `invoice` only as a bare id string (or null), so
+                    # the number needs a second call to Stripe. That call is best-effort:
+                    # an absent invoice number is a supported state (see me.py), and a
+                    # failure fetching it must never block the buyer's emails.
                     invoice_ref = session_data.get('invoice')
                     invoice_number = None
                     if isinstance(invoice_ref, dict):
@@ -138,9 +126,7 @@ async def stripe_webhook(
                                 order.id,
                                 exc_info=True,
                             )
-                    # One receipt for the whole order, however many products it contains
-                    # (W3-R11) — the same call a single "Buy" made before, just with a
-                    # one-item list.
+                    # One receipt for the whole order, however many products it contains.
                     await send_receipt_email(
                         to_email=user.email,
                         order_id=str(order.id),
@@ -163,7 +149,7 @@ async def stripe_webhook(
                         product_name=", ".join(product_names) if product_names else "Unknown product",
                     )
 
-                    # access_granted fires once PER PRODUCT (W3-R11) — each has its own
+                    # access_granted fires once PER PRODUCT — each has its own
                     # "what you now have access to" link, unlike the receipt/welcome pair
                     # above which describe the order as a whole.
                     for product in products:
@@ -182,10 +168,9 @@ async def stripe_webhook(
                             primary_link=primary_link,
                         )
 
-                    # week3_plan.md Phase 1 step 8: welcome fires once, alongside access
-                    # granted, only on a buyer's first-ever completed order — a repeat
-                    # buyer already knows what "welcome" would tell them. Still once per
-                    # ORDER (not per product) even for a first-order cart with several items.
+                    # Welcome fires once, alongside access granted, only on a buyer's
+                    # first-ever completed order. Still once per ORDER (not per product)
+                    # even for a first-order cart with several items.
                     order_count_result = await session.execute(
                         select(func.count())
                         .select_from(Order)
@@ -218,9 +203,9 @@ async def stripe_webhook(
             webhook_event.error_message = "Missing user_id or product_ids in session metadata"
             await session.commit()
     elif event['type'] == 'charge.refunded':
-        # week3_plan.md W3-R5 — a refund issued from the Stripe dashboard (not
-        # /admin/orders) must reach the same end state. Stripe has already refunded
-        # the charge by the time this fires, so this only catches up local state —
+        # A refund issued from the Stripe dashboard (not /admin/orders) must reach the
+        # same end state. Stripe has already refunded the charge by the time this
+        # fires, so this only catches up local state —
         # `apply_refund` is the same function the admin endpoint calls, just with no
         # Stripe API call in front of it and no admin actor.
         charge = event['data']['object']

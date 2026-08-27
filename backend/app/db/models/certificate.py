@@ -1,4 +1,4 @@
-"""Certificate model — issued on course completion (W5-R2).
+"""Certificate model — issued on course completion.
 
 A certificate is a claim about a moment. The snapshot columns (learner name,
 course title, issue date) are frozen at issue time so a later course rename

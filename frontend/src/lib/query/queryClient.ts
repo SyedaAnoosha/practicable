@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query'
 
-// DESIGN.md §79. One instance, imported everywhere a query/mutation is used.
+// One instance, imported everywhere a query/mutation is used.
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

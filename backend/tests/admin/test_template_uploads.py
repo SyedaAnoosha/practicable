@@ -3,9 +3,8 @@ against the real Supabase Storage S3-compatible endpoint — not mocked, matchin
 codebase's own rule (`storage_client.py`, gating case 3/4) that the thing guarding a
 paid artefact's delivery is verified against real infrastructure, not a stand-in.
 
-week4_plan.md Phase 2 step 1 / DoD: "Preview upload works end to end, verified with a
-real `head_object` HEAD — not the browser's own 'done' event." This file is that
-verification, kept as a permanent regression test rather than a one-off script.
+Preview upload works end to end, verified with a real `head_object` HEAD — not the
+browser's own "done" event.
 
 Real bytes are PUT directly to Storage (bypassing the app, exactly as a browser would
 via the presigned URL) and always cleaned up in a `finally`, since `db_session`'s
@@ -136,9 +135,9 @@ async def test_preview_upload_rejects_non_image_content_type(admin_client: httpx
 
 @pytest.mark.asyncio
 async def test_preview_confirm_rejects_missing_alt_text(admin_client: httpx.AsyncClient, db_session: AsyncSession):
-    """§20.2: 'alt text is a requirement, not a nicety' — confirm refuses a preview with
-    no alt text (or whitespace-only) rather than silently accepting one, since nothing
-    downstream would ever prompt for it again once the row exists."""
+    """Confirm refuses a preview with no alt text (or whitespace-only) rather than
+    silently accepting one, since nothing downstream would ever prompt for it again
+    once the row exists."""
     section = Section(name="Upload Test Section 3", slug=f"upload-test-section3-{uuid.uuid4().hex[:8]}")
     author = Author(name="Upload Test Author 3", slug=f"upload-test-author3-{uuid.uuid4().hex[:8]}")
     db_session.add_all([section, author])

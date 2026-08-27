@@ -3,25 +3,17 @@ import AxeBuilder from '@axe-core/playwright'
 import { hasAdminE2ECreds, adminE2ESkipReason, signInAsAdmin } from './adminAuth'
 
 /**
- * week4_plan.md Phase 8 (8E-9): "Tests, seen red first: ... round trip — h2/h3/h4,
- * bullets, a numbered list, a table and a link saved in admin and rendered on the
- * member lesson page, in both themes, at all seven widths · the lesson page still has
- * exactly one h1."
- *
- * Found during the 8D-8G re-verification pass (2026-08-21): no test anywhere in the
- * repo actually did this — searched and confirmed absent. This is that test.
+ * Prose round trip: h2/h3/h4, bullets, a numbered list, a table and a link saved in
+ * admin and rendered on the member lesson page, in both themes, at all seven widths,
+ * with the lesson page still having exactly one h1.
  *
  * Gated on real admin credentials, matching adminAuth.ts's established pattern
- * (gating.spec.ts, accessibility.spec.ts's /admin/metrics suite) — this project's own
- * rule is that E2E_ADMIN_EMAIL/PASSWORD are never created automatically, since that
- * would write a live row to the owner's real Supabase project unattended. Written and
- * committed unexecuted in this pass (no credentials configured in this environment) —
- * runs for real wherever those env vars are set (CI or a developer machine with them).
+ * (gating.spec.ts, accessibility.spec.ts's /admin/metrics suite): E2E_ADMIN_EMAIL/PASSWORD
+ * are never created automatically, since that would write a live row to the owner's real
+ * Supabase project unattended. Runs for real wherever those env vars are set.
  *
- * The toolbar buttons this test clicks by accessible name (title="Bold" etc.) did not
- * have one before this same pass — fixed in RichTextEditor.tsx alongside writing this
- * test, since a locator strategy that depended on icon SVGs or DOM position would have
- * been exactly the kind of brittle test this project's own conventions warn against.
+ * The toolbar buttons are located by accessible name (title="Bold" etc.) rather than by
+ * icon SVGs or DOM position, which would be brittle.
  *
  * Widths: DESIGN.md's seven-width sweep, reused from responsive-widths.spec.ts.
  */

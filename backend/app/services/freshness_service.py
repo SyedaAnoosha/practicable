@@ -9,8 +9,7 @@ and a template reviewed fourteen months ago are different facts and the admin ac
 them differently — the first needs a first pass, the second needs a re-read. Collapsing
 them into one "needs attention" badge throws away the distinction the admin is trying to
 make. This is the same rule the rest of this codebase already follows for every unset
-evidence field (week4_plan.md §20.1: unknown is null, zero is 0, and the two are
-different).
+evidence field: unknown is null, zero is 0, and the two are different.
 
 **Computed here rather than in TypeScript**, following `admin/promotions.py`'s `status`
 field: date arithmetic done twice in two languages drifts, and the second copy is the one
@@ -194,7 +193,7 @@ async def find_low_conversion_questions(
     min_search_traffic: int = MIN_SEARCH_TRAFFIC,
     max_recommendation_clicks: int = MAX_RECOMMENDATION_CLICKS,
 ) -> list[dict[str, Any]]:
-    """§16's third signal, approximated: high search interest, near-zero routed clicks.
+    """improvements.md #16's third signal, approximated: high search interest, near-zero routed clicks.
 
     Traffic side: FilterEvent search queries matched to questions by title containment.
     Conversion side: RecommendationEvent rows with surface="question" grouped by

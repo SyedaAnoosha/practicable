@@ -1,4 +1,4 @@
-"""Filter event model — week4_plan.md Phase 6B step 2.
+"""Filter event model.
 
 Migration 014_filter_events creates this table. The schema uses per-dimension
 columns (not a (dimension, value) pair) so queries can filter on specific

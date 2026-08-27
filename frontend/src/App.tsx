@@ -43,7 +43,7 @@ import { AccountNotifications } from '@/pages/account/AccountNotifications'
 import { AccountDataPrivacy } from '@/pages/account/AccountDataPrivacy'
 
 // ── Lazy loaded (heavy, route-specific) ────────────────────────────────────
-// §6.3 K3: every route lazy-loaded. Admin bundle never in a learner's download.
+// Every route lazy-loaded. Admin bundle never in a learner's download.
 // Mux player, rich text editor, and Stripe checkout are dynamically imported.
 const Learn = lazy(() => import('@/pages/Learn').then((m) => ({ default: m.Learn })))
 const Lesson = lazy(() => import('@/pages/Lesson').then((m) => ({ default: m.Lesson })))
@@ -95,9 +95,8 @@ function RouteLoading() {
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
-    /* `[ADDED 2026-08-22]` Without this, anything thrown while rendering a route —
-       and every unmatched URL — surfaced react-router's built-in developer screen
-       ("Unexpected Application Error! ... Hey developer") to real visitors. It sits on
+    /* Without this, anything thrown while rendering a route — and every unmatched URL —
+       surfaces react-router's built-in developer screen to real visitors. It sits on
        the root so it covers every branch below, and `RouteError` hands a 404 off to
        the proper not-found page rather than calling a wrong address a crash. */
     errorElement: <RouteError />,
@@ -150,9 +149,9 @@ const router = createBrowserRouter([
           // The domain-pack product page. Public like every other product page: reading
           // what a pack contains needs no account, and the questions it lists are free.
           { path: '/store/packs/:slug', element: <PackDetail /> },
-          // Owner direction 2026-08-16: no standalone pricing page — one-time prices
-          // for every product live on /store instead (see Store.tsx's bundle callout
-          // and footer). A bare redirect, not a 404, for anyone with the old link.
+          // No standalone pricing page — one-time prices for every product live on
+          // /store instead (see Store.tsx's bundle callout and footer). A bare
+          // redirect, not a 404, for anyone with the old link.
           { path: '/pricing', element: <Navigate to="/store" replace /> },
         ],
       },
@@ -187,7 +186,7 @@ const router = createBrowserRouter([
           { path: '/checkout/cancel', element: <Suspense fallback={<RouteLoading />}><CheckoutCancel /></Suspense> },
           { path: '/purchases', element: <Purchases /> },
           { path: '/modules/:moduleId/assessment', element: <Suspense fallback={<RouteLoading />}><AssessmentPage /></Suspense> },
-          // Phase 10: account shell with routed sub-pages (Decision #44)
+          // Account shell with routed sub-pages
           {
             path: '/account',
             element: <AccountShell />,
@@ -205,14 +204,13 @@ const router = createBrowserRouter([
       {
         // The content editor. AdminLayout checks the role for a clean message, but the
         // real boundary is server-side require_admin on every /admin/* route.
-        // §6.3 K3: ALL admin pages are lazy — the admin bundle never ships to a learner.
+        // ALL admin pages are lazy — the admin bundle never ships to a learner.
         element: <AdminLayout />,
         children: [
           { path: '/admin', element: <Suspense fallback={<RouteLoading />}><AdminQuestions /></Suspense> },
           { path: '/admin/questions', element: <Suspense fallback={<RouteLoading />}><AdminQuestions /></Suspense> },
           { path: '/admin/courses', element: <Suspense fallback={<RouteLoading />}><AdminCourses /></Suspense> },
-          // Full-screen "Write" editor (week4_plan.md Phase 8, 8E-continued,
-          // `[OWNER INSTRUCTION 2026-08-21]`) — its own route rather than a modal, so
+          // Full-screen "Write" editor — its own route rather than a modal, so
           // it has Back/Cancel/Save and is reachable/refreshable by URL. Still nested
           // under AdminLayout (keeps the admin nav bar and the is_admin guard, same as
           // every other /admin/* route) — "full screen" means its own routed page, not

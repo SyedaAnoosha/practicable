@@ -1,4 +1,4 @@
-"""Phase 8F (W4-R16): Per-buyer file stamping.
+"""Per-buyer file stamping.
 
 On a **paid** download, serve a copy stamped with the buyer's name and email, the
 order id, the licence tier and the version. `.docx` via `python-docx` (footer),
@@ -171,7 +171,7 @@ def get_extension(file_name: str) -> str:
 
 
 def is_stampable(file_name: str) -> bool:
-    """Phase 8F rule 2: is this a type we can stamp?"""
+    """Is this a type we can stamp? (rule 2)"""
     return get_extension(file_name) in STAMPABLE_EXTENSIONS
 
 
@@ -186,7 +186,6 @@ def stamp_file(
 ) -> bytes:
     """Stamp a file, or return the original unchanged.
 
-    Phase 8F rules:
     - Rule 2: unstampable types are served unchanged (never returns empty/None).
     - Rule 1: stamping failure serves the original file (never returns None to caller).
     """
@@ -218,8 +217,8 @@ def get_or_stamp(
 ) -> bytes:
     """Main entry point: check cache, stamp if needed, upload cached copy.
 
-    Phase 8F step 6: Generated once and cached. The version in the key makes a
-    re-published template re-stamp rather than serve a stale copy.
+    Generated once and cached. The version in the key makes a re-published template
+    re-stamp rather than serve a stale copy.
 
     Free templates (rule 3) should never reach this function — the caller must
     check `is_free` before calling. If they don't, the buyer_email being empty

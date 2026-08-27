@@ -20,13 +20,13 @@ class LessonBlockType(str, enum.Enum):
 
 
 class LessonBlock(Base, IdMixin, TimestampMixin):
-    """One ordered piece of a lesson's content — Product Spec §7.2's mixed-content
-    requirement. alembic/versions/009_lesson_blocks.py has the full reasoning.
+    """One ordered piece of a lesson's mixed-content lesson body.
+    alembic/versions/009_lesson_blocks.py has the full reasoning.
 
     Exactly one of `text_body` / `media_id` / `template_id` is populated, matching
-    `block_type` — enforced at the API layer (the admin publish guard,
-    week2_plan.md Phase 2 step 7), not by a DB CHECK constraint, the same choice this
-    schema already makes for `product_contents`' polymorphic content_type/content_id.
+    `block_type` — enforced at the API layer (the admin publish guard), not by a DB
+    CHECK constraint, the same choice this schema already makes for `product_contents`'
+    polymorphic content_type/content_id.
     """
 
     __tablename__ = "lesson_blocks"
@@ -41,7 +41,7 @@ class LessonBlock(Base, IdMixin, TimestampMixin):
     text_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     heading: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    # Phase 8 (8E): Sanitized version of prose for safe display.
+    # Sanitized version of prose for safe display.
     # The original text_body is kept for editing; this field stores sanitized HTML.
     prose_sanitized: Mapped[str | None] = mapped_column(Text, nullable=True)
 

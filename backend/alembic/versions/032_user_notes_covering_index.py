@@ -1,18 +1,17 @@
-"""Make ix_user_notes_user covering, as §III.5 specified (W5-R5).
+"""Make ix_user_notes_user covering.
 
-`week5_plan.md` §III.5 specifies `ix_user_notes_user` on `(user_id)`
-**`INCLUDE (lesson_id)`** — the same covering shape as `ix_entitlements_user` in
-migration `010` and `ix_certificates_user` in `027`. Migration `030` created it
-without the `INCLUDE`, so `GET /me/notes` finds its rows through the index and then
-visits the heap for every one of them purely to read `lesson_id`.
+`ix_user_notes_user` should be on `(user_id)` **`INCLUDE (lesson_id)`** — the same
+covering shape as `ix_entitlements_user` in migration `010` and `ix_certificates_user`
+in `027`. Migration `030` created it without the `INCLUDE`, so `GET /me/notes` finds
+its rows through the index and then visits the heap for every one of them purely to
+read `lesson_id`.
 
-That column is in the response for every note, and it is the only thing the heap
-visit is fetching, so including it removes the visit entirely. This is the
-difference between an index scan and an index-*only* scan on a query that runs on
-every lesson page a learner opens.
+That column is in the response for every note and is the only thing the heap visit
+fetches, so including it removes the visit entirely — an index-only scan on a query
+that runs on every lesson page a learner opens.
 
-An additive follow-up rather than an edit to `030`, per §III.6: never amend a
-migration that has already run.
+An additive follow-up rather than an edit to `030`: never amend a migration that has
+already run.
 
 Revision ID: 032
 Revises: 031
@@ -30,9 +29,8 @@ _INDEX_NAME = "ix_user_notes_user"
 
 
 def upgrade() -> None:
-    # CONCURRENTLY, inside the autocommit block — the pattern migration 010 established
-    # and §III.1 requires be copied rather than reinvented. Dropped and recreated rather
-    # than altered: Postgres has no ALTER INDEX ... INCLUDE.
+    # CONCURRENTLY, inside the autocommit block — the pattern migration 010 established.
+    # Dropped and recreated rather than altered: Postgres has no ALTER INDEX ... INCLUDE.
     with op.get_context().autocommit_block():
         op.drop_index(_INDEX_NAME, table_name="user_notes", postgresql_concurrently=True, if_exists=True)
         op.create_index(
@@ -64,7 +62,7 @@ def upgrade() -> None:
     if invalid:
         raise RuntimeError(
             f"CREATE INDEX CONCURRENTLY left INVALID index(es): {[r[0] for r in invalid]}. "
-            "Drop and re-run — see week3_plan.md §27.2."
+            "Drop and re-run."
         )
 
 

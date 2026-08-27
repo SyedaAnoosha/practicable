@@ -1,9 +1,8 @@
 """Admin API — the non-technical content editor's surface.
 
-Product spec §9: "Admin interface: add/edit a question, course, or template; upload a
-video; attach a file; publish — no code required." Until this existed, every content
-change was a hand-written SQL seed file in `db/seed/`, which made the catalogue
-un-growable by anyone but a developer — the single biggest gap against the spec.
+Add/edit a question, course, or template; upload a video; attach a file; publish —
+no code required. Until this existed, every content change was a hand-written SQL
+seed file in `db/seed/`, un-growable by anyone but a developer.
 
 TWO RULES HOLD ACROSS EVERY ROUTE IN THIS PACKAGE.
 

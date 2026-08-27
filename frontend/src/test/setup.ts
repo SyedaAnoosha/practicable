@@ -5,9 +5,9 @@ import { cleanup } from '@testing-library/react'
 
 // `globals: false` in vitest.config.ts means testing-library's own auto-cleanup (which
 // relies on the global `afterEach` jest/vitest normally installs) never registers —
-// found during Phase 6B verification (week4_plan.md) when a second `render()` in the
-// same test file left the first render's DOM mounted, so `queryByText` in the second
-// test matched leftover markup from the first. Explicit `afterEach(cleanup)` restores
+// without an explicit cleanup, a second `render()` in the same test file leaves the
+// first render's DOM mounted, so `queryByText` in the second test matches leftover
+// markup from the first. Explicit `afterEach(cleanup)` restores
 // real per-test isolation for every component test in this suite, not just the one
 // that happened to surface it.
 afterEach(() => {

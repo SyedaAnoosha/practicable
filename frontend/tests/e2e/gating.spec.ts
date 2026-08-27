@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 /**
- * Gating case 9 — DESIGN.md §58.2 / week2_plan.md Part IV.
+ * Gating case 9 — DESIGN.md §58.2.
  *
  * "`View source` on a lesson page a user is not entitled to contains no lesson body
  * text — a question page is exempt by design (§21.3)."
@@ -13,14 +13,11 @@ import { test, expect } from '@playwright/test'
  * is Playwright's rendered-DOM content after the SPA has run and made its real API
  * calls — which is what `page.content()` below actually inspects.
  *
- * week2_plan.md Phase 1 step 2 / §25: "Prefer the dependency override for
- * unit/integration; use real sign-in for the Playwright pass, so at least one layer
- * exercises the real token path." The SIGNED-IN-BUT-UNENTITLED half of case 9 needs a
- * real Supabase test account, which does not exist in this environment — creating one
- * automatically would write a real row into the owner's live Supabase project with no
- * confirmation, which this suite deliberately does not do unattended. That half is
- * written below, gated on E2E_TEST_EMAIL/E2E_TEST_PASSWORD, and SKIPS with a clear
- * reason when they are unset rather than silently passing or being deleted.
+ * Unit/integration coverage uses the dependency override; the Playwright pass uses a real
+ * sign-in so at least one layer exercises the real token path. The signed-in-but-unentitled
+ * half needs a real Supabase test account: it is gated on E2E_TEST_EMAIL/E2E_TEST_PASSWORD
+ * and skips with a clear reason when they are unset (accounts are never created
+ * automatically, since that would write a live row to the owner's real project).
  */
 
 // A real reading-type lesson (db/seed/008_seed_reading_lesson_body.sql) whose `body`
@@ -50,15 +47,13 @@ test.describe('Gating case 9 — lesson content never reaches an unentitled brow
 
   test('signed in, unentitled: the rendered page contains no lesson body text', async ({ page }) => {
     // `test.skip(condition, reason)` called at describe scope (rather than inside a
-    // test body) applies retroactively to every test in the enclosing describe block —
-    // including the anonymous one above, which silently skipped alongside this one the
-    // first time this was written. Scoping it inside this test's own body is what
-    // limits it to only this test.
+    // test body) applies retroactively to every test in the enclosing describe block,
+    // including the anonymous one above. Scoping it inside this test's own body limits
+    // it to only this test.
     test.skip(
       !process.env.E2E_TEST_EMAIL || !process.env.E2E_TEST_PASSWORD,
       'needs a real Supabase test account (E2E_TEST_EMAIL / E2E_TEST_PASSWORD) — ' +
-        'not created automatically, since that would write a live row to the real project. ' +
-        'See week2_plan.md Phase 1 for how to provision one.',
+        'not created automatically, since that would write a live row to the real project.',
     )
     await page.goto('/sign-in')
     await page.getByLabel(/email/i).fill(process.env.E2E_TEST_EMAIL!)

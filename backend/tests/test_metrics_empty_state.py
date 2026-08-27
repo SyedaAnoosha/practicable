@@ -1,11 +1,8 @@
-"""Regression coverage for a real bug found during Phase 6B verification
-(week4_plan.md): non-negotiable #15 says "unknown is null, zero is 0, and the
-two are different" — but every ratio metric (`second_purchase_rate`,
-`free_to_paid`, `refund_rate`, `signup_to_purchase_days`) always returned real
-integers, defaulting to `0`/`0` for "genuinely no data yet" exactly the same as
-it would for "we checked, and the answer is truly zero out of some real
-denominator". `MetricOut.numerator`/`denominator` were typed as plain `int`,
-so there was no way to return anything else even if a call site wanted to.
+"""regression: unknown must be null, zero must be 0, and the two must be
+distinguishable. Every ratio metric (`second_purchase_rate`, `free_to_paid`,
+`refund_rate`, `signup_to_purchase_days`) used to return `0`/`0` for "genuinely no
+data yet" exactly the same as for "truly zero out of a real denominator", because
+`MetricOut.numerator`/`denominator` were typed as plain `int`.
 
 Cannot be reproduced against the seeded test DB directly — `db_session`'s
 transaction wraps genuinely seeded rows, so `total_buyers` etc. are never

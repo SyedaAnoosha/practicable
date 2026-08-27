@@ -1,4 +1,4 @@
-"""Add user_notes and bookmarks tables (W5-R5).
+"""Add user_notes and bookmarks tables.
 
 ``user_notes`` stores per-lesson learner notes. One note per lesson per
 learner, edited in place via upsert.

@@ -1,6 +1,6 @@
 """Certificate PDF renderer - generates a one-page A4 landscape certificate.
 
-W5-R2: The PDF is generated once, cached under `certificates/{certificate_id}.pdf`,
+The PDF is generated once, cached under `certificates/{certificate_id}.pdf`,
 and served through a presigned URL. Generation failure does not fail the
 lesson-completion request - the row is written, the PDF is rendered lazily on
 first fetch.
@@ -8,11 +8,9 @@ first fetch.
 Colours come from frontend/src/styles/theme.css via the base.html.j2 hex palette,
 copied into module constants with comments naming each token.
 
-Section V.3.2 (`[OWNER]`, resolved 2026-08-23). The owner's decision: keep the
-wording "Certificate of Completion", and sign it from the platform rather than
-from a named individual. Both are honoured here and both are asserted by tests in
-`tests/test_certificate_pdf.py`, so a later edit that reintroduces an accreditation
-claim goes red rather than shipping:
+The wording is "Certificate of Completion", signed from the platform rather than
+from a named individual. Both are asserted by tests in `tests/test_certificate_pdf.py`,
+so a later edit that reintroduces an accreditation claim goes red rather than shipping:
 
   * The document asserts *completion of a course on this platform* and nothing more.
     `ATTESTATION_LINES` says "has completed the course" - not "is certified in", not

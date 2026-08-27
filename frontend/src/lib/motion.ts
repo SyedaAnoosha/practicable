@@ -75,11 +75,8 @@ export const inViewOnce = { once: true, amount: 0.15 } as const
 export const headerEnter: Transition = { duration: 0.6, ease: 'easeOut' }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * `[ADDED 2026-08-22, REDESIGN_SUMMARY.md §5.2 / D1.3]`
- *
- * Everything above is an ENTRANCE. Once a section had revealed, the page was
- * completely static — the Framer reference set is never fully static; something in
- * the background is always slowly moving (FRAMER_MOTION_REFERENCE.md §1.3).
+ * Everything above is an ENTRANCE. What follows keeps something slowly moving in the
+ * background once a section has revealed, so the page is never fully static.
  *
  * ⚠ The reduced-motion contract changes for what follows. `<MotionConfig
  * reducedMotion="user">` neutralises TRANSFORMS on Motion components, which is
@@ -161,8 +158,8 @@ export function useParallax(speed = 0.08) {
   return { ref, y: reduced ? 0 : y }
 }
 
-/** Hover: 2px lift, no scale (§39.3 — a card that grows 4% pushes its neighbours and
- *  reads consumer-app). The CSS `.hover-lift` utility in theme.css is the same
+/** Hover: 2px lift, no scale — a card that grows 4% pushes its neighbours and reads
+ *  consumer-app. The CSS `.hover-lift` utility in theme.css is the same
  *  movement for non-Motion elements; this is the variant for Motion components so a
  *  single card never stacks both mechanisms. */
 export const hoverLift = {
@@ -180,24 +177,23 @@ export const arrowNudge = {
  * Counts a real number up once, when it first enters view.
  *
  * Deliberately NOT a generic "animate any number" hook: it takes the resolved value
- * and returns the display value, so it is impossible to count to a fabricated target
- * (principle 7). A `null`/`undefined` value returns `null` and the caller renders
- * nothing rather than a zero.
+ * and returns the display value, so it is impossible to count to a fabricated target.
+ * A `null`/`undefined` value returns `null` and the caller renders nothing rather than
+ * a zero.
  *
  * Under reduced motion it returns the final value immediately — the number still has
- * to be readable, the animation is what goes away (§39.4: transitions become instant
- * state changes, never removals).
+ * to be readable, the animation is what goes away.
  */
 export function useCountUp(value: number | null | undefined, durationMs = 900) {
   const reduced = usePrefersReducedMotion()
   /* `null` means "not animating" — the resolved value is then used directly. Only a
      run that is actually counting writes a number here.
 
-     `[FIXED 2026-08-22]` The three non-animating branches (absent value, reduced
-     motion, not yet begun) previously wrote the final value from inside the effect,
-     which renders once with the old number and again with the right one. They are
-     pure functions of the props, so they are derived below instead and the effect is
-     left with the one job that genuinely is a side effect: driving the rAF loop. */
+     The three non-animating branches (absent value, reduced motion, not yet begun) are
+     pure functions of the props, so they are derived below rather than written from
+     inside the effect (which would render once with the old number and again with the
+     right one). The effect is left with the one genuine side effect: driving the rAF
+     loop. */
   const [counting, setCounting] = useState<number | null>(null)
   const [started, setStarted] = useState(false)
   const animating = value != null && !reduced && started

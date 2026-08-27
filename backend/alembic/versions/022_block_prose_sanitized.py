@@ -1,4 +1,4 @@
-"""Add prose_sanitized column to lesson_blocks (Phase 8 8E).
+"""Add prose_sanitized column to lesson_blocks.
 
 Mirrors the existing prose_sanitized column on lessons (migration 017):
 the original text_body is kept for editing; prose_sanitized holds the

@@ -1,11 +1,8 @@
-"""Phase 10 (§10F re-verification, 2026-08-22): the plan's own instruction —
-"Do not add a second mechanism: reuse the logic behind admin/users.py:269, extracting
-it to a service function both the admin endpoint and the new self-serve endpoint
-call" — was not followed. Both endpoints independently inlined
-`user.disabled_at = datetime.now(timezone.utc)`, so nothing enforced that they'd stay
-in sync. This tests the extracted `deactivate_user` service directly, and both real
-call sites are covered end-to-end in test_admin_phase6c.py and
-test_account_selfserve.py.
+"""Tests the extracted `deactivate_user` service directly. Both real call sites
+are covered end-to-end in test_admin_phase6c.py and test_account_selfserve.py.
+
+regression: the admin and self-serve endpoints must share this one service rather
+than each inlining `user.disabled_at = ...`, so their behaviour stays in sync.
 """
 import uuid
 

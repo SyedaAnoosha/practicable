@@ -1,4 +1,4 @@
-"""Recompute denormalised review counters from the reviews table (W5-R4).
+"""Recompute denormalised review counters from the reviews table.
 
 ``review_count`` and ``rating_sum`` on courses, templates, and products are
 updated in the same transaction as moderation transitions. This script

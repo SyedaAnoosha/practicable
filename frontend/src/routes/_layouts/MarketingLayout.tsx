@@ -18,12 +18,10 @@ import { CookieConsent } from '@/components/ui/CookieConsent'
 
 const DOMAINS = ['Risk', 'Cyber', 'Compliance', 'Resilience', 'AI']
 
-// Phase 8 (8G): header is `Products` (the ProductsMenu dropdown rendered just above
-// this list, not a NAV_ITEMS entry) · `About`. Courses, Templates and Reference packs
-// moved into that menu; Questions stays a top-level link — the flagship free
-// discovery surface, not just another shopping link buried inside the menu.
-// (Superseded the prior comment here, which described Courses/Templates folding into
-// Store — that was true before 8G moved them into ProductsMenu instead.)
+// Header is `Products` (the ProductsMenu dropdown rendered just above this list, not a
+// NAV_ITEMS entry) · `About`. Courses, Templates and Reference packs live in that menu;
+// Questions stays a top-level link — the flagship free discovery surface, not just
+// another shopping link buried inside the menu.
 const NAV_ITEMS = [
   // { to: '/questions', label: 'Questions' },
   { to: '/about', label: 'About' },

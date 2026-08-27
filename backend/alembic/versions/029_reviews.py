@@ -1,4 +1,4 @@
-"""Add reviews table and denormalised counters on content tables (W5-R4).
+"""Add reviews table and denormalised counters on content tables.
 
 Creates the ``reviews`` table with a ``review_state`` enum, a partial index
 for the moderation queue, and a unique constraint enforcing one review per

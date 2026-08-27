@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-// week3_plan.md W3-R11 — cart state is localStorage-persisted, matching emailGate.ts's
-// existing pattern, and NOT synced server-side or across devices for v1 (explicit
-// scope line: a page refresh must not lose the cart, but nothing more than that is
-// promised). zustand's own `persist` middleware is used here rather than
+// Cart state is localStorage-persisted, matching emailGate.ts's existing pattern, and
+// NOT synced server-side or across devices: a page refresh must not lose the cart, but
+// nothing more than that is promised. zustand's own `persist` middleware is used here
+// rather than
 // useThemeStore's hand-rolled localStorage read/write, since the cart is an array that
 // needs real (de)serialisation rather than a single string value.
 export interface CartItem {

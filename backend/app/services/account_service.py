@@ -1,14 +1,10 @@
-"""The one place a user account actually gets deactivated (week4_plan.md §10F step 2).
+"""The one place a user account actually gets deactivated.
 
 Two callers reach `deactivate_user` — `POST /admin/users/{id}/deactivate` (an admin
 acting on someone else, reason required) and `POST /me/account/close` (a user acting
-on themselves, password-reauth-gated instead) — and the plan is explicit: "Do not add
-a second mechanism... extracting it to a service function both the admin endpoint and
-the new self-serve endpoint call." Before this, both endpoints inlined the identical
-`user.disabled_at = datetime.now(timezone.utc)` independently — same effect today, but
-two places that could silently drift (e.g. one remembering to re-check an already-
-active gate condition and the other not) with no test able to catch the divergence.
-Neither caller sets `disabled_at` directly anymore; both call this.
+on themselves, password-reauth-gated instead). Both go through this one service function
+rather than each inlining `user.disabled_at = datetime.now(timezone.utc)`, so the two
+paths cannot silently drift.
 """
 from datetime import datetime, timezone
 from typing import Optional

@@ -1,28 +1,19 @@
-"""Repair cascading-escaped lesson/block prose (found live 2026-08-21).
+"""Repair cascading-escaped lesson/block prose.
 
-Before the plainTextToEditorHtml fix landed, opening a lesson/block in the
-admin "Write" modal could hand Tiptap already-HTML content as if it were
-plain text, and Tiptap's `<content>` prop then serialised the literal `<`/`&`
-characters back out on save. Each subsequent open->save cycle against the
-same row added one more layer of HTML-entity escaping — e.g. `<p>` became
-`&lt;p&gt;`, then `&amp;lt;p&amp;gt;`, then `&amp;amp;lt;p&amp;amp;gt;` and so
-on, visible as literal escaped markup on the reading page instead of
-formatted text (reported live, screenshots against the "Understanding
-Threat, Vulnerability, Exposure and Risk" and a "Managing..." lesson).
-
-This is a one-time data repair, not a recurring migration: the editor fix
+A stored body can accumulate layers of HTML-entity escaping — e.g. `<p>`
+becomes `&lt;p&gt;`, then `&amp;lt;p&amp;gt;` and so on, visible as literal
+escaped markup on the reading page instead of formatted text. The editor fix
 (AdminCourses.tsx preferring prose_sanitized, plainTextToEditorHtml only
-running against genuine legacy plain text) stops new corruption; it cannot
-undo escaping already baked into stored rows.
+running against genuine legacy plain text) stops new corruption; this is a
+one-time repair for rows already corrupted.
 
 Approach: repeatedly html.unescape() each affected body/prose_sanitized
-value until it stabilises (i.e. until unescaping again is a no-op), then
-re-run the result through sanitize_html() so the stored prose_sanitized
-stays governed by the same allow-list as any freshly-saved content. `body`
-is set to the same unescaped, plain-tag-stripped text via strip_tags() —
-mirroring what a legacy plain-text body looked like before 8E — so the
-"reopen predates 8E" fallback in AdminCourses.tsx keeps behaving sanely for
-any row this script cannot fully repair.
+value until it stabilises, then re-run the result through sanitize_html() so
+the stored prose_sanitized stays governed by the same allow-list as any
+freshly-saved content. `body` is set to the same unescaped,
+plain-tag-stripped text via strip_tags(), mirroring a legacy plain-text
+body, so the plain-text fallback in AdminCourses.tsx keeps behaving sanely
+for any row this script cannot fully repair.
 
 A row only qualifies as "affected" if its escaped text, once unescaped,
 actually decodes into real markup (contains a literal `<` after unescaping)
@@ -107,11 +98,9 @@ def looks_corrupted(text: str | None) -> bool:
 
 
 async def repair(apply: bool) -> None:
-    # Found running backfill_lesson_entitlements.py for real 2026-08-22: get_session()
-    # is a FastAPI dependency generator, not an async context manager — `async with
-    # get_session()` raises TypeError before any query runs. This script had the same
-    # bug and had never actually been executed end-to-end either. AsyncSessionLocal()
-    # (the session factory itself) is the correct pattern — see grant_admin.py.
+    # get_session() is a FastAPI dependency generator, not an async context manager —
+    # `async with get_session()` raises TypeError before any query runs. Use
+    # AsyncSessionLocal() (the session factory itself) instead — see grant_admin.py.
     async with AsyncSessionLocal() as session:
         lessons = (await session.execute(select(Lesson))).scalars().all()
         blocks = (await session.execute(select(LessonBlock))).scalars().all()

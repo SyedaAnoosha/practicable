@@ -1,11 +1,8 @@
 """Transactional email, over Mailjet.
 
-Mailjet is the only transport (week3_plan.md W3-R1, restored 2026-08-15). It was
-working over REST when it was removed by choice on 2026-08-12, not because it failed —
-see docs/email.md and docs/gmail.md §9 for the full provider history. It reaches an
-arbitrary real recipient directly, no domain and no sandbox redirect required, and it
-survives Render's outbound-port-587 block that makes Gmail/Brevo SMTP structurally
-impossible on this host (docs/gmail.md §8).
+Mailjet is the only transport. It reaches an arbitrary real recipient directly, no
+domain and no sandbox redirect required, and it survives Render's outbound-port-587
+block that makes Gmail/Brevo SMTP structurally impossible on this host.
 
 Every send is rendered from a Jinja2 template under app/emails/ with autoescaping on —
 load-bearing for send_contact_notification_email, the one call in this module built
@@ -51,8 +48,8 @@ def _format_version_stamp(version: str | None, last_reviewed_at: datetime | None
     """`v1.2 · reviewed 17 Aug 2026` — the exact string `VersionStamp.tsx` renders on
     the product page, reproduced here so the receipt states the same fact rather than a
     second, drifting formatting of it. Absence rule: both unset returns None, which the
-    template renders as nothing — never `v—` or an empty stamp line (week4_plan.md
-    §20.1, the rule every unset-evidence-field surface in this app already follows)."""
+    template renders as nothing — never `v—` or an empty stamp line, the rule every
+    unset-evidence-field surface in this app already follows."""
     if not version and not last_reviewed_at:
         return None
     parts = []
@@ -162,7 +159,7 @@ def _format_amount(amount_cents: int, currency: str) -> str:
     return f"{currency} {amount_cents / 100:.2f}"
 
 
-# ── The six buyer-facing emails (DESIGN.md §32.3 + the refund confirmation W3-R5 adds) ──
+# ── The six buyer-facing emails (DESIGN.md §32.3, plus the refund confirmation) ──
 
 
 async def send_welcome_email(
@@ -190,23 +187,21 @@ async def send_receipt_email(
     product_versions: list[tuple[str | None, datetime | None]] | None = None,
 ) -> bool:
     """To the buyer: order reference, every product the order contains, amount, date,
-    and the currently-drafted contracting entity (decision #27, closed — 'Effective
-    Risk Management') — a document someone can submit to finance. The entity is not
-    GST-registered and has no ABN, so no ABN field exists here or anywhere else in the
-    app — not blank, not [OWNER], simply absent.
+    and the contracting entity ('Effective Risk Management') — a document someone can
+    submit to finance. The entity is not GST-registered and has no ABN, so no ABN field
+    exists here or anywhere else in the app — not blank, simply absent.
 
-    `product_names` is a list, not a single string, since week3_plan.md W3-R11: one
-    receipt for a whole cart checkout, itemising every product, not one receipt per
-    product. A direct "Buy" (the pre-cart path) is the one-item-list case of the same
-    call, not a second code path.
+    `product_names` is a list, not a single string: one receipt for a whole cart
+    checkout, itemising every product, not one receipt per product. A direct "Buy" (the
+    pre-cart path) is the one-item-list case of the same call, not a second code path.
 
     `product_versions` is the parallel (version, last_reviewed_at) tuple per entry in
-    `product_names` — week4_plan.md §20.9's "version renders under the line item."
-    Optional and independently absent per product (a cart can mix versioned and
-    unversioned products); omitted entirely (None) for a caller that predates this.
+    `product_names` — the version renders under the line item. Optional and independently
+    absent per product (a cart can mix versioned and unversioned products); omitted
+    entirely (None) for a caller that predates this.
 
-    W4-R2: invoice_number and seller_legal_name enable tax-invoice-quality receipts
-    for business buyers."""
+    invoice_number and seller_legal_name enable tax-invoice-quality receipts for
+    business buyers."""
     amount_display = _format_amount(amount_cents, currency)
     # %-d (no leading zero) is glibc/macOS-only; %d is portable but zero-pads, so the
     # leading zero is stripped by hand instead — this runs on Windows in dev and Linux
@@ -260,23 +255,17 @@ async def send_access_granted_email(
 async def send_product_update_email(
     *, to_email: str, product_name: str, primary_link: str, notify_product_updates: bool, summary: str = "",
 ) -> bool:
-    """Phase 10 (§10E): the one genuinely optional email in this module — every other
-    function here is transactional (a receipt, access, a password reset, a security
-    or refund confirmation) and is never gated by a preference, per §10E step 3's own
-    rule stated plainly on the Notifications page. This is what "Tell me when a
-    template or course I own is revised" (the copy deck's own line) actually sends,
-    and it is gated on the caller's own `notify_product_updates` flag — the owner of
-    the email address, not a global setting, decides.
+    """The one genuinely optional email in this module — every other function here is
+    transactional (a receipt, access, a password reset, a security or refund
+    confirmation) and is never gated by a preference. This is what "Tell me when a
+    template or course I own is revised" actually sends, and it is gated on the caller's
+    own `notify_product_updates` flag — the owner of the email address, not a global
+    setting, decides.
 
-    Found 2026-08-22 (Phase 10 re-verification): the preference toggle existed and
-    persisted correctly, but nothing in this file sent product-update mail at all, so
-    the DoD's own required test ("a marketing send is suppressed when
-    notify_marketing is false") had nothing to exercise. This is that sender. The
-    trigger — deciding *when* a revision is significant enough to notify every
-    entitled buyer — is separate, larger work this fix does not invent; this
-    function is the correctly-gated send path a future trigger calls into, matching
-    how every other send in this file is a narrow, single-purpose function the
-    caller decides when to invoke.
+    The trigger — deciding *when* a revision is significant enough to notify every
+    entitled buyer — is separate work; this function is only the correctly-gated send
+    path a future trigger calls into, matching how every other send in this file is a
+    narrow, single-purpose function the caller decides when to invoke.
     """
     if not notify_product_updates:
         return False
@@ -316,7 +305,7 @@ async def send_refund_confirmation_email(
     refund_eta: str = "5–10 business days",
 ) -> bool:
     """The original order reference, the amount refunded, what access was removed, and
-    when the money should land — wired from the refund endpoint in Phase 4 (W3-R5)."""
+    when the money should land — sent from the refund endpoint."""
     amount_display = _format_amount(amount_cents, currency)
     html, text = _render(
         "refund_confirmation",
@@ -408,7 +397,7 @@ async def send_contact_notification_email(
     )
 
 
-# ── Security alert (Phase 10A/10B: identity and password changes) ──
+# ── Security alert (identity and password changes) ──
 
 
 async def send_security_alert_email(
@@ -430,7 +419,7 @@ async def send_security_alert_email(
     )
 
 
-# ── Account closure (Phase 10F) ──
+# ── Account closure ──
 
 
 async def send_account_closure_email(*, to_email: str) -> bool:
@@ -444,7 +433,7 @@ async def send_account_closure_email(*, to_email: str) -> bool:
     )
 
 
-# ── Certificate email (W5-R2) ───────────────────────────────────────────────
+# ── Certificate email ──────────────────────────────────────────────────────
 
 
 async def send_certificate_issued_email(

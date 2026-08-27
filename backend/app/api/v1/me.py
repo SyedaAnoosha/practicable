@@ -271,7 +271,7 @@ async def get_my_library(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 9B (W4-R20): Buyer-initiated refunds
+# Buyer-initiated refunds
 # ─────────────────────────────────────────────────────────────────────────────
 
 REFUND_KEEP_PERCENT = Decimal('15')  # The buyer keeps 15%; we refund 85%
@@ -297,11 +297,7 @@ class OrderOut(BaseModel):
 class OrdersOut(BaseModel):
     orders: list[OrderOut]
     has_more: bool
-    # Phase 10 (§10C re-verification, 2026-08-22): this was computed below and then
-    # silently dropped — has_more was returned with no way to actually request the
-    # next page. A caller could learn "there's more" but had no cursor to ask for it
-    # with short of re-deriving it from the last row's created_at itself, duplicating
-    # this endpoint's own keyset logic. Added so the contract is actually usable.
+    # The cursor to request the next page with; without it has_more is not actionable.
     next_cursor: Optional[str] = None
 
 
@@ -314,14 +310,9 @@ async def get_my_orders(
 ):
     """Buyer's own orders, keyset-paginated. Returns items + refund fields.
 
-    Phase 10 (§10C re-verification, 2026-08-22): the cursor filter used to compare
-    created_at alone (`WHERE created_at < :cursor`), which DESIGN.md §26.3 documents
-    as the wrong shape — two orders can share a timestamp, and a created_at-only
-    cursor silently skips the rest of a tied batch rather than raising or repeating.
-    Caught by a real test: 3 orders created in the same request all landed on one
-    timestamp, and the second page came back empty. Fixed to the row-value form
-    §26.3 already specifies: `(created_at, id) < (:cursor_created_at, :cursor_id)`,
-    with `id` as the tiebreak so the ordering is total.
+    The cursor is a row-value comparison `(created_at, id) < (:cursor_created_at,
+    :cursor_id)` with `id` as the tiebreak, so two orders sharing a timestamp are
+    ordered totally and a tied batch is never silently skipped.
     """
     uid = uuid.UUID(user_id)
     q = (
@@ -398,13 +389,9 @@ class ReceiptLineOut(BaseModel):
 
 
 class ReceiptOut(BaseModel):
-    """§10C step 2 `[GAP]`: no Stripe invoice id is ever persisted on `orders` — it's
-    fetched from the Stripe session at webhook time and only reaches the one-shot
-    receipt email (webhooks.py), never saved. So a receipt requested later has
-    nothing real to link to. Per the plan's own instruction ('if not [stored], regen
-    from order data. Never fabricate an invoice number.'), this regenerates the
-    receipt from the order row alone and omits invoice_number entirely — an absent
-    field, never a fake one."""
+    """No Stripe invoice id is persisted on `orders` — it only reaches the one-shot
+    receipt email (webhooks.py), never saved. This receipt is regenerated from the
+    order row alone and omits invoice_number entirely rather than fabricating one."""
 
     order_id: str
     order_date: datetime
@@ -423,9 +410,9 @@ async def get_order_receipt(
     session: AsyncSession = Depends(get_session),
     user_id: str = Depends(get_current_user_id),
 ):
-    """§10C step 2: a receipt for one of the caller's own orders, regenerated from
-    order data — scoped strictly to the requesting user's own order, matching every
-    other /me/* row-ownership check in this file."""
+    """A receipt for one of the caller's own orders, regenerated from order data —
+    scoped strictly to the requesting user's own order, matching every other /me/*
+    row-ownership check in this file."""
     try:
         oid = uuid.UUID(order_id)
     except ValueError:
@@ -480,8 +467,8 @@ class RefundEligibilityOut(BaseModel):
     reason_code: Optional[str] = None
 
 
-# §9B step 5: "Rate-limited per user, in memory, no IP stored" — same RateLimiter
-# already shared by the account-security endpoints below in this file.
+# Rate-limited per user, in memory, no IP stored — same RateLimiter shared by the
+# account-security endpoints below in this file.
 _refund_rate_limiter = RateLimiter(window_seconds=60, max_requests=5)
 
 
@@ -500,23 +487,10 @@ def _compute_refund_amount(total_cents: int) -> tuple[int, int]:
 async def _resolve_course_ids(session: AsyncSession, product_ids: list[uuid.UUID]) -> list[uuid.UUID]:
     """Every course reachable from these products — directly OR through their lessons.
 
-    `[FIXED 2026-08-22]` Reported by the owner against the live database: order
-    `0b29c5e4`, "Risk Register Fundamentals", A$49, plainly a course, was told
-    *"This order doesn't include a course. Contact us and we'll sort it out."*
-
-    Both refund endpoints used to ask only `content_type == 'course'`. `product_contents`
-    is polymorphic, and a course product may enumerate its **lessons** instead of the
-    course row. On the live catalogue that is the normal case, not the exception:
-
-        content_type   rows          product                        course lesson tpl qset
-        question_set    122          risk-register-fundamentals        0     3     1    1
-        template         11          risk-register-bundle              0     3     2   60
-        lesson           11          managing-cyber-risk-...-course    1     5     0    0
-        course            1   <--
-
-    One product in ten used the row the check required, so nine were told they contained
-    no course. Resolving through `lesson -> module -> course` (the real ownership chain;
-    `lessons` has no `course_id` of its own) covers both shapes.
+    `product_contents` is polymorphic: a course product may enumerate its lessons
+    instead of a `course` row, and on the live catalogue that is the common case. So
+    resolving through `lesson -> module -> course` (the real ownership chain; `lessons`
+    has no `course_id` of its own) is needed to cover both shapes.
 
     Returns a de-duplicated list: a product carrying BOTH a direct course row and that
     course's lessons must not count the course twice, or `func.max(progress)` would be
@@ -634,21 +608,12 @@ async def request_refund(
 ):
     """Buyer-initiated partial refund. Single-flight: check-and-set order status
     inside one transaction before calling Stripe, so a double-clicked button
-    cannot issue two refunds.
+    cannot issue two refunds (the second request 409s before it reaches Stripe).
 
-    Found 2026-08-21 (Phase 9B re-verification): this previously never called Stripe
-    at all — a `# TODO: Call Stripe Refund.create(...) here` sat where the real call
-    belongs, so a buyer got a 200 response and no money ever moved, and the
-    `charge.refunded` webhook (which does the actual state change per §9B step 6)
-    could never fire from this path. Fixed below: the single-flight check-and-set
-    still happens first (so a double-click 409s on the second request before either
-    one reaches Stripe), then the real partial refund is issued via the same
-    `create_refund` the admin path uses, now accepting the amount §9B step 5's
-    `_compute_refund_amount` computed. `apply_refund` runs here too rather than
-    waiting on the webhook round trip, matching the admin endpoint's own pattern of
-    not leaving the buyer on a spinner for an event that may take a moment to
-    arrive — the webhook replay of the same event is a no-op via `apply_refund`'s own
-    idempotency on `order.status`.
+    The partial refund is issued via the same `create_refund` the admin path uses,
+    then `apply_refund` runs here rather than waiting on the `charge.refunded`
+    webhook round trip; the webhook replay of the same event is a no-op via
+    `apply_refund`'s idempotency on `order.status`.
     """
     if not _refund_rate_limiter.allow(str(user.id), "self_serve_refund"):
         raise HTTPException(
@@ -728,10 +693,9 @@ async def request_refund(
     try:
         create_refund(payment_intent_id=order.stripe_payment_intent_id, amount=refund_amount)
     except stripe_sdk.StripeError as e:
-        # Found 2026-08-21: without this rollback, a declined/failed Stripe call
-        # would leave buyer_refunded_at permanently set with no refund ever issued —
-        # the buyer's one shot at self-serve would be silently consumed. Undo the
-        # single-flight lock so they can retry (or contact support in the meantime).
+        # Without this rollback, a declined Stripe call would leave buyer_refunded_at
+        # permanently set with no refund issued — the buyer's one shot at self-serve
+        # silently consumed. Undo the single-flight lock so they can retry.
         order.buyer_refund_amount_cents = None
         order.buyer_refunded_at = None
         order.buyer_refund_reason_code = None
@@ -784,13 +748,13 @@ async def request_refund(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 10 — Account management
+# Account management
 # ─────────────────────────────────────────────────────────────────────────────
 
 _account_rate_limiter = RateLimiter(window_seconds=60, max_requests=10)
 
 
-# ── §10A: Profile (name update) ─────────────────────────────────────────────
+# ── Profile (name update) ──────────────────────────────────────────────────
 
 
 class ProfileUpdateIn(BaseModel):
@@ -830,13 +794,10 @@ async def update_my_profile(
     )
     await session.commit()
 
-    # §10A: the alert fires on name, email AND password change. Name was the one of the
-    # three that never sent (found 2026-08-22). Changing the display name is one of the
-    # first things an account takeover does — it is the cheapest way to make later
-    # messages look legitimate — so it is exactly the door the alert should cover.
-    #
-    # Best-effort and after commit, the same shape the password path uses: a failed
-    # side-effect email must never undo an already-committed change (BACKEND.md §6.1).
+    # The security alert fires on name, email AND password change: changing the
+    # display name is an early move in an account takeover, so it gets the same
+    # alert. Best-effort and after commit, the same shape the password path uses: a
+    # failed side-effect email must never undo an already-committed change (BACKEND.md §6.1).
     if previous_name != full_name:
         try:
             await send_security_alert_email(
@@ -858,7 +819,7 @@ async def update_my_profile(
     )
 
 
-# ── §10E: Notification preferences ──────────────────────────────────────────
+# ── Notification preferences ───────────────────────────────────────────────
 
 
 class NotificationsIn(BaseModel):
@@ -918,7 +879,7 @@ async def update_notification_preferences(
     )
 
 
-# ── §10B: Password change (audit hook) ──────────────────────────────────────
+# ── Password change (audit hook) ───────────────────────────────────────────
 
 
 class PasswordChangeHookIn(BaseModel):
@@ -962,7 +923,7 @@ async def record_password_change(
     return {"ok": True}
 
 
-# ── §10A: Email change (audit hook) ─────────────────────────────────────────
+# ── Email change (audit hook) ──────────────────────────────────────────────
 
 
 class EmailChangeHookIn(BaseModel):
@@ -1008,7 +969,7 @@ async def record_email_change(
     return {"ok": True}
 
 
-# ── §10F: Data export ───────────────────────────────────────────────────────
+# ── Data export ────────────────────────────────────────────────────────────
 
 
 @router.post("/me/account/export")
@@ -1020,8 +981,8 @@ async def export_my_data(
     lesson progress, notification preferences. Scoped strictly to the
     requester; a test asserts no foreign rows.
 
-    This is the Privacy Act / GDPR data-subject right in Research §7.6:
-    it must produce a real file, not a stub."""
+    This is the Privacy Act / GDPR data-subject right: it must produce a real
+    file, not a stub."""
     if not _account_rate_limiter.allow(str(user.id), action="export"):
         raise HTTPException(
             status_code=429,
@@ -1112,7 +1073,7 @@ async def export_my_data(
     return export_data
 
 
-# ── §10F: Account closure (deactivation) ────────────────────────────────────
+# ── Account closure (deactivation) ─────────────────────────────────────────
 
 
 class AccountCloseIn(BaseModel):
@@ -1131,19 +1092,13 @@ async def close_my_account(
     service (app/services/account_service.py) — setting disabled_at, which the
     entitlements gate already filters on (core/entitlements.py:53).
 
-    Found 2026-08-22 (Phase 10 re-verification), two gaps in the same endpoint:
-    (1) this previously depended on plain get_current_user — any valid session
-    could close the account, with the password gate enforced only by
-    AccountDataPrivacy.tsx choosing to call signInWithPassword first.
-    require_recent_reauth (core/deps.py) closes that gap server-side, using the
-    fresh `iat` Supabase's own reauth call produces. (2) this and
-    admin/users.py's deactivate_user each inlined `user.disabled_at =
-    datetime.now(timezone.utc)` independently, despite the plan's explicit "do not
-    add a second mechanism... extract to a service function" instruction — fixed
-    by extracting `deactivate_user` and having both call it.
+    Depends on require_recent_reauth (core/deps.py) so the password gate is
+    enforced server-side via the fresh `iat` Supabase's reauth call produces, not
+    left to the frontend to call signInWithPassword first. admin/users.py's
+    deactivation path calls the same `deactivate_user` service.
 
-    This is deactivation, never hard delete (Research §7.6): financial records
-    must survive 7 years, and orders.user_id is a non-nullable FK."""
+    This is deactivation, never hard delete: financial records must survive 7
+    years, and orders.user_id is a non-nullable FK."""
     if not _account_rate_limiter.allow(str(user.id), action="close_account"):
         raise HTTPException(
             status_code=429,

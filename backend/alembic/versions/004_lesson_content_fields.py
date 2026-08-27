@@ -1,11 +1,10 @@
 """Add reading/download/free-preview fields to lessons
 
 The LMS shell (courses catalogue, course outline, lesson viewer) needs lessons to
-actually carry content for the two non-video types the intern brief requires: `body`
-for reading lessons, and `download_template_id` for downloadable-artefact lessons
-(reusing the templates table's storage_key/file_name/mime_type rather than duplicating
-file columns on lessons). `is_free_preview` backs DESIGN.md §23.3's required free
-preview lesson.
+carry content for the two non-video types: `body` for reading lessons, and
+`download_template_id` for downloadable-artefact lessons (reusing the templates table's
+storage_key/file_name/mime_type rather than duplicating file columns on lessons).
+`is_free_preview` backs the free preview lesson.
 
 Revision ID: 004
 Revises: 003

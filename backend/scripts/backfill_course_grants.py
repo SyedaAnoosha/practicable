@@ -1,9 +1,8 @@
 """Give every product that sells a course's lessons an explicit `course` content row.
 
-`[FIXED 2026-08-23]` Companion to the gate change in `app/core/entitlements.py`, which
-made a `course` grant expand to that course's lessons at request time so a lesson added
-after purchase unlocks for existing buyers. That fix only helps products which actually
-name the course. Two did not:
+Companion to the gate in `app/core/entitlements.py`, which makes a `course` grant expand
+to that course's lessons at request time so a lesson added after purchase unlocks for
+existing buyers. That only helps products which actually name the course. Two did not:
 
     risk-register-fundamentals   A$49  "The full course - every lesson across both
                                         modules, plus the register template used in it."
@@ -15,9 +14,8 @@ them — with no `course` row at all. The course has 4 published lessons. So bot
 promised "the full course" in their own description and delivered three quarters of it,
 and `writing-a-register-entry` was unreachable for everyone who had paid.
 
-That is the exact failure the entitlements change is meant to prevent, and it was already
-live. The lesson-by-lesson list is a snapshot of the course as it stood when the product
-was seeded; it silently stops being the course the moment anyone adds a lesson.
+The lesson-by-lesson list is a snapshot of the course as it stood when the product was
+seeded; it silently stops being the course the moment anyone adds a lesson.
 
 WHAT THIS DOES. For any product holding >= 1 `lesson` row, find the course(s) those
 lessons belong to, and add a `course` row for each one not already named. It does NOT

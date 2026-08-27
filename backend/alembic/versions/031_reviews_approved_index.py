@@ -1,17 +1,14 @@
-"""Add the partial approved-reviews index, and drop the orphaned review_state type (W5-R4).
+"""Add the partial approved-reviews index, and drop the orphaned review_state type.
 
-Two corrections to migration `029`, found by reading it back against
-`week5_plan.md` §III.5. Both are additive follow-ups rather than edits to `029`,
-because `029` has already been applied — §III.6 rule: never amend a migration that
-has run.
+Two corrections to migration `029`, as additive follow-ups rather than edits, because
+`029` has already been applied — never amend a migration that has run.
 
-**1. `ix_reviews_content_approved` was specified and never created.** §III.5 names
-two indexes on `reviews`: `ix_reviews_state_created` for the moderation queue (which
-`029` did create) and `ix_reviews_content_approved` — partial, `WHERE state =
-'approved'` — for the public read path. Without it, every testimonial block and every
-rating lookup on a content detail page filters `reviews` on an unindexed pair of
-columns. That is the read that happens on a visitor's page load, so it is the one
-that mattered most of the two.
+**1. `ix_reviews_content_approved` was specified and never created.** `reviews` needs
+two indexes: `ix_reviews_state_created` for the moderation queue (which `029` did
+create) and `ix_reviews_content_approved` — partial, `WHERE state = 'approved'` — for
+the public read path. Without it, every testimonial block and every rating lookup on a
+content detail page filters `reviews` on an unindexed pair of columns, on a visitor's
+page load.
 
 Partial by design: the public path only ever wants approved rows, so indexing the
 pending and rejected ones would pay storage and write cost for rows no reader asks
@@ -50,8 +47,7 @@ _INDEX_NAME = "ix_reviews_content_approved"
 def upgrade() -> None:
     # ── The partial index — CONCURRENTLY, so it never blocks writes on a table
     # people are reading. Cannot run inside Alembic's default transaction, hence the
-    # autocommit block (the pattern migration 010 established; §III.1 says copy it
-    # exactly rather than invent a second approach).
+    # autocommit block — the pattern migration 010 established.
     with op.get_context().autocommit_block():
         op.create_index(
             _INDEX_NAME,
@@ -70,8 +66,7 @@ def upgrade() -> None:
         )
 
     # A CONCURRENTLY build can fail and leave an INVALID index behind WITHOUT raising.
-    # Verified explicitly rather than assumed — an INVALID index is silent, it simply
-    # never gets used, which is the failure mode §III.1 calls out by name.
+    # Verify explicitly — an INVALID index is silent, it simply never gets used.
     conn = op.get_bind()
     invalid = conn.execute(
         sa.text(
@@ -83,7 +78,7 @@ def upgrade() -> None:
     if invalid:
         raise RuntimeError(
             f"CREATE INDEX CONCURRENTLY left INVALID index(es): {[r[0] for r in invalid]}. "
-            "Drop and re-run — see week3_plan.md §27.2."
+            "Drop and re-run."
         )
 
     # ── The CHECK the orphaned enum type was reaching for. Back inside Alembic's

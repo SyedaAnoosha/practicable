@@ -1,15 +1,14 @@
 -- Split the one bundled product into two separately-priced ones.
 --
--- THE BUG (owner-reported, 2026-08-11): "Buying template shouldn't access the course.
--- When I am clicking on buying template, I can buy course too." Correct, and it was a
--- data problem, not an entitlements-engine problem — app/core/entitlements.py does
--- exactly what it says (a product grants whatever its product_contents rows point at).
--- There was simply one product, `risk-register-template` at A$29, carrying FIVE
--- content rows: the template file, all three course lessons, and Q001's question_set.
--- So "the template" and "the course" were never distinct purchasables at all; 006 and
--- 010 had each added lesson rows to the only product that existed.
+-- THE BUG: buying the template also unlocked the course. This was a data problem, not
+-- an entitlements-engine problem — app/core/entitlements.py does exactly what it says (a
+-- product grants whatever its product_contents rows point at). There was simply one
+-- product, `risk-register-template` at A$29, carrying FIVE content rows: the template
+-- file, all three course lessons, and Q001's question_set. So "the template" and "the
+-- course" were never distinct purchasables at all; 006 and 010 had each added lesson
+-- rows to the only product that existed.
 --
--- THE SHAPE AFTER THIS MIGRATION (docs/pricing.md §1's ladder):
+-- THE SHAPE AFTER THIS MIGRATION:
 --   Risk Register Template        A$29  -> the template file + Q001's guidance
 --   Risk Register Fundamentals    A$49  -> all 3 lessons + the template + Q001
 --
@@ -19,15 +18,12 @@
 -- stated is one-directional and is what this enforces — template does NOT unlock the
 -- course; course DOES include the template.
 --
--- PRICE CAVEAT, stated plainly: docs/pricing.md §2 previously argued *against* pricing
--- this course separately, because at its real depth (~3 min video + one ~650-word
--- reading + one download) it doesn't yet earn the A$39-59 "short course" tier. The
--- owner has since asked for templates and courses to be priced separately, which
--- overrides that hold. A$49 is the bottom of the short-course tier rather than a
--- number invented for this migration. Change the amount here AND the Stripe price if
--- a different figure is wanted.
+-- PRICE. A$49 is the bottom of the short-course tier. At its real depth (~3 min video +
+-- one ~650-word reading + one download) this course is at the low end of what earns a
+-- separate price. Change the amount here AND the Stripe price if a different figure is
+-- wanted.
 --
--- Stripe (test mode) objects created for this, 2026-08-11:
+-- Stripe (test mode) objects for this:
 --   product prod_V3R56Vr4rUDks1 / price price_1U3KDULTNkwhOECvalmzoP0V (4900 AUD)
 
 -- ── 1. The course product ────────────────────────────────────────────────────────

@@ -70,8 +70,8 @@ async def create_template_version_notification(
         return 0
 
     # A version bump is a product update, NOT transactional mail — nothing has happened
-    # to this reader's money or account, so §10E's rule applies and the preference gates
-    # it. The gate is applied to the *notification row itself*, not just the email:
+    # to this reader's money or account, so the product-updates preference gates it.
+    # The gate is applied to the *notification row itself*, not just the email:
     # writing an in-app row for a reader who asked not to hear about product updates
     # would honour the opt-out only on the channel that is easiest to check, which is
     # the dishonest half of an opt-out.

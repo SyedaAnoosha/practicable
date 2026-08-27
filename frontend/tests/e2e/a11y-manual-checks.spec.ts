@@ -1,13 +1,12 @@
 import { test, expect, type Page } from '@playwright/test'
 
 /**
- * W4-R7's six "by hand" checks — the part of each that a machine can honestly close.
+ * The six "by hand" accessibility checks — the part of each that a machine can honestly
+ * close.
  *
- * `DESIGN.md` §42.9 lists six checks to perform by hand, and week4_plan.md has carried
- * them as `[HUMAN] [NOT DONE]` on the grounds that they "cannot be automated". That is
- * true of some of them and false of others, and the distinction is worth drawing
- * precisely, because "a human must do it" has been the reason these went unchecked for
- * weeks while several are mechanically verifiable today.
+ * `DESIGN.md` §42.9 lists six checks to perform by hand. Some genuinely cannot be
+ * automated; several are mechanically verifiable today, and the distinction is worth
+ * drawing precisely.
  *
  * What this file proves, per check:
  *
@@ -28,7 +27,7 @@ import { test, expect, type Page } from '@playwright/test'
  *      both themes, which is what §42.9 singles out.
  *
  * Nothing here claims a check is closed that is not. Each test's title says PARTIAL
- * where it is partial, and `a11y_manual_checks.md` records what remains for a person.
+ * where it is partial.
  */
 
 const LIGHT = 'light'
@@ -56,10 +55,10 @@ async function hasVisibleFocusIndicator(page: Page): Promise<boolean> {
 
 // ── 4. Zoom to 200% ──────────────────────────────────────────────────────────────────
 //
-// The plan is explicit that the seven-width suite does NOT cover this: a narrow viewport
-// reflows differently from a zoomed one, because zoom scales the CSS pixel while the
-// layout viewport stays put. Emulated the way a real browser zoom behaves — halve the
-// viewport in CSS px at the same device size, which is what 200% zoom is.
+// The seven-width suite does NOT cover this: a narrow viewport reflows differently from a
+// zoomed one, because zoom scales the CSS pixel while the layout viewport stays put.
+// Emulated the way a real browser zoom behaves — halve the viewport in CSS px at the same
+// device size, which is what 200% zoom is.
 test.describe('W4-R7 check 4: zoom to 200%', () => {
   const ZOOM_ROUTES = ['/', '/questions', '/store', '/templates', '/courses', '/packs', '/search?q=risk', '/verify/test-code'] as const
 
@@ -119,9 +118,7 @@ test.describe('W4-R7 check 4: zoom to 200%', () => {
         if (s.textOverflow === 'ellipsis') continue
         // `sr-only` is a 1px clipped box ON PURPOSE — visually hidden, fully available to
         // a screen reader. It is the exact shape of the bug this check looks for, and the
-        // opposite of a bug. Flagged "Skip to content" and "Question results" on the
-        // first run; both are correct implementations of visually-hidden text, so the
-        // test was wrong rather than the app.
+        // opposite of a bug, so it must be excluded.
         const srOnly =
           s.position === 'absolute' &&
           e.clientHeight <= 1 &&
@@ -142,23 +139,17 @@ test.describe('W4-R7 check 4: zoom to 200%', () => {
 
 // ── 5. prefers-reduced-motion ────────────────────────────────────────────────────────
 //
-// The plan names the exact thing to verify, and it is subtle: `theme.css` collapses
-// transitions to 0.01ms rather than removing them, deliberately. So the check is NOT
-// "is motion gone" — it is "is the STATE CHANGE still visible". A reduced-motion user
-// who can no longer tell that a menu opened has been made worse off, not safer.
+// `theme.css` collapses transitions to 0.01ms rather than removing them, deliberately.
+// So the check is NOT "is motion gone" — it is "is the STATE CHANGE still visible". A
+// reduced-motion user who can no longer tell that a menu opened has been made worse off,
+// not safer.
 test.describe('W4-R7 check 5: prefers-reduced-motion', () => {
-  // `page.emulateMedia()`, not `test.use({ reducedMotion })`.
-  //
-  // The fixture form was tried first and silently did nothing: under it the page still
-  // reported `matchMedia('(prefers-reduced-motion: reduce)').matches === false`,
-  // transition-duration 0.15s and `ambient-drift` running — identical to no emulation at
-  // all. Taken at face value that reads as "the theme.css backstop is broken", and it
-  // would have been reported as an app defect. It is not: theme.css:467 and :798 are
-  // both correct, and the emulation was what never arrived.
-  //
-  // Checked rather than guessed — a probe printed the media-query state under both
-  // paths side by side. Worth the comment because a mis-emulating accessibility test
-  // does not merely fail to catch bugs, it invents them.
+  // `page.emulateMedia()`, not `test.use({ reducedMotion })`: the fixture form silently
+  // did nothing here — the page still reported
+  // `matchMedia('(prefers-reduced-motion: reduce)').matches === false` and animations
+  // running, identical to no emulation. The `emulateMedia` call is what actually reaches
+  // the page. The guard test below asserts the emulation applied, so a mis-emulating
+  // check fails loudly rather than inventing app defects.
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
   })
@@ -351,10 +342,10 @@ test.describe('W5-R3 search page accessibility', () => {
 
 // ── 3. Screen reader on the discovery page (the automatable half) ────────────────────
 //
-// The plan's own wording is the giveaway: *"the aria-live region exists — confirm it
-// actually fires"*. Existence is cheap; firing is the part that silently breaks, and it
-// is mechanically checkable. What remains human is whether NVDA/VoiceOver speaks it.
-test.describe('W4-R7 check 3: the result count actually updates (PARTIAL — see a11y_manual_checks.md)', () => {
+// The aria-live region existing is cheap to check; whether it actually fires is the part
+// that silently breaks, and it is mechanically checkable. What remains human is whether
+// NVDA/VoiceOver speaks it.
+test.describe('W4-R7 check 3: the result count actually updates (PARTIAL — needs a human screen-reader pass)', () => {
   test('the aria-live region is configured correctly and its text changes on filter change', async ({ page }) => {
     await page.goto('/questions')
     await expect(page.locator('h1')).toBeVisible()
@@ -408,45 +399,19 @@ test.describe('W4-R7 check 1: keyboard-only purchase (PARTIAL — stops at the S
   test('landing -> catalogue -> product -> cart, entirely by keyboard, with focus always visible', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('h1')).toBeVisible()
-    /* `[INVESTIGATED 2026-08-23]` This test fails intermittently — measured at roughly
-       one run in three — and the investigation found TWO separate causes. One is now
-       fixed in the product; the other is a real limitation of the test that is recorded
-       here rather than papered over.
-
-       1. FIXED, and it was a genuine WCAG 2.4.7 defect, not flake. Runs that tabbed onto
-          a catalogue CARD failed with "has focus but no visible indicator", because each
-          catalogue grid draws its cell dividers as `[&>*]:outline-1` on the card links,
-          which beat the global `:focus-visible` rule. Focused and unfocused cards
-          computed to identical styles. Fixed in all three catalogues, and now asserted
-          directly and deterministically by the "catalogue cards show focus" suite at the
-          bottom of this file — that is where the regression is guarded, because it fails
-          every run instead of a third of them.
-
-       2. NOT FIXED, and deliberately. Which link this walk lands on is genuinely
-          nondeterministic: the landing page's carousels and promo bar mount
-          asynchronously, so the first catalogue-ish link is `/templates` on some runs and
-          `/courses` on others, at different tab stops. Adding `waitForLoadState`
-          ('networkidle') was tried and made things WORSE — 6 failures in 8 rather than
-          1 in 3 — because settling the network changes which links exist at the moment
-          tabbing starts, and the walk then ends somewhere the assertions do not expect.
-          It was reverted rather than kept.
-
-          A durable fix means giving this walk a deterministic starting DOM, which is a
-          larger change to how the landing page mounts its carousels than a keyboard
-          test should be driving. Left as-is, with the flake named: the property it
-          covers that nothing else does is that the journey is possible BY KEYBOARD, and
-          it does still demonstrate that on the runs it completes. */
+    /* This test can fail intermittently: which link the walk lands on is nondeterministic
+       because the landing page's carousels and promo bar mount asynchronously, so the
+       first catalogue-ish link varies run to run. `waitForLoadState('networkidle')` makes
+       it worse, not better. The catalogue-card focus regression it used to surface is now
+       guarded deterministically by the "catalogue cards show focus" suite at the bottom
+       of this file; what this walk still covers is that the journey is possible BY
+       KEYBOARD. */
 
     // Reach the store by keyboard alone. Tab until a store/products link has focus,
     // then activate it with Enter — not `.click()`, which would prove nothing.
-    /* `[RAISED 2026-08-23]` The budget was 40 and the first catalogue link is now
-       reached at tab 45. Nothing regressed and nothing traps focus — the landing page
-       simply gained stops: the promo bar and its dismiss, the cookie notice and its
-       two links, the filter chips, and one arrow pair per product carousel. Measured
-       stop-by-stop before changing this, precisely because raising a budget is the
-       easy way to hide a real trap.
-       80 leaves headroom for another section without going unbounded; a genuine trap
-       still fails here, because focus would stop advancing rather than take longer. */
+    /* The tab budget is generous (80) because the landing page has many stops — promo
+       bar, cookie notice, filter chips, carousel arrows. A genuine focus trap still fails
+       here, because focus would stop advancing rather than just take longer. */
     let reached = false
     for (let i = 0; i < 80 && !reached; i++) {
       await page.keyboard.press('Tab')
@@ -464,15 +429,9 @@ test.describe('W4-R7 check 1: keyboard-only purchase (PARTIAL — stops at the S
     await expect(page.locator('h1')).toBeVisible()
 
     // Into a product detail page, again by keyboard — UNLESS the previous step already
-    // landed on one.
-    //
-    // The original version assumed a strict landing -> catalogue-index -> product chain
-    // and failed looking for a product link on a page that already WAS the product. A
-    // tab-order probe settled it: the first catalogue-ish link reachable from the
-    // landing page is `/store/packs/risk-enterprise-op-question-pack`, a product detail
-    // page, at stop 38. The real journey is one hop shorter than assumed, which is a
-    // better result for a keyboard buyer, not a worse one — so the test follows the
-    // product's actual shape rather than forcing the shape it was written against.
+    // landed on one. The first catalogue-ish link reachable from the landing page can be
+    // a product detail page directly, so the test follows the product's actual shape
+    // rather than assuming a landing -> catalogue-index -> product chain.
     const alreadyOnProduct = /\/(store\/packs|templates|courses|packs)\/[^/]+$/.test(new URL(page.url()).pathname)
 
     if (!alreadyOnProduct) {
@@ -566,27 +525,15 @@ test.describe('W4-R7 check 2: keyboard-only lesson (PARTIAL — needs a real ent
   })
 })
 
-// ── Catalogue card focus (W4-R7 check 6, extended) ───────────────────────────────────
+// ── Catalogue card focus (WCAG 2.4.7) ───────────────────────────────────────────────
 //
-// `[ADDED 2026-08-23]` A real WCAG 2.4.7 failure the suite was catching only by luck.
-// The keyboard-purchase test above failed about one run in three with "product link
-// /courses/... has focus but no visible indicator", and it looked like flake because
-// which link it tabbed to varied run to run. It was not flake: catalogue cards had no
-// visible focus state at all, and the test only failed on the runs that happened to
-// land on one.
-//
-// Cause: each catalogue grid draws its cell dividers with `[&>*]:outline-1
-// outline-border` on the card links themselves. A utility class on the element beats
-// the global `:focus-visible { outline: 2px solid var(--color-ring) }` in theme.css, so
-// focusing a card changed nothing. Measured before the fix on /courses:
-//
-//     unfocused  outline: solid 1px rgb(230, 223, 208)   box-shadow: none
-//     focused    outline: solid 1px rgb(230, 223, 208)   box-shadow: none
-//
-// Identical. All three catalogues shared it.
-//
-// This asserts the property directly rather than through a tab walk, so it fails
-// deterministically on every run instead of a third of them, and names the page.
+// Regression guard: each catalogue grid draws its cell dividers with `[&>*]:outline-1
+// outline-border` on the card links themselves, and a utility class on the element beats
+// the global `:focus-visible { outline: 2px solid var(--color-ring) }` in theme.css — so
+// focusing a card could compute an identical style to an unfocused one, leaving a
+// keyboard user unable to tell which card they are on. This asserts the property
+// directly rather than through a tab walk, so it fails deterministically and names the
+// page.
 test.describe('catalogue cards show focus', () => {
   const CARD_GRIDS = [
     { route: '/courses', pattern: /^\/courses\/[^/]+$/ },

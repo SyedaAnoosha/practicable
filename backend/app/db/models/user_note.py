@@ -1,4 +1,4 @@
-"""UserNote model for W5-R5 — per-lesson learner notes.
+"""UserNote model — per-lesson learner notes.
 
 One note per lesson per learner, edited in place via upsert.
 """

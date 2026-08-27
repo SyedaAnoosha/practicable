@@ -1,4 +1,4 @@
-"""Add promotions table for admin-controlled discount codes (W5-R1).
+"""Add promotions table for admin-controlled discount codes.
 
 The discount path already reaches Stripe end to end (stripe_client.py:53-84).
 This migration adds the control surface: a promotions table an admin can

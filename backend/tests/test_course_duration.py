@@ -1,7 +1,7 @@
-"""`[ADDED 2026-08-22]` Regression cover for the course catalogue's duration field.
+"""Regression cover for the course catalogue's duration field.
 
-The `/courses` list endpoint had no test touching `estimated_duration_minutes`,
-`min_duration` or `max_duration` at all, which is how three separate defects survived:
+The `/courses` list endpoint's handling of `estimated_duration_minutes`,
+`min_duration` and `max_duration`, guarding three defects:
 
   1. `Media.duration_seconds` was summed and returned as `estimated_duration_minutes`
      — a 60x overstatement on every card (a three-minute video read as "184 min").
@@ -9,8 +9,6 @@ The `/courses` list endpoint had no test touching `estimated_duration_minutes`,
      populates, was never read, so reading-only courses reported `null` forever.
   3. `max_duration` used `.get(id, 0)`, so a course with *unknown* duration scored zero
      and passed every "under N minutes" filter.
-
-Each test below fails against the old implementation.
 """
 from __future__ import annotations
 

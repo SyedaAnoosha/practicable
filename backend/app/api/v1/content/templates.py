@@ -45,7 +45,7 @@ class TemplateSummaryOut(BaseModel):
     # When true, `product` is None and `owned` is meaningless — the card shows an email
     # capture instead of a price.
     is_free: bool
-    # Evidence layer (W4-R1)
+    # Evidence layer
     page_count: Optional[int] = None
     sheet_count: Optional[int] = None
     is_editable: Optional[bool] = None
@@ -57,8 +57,8 @@ class TemplateSummaryOut(BaseModel):
     last_reviewed_at: Optional[datetime] = None
     # ".xlsx · 1 file" — read off the real uploaded file, never typed per product.
     format: Optional[str] = None
-    # W5-R4 Stage B. Null below MIN_REVIEWS_FOR_AGGREGATE; served from the row's own
-    # denormalised counters so a catalogue stays one query.
+    # Null below MIN_REVIEWS_FOR_AGGREGATE; served from the row's own denormalised
+    # counters so a catalogue stays one query.
     rating: Optional[float] = None
     review_count: int = 0
 
@@ -75,11 +75,8 @@ async def list_templates(
     """The template catalogue — public. Each template carries the product that sells it,
     so the card can show a real price without a second round trip.
 
-    `[FIXED]` This used to spend two round trips per template — a full `has_access_to`
-    call (itself 2 queries) plus a product lookup — run serially for every row. Each
-    round trip to Postgres here costs on the order of hundreds of ms, so a catalogue of
-    a dozen templates could take seconds. Below, ownership and pricing are each
-    resolved in one bulk query for the whole catalogue.
+    Ownership and pricing are each resolved in one bulk query for the whole
+    catalogue.
     """
     result = await session.execute(select(Template).where(Template.published.is_(True)).order_by(Template.created_at))
     templates = list(result.scalars().all())
@@ -153,21 +150,9 @@ async def get_template(
     """One template, public — lets the download page show what a visitor is about to get
     without pulling the whole catalogue.
 
-    Accepts either the id or the slug.
-
-    `[FIXED 2026-08-22]` This did `uuid.UUID(template_id)` with no guard, so anything
-    that wasn't a well-formed UUID raised `ValueError: badly formed hexadecimal UUID
-    string` and the endpoint returned a **500**. Two consequences, both user-visible:
-
-      - Every slug-shaped URL crashed. `/templates/risk-register-template` is exactly
-        the sort of link a person types, shares or bookmarks, and `Template` serialises
-        a `slug` field, so slugs were plainly meant to resolve here.
-      - FastAPI attaches no CORS headers to an unhandled exception, so in the browser
-        the crash surfaced as "blocked by CORS policy" — pointing every diagnosis at
-        the middleware config instead of at this line.
-
-    A wrong identifier is a 404, not a server fault: the id branch is tried only when
-    the value actually parses as a UUID, and the slug branch handles everything else.
+    Accepts either the id or the slug. The id branch is tried only when the value
+    parses as a UUID; the slug branch handles everything else, so a wrong identifier
+    is a 404 rather than a 500 from `uuid.UUID()` raising.
     """
     try:
         lookup = Template.id == uuid.UUID(template_id)
@@ -230,8 +215,7 @@ async def get_template_download_url(
     # Optional so a free template is downloadable with no account. Paid templates still
     # 401 below when this is None. The full User (not just the id) so an admin without
     # the entitlement gets the audited bypass rather than a plain 403 — see
-    # `has_access_to_or_admin`; this route called `has_access_to` directly before
-    # 2026-08-13, which had no concept of role at all.
+    # `has_access_to_or_admin`.
     user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get presigned Supabase Storage download URL for a template."""
@@ -271,10 +255,10 @@ async def get_template_download_url(
             detail={"error": {"code": "not_entitled", "message": "This template is part of a product you don't have yet."}},
         )
 
-    # Phase 8F step 11: soft rate-limit on link minting. Logs, never blocks.
+    # Soft rate-limit on link minting. Logs, never blocks.
     check_link_rate(str(user.id), str(template.id))
 
-    # Phase 8F (W4-R16): Stamp paid downloads with buyer info.
+    # Stamp paid downloads with buyer info.
     # Free templates are never stamped (rule 3); unstampable types served unchanged (rule 2).
     if is_stampable(template.file_name):
         original_bytes = await asyncio.to_thread(download_file, template.storage_key)

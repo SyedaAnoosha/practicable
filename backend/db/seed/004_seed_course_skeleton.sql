@@ -43,7 +43,7 @@ VALUES (
   'video',
   '550e8400-e29b-41d4-a716-446655440301',
   0,
-  false, -- Flip true once the real Mux asset + media row exist (Phase 3) — still pending real content
+  false, -- Flip true once the real Mux asset + media row exist
   NOW(),
   NOW()
 )

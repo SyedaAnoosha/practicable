@@ -1,4 +1,4 @@
-"""Seed 014 — a domain pack: the reference-pack SKU (week2_plan.md W2-R6, RS 5.6).
+"""Seed 014 — a domain pack: the reference-pack SKU.
 
 Python rather than .sql, for the same reason as 011: the `question_set` grants are
 derived from docs/questions/questions.json, and writing 60 of them as SQL literals
@@ -18,7 +18,7 @@ domain pack is an ordinary `products` row whose `product_contents` rows are:
 WHAT IS BEING SOLD, AND WHAT IS NOT. The questions are free and stay free — the
 `question_set` grants change the *upsell card*, never whether `body` is present
 (entitlements.py's own module docstring is explicit about this). The paid artefact is
-the PDF. §20.6's honesty notice states that on the product page and on the PDF cover.
+the PDF. An honesty notice states that on the product page and on the PDF cover.
 
 TWO THINGS THIS SCRIPT CANNOT DO, BY DESIGN:
   1. Upload the PDF. Run `python scripts/build_domain_pack.py --domain Risk`, upload
@@ -28,8 +28,7 @@ TWO THINGS THIS SCRIPT CANNOT DO, BY DESIGN:
 
 Without --stripe-price-id the product is inserted **unpublished** and the script says
 so. That is deliberate: a published product with a fake price id would take a
-customer's click and fail at checkout, which is exactly the "no placeholder content"
-failure (non-negotiable #5) that this SKU was deferred to avoid in the first place.
+customer's click and fail at checkout — placeholder content in a checkout path.
 
 Run (from backend/):
     python db/seed/014_seed_domain_pack.py --domain Risk \\
@@ -73,14 +72,13 @@ DOMAIN_TITLES = {
     "AI": "AI (Governance)",
 }
 
-# docs/pricing.md §1's ladder — A$49, the "Professional checklist" anchor. Reasoned,
-# not invented: above the A$29 single-template tier because a 31-page curated document
-# is more than one file, and below the A$99 "template pack" tier because it is one PDF
-# rather than a multi-file bundle. See docs/pricing.md §4 for the full argument.
+# A$49, the "Professional checklist" anchor: above the A$29 single-template tier because
+# a 31-page curated document is more than one file, and below the A$99 "template pack"
+# tier because it is one PDF rather than a multi-file bundle.
 PACK_PRICE_CENTS = 4900
 
 # Below this, a pack is too thin to sell honestly and the script refuses to publish it.
-# Risk has 60; AI has 4. See docs/pricing.md §4.
+# Risk has 60; AI has 4.
 MIN_QUESTIONS_TO_PUBLISH = 20
 
 
@@ -241,7 +239,7 @@ async def main() -> None:
         print(f"  PUBLISHED — {pack_slug} is live at A${PACK_PRICE_CENTS / 100:.0f}")
     elif thin:
         print(f"  UNPUBLISHED — {domain} has only {len(subset)} questions "
-              f"(minimum {MIN_QUESTIONS_TO_PUBLISH} to publish honestly). See docs/pricing.md §4.")
+              f"(minimum {MIN_QUESTIONS_TO_PUBLISH} to publish honestly).")
     else:
         print("  UNPUBLISHED — no --stripe-price-id given. Create the Stripe Price, then re-run,")
         print("  or flip products.published + templates.published once the price id is set.")

@@ -1,7 +1,5 @@
 """Publish guards for content overlap, bundle pricing, macros, and preview requirements.
 
-week4_plan.md W4-R3: The overlap publish guard.
-
 `check_content_overlap(product_id, session)` returns the intersecting
 (product, content_type, content_id) rows, or empty — giving the admin UI the information
 to render an inline refusal with full context rather than a generic 409.
@@ -15,12 +13,12 @@ or above what buying each part separately would cost.
 
 All functions are pure (no HTTP concerns); they take a session and return a result object,
 never raise. The calling admin endpoint is responsible for translating the result into an
-HTTP 409 with the appropriate message from the copy deck (week4_plan.md §23).
+HTTP 409 with the appropriate message from the copy deck.
 
 The overlap guard is also available as a standalone SQL file at
 `scripts/check_overlaps.sql` for running against production without a deploy.
 
-Non-negotiable #1: the guard changes in one place only (here), not beside the gate.
+The guard changes in one place only (here), not beside the gate.
 """
 from __future__ import annotations
 
@@ -75,8 +73,8 @@ async def check_content_overlap(
     Bundles are permitted to overlap — that is the point of a bundle — but only when
     is_bundle=True. The escape hatch is deliberate, not the default.
 
-    The query is a fixed count regardless of catalogue size (week4_plan.md §10,
-    non-negotiable #12). It uses the reverse-direction index added in migration 013
+    The query is a fixed count regardless of catalogue size. It uses the
+    reverse-direction index added in migration 013
     (ix_product_contents_type_content_reverse) to avoid a seq scan on product_contents.
     """
     if is_bundle:
@@ -95,10 +93,9 @@ async def check_content_overlap(
     # Find OTHER published products that grant any of the same content. Grouped by
     # content_type into one bulk query per type (at most 3 today: template/lesson/
     # question_set) rather than one query per content row — the loop this replaced was
-    # a real N+1 (week4_plan.md Phase 1 verification, 2026-08-20): a product with 20
-    # content rows issued 20 round trips despite this function's own docstring already
-    # claiming a fixed query count. Matches the bulk-resolve idiom `resolve_granted_
-    # content_ids` and `_resolve_contents_bulk` already establish elsewhere.
+    # a real N+1: a product with 20 content rows issued 20 round trips despite this
+    # function's own docstring claiming a fixed query count. Matches the bulk-resolve
+    # idiom `resolve_granted_content_ids` and `_resolve_contents_bulk` establish elsewhere.
     ids_by_type: dict[str, list[uuid.UUID]] = {}
     for content_type, content_id in this_rows:
         ids_by_type.setdefault(content_type, []).append(content_id)
@@ -143,9 +140,9 @@ async def check_bundle_pricing(
 ) -> PricingResult:
     """A bundle must cost less than the sum of its constituent products' prices.
 
-    week4_plan.md W4-R3: "A bundle priced AT OR ABOVE the sum of its parts is refused."
-    The existing A$79 bundle over A$98 of parts passes; a hypothetical A$98 bundle
-    over A$98 of parts does not.
+    A bundle priced at or above the sum of its parts is refused. The existing A$79
+    bundle over A$98 of parts passes; a hypothetical A$98 bundle over A$98 of parts
+    does not.
 
     Returns PricingResult.ok=False with both prices when the bundle is overpriced.
     Returns PricingResult.ok=True immediately when the product is not a bundle or has no
@@ -210,8 +207,8 @@ async def check_bundle_pricing(
 def check_has_macros(template) -> bool:
     """Returns True if publishing is REFUSED (has_macros=True).
 
-    week4_plan.md W4-R1: 'No macros in any sold artefact. Ever.' A publish with
-    has_macros=True is a hard refusal, not a warning.
+    No macros in any sold artefact: a publish with has_macros=True is a hard refusal,
+    not a warning.
     """
     return bool(getattr(template, "has_macros", False))
 
@@ -219,8 +216,8 @@ def check_has_macros(template) -> bool:
 def check_preview_images(template) -> PreviewResult:
     """Returns PreviewResult.ok=False if fewer than 2 preview image keys are set.
 
-    week4_plan.md W4-R1: 'No published paid product may publish with fewer than two
-    previews. Fails closed, with a message naming what is missing.'
+    No paid product may publish with fewer than two previews. Fails closed, with a
+    message naming what is missing.
     """
     keys = getattr(template, "preview_image_keys", None) or []
     count = len(keys)
@@ -242,8 +239,8 @@ def check_stripe_price(
 ) -> StripePriceResult:
     """Refuses publish when the Stripe price is invalid, inactive, cross-mode, or mismatches.
 
-    Phase 8 (8A-7): Four conditions, four distinct messages.
-    The mismatch case uses §23's existing "Price mismatch" string.
+    Four conditions, four distinct messages. The mismatch case uses the existing
+    "Price mismatch" string.
 
     Args:
         stripe_price_id: The Stripe price ID to validate
@@ -289,19 +286,10 @@ def check_stripe_price(
 
     # Check 4: Cross-mode (test key against live price or vice versa)
     #
-    # `[FIXED 2026-08-22]` This read `startswith("sk_test_")`, which is only one of the
-    # four key forms Stripe issues. A **restricted** key is `rk_test_…` / `rk_live_…`,
-    # and this project is configured with an `rk_test_` key — so `is_test_key` was False,
-    # the second branch fired, and every product with a (correct) test price reported
-    # "Mode mismatch: live API key against a test Stripe price. Use matching keys."
-    #
-    # The keys were never mismatched. The guard was telling the owner to fix a
-    # configuration that was already right, on the admin screens for courses, templates
-    # and packs at once — and a false alarm on a payment safety check is worse than no
-    # check, because it trains you to ignore the real one.
-    #
-    # Mode is now taken from the `_test_` / `_live_` infix, which is present on every
+    # Mode is taken from the `_test_` / `_live_` infix, which is present on every
     # Stripe key form (sk_, rk_, pk_) and is the only part that actually encodes mode.
+    # A `startswith("sk_test_")` check would miss restricted keys (`rk_test_…` /
+    # `rk_live_…`), which this project uses, and produce a false mode-mismatch alarm.
     key = settings.stripe_secret_key or ""
     if "_test_" in key:
         key_is_live = False
@@ -354,7 +342,7 @@ ReadinessState = Literal["no_product", "price_unset", "stripe_price_unresolved",
 @dataclass
 class Readiness:
     """Returned by compute_readiness — the one place a course/template/product's
-    purchasability state is decided (8A-6: server-derived, not inferred client-side)."""
+    purchasability state is decided: server-derived, not inferred client-side."""
     state: ReadinessState
     message: str
 

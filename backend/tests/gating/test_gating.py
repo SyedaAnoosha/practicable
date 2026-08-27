@@ -128,11 +128,11 @@ async def test_case7_revoked_entitlement_denies_the_next_request(
     assert resp_after.json()["body"] is None
 
 
-# ── week3_plan.md W3-R5 — a real production refund, not case 7's row deletion ───────
-# Case 7 above simulates revocation by deleting the row, which — per the plan — "today
-# has no production code path that can actually produce the state it tests." These
-# three go through the real path: an Order + OrderItems, `POST
-# /admin/orders/{id}/refund`, and the `charge.refunded` webhook.
+# ── A real production refund, not case 7's row deletion ───────
+# Case 7 above simulates revocation by deleting the row, which has no production
+# code path that can actually produce the state it tests. These three go through
+# the real path: an Order + OrderItems, `POST /admin/orders/{id}/refund`, and the
+# `charge.refunded` webhook.
 @pytest.mark.asyncio
 async def test_refund_denies_lesson_template_and_download_on_next_request(
     admin_client: AsyncClient, entitled_client: AsyncClient, entitled_user, content_graph, db_session: AsyncSession
@@ -283,9 +283,9 @@ async def test_case8_draft_lesson_404s_for_signed_out(anon_client: AsyncClient, 
 
 @pytest.mark.asyncio
 async def test_case8_draft_lesson_404s_for_admin_too(admin_client: AsyncClient, content_graph):
-    """§31.2: "Draft content is never reachable on a public URL, even by direct link,
-    even by an admin who is not signed in [to the admin surface specifically]." This
-    route has no admin bypass — publish state, unlike entitlement, has none."""
+    """Draft content is never reachable on a public URL, even by direct link, even
+    by an admin who is not signed in to the admin surface. This route has no admin
+    bypass — publish state, unlike entitlement, has none."""
     g = content_graph
     resp = await admin_client.get(f"/courses/{g.course.slug}/lessons/{g.draft_lesson.slug}")
     assert resp.status_code == 404
@@ -424,7 +424,7 @@ async def test_case11_block_download_url_free_block_needs_no_auth(anon_client: A
     assert resp.json()["file_name"] == g.free_template.file_name
 
 
-# ── The free-template case (new since §58.2 was written) ───────────────────────────
+# ── The free-template case ───────────────────────────
 @pytest.mark.asyncio
 async def test_free_template_downloads_with_no_auth(anon_client: AsyncClient, content_graph):
     g = content_graph
@@ -479,16 +479,16 @@ async def test_course_product_grants_both_lesson_and_its_own_template(
     assert resp.json()["entitled"] is True
 
 
-# ── week3_plan.md Phase 3 step 8 — the bundle extends case 13's shape check ──────────
+# ── The bundle extends case 13's shape check ──────────
 @pytest.mark.asyncio
 async def test_bundle_grants_both_parts_and_nothing_else(
     entitled_client: AsyncClient, entitled_user, content_graph, grant, db_session: AsyncSession
 ):
-    """A bundle is an ordinary Product whose product_contents union its parts (RS 5.6 —
-    no new entitlement mechanism, exactly as db/seed/016_seed_bundle.sql builds the real
-    one). Holding it must grant every part's content and nothing belonging to a third,
-    unrelated product — the same shape assertion as the template/course pair above,
-    generalised to two parts on one product."""
+    """A bundle is an ordinary Product whose product_contents union its parts (no
+    new entitlement mechanism, exactly as db/seed/016_seed_bundle.sql builds the
+    real one). Holding it must grant every part's content and nothing belonging to a
+    third, unrelated product — the same shape assertion as the template/course pair
+    above, generalised to two parts on one product."""
     g = content_graph
     bundle = Product(
         slug=f"bundle-product-{uuid.uuid4().hex[:10]}", name="Test Bundle", description="d",
@@ -517,7 +517,7 @@ async def test_bundle_grants_both_parts_and_nothing_else(
     assert pack_resp.status_code == 403
 
 
-# ── week3_plan.md W3-R11 — a cart checkout grants exactly what was bought ───────────
+# ── A cart checkout grants exactly what was bought ───────────
 @pytest.mark.asyncio
 async def test_cart_checkout_grants_exactly_the_products_bought(
     member_user, content_graph, db_session: AsyncSession
@@ -602,9 +602,8 @@ async def test_case14_pack_pdf_downloads_once_purchased(
 
 @pytest.mark.asyncio
 async def test_case14_pack_question_stays_free_whether_or_not_purchased(anon_client: AsyncClient, content_graph):
-    """The whole honesty point of §20.6: buying the pack must not be what unlocks the
-    question. It was never locked. A stranger reads it exactly the same before or
-    after anyone buys the pack."""
+    """Buying the pack must not be what unlocks the question. It was never locked. A
+    stranger reads it exactly the same before or after anyone buys the pack."""
     g = content_graph
     resp = await anon_client.get(f"/questions/{g.pack_question.slug}")
     assert resp.status_code == 200
@@ -618,7 +617,7 @@ async def test_case14_unpublished_pack_product_404s(anon_client: AsyncClient, co
     assert resp.status_code == 200  # published in the fixture — sanity check the happy path
     body = resp.json()
     assert body["question_count"] == 1
-    assert body["honesty_notice"]  # never empty — §20.6 requires it be present, not just true
+    assert body["honesty_notice"]  # never empty — must be present, not just truthy
 
 
 # ── The admin-bypass audit gap ───────────────────────────────────────────────────
@@ -706,7 +705,7 @@ async def test_webhook_replayed_three_times_grants_exactly_once(
     assert len(events) == 1
 
 
-# ── W3-R11 — a cart checkout, through the real webhook, sends ONE itemised receipt ──
+# ── A cart checkout, through the real webhook, sends ONE itemised receipt ──
 @pytest.mark.asyncio
 async def test_webhook_cart_checkout_grants_three_and_sends_one_receipt(
     anon_client: AsyncClient, member_user, content_graph, db_session: AsyncSession
@@ -764,16 +763,14 @@ async def test_webhook_cart_checkout_grants_three_and_sends_one_receipt(
     assert {e.product_id for e in entitlements} == set(product_ids)
 
 
-# ── W3-R9 — a duplicate entitlement is impossible at the database level ─────────────
+# ── A duplicate entitlement is impossible at the database level ─────────────
 @pytest.mark.asyncio
 async def test_duplicate_entitlement_rejected_by_database_constraint(
     entitled_user, content_graph, grant, db_session: AsyncSession
 ):
-    """migration 010's uq_entitlements_user_product (non-negotiable #13) — the database
-    rejects a second (user_id, product_id) row, not just application code choosing not
-    to insert one. Seen red first: run against the database at migration 009 (before
-    the constraint existed), the second grant() succeeded silently and this assertion
-    failed; run again at 010, it raises IntegrityError as asserted below."""
+    """migration 010's uq_entitlements_user_product — the database rejects a second
+    (user_id, product_id) row, not just application code choosing not to insert
+    one."""
     g = content_graph
     await grant(entitled_user, g.lesson_product)
 
@@ -783,13 +780,12 @@ async def test_duplicate_entitlement_rejected_by_database_constraint(
 
 # ── A lesson added AFTER purchase ───────────────────────────────────────────────────
 #
-# Owner rule, 2026-08-23: "No matter if the lesson is added after someone has purchased,
-# the lesson must be granted to the one who has already purchased — they don't have to
-# repurchase it. Moreover, if I add a lesson and someone hasn't purchased, they will
-# have to buy the course."
+# Rule: a lesson added after someone has purchased the course must be granted to
+# that buyer without a repurchase; a lesson added when someone has not purchased
+# still requires them to buy the course.
 #
-# Both halves are asserted here. The first was a real, live defect: access was resolved
-# only against explicit `product_contents` rows of type `lesson`, so a lesson added after
+# regression: access was resolved only against explicit `product_contents` rows of
+# type `lesson`, so a lesson added after
 # a product was seeded had no row naming it and was locked to people who had already paid
 # for the course. `risk-register-fundamentals` was in exactly that state in production
 # data — 4 published lessons, 3 granted — with both its own description and the bundle's

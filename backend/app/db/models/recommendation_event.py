@@ -1,4 +1,4 @@
-"""Recommendation-click event model — week4_plan.md W4-R4 item 6, ledger row 29.
+"""Recommendation-click event model.
 
 Created by migration 024_recommendation_events, alongside the same privacy constraint
 filter_events and download_events already carry: no user_id, no session id, no IP.
@@ -17,7 +17,7 @@ class RecommendationEvent(Base, IdMixin):
 
     __tablename__ = "recommendation_events"
 
-    # "question" (RoutedProducts, §20.5) or "catalogue" (SituationProducts, §20.6).
+    # "question" (RoutedProducts) or "catalogue" (SituationProducts).
     surface: Mapped[str] = mapped_column(String, nullable=False)
     # Null on the catalogue surface, which routes from a filter set rather than one question.
     question_slug: Mapped[str | None] = mapped_column(String, nullable=True)

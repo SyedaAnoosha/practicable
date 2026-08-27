@@ -3,23 +3,19 @@ import AxeBuilder from '@axe-core/playwright'
 import { hasAdminE2ECreds, adminE2ESkipReason, signInAsAdmin } from './adminAuth'
 
 /**
- * week2_plan.md Phase 1 / DESIGN.md §42.9 — axe on every public route, in CI, from
- * Phase 1 (the full accessibility audit stays a Week 4 item; this is the floor).
+ * DESIGN.md §42.9 — axe on every public route, in CI. This is the floor; the full
+ * accessibility audit is a separate effort.
  *
- * `/store` added 2026-08-14 (Phase 4); the three `/legal/*` pages added the same day
- * (Phase 5). `/pricing` (added 2026-08-15, week3_plan.md Phase 3 step 9) was removed
- * 2026-08-16 by owner direction — no standalone pricing page, one-time prices for
- * every product live on `/store` instead (Store.tsx's bundle card + footer text).
+ * There is no standalone `/pricing` page — one-time prices for every product live on
+ * `/store` instead (Store.tsx's bundle card + footer text).
  *
  * Read-only: every route below is a GET against published, public content — no sign-up,
  * no purchase, no write of any kind against the real backend this suite points at.
  */
-// week4_plan.md Phase 3 step 7: two of the evidence-layer product-detail routes, added
-// against real seeded rows (see responsive-widths.spec.ts's identical note on that
-// coupling and on why `/buy/:slug` isn't here — it requires sign-in, so it's out of
-// scope for this anonymous-GET sweep) — each renders `EvidencePanel`'s `<dl>`,
-// `PreviewGallery`'s lightbox and `LicenceLine`, none of which axe had ever scanned
-// before this pass.
+// Two of the evidence-layer product-detail routes, scanned against real seeded rows (see
+// responsive-widths.spec.ts's note on that coupling and on why `/buy/:slug` isn't here —
+// it requires sign-in, so it's out of scope for this anonymous-GET sweep). Each renders
+// `EvidencePanel`'s `<dl>`, `PreviewGallery`'s lightbox and `LicenceLine`.
 const PUBLIC_ROUTES = [
   '/',
   '/questions',
@@ -34,27 +30,23 @@ const PUBLIC_ROUTES = [
   '/checkout/success',
   '/templates/4935c92a-3138-4dd4-9c70-1d23beb0a8b4',
   '/store/packs/risk-register-fundamentals',
-  // W5-R3/W5-R2 (week5_plan.md Phase 6 step 4). Both are public and anonymous, so they
-  // belong in this sweep like any other public route. `/verify/:code` is scanned with a
-  // deliberately unknown code: its not-found state is the one a stranger following a
-  // bad link actually lands on, and an unaudited error state is exactly where contrast
-  // and heading-order slips survive.
+  // Both are public and anonymous, so they belong in this sweep like any other public
+  // route. `/verify/:code` is scanned with a deliberately unknown code: its not-found
+  // state is the one a stranger following a bad link actually lands on, and an unaudited
+  // error state is exactly where contrast and heading-order slips survive.
   '/search?q=risk',
   '/verify/not-a-real-certificate-code',
 ] as const
 
-/** `[ADDED 2026-08-22]` Wait for entry animations to finish before auditing.
+/** Wait for entry animations to finish before auditing.
  *
  * Every page fades and rises in on mount (`animate-enter`, motion's `riseItem`). While
- * that runs, an element's *computed* colour is a partway blend of its final colour and
- * the background — so axe measured `#8b867b` where the resting colour is the token's
- * `#6e675a`, and reported a 3.59:1 contrast failure against a control that actually
- * renders at 4.61:1 and passes. Four routes failed this way in both themes.
- *
- * Waiting for `<h1>` visibility (which this file already did) is not enough: the
- * heading becomes visible at the *start* of the fade, not the end. This waits for the
- * document's own animations to settle, which is the real precondition for measuring a
- * colour, and falls back to a short fixed delay where the API is unavailable.
+ * that runs, an element's computed colour is a partway blend of its final colour and
+ * the background, which produces false contrast failures against controls that actually
+ * pass once settled. Waiting for `<h1>` visibility is not enough: the heading becomes
+ * visible at the start of the fade, not the end. This waits for the document's own
+ * animations to settle, and falls back to a short fixed delay where the API is
+ * unavailable.
  */
 async function settleAnimations(page: import('@playwright/test').Page) {
   await page
@@ -90,9 +82,9 @@ for (const route of PUBLIC_ROUTES) {
   })
 }
 
-// week3_plan.md Phase 6 step 7 / §62's "both themes checked" — the deliberately
-// separate dark-mode run the comment above promises, rather than doubling every route
-// in the light-mode loop. `useThemeStore.ts` reads its persisted choice from
+// DESIGN.md §62's "both themes checked" — the deliberately separate dark-mode run the
+// comment above promises, rather than doubling every route in the light-mode loop.
+// `useThemeStore.ts` reads its persisted choice from
 // `localStorage['practicable:theme']` before first paint (index.html's own inline
 // script does the same, to avoid a light→dark flash) — `addInitScript` sets it before
 // any app code runs, which is the only point that's early enough for the app to boot
@@ -152,9 +144,9 @@ test('axe: a real template detail page has no violations', async ({ page }) => {
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([])
 })
 
-// week4_plan.md Phase 6B step 13 — the chart (TrendChart, recharts) is a graphical
-// object with its own contrast/keyboard-tooltip requirements the anonymous PUBLIC_ROUTES
-// loop above can never reach, since /admin/metrics requires a real admin sign-in.
+// The chart (TrendChart, recharts) is a graphical object with its own contrast/
+// keyboard-tooltip requirements the anonymous PUBLIC_ROUTES loop above can never reach,
+// since /admin/metrics requires a real admin sign-in.
 test.describe('axe: /admin/metrics (admin-only)', () => {
   test('light theme has no violations', async ({ page }) => {
     test.skip(!hasAdminE2ECreds, adminE2ESkipReason)
@@ -184,18 +176,17 @@ test.describe('axe: /admin/metrics (admin-only)', () => {
   })
 })
 
-// week4_plan.md §8G-11's own DoD line: "axe clean with the menu open" — the state a
-// closed-only audit never reaches. The PUBLIC_ROUTES loop above already scans `/` with
-// ProductsMenu closed; this is the deliberately separate open-state run that line calls
-// for. Real Playwright automation (unlike the jsdom unit suite in ProductsMenu.test.tsx)
-// has no synthetic-click limitation here, so this is a genuine click, not a workaround.
+// "axe clean with the menu open" — the state a closed-only audit never reaches. The
+// PUBLIC_ROUTES loop above already scans `/` with ProductsMenu closed; this is the
+// deliberately separate open-state run. Real Playwright automation (unlike the jsdom unit
+// suite in ProductsMenu.test.tsx) has no synthetic-click limitation, so this is a genuine
+// click.
 //
 // Scoped to the trigger + open menu region, not the whole page: a full-page scan here
 // would duplicate the PUBLIC_ROUTES `/` check above and fail on an unrelated, pre-existing
 // contrast issue in Home.tsx's stat strip (`.band` / `--muted-foreground`, nothing to do
-// with the menu — confirmed failing on the *closed*-menu `/` test too, so it predates and
-// is independent of this test). What §8G-11 actually asks about is the menu's own
-// accessibility, which this scan covers precisely.
+// with the menu — it fails on the closed-menu `/` test too). This scan covers the menu's
+// own accessibility.
 test('axe: Products menu has no violations when open', async ({ page }) => {
   await page.goto('/')
   const trigger = page.getByRole('button', { name: /products/i })

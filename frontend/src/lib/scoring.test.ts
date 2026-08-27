@@ -1,10 +1,10 @@
 // Reads backend/tests/fixtures/scoring_cases.json — the same file
 // backend/tests/test_question_service.py reads — and asserts scoring.ts agrees with
-// every case (Non-negotiable #10, week2_plan.md Phase 3 step 2).
+// every case.
 //
-// §57.6's explicit list is covered here: the v1 "one exact + one far" bug, one
-// exact + one adjacent, zero active filters, an unknown tag value, and multi-select
-// partial overlap — plus several more real-shape cases, and native (non-fixture)
+// Covered here: the v1 "one exact + one far" bug, one exact + one adjacent, zero
+// active filters, an unknown tag value, and multi-select partial overlap — plus
+// several more real-shape cases, and native (non-fixture)
 // tests for partitionQuestions/rankRelaxationCandidates, which are about a LIST of
 // questions rather than one question's score in isolation.
 import { describe, expect, it } from 'vitest'

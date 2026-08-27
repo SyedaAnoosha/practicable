@@ -1,4 +1,4 @@
-"""Add settings table and users.disabled_at for admin panel gaps (Phase 6C / W4-R13).
+"""Add settings table and users.disabled_at for admin panel gaps.
 
 settings table: operational key-value store for non-secret configuration.
 Docstring deliberately states: NO SECRET IS EVER INSERTED. Secrets read from

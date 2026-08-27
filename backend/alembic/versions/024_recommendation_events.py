@@ -1,23 +1,22 @@
-"""recommendation_events — make W4-R4's routing claim measurable
+"""recommendation_events — make the question→product routing claim measurable
 
-week4_plan.md W4-R4 item 6 asks for a `recommendation_clicked` event so that §22's own
-claim — that routing a reader from a question to a product actually helps — is measured
-rather than asserted. Ledger row 29 recorded it as absent everywhere.
+Records a `recommendation_clicked` event so that routing a reader from a question to a
+product can be measured rather than asserted.
 
-Server-side, not PostHog, for the same reason W4-R10's 2026-08-17 amendment moved the
-tag-filter counter server-side: the admin metrics page must answer its questions with
-no external project key set. This table is the routing twin of `download_events`.
+Server-side, not PostHog, for the same reason the tag-filter counter is server-side: the
+admin metrics page must answer its questions with no external project key set. This
+table is the routing twin of `download_events`.
 
-The same privacy constraint as `filter_events` and `download_events`, and it is
-load-bearing, not incidental: **no user_id, no session id, no IP.** The question this
-table answers is "does routing from question X to product Y get clicked", which needs
-only the pair and a timestamp. Adding an identity column would turn an anonymous counter
-into a behavioural profile, which is not what was asked for and not what was disclosed.
+Same privacy constraint as `filter_events` and `download_events`, and it is
+load-bearing: **no user_id, no session id, no IP.** The question this table answers is
+"does routing from question X to product Y get clicked", which needs only the pair and a
+timestamp. An identity column would turn an anonymous counter into a behavioural
+profile.
 
-`surface` distinguishes the two routing components (§20.5 `RoutedProducts` on a question
-page, §20.6 `SituationProducts` on a filtered catalogue), because a click from a
-question the reader is actually reading and a click from a filter result set are
-different signals and averaging them would hide which one works.
+`surface` distinguishes the two routing components (`RoutedProducts` on a question page,
+`SituationProducts` on a filtered catalogue), because a click from a question the reader
+is actually reading and a click from a filter result set are different signals and
+averaging them would hide which one works.
 
 Revision ID: 024
 Revises: 023
@@ -47,7 +46,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        # "question" (RoutedProducts, §20.5) or "catalogue" (SituationProducts, §20.6).
+        # "question" (RoutedProducts) or "catalogue" (SituationProducts).
         sa.Column("surface", sa.String(), nullable=False),
         # The question the reader was routed FROM. Nullable because a catalogue-surface
         # click routes from a filter result set, not from one question.

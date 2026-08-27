@@ -15,18 +15,17 @@ from app.db.models import User
 
 # Re-exported, not duplicated: `app/core/entitlements.py` needs the same writer for the
 # admin-bypass audit row, and a core module cannot import from `api/` without inverting
-# the layer direction §1.3 exists to protect. The implementation lives in
-# `services/audit_service.py`; every admin route still imports it from this module so
-# nothing else in `admin/*` had to change.
+# the layer direction. The implementation lives in `services/audit_service.py`; every
+# admin route imports it from this module.
 from app.services.audit_service import record_audit  # noqa: F401
 
 
 class PublishStateIn(BaseModel):
     """Shared publish-toggle body for questions/templates/courses/lessons (migration
-    012, week3_plan.md Phase 5 step 4). `published` is the legacy boolean every existing
-    caller and test already sends; `publish_state` is the new fourth-state field the
-    `PublishStateChip` UI sends explicitly. Both are accepted so old and new clients
-    keep working against the same endpoint — see `apply_publish_state_or_422`."""
+    012). `published` is the legacy boolean every existing caller and test sends;
+    `publish_state` is the fourth-state field the `PublishStateChip` UI sends
+    explicitly. Both are accepted so old and new clients keep working against the
+    same endpoint — see `apply_publish_state_or_422`."""
     published: bool
     publish_state: Optional[Literal["draft", "in_review", "published", "archived"]] = None
 

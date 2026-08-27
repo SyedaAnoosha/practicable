@@ -1,15 +1,13 @@
-"""Phase 10 (§10C re-verification, 2026-08-22): GET /me/orders/{id}/receipt.
+"""GET /me/orders/{id}/receipt.
 
-The plan's own `[GAP]` marker: no Stripe invoice id is ever persisted on `orders`
-(it's fetched from the Stripe session at webhook time and only reaches the one-shot
-receipt email — never saved). Per the plan's explicit instruction ("if not [stored],
-regenerate the receipt from order data. Never fabricate an invoice number."), this
-endpoint regenerates a receipt from the order row alone and never invents an invoice
-number.
+No Stripe invoice id is ever persisted on `orders` (it's fetched from the Stripe
+session at webhook time and only reaches the one-shot receipt email — never saved).
+This endpoint regenerates a receipt from the order row alone and never invents an
+invoice number.
 
-Also covers the /me/orders `next_cursor` fix: it was computed and then silently
-dropped from the response model, so has_more was returned with no way to actually
-request the next page — a genuine keyset-pagination bug, not just a missing field.
+regression: the /me/orders `next_cursor` was computed and then silently dropped from
+the response model, so has_more was returned with no way to actually request the
+next page.
 """
 import uuid
 

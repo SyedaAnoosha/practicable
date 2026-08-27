@@ -1,11 +1,10 @@
-"""The one place an order's entitlements get revoked (week3_plan.md W3-R5).
+"""The one place an order's entitlements get revoked.
 
 Two callers reach `apply_refund` — `POST /admin/orders/{id}/refund` (which issues the
 Stripe refund itself, then calls this) and the `charge.refunded` webhook (where Stripe
 has already refunded the charge; this only has to catch the local state up) — so a
 refund issued from the Stripe dashboard reaches the exact same end state as one issued
-from the admin, per the plan's explicit requirement. Neither caller duplicates the
-revoke/audit logic; both call this.
+from the admin. Neither caller duplicates the revoke/audit logic; both call this.
 """
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -97,7 +96,7 @@ async def apply_refund(
         },
     )
 
-    # W5-R2: Revoke certificates for courses covered by the refunded products.
+    # Revoke certificates for courses covered by the refunded products.
     # A certificate for a refunded course must not verify clean — that is the
     # whole point of having a verify page.
     if entitlements:

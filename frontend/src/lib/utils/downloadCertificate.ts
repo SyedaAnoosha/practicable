@@ -13,11 +13,9 @@ import { api } from '@/lib/api/client'
  *    (`VITE_API_BASE_URL` is the origin, with no `/api/v1` prefix), so it would resolve
  *    against the SPA origin and return the index page.
  *
- * `[MOVED 2026-08-25]` Lifted out of Dashboard.tsx so CourseDetail can use the same
- * path. It previously existed only on the dashboard, which is why CourseDetail's
- * "View certificate" had nothing to call and pointed at the public /verify page
- * instead — showing the learner the stranger's-eye verification record rather than
- * their own certificate.
+ * Shared between Dashboard and CourseDetail so "View certificate" gives the learner
+ * their own certificate rather than the public /verify page's stranger's-eye
+ * verification record.
  *
  * @returns true when a download was opened, false when it failed.
  */

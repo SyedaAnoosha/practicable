@@ -1,6 +1,5 @@
-// week4_plan.md Phase 8 (8B-6): "the field takes dollars and stores cents, with the
-// conversion in exactly one place ... a value with three decimals" among the named
-// cases. The regression this guards: `parseInt(str, 10) * 100` (the pattern that was
+// The field takes dollars and stores cents, with the conversion in exactly one place.
+// The regression this guards: `parseInt(str, 10) * 100` (the pattern that was
 // duplicated across AdminProducts.tsx, AdminPacks.tsx and AdminCourses.tsx/
 // AdminTemplates.tsx's price controls) truncates a fractional-cent input instead of
 // rounding it.

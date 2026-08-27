@@ -16,7 +16,7 @@ import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {/* Respects prefers-reduced-motion tree-wide (DESIGN.md §45) */}
+    {/* Respects prefers-reduced-motion tree-wide */}
     <MotionConfig reducedMotion="user">
       <ToastProvider>
         <QueryClientProvider client={queryClient}>

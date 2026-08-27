@@ -8,19 +8,13 @@ import { api } from '@/lib/api/client'
 /** Announces the new page on every route change for screen-reader users, who
  * otherwise get told nothing when a SPA navigates.
  *
- * `[FIXED 2026-08-22, a11y-manual-checks.spec.ts]` **This announced nothing at all for
- * its entire life, and its own comment explained why.**
+ * An aria-live region only announces when its text actually changes, so this must not
+ * derive the message from `document.title` — nothing in this application sets it
+ * per-route, so the text would be identical on every route and the region would never
+ * announce.
  *
- * The message used to be `` `${document.title} — page loaded` ``, and the comment
- * correctly noted that "an aria-live region only announces when its text actually
- * changes". Nothing in this application ever sets `document.title` — there is no
- * `useDocumentTitle`, no per-route title, and `index.html` hard-codes
- * `<title>Practicable</title>`. So the text was the identical string on every route,
- * the region never changed, and a screen-reader user navigating the whole product was
- * told nothing, ever. The region existed, was correctly configured, and was inert.
- *
- * The fix reads the page's real `<h1>`, which is the one string guaranteed to exist and
- * to differ per route: `PageTitle` is the single `<h1>` for every route by design
+ * It reads the page's real `<h1>` instead, which is the one string guaranteed to exist
+ * and to differ per route: `PageTitle` is the single `<h1>` for every route by design
  * ("One <h1> per page — every route's title goes through this component so that rule
  * can't be violated by accident"). Deriving from it rather than adding titles to 45
  * page components keeps one source of truth instead of two that can drift.
@@ -78,10 +72,10 @@ function RouteAnnouncer() {
 /** Focuses the new page's h1 after every route change so keyboard-only users
  * land on the page heading rather than staying wherever they were.
  *
- * `[ADDED 2026-08-22, §6.1 J4 P0]` WCAG 2.2 §2.4.3 (Focus Order) requires that
- * focus moves to the content of the new page after user-initiated navigation.
- * The RouteAnnouncer already reads the h1 for screen-reader users; this targets
- * keyboard users who tab through the page after a click.
+ * WCAG 2.4.3 (Focus Order) requires that focus moves to the content of the new page
+ * after user-initiated navigation. The RouteAnnouncer already reads the h1 for
+ * screen-reader users; this targets keyboard users who tab through the page after a
+ * click.
  *
  * Left alone: hash navigation (focus to an anchor), POP (back/forward), and
  * query-string-only changes (the reader is still on the same page). */
@@ -133,18 +127,14 @@ export default function RootLayout() {
   const setLoading = useAuthStore((s) => s.setLoading)
 
   useEffect(() => {
-    // Phase 10 (§10A re-verification, 2026-08-22): me.py's own docstring for
-    // POST /me/account/email-changed says "After Supabase confirms the new email,
-    // the frontend calls this" — but nothing did. AccountProfile.tsx's
-    // updateUser({ email }) only *requests* the change; Supabase's email does not
-    // change until the confirmation link is clicked, per the page's own copy. This
-    // is the one app-wide place that already observes every session change
-    // (RootLayout's own comment above: "every layout and page reads session state
-    // from useAuthStore, never from Supabase directly"), so it's where the
-    // confirmed-email moment is actually observable — comparing the previous
+    // POST /me/account/email-changed must be called after Supabase confirms the new
+    // email. AccountProfile.tsx's updateUser({ email }) only *requests* the change;
+    // Supabase's email does not change until the confirmation link is clicked. This is
+    // the one app-wide place that already observes every session change, so it's where
+    // the confirmed-email moment is actually observable — comparing the previous
     // session's email to the incoming one catches exactly that transition, without
-    // firing on unrelated USER_UPDATED events (e.g. a password change, which
-    // touches the user object but never the email).
+    // firing on unrelated USER_UPDATED events (e.g. a password change, which touches
+    // the user object but never the email).
     //
     // previousEmail starts as `undefined`, not read from the Zustand store: the
     // store's own session is populated by this same effect's getSession() call

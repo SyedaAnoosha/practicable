@@ -1,15 +1,13 @@
-// Shared copy that must read identically wherever it appears — week3_plan.md Phase 4
-// step 1: "the same sentence, defined once, not three independent drafts." /store,
-// /legal/refunds (components/legal/pages/Refunds.tsx) and the receipt email
+// Shared copy that must read identically wherever it appears — the same sentence,
+// defined once. /store, /legal/refunds (pages/legal/Refunds.tsx) and the receipt email
 // (backend/app/core/labels.py — Jinja2 can't import a TS module, so that file carries
 // a byte-identical Python copy, cross-referenced in both directions) all render this
 // exact sentence; each surface adds its OWN pointer/link around it rather than baking
 // one into the shared string, since "see the full policy" reads oddly ON the full
 // policy page itself.
 //
-// Decision #17 stays deliberately open (owner instruction, "keep the refund window as
-// it is") — this text states the consumer-guarantee position and never invents a
-// day-count /legal/refunds doesn't (yet) finally state.
+// This text states the consumer-guarantee position and never invents a day-count
+// /legal/refunds doesn't finally state.
 export const REFUND_POSITION_TEXT =
   "You're covered by your consumer-guarantee rights, regardless of anything else stated here."
 
@@ -19,7 +17,7 @@ export const REFUND_POSITION_TEXT =
 // acknowledged it. That reads as the site losing their purchase, which is worse than
 // the refund itself.
 //
-// Tone is deliberate and matches week4_plan.md 9B step 7: `muted`, never `destructive`.
+// Tone is deliberate: `muted`, never `destructive`.
 // A refund the buyer asked for is a completed transaction, not an error — colouring it
 // red would tell them something went wrong when nothing did. It also never implies the
 // refund was a mistake or invites them to justify it.
@@ -27,14 +25,14 @@ export const ACCESS_ENDED_HEADING = 'Access ended — refunded'
 export const ACCESS_ENDED_BODY =
   'This course was refunded, so it is no longer in your library. You can buy it again at any time, and your progress is kept if you do.'
 
-// DESIGN.md §28.2 — stated before the Stripe redirect, not discovered on it.
+// Stated before the Stripe redirect, not discovered on it.
 export const TAX_STATEMENT_TEXT = 'Prices are in AUD. GST is included for Australian customers.'
 
 export const BILLING_TYPE_TEXT = 'one-time · lifetime access'
 
-// ── Phase 8F: WhyThis claims (W4-R16) ───────────────────────────────────────────
+// ── WhyThis claims ──────────────────────────────────────────────────────────────
 // Every claim traces to a column or a guard. Zero social-proof claims.
-// No line makes a claim about other buyers (non-negotiable #13).
+// No line makes a claim about other buyers.
 export const WHY_BUY_CLAIMS = [
   {
     label: 'Lifetime access',
@@ -76,15 +74,10 @@ export const WHY_BUY_CLAIMS = [
 
 // The objection block — five things, placed below WhyThis on product pages.
 //
-// `[CHANGED 2026-08-27, owner direction]` "Refund policy section must be different for
-// courses, templates, and packs."
-//
-// This was ONE shared array used verbatim by ProductBuy, Template and PackDetail, so a
-// template page promised "refunds up to 15% course completion" for a file that has no
-// completion to measure — and a spreadsheet download has no lessons to be 15% through.
-// Worse, the self-serve refund endpoint (`POST /me/orders/{id}/refund`) refuses any
-// order that resolves to no course at all: "This order doesn't include a course."
-// A template buyer was being shown a refund route that would reject them.
+// The refund policy differs by product type. A single shared array would promise a
+// template buyer "refunds up to 15% course completion" for a file with no completion to
+// measure, and the self-serve refund endpoint (`POST /me/orders/{id}/refund`) refuses
+// any order that resolves to no course at all ("This order doesn't include a course").
 //
 // The other four entries are genuinely shared, so they stay in one place and only
 // `Refund policy` — plus `What it opens in`, which had the same courses-and-templates

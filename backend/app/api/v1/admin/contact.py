@@ -1,14 +1,12 @@
 """Admin contact inbox — reads the contact_messages table.
 
-week4_plan.md W4-R5: 'Read what came in through the contact form, without SQL.'
-
-handover.md §2 currently instructs the owner to run hand-written SQL to see contact
-messages. This endpoint replaces that instruction with a proper admin view.
+Read what came in through the contact form, without SQL — replacing the
+hand-written SQL that handover.md §2 instructs the owner to run.
 
 The inbox is read-only. `notified = false` rows are the set that matters after any email
 outage — they are always included and never filtered by default.
 
-#12: Extended to support "Ask Practicable" with grouping by similar questions.
+Also supports "Ask Practicable" with grouping by similar questions.
 """
 from datetime import datetime
 from typing import List, Optional

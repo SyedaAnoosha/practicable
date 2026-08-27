@@ -1,18 +1,14 @@
 """Build a domain pack PDF from the real 100-question catalogue.
 
-WHAT A DOMAIN PACK IS (week2_plan.md W2-R6, RS 5.6). A purchasable *artefact* — a
-formatted, ordered PDF of one domain's questions — not a paywall over free text. The
-questions themselves stay free on the site, forever. What is sold here is the format
-and the ordering: a document you can print, take into a meeting, and work through in a
-defensible sequence. §20.6's honesty notice says exactly that, on the cover, above the
-fold, not in fine print.
+WHAT A DOMAIN PACK IS. A purchasable *artefact* — a formatted, ordered PDF of one
+domain's questions — not a paywall over free text. The questions themselves stay free on
+the site, forever. What is sold here is the format and the ordering: a document you can
+print, take into a meeting, and work through in a defensible sequence. An honesty notice
+says exactly that, on the cover, above the fold, not in fine print.
 
-WHY THIS UNBLOCKED. Decision #19 held this SKU because "producing the PDF is content
-work only the author can do." It was answered 2026-08-14 with "design something from
-the files we already have" — so the pack is generated from
-`docs/questions/questions.json`, which IS the author's own content: 100 real questions
-with real answers, already seeded and already live on the site. Nothing here is
-written by a machine. The machine only orders and typesets what was already authored.
+The pack is generated from `docs/questions/questions.json`, which is the author's own
+content: 100 real questions with real answers, already seeded and already live on the
+site. The machine only orders and typesets what was already authored.
 
 THE WORKING ORDER — the actual thing being sold, so it has to be defensible.
 Questions are sorted by, in strict priority:
@@ -81,7 +77,7 @@ MUTED = colors.HexColor("#6E675A")  # --muted-foreground
 RULE = colors.HexColor("#E6DFD0")  # --border
 
 # The five domains as they appear in questions.json, mapped to the buyer-facing names
-# decided in week1_plan.md #2 and seeded in db/seed/001.
+# seeded in db/seed/001.
 DOMAIN_TITLES = {
     "Risk": "Risk (Enterprise & operational)",
     "Cyber": "Cyber (Technology & security)",
@@ -174,7 +170,7 @@ def build_styles() -> dict[str, ParagraphStyle]:
 
 
 def tag_line(tags: dict) -> str:
-    """Every badge carries a word (DESIGN.md §7.6: colour is never the only carrier of
+    """Every badge carries a word (DESIGN.md: colour is never the only carrier of
     meaning — in a print artefact there is no colour to lean on at all)."""
     parts = [
         ("Tier", tags.get("tier")),
@@ -232,9 +228,8 @@ def build_pack(domain: str, questions: list[dict], out_path: Path) -> Path:
     ))
     story.append(Spacer(1, 6 * mm))
 
-    # §20.6's honesty notice — above the fold, on the cover, not in fine print. The
-    # fastest possible way to lose buyer trust is a pack that implies purchase unlocks
-    # something already free.
+    # Honesty notice — above the fold, on the cover, not in fine print. The fastest way
+    # to lose buyer trust is a pack that implies purchase unlocks something already free.
     story.append(Paragraph(
         "<b>What you are buying, plainly.</b> Every question and answer in this pack is "
         "free to read on practicable.com.au, and always will be. This document is not a "
@@ -334,7 +329,7 @@ def main() -> None:
         out = OUT_DIR / f"practicable-{DOMAIN_SLUGS[domain]}-question-pack.pdf"
         build_pack(domain, subset, out)
         size = out.stat().st_size
-        flag = "" if len(subset) >= 20 else "   <-- thin: see docs/pricing.md before publishing"
+        flag = "" if len(subset) >= 20 else "   <-- thin: review before publishing"
         print(f"  {domain:<12} {len(subset):>3} questions  {size:>8,} bytes  {out.name}{flag}")
 
 

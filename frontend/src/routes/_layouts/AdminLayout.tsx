@@ -40,8 +40,7 @@ export interface Profile {
   is_admin: boolean
 }
 
-// Phase 9: grouped into Content · Commerce · System — same structure as before,
-// now rendered in a collapsible sidebar rather than a horizontal top bar.
+// Grouped into Content · Commerce · System, rendered in a collapsible sidebar.
 const ADMIN_NAV_GROUPS = [
   {
     label: 'Content',
@@ -178,10 +177,9 @@ function AdminSidebarNav({
 
 function AdminSidebarBrand({ collapsed, onToggleCollapse }: { collapsed: boolean; onToggleCollapse?: () => void }) {
   return (
-    /* `[FIXED 2026-08-22]` Same fix as MemberLayout's brand row: collapsed, this was
-       `justify-center` with an `ml-auto` toggle beside it, so in a 64px column the
-       shield sat against the left edge and the chevron against the right. Stacked and
-       centred when collapsed. */
+    /* Same as MemberLayout's brand row: stacked and centred when collapsed, because
+       `justify-center` with an `ml-auto` toggle beside it puts the shield against the
+       left edge and the chevron against the right in a 64px column. */
     <div className={cn('flex py-5', collapsed ? 'flex-col items-center gap-2 px-0' : 'items-center px-5')}>
       <Link
         to="/dashboard"
@@ -214,11 +212,9 @@ function AdminSidebarBrand({ collapsed, onToggleCollapse }: { collapsed: boolean
 
 function AdminSidebarFooter({ collapsed }: { collapsed: boolean }) {
   return (
-    /* `[CHANGED 2026-08-25, owner direction]` The theme toggle and sign-out button that
-       used to share this row now live in AppHeader, top right, in both shells. What is
-       left is the one control that is genuinely about *leaving admin* rather than about
-       the account — the way back to the member dashboard — so the row no longer needs
-       the collapsed-stacking workaround the three-control version required. */
+    /* The theme toggle and sign-out button live in AppHeader, top right, in both
+       shells. What is left is the one control that is genuinely about *leaving admin*
+       rather than about the account — the way back to the member dashboard. */
     <div className={cn('border-t border-stage-foreground/15 py-4', collapsed ? 'px-0' : 'px-3')}>
       <RailTooltip label="Back to dashboard" collapsed={collapsed}>
         <Link
@@ -238,9 +234,9 @@ function AdminSidebarFooter({ collapsed }: { collapsed: boolean }) {
 }
 
 /**
- * Phase 9: Admin panel with a collapsible sidebar, matching the MemberLayout
- * pattern. The role check is UX, not security — every /admin/* API route is
- * guarded by `require_admin` server-side.
+ * Admin panel with a collapsible sidebar, matching the MemberLayout pattern. The role
+ * check is UX, not security — every /admin/* API route is guarded by `require_admin`
+ * server-side.
  */
 export default function AdminLayout() {
   const user = useAuthStore((s) => s.user)
@@ -286,14 +282,10 @@ export default function AdminLayout() {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Admin sidebar.
-          `[CHANGED 2026-08-22, owner direction]` "make the admin sidebar in similar
-          colour, if not exactly the same as well, give it some colour."
-          It was bare `bg-background`, i.e. the same cream as the page beside it, so the
-          rail had no edge of its own and read as washed-out next to the member rail's
-          navy. It now uses the same `bg-stage` surface and stage-foreground text as
-          MemberLayout, which makes the two shells feel like one product and gives the
-          admin nav the contrast it was missing. */}
+      {/* Admin sidebar. Uses the same `bg-stage` surface and stage-foreground text as
+          MemberLayout so the two shells feel like one product — bare `bg-background`
+          would be the same cream as the page beside it, leaving the rail with no edge of
+          its own. */}
       <aside
         className={cn(
           'relative isolate hidden shrink-0 flex-col overflow-y-auto overflow-x-hidden overscroll-y-contain scrollbar-none border-r border-stage-foreground/15 bg-stage md:sticky md:top-0 md:flex md:h-screen transition-[width] duration-200 ease-[var(--ease-standard)]',
@@ -306,10 +298,9 @@ export default function AdminLayout() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-x-clip">
-        {/* `[ADDED 2026-08-25, owner direction]` The admin shell had no header at all —
-            cart, notifications and the account menu were unreachable without first
-            navigating back out to the member area. Same component, same position as
-            MemberLayout, so the two shells read as one product. */}
+        {/* Same component, same position as MemberLayout, so the two shells read as one
+            product — without it, cart, notifications and the account menu are
+            unreachable from the admin shell. */}
         <AppHeader />
         <main id="main" className="flex-1">
           <Outlet />

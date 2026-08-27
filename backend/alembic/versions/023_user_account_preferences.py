@@ -1,4 +1,4 @@
-"""Phase 10E: Add notification preference columns to users.
+"""Add notification preference columns to users.
 
 Revision ID: 023
 Revises: 022
@@ -15,8 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Two named columns, not a JSONB blob — matching the house preference for
-    # named columns over opaque fields (week4_plan.md Phase 10 §10E step 1).
+    # Two named columns, not a JSONB blob — house preference for named columns over
+    # opaque fields.
     op.add_column(
         "users",
         sa.Column(

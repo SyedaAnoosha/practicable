@@ -1,4 +1,4 @@
-"""Add certificates table for course completion certificates (W5-R2).
+"""Add certificates table for course completion certificates.
 
 On the false→true transition of CourseProgress.completed, exactly one
 Certificate row is created. Re-completing, un-completing then re-completing,

@@ -1,4 +1,4 @@
-"""Bookmarks endpoints for W5-R5.
+"""Bookmarks endpoints.
 
 POST   /me/bookmarks         — add a bookmark
 DELETE /me/bookmarks/{id}    — remove a bookmark

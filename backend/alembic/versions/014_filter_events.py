@@ -1,4 +1,4 @@
-"""Analytics events for filters and downloads (week4_plan.md W4-R10).
+"""Analytics events for filters and downloads.
 
 Adds `filter_events` and `download_events` tables for tracking user behavior
 without user_id (privacy-first analytics).
