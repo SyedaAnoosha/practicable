@@ -74,33 +74,97 @@ export const WHY_BUY_CLAIMS = [
   },
 ] as const
 
-// The objection block — five things, four of which are columns.
-// Placed below WhyThis on product pages.
-export const OBJECTION_BLOCK = [
-  {
-    label: 'Refund policy',
-    detail:
-      'Change-of-mind refunds are available up to 15% course completion. Consumer-guarantee rights always apply.',
-  },
-  {
-    label: 'Licence terms',
-    detail:
-      'Use and adapt inside your own organisation. Full terms on the legal page.',
-    href: '/legal/terms',
-  },
-  {
-    label: 'Version and updates',
-    detail:
-      'The version and last review date are shown on every product page. Updates to the same product are included.',
-  },
-  {
-    label: 'What it opens in',
-    detail:
-      'Templates: standard office software (Word, Excel, or compatible). Courses: your browser, with video and reading.',
-  },
-  {
-    label: 'After payment',
-    detail:
-      'Download immediately. Receipt by email. Access does not expire.',
-  },
-] as const
+// The objection block — five things, placed below WhyThis on product pages.
+//
+// `[CHANGED 2026-08-27, owner direction]` "Refund policy section must be different for
+// courses, templates, and packs."
+//
+// This was ONE shared array used verbatim by ProductBuy, Template and PackDetail, so a
+// template page promised "refunds up to 15% course completion" for a file that has no
+// completion to measure — and a spreadsheet download has no lessons to be 15% through.
+// Worse, the self-serve refund endpoint (`POST /me/orders/{id}/refund`) refuses any
+// order that resolves to no course at all: "This order doesn't include a course."
+// A template buyer was being shown a refund route that would reject them.
+//
+// The other four entries are genuinely shared, so they stay in one place and only
+// `Refund policy` — plus `What it opens in`, which had the same courses-and-templates
+// hedge — varies by type. Each variant is written from what the code actually enforces:
+//   • eligibility  = max course progress ≤ 15%  (me.py `max_progress > 15`)
+//   • amount       = 85% refunded, buyer keeps 15%  (me.py `REFUND_KEEP_PERCENT`)
+//   • no course in the order → no self-serve refund, contact support instead
+// Consumer-guarantee rights are stated in every variant because they are not waivable
+// and do not depend on the product type.
+
+type ObjectionItem = {
+  readonly label: string
+  readonly detail: string
+  readonly href?: string
+}
+
+const REFUND_POLICY = {
+  // A course is the only thing with progress, so it is the only self-serve path.
+  course:
+    'Change-of-mind refunds are available while you are 15% or less through the course — '
+    + 'we refund 85% and you keep the rest. Consumer-guarantee rights always apply.',
+  // Deliberately does NOT promise a self-serve refund: the endpoint would refuse it.
+  template:
+    'The file is yours to download as soon as you pay, so there is no change-of-mind '
+    + 'refund on a template. If something is wrong with it, contact us — '
+    + 'consumer-guarantee rights always apply.',
+  // A pack can mix courses and templates, so it cannot promise either rule outright.
+  pack:
+    'If the pack includes a course, change-of-mind refunds are available while you are '
+    + '15% or less through it — we refund 85%. Downloaded files on their own are not '
+    + 'refundable for change of mind. Consumer-guarantee rights always apply.',
+} as const
+
+const OPENS_IN = {
+  course: 'Your browser, with video and reading. Nothing to install.',
+  template: 'Standard office software — Word, Excel, or compatible.',
+  pack: 'Templates open in standard office software (Word, Excel, or compatible). '
+    + 'Courses run in your browser, with video and reading.',
+} as const
+
+const ACCESS_AFTER_PAYMENT = {
+  course: 'Start immediately. Receipt by email. Access does not expire.',
+  template: 'Download immediately. Receipt by email. Access does not expire.',
+  pack: 'Download and start immediately. Receipt by email. Access does not expire.',
+} as const
+
+/**
+ * The objection block for one product type.
+ *
+ * Call it with the type of the page you are rendering — `course` on ProductBuy,
+ * `template` on Template, `pack` on PackDetail. There is no default on purpose: a
+ * silent fallback is how the course-only refund wording ended up on template pages.
+ */
+export function objectionBlock(
+  kind: 'course' | 'template' | 'pack',
+): readonly ObjectionItem[] {
+  return [
+    {
+      label: 'Refund policy',
+      detail: REFUND_POLICY[kind],
+      href: '/legal/refunds',
+    },
+    {
+      label: 'Licence terms',
+      detail: 'Use and adapt inside your own organisation. Full terms on the legal page.',
+      href: '/legal/terms',
+    },
+    {
+      label: 'Version and updates',
+      detail:
+        'The version and last review date are shown on every product page. '
+        + 'Updates to the same product are included.',
+    },
+    {
+      label: 'What it opens in',
+      detail: OPENS_IN[kind],
+    },
+    {
+      label: 'After payment',
+      detail: ACCESS_AFTER_PAYMENT[kind],
+    },
+  ]
+}

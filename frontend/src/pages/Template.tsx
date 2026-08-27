@@ -16,7 +16,7 @@ import { ErrorState } from '@/components/ui/ErrorState'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
 import type { Preview } from '@/components/product/PreviewGallery'
 import { WhyThis } from '@/components/product/WhyThis'
-import { OBJECTION_BLOCK } from '@/lib/labels'
+import { objectionBlock } from '@/lib/labels'
 import { formatCurrency } from '@/lib/utils/formatCurrency'
 import { FactStrip, type Fact } from '@/components/ui/FactStrip'
 import { TestimonialSection } from '@/components/ui/Testimonial'
@@ -289,7 +289,7 @@ export function Template() {
           <div className="mt-6 rounded-lg border border-border bg-card p-5 sm:p-6">
             <p className="eyebrow">Before you decide</p>
             <ul className="mt-4 flex flex-col gap-3">
-              {OBJECTION_BLOCK.map((item) => (
+              {objectionBlock('template').map((item) => (
                 <li key={item.label}>
                   <p className="text-sm font-medium text-foreground">
                     {'href' in item && item.href ? (

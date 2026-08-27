@@ -13,7 +13,7 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb'
 import { ErrorState } from '@/components/ui/ErrorState'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
 import { WhyThis } from '@/components/product/WhyThis'
-import { OBJECTION_BLOCK } from '@/lib/labels'
+import { objectionBlock } from '@/lib/labels'
 import { Accordion, type AccordionItemData } from '@/components/ui/Accordion'
 import { FactStrip, type Fact } from '@/components/ui/FactStrip'
 import { TestimonialSection } from '@/components/ui/Testimonial'
@@ -342,7 +342,7 @@ export function PackDetail() {
           <div className="mt-6 rounded-lg border border-border bg-card p-5 sm:p-6">
             <p className="eyebrow">Before you decide</p>
             <ul className="mt-4 flex flex-col gap-3">
-              {OBJECTION_BLOCK.map((item) => (
+              {objectionBlock('pack').map((item) => (
                 <li key={item.label}>
                   <p className="text-sm font-medium text-foreground">
                     {'href' in item && item.href ? (

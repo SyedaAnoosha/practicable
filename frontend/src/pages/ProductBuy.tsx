@@ -12,7 +12,7 @@ import { PageTitle } from '@/components/ui/PageTitle'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { EvidencePanel } from '@/components/product/EvidencePanel'
 import { WhyThis } from '@/components/product/WhyThis'
-import { OBJECTION_BLOCK } from '@/lib/labels'
+import { objectionBlock } from '@/lib/labels'
 import type { Preview } from '@/components/product/PreviewGallery'
 
 interface ProductContent {
@@ -270,7 +270,7 @@ export function ProductBuy() {
           <div className="rounded-lg border border-border bg-card p-5 sm:p-6">
             <p className="eyebrow">Before you decide</p>
             <ul className="mt-4 flex flex-col gap-3">
-              {OBJECTION_BLOCK.map((item) => (
+              {objectionBlock('course').map((item) => (
                 <li key={item.label}>
                   <p className="text-sm font-medium text-foreground">
                     {'href' in item && item.href ? (
