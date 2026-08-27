@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
 from app.core.entitlements import ResourceType, has_access_to
-from app.core.html_sanitizer import sanitize_html
+from app.core.html_sanitizer import strip_tags
 from app.db.models import Course, Lesson, Module, Product, ProductContent, Review, ReviewState, Template, User
 from app.db.session import get_session
 
@@ -248,8 +248,11 @@ async def submit_review(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Submit a review for purchased content. The review is created in ``pending``
-    state and invisible to the public until an admin approves it.
+    """Submit a review for purchased content.
+
+    The review is published immediately (see the `[CHANGED 2026-08-25]` note at the
+    insert below): only a buyer can review, so moderation is reactive — an admin
+    deletes a bad review — rather than a queue every honest review waits behind.
 
     One review per user per content item, enforced by a UNIQUE constraint.
     A duplicate submission returns 409.
@@ -290,8 +293,23 @@ async def submit_review(
             detail={"error": {"code": "not_entitled", "message": "You must purchase this content to leave a review."}},
         )
 
-    # 3. Sanitise body
-    body = sanitize_html(req.body) if req.body else None
+    # 3. Sanitise body — strip tags to PLAIN TEXT, do not sanitise as rich HTML.
+    #
+    # `[CHANGED 2026-08-27]` This called `sanitize_html`, which is the rich-text-editor
+    # sanitiser: it deliberately promotes plain text to real paragraphs, so a review
+    # typed as "I definitely loved using it!" was STORED as
+    # "<p>I definitely loved using it!</p>". Testimonial.tsx renders the body as
+    # `{review.body}` — plain JSX text, which React escapes — so the reviewer's words
+    # appeared on the page with visible <p> tags around them.
+    #
+    # A review is a plain-text field with no editor behind it, so the tags are stripped
+    # rather than allowed. `strip_tags` also handles the hostile case: a body containing
+    # markup is flattened to its text, so nothing can be injected through this field
+    # whichever way it is later rendered.
+    body = strip_tags(req.body).strip() if req.body else None
+    # A body of nothing but markup strips to an empty string; store NULL rather than ""
+    # so "has a written review" stays a single check for every reader of this column.
+    body = body or None
 
     # 4. Derive display_name if not provided
     display_name = req.display_name

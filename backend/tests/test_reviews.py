@@ -1046,3 +1046,46 @@ async def test_submit_review_403_when_entitlement_is_revoked(
 
     assert resp.status_code == 403
     assert resp.json()["detail"]["error"]["code"] == "not_entitled"
+
+
+# ── Review bodies are plain text, not rich HTML ───────────────────────────────
+#
+# `[ADDED 2026-08-27]` The submit endpoint used to run bodies through
+# `sanitize_html`, the rich-text-editor sanitiser, which deliberately promotes plain
+# text to real paragraphs. A review typed as "I definitely loved using it!" was
+# therefore STORED as "<p>I definitely loved using it!</p>", and Testimonial.tsx
+# renders the body as `{review.body}` — plain JSX text that React escapes — so the
+# reviewer's words appeared on the public page wrapped in visible <p> tags.
+#
+# These test the sanitiser contract directly. That is the seam the bug lived in: the
+# endpoint picked the wrong helper, and both helpers are "sanitise" as far as the call
+# site reads.
+
+from app.core.html_sanitizer import strip_tags
+
+
+async def test_plain_text_review_body_is_not_wrapped_in_paragraph_tags():
+    """The exact regression: no markup in, no markup out."""
+    assert strip_tags("I definitely loved using it!").strip() == (
+        "I definitely loved using it!"
+    )
+
+
+async def test_markup_in_a_review_body_is_flattened_to_its_text():
+    assert strip_tags("<p>Very <strong>practical</strong>.</p>").strip() == (
+        "Very practical."
+    )
+
+
+async def test_a_body_of_only_markup_becomes_empty_so_the_endpoint_stores_null():
+    """`body or None` in the endpoint depends on this being falsy — otherwise a review
+    with no words reads as "has a written review" to every consumer of the column."""
+    assert (strip_tags("<p></p>").strip() or None) is None
+
+
+async def test_script_tags_do_not_survive_a_review_body():
+    """Defence in depth: the field is rendered as text today, but a body that still
+    carried a live <script> would be one `dangerouslySetInnerHTML` away from XSS."""
+    cleaned = strip_tags("<script>alert('xss')</script>Nice template")
+    assert "<script>" not in cleaned
+    assert "Nice template" in cleaned

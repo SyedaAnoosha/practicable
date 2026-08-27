@@ -86,9 +86,16 @@ export function ReviewForm({
           <Check className="size-6 text-success" aria-hidden="true" />
         </span>
         <h3 className="mt-4 text-h4 font-semibold text-foreground">Thanks for the review</h3>
+        {/* `[CHANGED 2026-08-27]` This used to read "Reviews are read before they go
+            up, so it won't appear on the page straight away." That described the old
+            pending-queue behaviour and has been wrong since reviews began publishing on
+            submit — the reviewer saw their review live on the page while this message
+            told them it was still waiting, which reads as a broken site. Only buyers can
+            review, so there is no queue to warn about; the admin removes a bad review
+            after the fact instead. */}
         <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-          It&apos;s with us now. Reviews are read before they go up, so it won&apos;t appear
-          on the page straight away.
+          It&apos;s live on the page now. We may remove reviews that break our
+          guidelines.
         </p>
       </div>
     )
