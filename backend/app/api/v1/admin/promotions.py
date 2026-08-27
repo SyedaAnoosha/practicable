@@ -174,21 +174,7 @@ async def create_promotion(
     no row — a promotion advertising a code Stripe will not honour is worse than
     no promotion.
     """
-    overlap = await _overlapping(
-        session=session,
-        starts_at=payload.starts_at,
-        ends_at=payload.ends_at,
-    )
-    if overlap is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error": {
-                    "code": "promotion_overlap",
-                    "message": f"Overlaps with active promotion '{overlap.code}'",
-                }
-            },
-        )
+    # Overlap check removed per user request: allow multiple active promotions
 
     stripe_coupon_id = None
     stripe_promotion_code_id = None
@@ -280,23 +266,7 @@ async def update_promotion(
     await session.flush()
     await session.refresh(promo)
 
-    # Re-check overlap against the updated values, excluding self
-    overlap = await _overlapping(
-        session=session,
-        starts_at=promo.starts_at,
-        ends_at=promo.ends_at,
-        exclude_id=promo.id,
-    )
-    if overlap is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error": {
-                    "code": "promotion_overlap",
-                    "message": f"Overlaps with active promotion '{overlap.code}'",
-                }
-            },
-        )
+    # Overlap check removed per user request: allow multiple active promotions
 
     await record_audit(
         session,

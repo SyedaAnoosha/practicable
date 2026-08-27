@@ -34,13 +34,20 @@ def create_checkout_session(
     W4-R2: invoice_creation and billing_address_collection enable tax-invoice-quality
     receipts for business buyers who need to expense purchases.
     """
+    customers = stripe.Customer.list(email=user_email, limit=1)
+    if customers.data:
+        customer_id = customers.data[0].id
+    else:
+        customer = stripe.Customer.create(email=user_email, metadata={"user_id": user_id})
+        customer_id = customer.id
+
     session_kwargs: dict = {
         'payment_method_types': ['card'],
         'line_items': [{'price': price_id, 'quantity': 1} for price_id in price_ids],
         'mode': 'payment',
         'success_url': success_url,
         'cancel_url': cancel_url,
-        'customer_email': user_email,
+        'customer': customer_id,
         'invoice_creation': {'enabled': True},
         'billing_address_collection': 'required',
         'allow_promotion_codes': True,
