@@ -43,6 +43,7 @@ def create_checkout_session(
         'customer_email': user_email,
         'invoice_creation': {'enabled': True},
         'billing_address_collection': 'required',
+        'allow_promotion_codes': True,
         'metadata': {
             'user_id': user_id,
             'product_ids': ','.join(product_ids),
@@ -56,6 +57,7 @@ def create_checkout_session(
         try:
             promo_codes = stripe.PromotionCode.list(code=discount_code, active=True)
             if promo_codes.data:
+                del session_kwargs['allow_promotion_codes']
                 session_kwargs['discounts'] = [{
                     'promotion_code': promo_codes.data[0].id,
                 }]
