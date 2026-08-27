@@ -1,23 +1,28 @@
-"""Admin CRUD for promotions — create, update, deactivate, with overlap check and audit.
+"""Admin CRUD for promotions — create, update, deactivate, delete, with audit.
 
 W5-R1: The admin creates a promotion with message, code, percent, date window,
-and optionally syncs it to Stripe. Every mutation writes an audit_log row.
+and optional Stripe restrictions (first-time-order-only, minimum amount, max
+redemptions), and can sync it to Stripe. Every mutation writes an audit_log row.
 
-The overlap check prevents two active promotions covering the same instant,
-which would make GET /promotions/active pick one arbitrarily by sort order.
-That is a coin flip over which discount a visitor sees, so it is refused at
-write time with a 409 naming the conflicting promotion.
+`[CHANGED 2026-08-27]` The overlap check is gone. It refused a second active
+promotion with a 409, which made a legitimate pairing impossible: WELCOME15 is a
+standing first-order-only offer, and a limited-time sale code has to be able to
+run alongside it. Multiple active promotions are now allowed.
 
-Half-open intervals [starts_at, ends_at): one ending at noon and one starting
-at noon do not overlap. A NULL ends_at is +infinity.
+The consequence is that GET /promotions/active — which still returns at most one
+promotion for the banner — picks the most recently started of the live ones. That
+is a display choice about which offer to advertise, not a restriction on which
+codes work: Stripe holds every synced code and validates each on its own
+restrictions at checkout, so a code that is live but unbannered still redeems.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
 import stripe
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +32,8 @@ from app.db.models import Promotion, User
 from app.db.session import get_session
 from app.integrations import stripe_client
 from app.services.audit_service import record_audit
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -343,16 +350,26 @@ async def deactivate_promotion(
     return _promotion_to_out(promo)
 
 
-@router.delete("/admin/promotions/{promotion_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/admin/promotions/{promotion_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 async def delete_promotion(
     promotion_id: str,
     admin: User = Depends(require_admin),
     session: AsyncSession = Depends(get_session),
-) -> None:
-    """Delete a promotion from the database and Stripe.
-    
-    If the promotion has Stripe IDs, it deactivates the PromotionCode and deletes
-    the Coupon in Stripe.
+):
+    """Delete a promotion from the database and from Stripe.
+
+    No `-> None` return annotation, deliberately. This module has
+    `from __future__ import annotations`, so every annotation is a *string* at
+    runtime; FastAPI resolves `"None"` into a truthy response_model and then
+    asserts that a 204 must not carry a body, which crashes the app at import
+    time. `response_class=Response` is what actually keeps the body empty.
+
+    Stripe cleanup is best-effort: a code already deleted in the dashboard must
+    not strand an undeletable row in the admin screen.
     """
     promo = (await session.execute(
         select(Promotion).where(Promotion.id == uuid.UUID(promotion_id))
@@ -361,25 +378,53 @@ async def delete_promotion(
     if not promo:
         raise HTTPException(status_code=404, detail="Promotion not found")
         
-    if promo.stripe_coupon_id and promo.stripe_promotion_code_id:
+    # Prefer the stored ids; fall back to resolving the code in Stripe.
+    #
+    # `[CHANGED 2026-08-27]` This used to run only `if promo.stripe_coupon_id and
+    # promo.stripe_promotion_code_id`, which silently skipped Stripe for any promotion
+    # created by hand in the dashboard. WELCOME15 is exactly that row — NULL ids, but a
+    # live, first-order-restricted code in Stripe. Deleting it removed the banner while
+    # leaving the code redeemable, so the discount outlived the promotion that
+    # advertised it and the admin had no way to tell.
+    stripe_ids: tuple[str, str] | None = None
+    if promo.stripe_promotion_code_id and promo.stripe_coupon_id:
+        stripe_ids = (promo.stripe_promotion_code_id, promo.stripe_coupon_id)
+    else:
+        stripe_ids = stripe_client.find_promotion_code_by_code(promo.code)
+
+    if stripe_ids is not None:
+        promotion_code_id, coupon_id = stripe_ids
         try:
             stripe_client.delete_promotion_in_stripe(
-                promotion_code_id=promo.stripe_promotion_code_id,
-                coupon_id=promo.stripe_coupon_id,
+                promotion_code_id=promotion_code_id,
+                coupon_id=coupon_id,
             )
         except stripe.StripeError:
-            # We allow local deletion even if Stripe fails (e.g. already deleted)
-            pass
+            # Local deletion proceeds even if Stripe refuses — a code already removed
+            # there must not leave an undeletable row here. Logged, not silent, because
+            # the operator is the only one who can reconcile the leftover by hand.
+            logger.warning(
+                "Stripe cleanup failed while deleting promotion %r (code %s / coupon "
+                "%s). The row is removed locally; check the Stripe dashboard.",
+                promo.code, promotion_code_id, coupon_id,
+                exc_info=True,
+            )
 
-    await session.delete(promo)
-    
+    # Capture identity BEFORE the delete: after session.delete + flush the instance
+    # is expired, and touching promo.id/promo.code would raise on a deleted row.
+    promo_id, promo_code = promo.id, promo.code
+
     await record_audit(
         session,
         actor=admin,
         action="delete_promotion",
         target_type="promotion",
-        target_id=promo.id,
-        context={"code": promo.code},
+        target_id=promo_id,
+        context={"code": promo_code},
     )
-    
+
+    await session.delete(promo)
+
+    # See create_promotion: the endpoint owns the commit.
     await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
