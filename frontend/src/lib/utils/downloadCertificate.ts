@@ -1,21 +1,11 @@
 import { api } from '@/lib/api/client'
 
 /**
- * Fetch a certificate's short-lived presigned URL, then open it.
- *
- * Two reasons this is not a plain `<a href download>`:
- *
- *  - `GET /me/certificates/{id}/download` returns JSON (`{download_url}`), not the
- *    file. It renders the PDF on first call and presigns it; the browser must follow
- *    the presigned URL it hands back, not the endpoint itself.
- *  - The endpoint is authenticated. An `<a>` sends no Authorization header, so the
- *    request would 401 — and pointing it at `/api/v1/…` is not even where the API lives
- *    (`VITE_API_BASE_URL` is the origin, with no `/api/v1` prefix), so it would resolve
- *    against the SPA origin and return the index page.
- *
- * Shared between Dashboard and CourseDetail so "View certificate" gives the learner
- * their own certificate rather than the public /verify page's stranger's-eye
- * verification record.
+ * Fetch a certificate's short-lived presigned URL, then open it. Not a plain
+ * `<a href download>`: the endpoint returns JSON (`{download_url}`), not the file, and
+ * it is authenticated — an `<a>` sends no Authorization header and would 401. Shared
+ * between Dashboard and CourseDetail so "View certificate" gives the learner their own
+ * certificate, not the public /verify page's record.
  *
  * @returns true when a download was opened, false when it failed.
  */

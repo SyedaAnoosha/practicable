@@ -22,7 +22,7 @@ export interface BundleCardProps {
    * way to owe a refund). */
   ownsEveryPart?: boolean
   owned?: boolean
-  /** `[ADDED 2026-08-23]` The heading level this card's title renders at.
+  /** The heading level this card's title renders at.
    *
    * It was hard-coded `<h3>`. On /store the card is the page's featured item and sits
    * directly under the `<h1>`, with the first `<h2>` ("Reference packs") only appearing
@@ -34,7 +34,7 @@ export interface BundleCardProps {
   headingLevel?: 'h2' | 'h3'
 }
 
-// week3_plan.md §20.2. The saving is shown as a real dollar amount computed from the
+// The saving is shown as a real dollar amount computed from the
 // two real parts, never a hard-coded "Save $X" string that could drift from the actual
 // arithmetic if either part's price ever changes.
 export function BundleCard({

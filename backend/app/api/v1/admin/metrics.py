@@ -1,9 +1,9 @@
-"""Admin metrics endpoint for analytics dashboard — week4_plan.md W4-R10.
+"""Admin metrics endpoint for the analytics dashboard.
 
 Returns 10 key metrics as numerator+denominator pairs, never percentages.
 All queries are pure SQL against tables that already exist. No PostHog dependency.
 Revenue returns gross_cents, refunded_cents, net_cents as three fields.
-Unknown is null, zero is 0, and the two are different (non-negotiable #15).
+Unknown is null, zero is 0, and the two are different.
 """
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -49,8 +49,7 @@ class MetricOut(BaseModel):
     numerator/denominator are `None` (not `0`) when there is nothing yet to compute a
     ratio from — e.g. `second_purchase_rate` with zero total buyers. A real "0 of 5" is
     a fact; "0 of 0" is not a rate at all, and the two must not render the same way on
-    the tile (non-negotiable #15: unknown is null, zero is 0, and the two are
-    different).
+    the tile: unknown is null, zero is 0, and the two are different.
     """
     model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
@@ -66,19 +65,19 @@ class MetricsOut(BaseModel):
 
     metrics: list[MetricOut]
     generated_at: datetime
-    # Revenue breakdown — gross, refunded, net (W4-R10)
+    # Revenue breakdown — gross, refunded, net
     revenue_gross_cents: int
     revenue_refunded_cents: int
     revenue_net_cents: int
-    # Enrollment splits by granted_via (W4-R10)
+    # Enrollment splits by granted_via
     enrollment_splits: dict  # {"purchase": n, "manual": n, "free": n}
-    # Product rankings by units and revenue (W4-R10)
+    # Product rankings by units and revenue
     product_rankings: list  # [{id, name, units, revenueCents, revenueDollars}]
-    # Download links issued (W4-R10)
+    # Download links issued
     download_links_issued: int
-    # Courses ranked by enrollment, started and completed (W4-R10 8C-2)
+    # Courses ranked by enrollment, started and completed
     course_enrollment_rankings: list  # [{id, title, enrolled, started, completed}]
-    # Recommendation clicks — W4-R4 item 6.
+    # Recommendation clicks by routing surface.
     recommendation_clicks: dict  # {"question": n, "catalogue": n, "total": n}
     # The routed products readers actually follow, most-followed first.
     recommendation_rankings: list  # [{productSlug, clicks}]
@@ -106,10 +105,10 @@ class RevenueSeriesOut(BaseModel):
     data: list[RevenueSeriesPoint]
 
 
-# ── W4-R10 Metrics ──────────────────────────────────────────────────────────────
+# ── Metrics ────────────────────────────────────────────────────────────
 # All queries are pure SQL against tables that already exist.
 # Every metric returns numerator + denominator, never a pre-computed percentage.
-# Unknown is null, zero is 0, and the two are different (non-negotiable #15).
+# Unknown is null, zero is 0, and the two are different.
 
 
 async def _get_second_purchase_rate(session: AsyncSession) -> MetricOut:
@@ -278,7 +277,7 @@ async def _get_signup_to_purchase(session: AsyncSession) -> MetricOut:
 
 
 async def _get_revenue_breakdown(session: AsyncSession) -> tuple[int, int, int]:
-    """Revenue: gross, refunded, net — three fields, never one (W4-R10)."""
+    """Revenue: gross, refunded, net — three fields, never one."""
     gross = (
         await session.execute(
             select(func.coalesce(func.sum(Order.total_amount_cents), 0))
@@ -297,7 +296,7 @@ async def _get_revenue_breakdown(session: AsyncSession) -> tuple[int, int, int]:
 
 
 async def _get_enrollment_splits(session: AsyncSession) -> dict:
-    """Enrollment splits by granted_via: purchase / manual / free (W4-R10)."""
+    """Enrollment splits by granted_via: purchase / manual / free."""
     result = await session.execute(
         select(Entitlement.granted_via, func.count(Entitlement.id))
         .where(Entitlement.revoked_at.is_(None))
@@ -307,12 +306,12 @@ async def _get_enrollment_splits(session: AsyncSession) -> dict:
 
 
 async def _get_product_rankings(session: AsyncSession, limit: int = 10) -> list:
-    """Products ranked by revenue (W4-R10). Joins through OrderItem, not Order.total.
+    """Products ranked by revenue. Joins through OrderItem, not Order.total.
 
-    8C-2: "top products by units and revenue, refunds excluded" — units is the count
-    of OrderItem rows (one per unit sold), not a separate query; a completed order's
-    line item is a unit, so counting rows and summing price_amount_cents in the same
-    grouped query costs nothing extra.
+    Top products by units and revenue, refunds excluded — units is the count of
+    OrderItem rows (one per unit sold), not a separate query; a completed order's line
+    item is a unit, so counting rows and summing price_amount_cents in the same grouped
+    query costs nothing extra.
     """
     from app.db.models import OrderItem
 
@@ -337,7 +336,7 @@ async def _get_product_rankings(session: AsyncSession, limit: int = 10) -> list:
 
 
 async def _get_course_enrollment_rankings(session: AsyncSession, limit: int = 10) -> list:
-    """Courses ranked by enrollment, started and completed (W4-R10 8C-2).
+    """Courses ranked by enrollment, started and completed.
 
     "Enrolled" is an active (non-revoked) entitlement whose linked content is this
     course, via ProductContent — the same purchasability graph 8A's readiness check
@@ -397,7 +396,7 @@ async def _get_course_enrollment_rankings(session: AsyncSession, limit: int = 10
 
 
 async def _get_download_links_issued(session: AsyncSession) -> int:
-    """Download links issued — labelled 'links issued' with a one-sentence caveat (W4-R10)."""
+    """Download links issued — labelled 'links issued' with a one-sentence caveat."""
     from app.db.models import DownloadEvent
     result = await session.execute(select(func.count(DownloadEvent.id)))
     return result.scalar() or 0
@@ -407,11 +406,11 @@ async def _get_download_links_issued(session: AsyncSession) -> int:
 
 
 async def _get_recommendation_clicks(session: AsyncSession) -> dict:
-    """Recommendation clicks split by routing surface (W4-R4 item 6).
+    """Recommendation clicks split by routing surface.
 
     Both surfaces are always present in the result, at zero if unclicked, so the page
     can render "0 of 0" honestly rather than omitting a row and implying the surface
-    does not exist — the same denominator rule W4-R10's acceptance applies to the tiles.
+    does not exist — the same denominator rule that applies to the tiles.
     """
     from app.db.models import RecommendationEvent
 
@@ -505,7 +504,7 @@ async def _get_revenue_series(
 ) -> list:
     """Revenue time series data.
 
-    Phase 8 (8C-4): Returns revenue grouped by day, week, or month.
+    Returns revenue grouped by day, week, or month.
     """
     from sqlalchemy import extract
 
@@ -552,13 +551,13 @@ async def _get_revenue_series(
 async def get_metrics(
     session: AsyncSession = Depends(get_session),
 ):
-    """W4-R10 metrics for the admin dashboard.
+    """Metrics for the admin dashboard.
     
     Returns numerator+denominator pairs so the frontend can calculate
     percentages or ratios as needed. Revenue returns gross, refunded, net.
-    Unknown is null, zero is 0, and the two are different (non-negotiable #15).
+    Unknown is null, zero is 0, and the two are different.
     """
-    # W4-R10 metrics
+    # metrics
     second_purchase = await _get_second_purchase_rate(session)
     free_to_paid = await _get_free_to_paid(session)
     refund_rate = await _get_refund_rate(session)
@@ -634,7 +633,7 @@ async def get_revenue_series(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """Phase 8 (8C-4): Revenue time series for charting.
+    """Revenue time series for charting.
 
     Returns revenue data grouped by day, week, or month for the specified period.
     """

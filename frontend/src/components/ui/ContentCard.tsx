@@ -50,18 +50,11 @@ function DomainTag({ domain, tone, className }: { domain: string; tone: string; 
 }
 
 /**
- * A unified content card — editorial index entry treatment.
+ * A unified content card — editorial index entry treatment (top rule, square corners,
+ * mono metadata, title underline on hover), matching the Home QuestionCard.
  *
- * `[REDESIGNED 2026-08-22]` Was a rounded box with a coloured left bar — the single
- * most recognisable AI-generated card pattern. Replaced with the editorial treatment
- * from the Home QuestionCard: top rule, square corners, mono metadata, title
- * underline on hover.
- *
- * The whole card is one `<Link>` (§36 — a card with a separate link inside is two
- * tab stops for one destination). No hover-lift on the card itself; the title
- * underlines on hover, which is what a link does.
- *
- * Domain identity: colour + icon + label together, never colour alone (§3.2).
+ * The whole card is one `<Link>` (§36); no hover-lift, the title underlines instead.
+ * Domain identity is colour + icon + label together, never colour alone (§3.2).
  */
 export function ContentCard({
   kind,
@@ -223,7 +216,7 @@ export function ContentCard({
       {/* Pack: artwork + domain label + content */}
       {kind === 'pack' && (
         <>
-        {/* `[ADDED 2026-08-25, owner direction]` Artwork was gated on
+        {/* Artwork was gated on
             `kind === 'course'`, so a pack card rendered text-only beside an
             illustrated course card in the same grid. `CourseArt` is documented as
             "course/pack artwork" — packs were always in scope.

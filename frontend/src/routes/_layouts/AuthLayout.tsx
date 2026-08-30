@@ -5,17 +5,10 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { authStagger, springItem } from '@/lib/motion'
 
-/** Split-screen auth shell, from Watermelon UI's auth-08 and auth-10.
- *
- * Both references are the same skeleton: a full-height brand panel on the left (image,
- * a mark at the top, a headline pinned to the bottom) and a centred form column on the
- * right, collapsing to stacked on mobile. auth-08 puts a "Back" link opposite the mark;
- * auth-10 centres a serif wordmark and the headline. This takes auth-08's header row
- * and auth-10's serif wordmark, because the serif is already this brand's display face.
- *
- * The one substantive change: both references use a hosted photograph as the left
- * panel. Here it is the `--stage` plane under a layered gradient — no external image
- * request in the auth path, and every stop is a token, so it follows a theme swap.
+/** Split-screen auth shell: a full-height brand panel left (mark top, headline bottom),
+ * a centred form column right, stacked on mobile. The left panel is the `--stage` plane
+ * under a layered gradient rather than a hosted photo — no external image request in
+ * the auth path, and every stop is a token so it follows a theme swap.
  */
 export default function AuthLayout() {
   return (
@@ -25,7 +18,7 @@ export default function AuthLayout() {
           flag the wordmark, back link and headline as page content contained by no
           landmark at all otherwise. */}
       <header className="relative isolate flex min-h-[38vh] w-full flex-col justify-between overflow-hidden bg-stage p-8 text-stage-foreground sm:p-10 lg:min-h-screen lg:w-1/2">
-        {/* auth-08 fills this panel with a hosted photograph. `.stage-aurora`
+        {/* Auth-08 fills this panel with a hosted photograph. `.stage-aurora`
             (theme.css) replaces it with the same composition drawn in blue — no image
             request anywhere in the auth path, and it follows a theme swap because every
             stop is a token. This is the surface the aurora was tuned against: the
@@ -33,7 +26,7 @@ export default function AuthLayout() {
             the light climbs into the empty opposite corner. */}
         <div aria-hidden="true" className="stage-aurora -z-10" />
 
-        {/* auth-08's header row: mark on one side, a way back on the other. */}
+        {/* Auth-08's header row: mark on one side, a way back on the other. */}
         <div className="relative z-10 flex items-center justify-between">
           <Link to="/" className="font-serif text-2xl tracking-tight text-stage-foreground sm:text-3xl">
             Practicable
@@ -47,7 +40,7 @@ export default function AuthLayout() {
           </Link>
         </div>
 
-        {/* auth-08 pins the promise to the bottom of the panel. */}
+        {/* Auth-08 pins the promise to the bottom of the panel. */}
         <motion.div
           variants={authStagger}
           initial="hidden"

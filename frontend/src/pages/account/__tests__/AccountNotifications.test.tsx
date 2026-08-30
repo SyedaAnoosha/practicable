@@ -1,8 +1,8 @@
 /**
- * Phase 10 (§10E re-verification, 2026-08-22): the backend side of this page had
+ * the backend side of this page had
  * good coverage; the page itself had none. This proves the two toggles round-trip
  * to the real PATCH payload and that transactional-mail reassurance copy is present
- * (the DoD's own "the page says so" requirement).
+ * (the "the page says so" requirement).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'

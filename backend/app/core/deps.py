@@ -12,11 +12,9 @@ from app.db.session import get_session
 
 logger = logging.getLogger(__name__)
 
-# Someone who signs up has given us their address just as deliberately as someone who
-# typed it into the free-template form — the only difference is which door they used.
-# Recording it here rather than in the frontend's signUp() handler means it cannot be
-# skipped: it fires on the first authenticated API call for a brand-new user, whatever
-# path created the account (email/password, a future OAuth provider, or a seeded admin).
+# A signup is a deliberate email capture, same as the free-template form. Recorded here,
+# not in the frontend's signUp() handler, so it fires on the first authenticated call
+# for any new user whatever path created the account.
 SIGNUP_LEAD_SOURCE = "signup"
 
 

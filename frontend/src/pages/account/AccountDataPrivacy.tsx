@@ -7,9 +7,9 @@ import { Input } from '@/components/ui/Input'
 import { FieldError } from '@/components/ui/FieldError'
 import { useFieldValidation } from '@/lib/useFieldValidation'
 
-/** Phase 10F: Data & privacy — export my data and close my account.
- *  Export produces a real JSON file. Closure is deactivation (never hard delete),
- *  password-confirmed, reusing the existing gate-wired path. */
+/** Data & privacy — export my data and close my account.
+ * Export produces a real JSON file. Closure is deactivation (never hard delete),
+ * password-confirmed, reusing the existing gate-wired path. */
 
 export function AccountDataPrivacy() {
   // ── Export ──

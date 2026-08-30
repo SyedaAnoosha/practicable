@@ -12,21 +12,12 @@ import { CartButton } from '@/components/cart/CartButton'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 /**
- * The persistent signed-in header.
+ * The persistent signed-in header — account settings, theme toggle, logout, cart, and
+ * notifications, top-right and identical in both the member and admin shells (these
+ * controls previously lived only at the bottom of the member sidebar).
  *
- * `[ADDED 2026-08-25, owner direction]` "can we add account settings, dark/light mode,
- * logout, cart, notifications on the top right and fix that header on all pages, like
- * the usual pages."
- *
- * Before this, those five controls lived only in the *bottom* of the member sidebar —
- * so on a collapsed rail they were a 64px stack of unlabelled icons, in the admin shell
- * three of them were missing entirely, and the notification bell had to portal its
- * dropdown out of the sidebar's `overflow-y-auto` box and guess whether to open upward.
- * Top-right is where every product measured puts this cluster, and it is the same
- * position in both shells, so the two stop looking like two different applications.
- *
- * Sticky rather than fixed: it participates in the content column's layout, so it never
- * overlaps page content and it does not need a body offset to compensate.
+ * Sticky, not fixed: it participates in the content column's layout, so it never
+ * overlaps page content and needs no body offset.
  */
 export function AppHeader({
   onOpenMenu,

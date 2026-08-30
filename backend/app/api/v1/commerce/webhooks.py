@@ -105,11 +105,10 @@ async def stripe_webhook(
                     # The receipt states each product's own version/last_reviewed_at,
                     # same fact as the buy page's VersionStamp.
                     product_versions = [(p.version, p.last_reviewed_at) for p in products]
-                    # The human-readable invoice number for the receipt. A webhook
-                    # payload carries `invoice` only as a bare id string (or null), so
-                    # the number needs a second call to Stripe. That call is best-effort:
-                    # an absent invoice number is a supported state (see me.py), and a
-                    # failure fetching it must never block the buyer's emails.
+                    # Human-readable invoice number for the receipt. The webhook carries
+                    # `invoice` only as a bare id, so this needs a second Stripe call —
+                    # best-effort, since an absent number is supported and must never
+                    # block the buyer's emails.
                     invoice_ref = session_data.get('invoice')
                     invoice_number = None
                     if isinstance(invoice_ref, dict):
@@ -203,11 +202,10 @@ async def stripe_webhook(
             webhook_event.error_message = "Missing user_id or product_ids in session metadata"
             await session.commit()
     elif event['type'] == 'charge.refunded':
-        # A refund issued from the Stripe dashboard (not /admin/orders) must reach the
-        # same end state. Stripe has already refunded the charge by the time this
-        # fires, so this only catches up local state —
-        # `apply_refund` is the same function the admin endpoint calls, just with no
-        # Stripe API call in front of it and no admin actor.
+        # A refund issued from the Stripe dashboard must reach the same end state.
+        # Stripe has already refunded the charge, so this only catches up local state via
+        # `apply_refund` — the same function the admin endpoint calls, minus the Stripe
+        # call and admin actor.
         charge = event['data']['object']
         payment_intent_id = charge.get('payment_intent')
         try:

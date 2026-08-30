@@ -11,22 +11,12 @@ export interface Stat {
 }
 
 /**
- * A row of compact number+label tiles (design-research §2 Skillshare, §5).
+ * A row of compact number+label tiles — exact counts (which read as verifiable) packed
+ * into ~100px. Renders the numbers it's given, never invents them: a caller with
+ * nothing to show passes an empty list and gets nothing.
  *
- * Skillshare's homepage is the length anti-pattern in the research — 8397px of
- * single-idea slabs — but one block in it is genuinely good: four bordered tiles on a
- * dark ground carrying "425k+ members / 30k+ classes / 9k+ teachers / 4.8★", roughly
- * 100px for four credibility facts. The research §6 note on trust is that specificity is
- * the mechanism: an exact count reads as verifiable in a way a claim does not.
- *
- * Practicable's numbers are real and already counted from the API rather than written
- * down (Dashboard.tsx has a standing comment about a hand-maintained count going stale
- * twice). This renders them; it never invents them — a caller with nothing to show
- * passes an empty list and gets nothing.
- *
- * `on="stage"` puts the row on the dark plane, where the same content reads as a
- * deliberate composition rather than another card. Stage tokens and alphas of them
- * only — never `--primary` or `--card`, which invert between themes (§7.6).
+ * `on="stage"` puts the row on the dark plane. Stage tokens only there — never
+ * `--primary`/`--card`, which invert between themes.
  */
 export function StatTiles({
   stats,

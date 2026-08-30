@@ -12,7 +12,7 @@ export function priceChangeNeedsConfirm(oldCents: number, newCents: number): boo
   return ratio > 1.5 || ratio < 0.5
 }
 
-// e.g. "A$99.00 → A$9.90. Change the price?"
+// E.g. "A$99.00 → A$9.90. Change the price?"
 export function priceChangeConfirmMessage(oldCents: number, newCents: number, currency: string): string {
   return `${formatCurrency(oldCents, currency)} → ${formatCurrency(newCents, currency)}. Change the price?`
 }

@@ -1,4 +1,4 @@
-// Originally written for Phase 6B DoD's "the page renders with both PostHog keys
+// Originally written for "the page renders with both PostHog keys
 // unset". PostHog has since been removed from the project entirely (no client-side
 // analytics of any kind), which makes the original premise moot — kept as a general
 // AdminMetrics render smoke test instead, since it's still real coverage of the page
@@ -35,7 +35,7 @@ const mockMetricsData = {
       description: 'Links issued',
     },
   ],
-  /* `[FIXED 2026-08-22]` This fixture was snake_case throughout while the endpoint
+  /* This fixture was snake_case throughout while the endpoint
      returns camelCase (`backend/app/api/v1/admin/metrics.py` builds the dict with
      "revenueGrossCents", "enrollmentSplits", … explicitly). So every field below the
      `metrics` array arrived as `undefined` in the component under test, and the suite

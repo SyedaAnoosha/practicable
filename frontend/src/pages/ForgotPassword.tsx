@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { AuthField } from '@/components/ui/AuthField'
 import { springItem } from '@/lib/motion'
 
-/** Request a password reset — the frontend half of week3_plan.md W3-R1's password
+/** Request a password reset — the frontend half of the password
  * reset email. Posts to the backend rather than calling
  * `supabase.auth.resetPasswordForEmail()` directly, so the email goes out through our
  * own Mailjet-branded template (backend/app/api/v1/auth.py has the full reasoning).

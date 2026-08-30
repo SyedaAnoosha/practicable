@@ -189,7 +189,7 @@ export function Question() {
           </ol>
         </nav>
 
-        {/* variant="editorial" gives this page the serif title treatment no other page
+        {/* Variant="editorial" gives this page the serif title treatment no other page
             uses. The title stays solid-coloured — a long wrapping headline is where a
             gradient fill fights legibility, and the wash above already carries colour. */}
         <div className="animate-enter" style={{ animationDelay: '60ms' }}>
@@ -211,11 +211,10 @@ export function Question() {
             tile carries this question's domain colour; regulator pressure keeps the
             accent blue so the one urgent signal still stands out.
 
-            `[FIXED 2026-08-13]` Was a real `<dl>`, with each tile's icon `<span>` sitting
-            as a sibling of the `<dt>`/`<dd>` pair inside the wrapping div. Per the HTML
-            spec a `<dl>`'s (or its wrapping div's) children may only be dt/dd groups —
-            axe's `definition-list`/`dlitem`/`only-dlitems` rules flagged this on every
-            tile. These are labelled metadata values, not a glossary of defined terms,
+            Not a real `<dl>`: per the HTML spec a `<dl>`'s (or its wrapping div's)
+            children may only be dt/dd groups, and an icon `<span>` sibling trips axe's
+            `definition-list`/`dlitem`/`only-dlitems` rules. These are labelled metadata
+            values, not a glossary of defined terms,
             so a plain div structure is the more accurate semantic fit anyway, not just
             the expedient fix. */}
         <div className="animate-enter mt-6 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4" style={{ animationDelay: '160ms' }}>

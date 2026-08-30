@@ -88,7 +88,7 @@ export function CommandPalette({
     [query],
   )
   const inputRef = useRef<HTMLInputElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)  // Server-side full-text search via the /search endpoint
+  const listRef = useRef<HTMLDivElement>(null) // Server-side full-text search via the /search endpoint
   const { data: searchResponse } = useQuery<SearchResponse>({
     queryKey: ['search', 'palette', debouncedQuery],
     queryFn: () => api.get<SearchResponse>('/search', { params: { q: debouncedQuery } }).then((r) => r.data),
@@ -140,7 +140,7 @@ export function CommandPalette({
 
   const flatResults = results
 
-  /* `[FIXED 2026-08-22]` The active row used to be reset inside an effect keyed on
+  /* The active row used to be reset inside an effect keyed on
      `query`, which renders the stale highlight once and then corrects it — the render
      cascade `react-hooks/set-state-in-effect` exists to catch. It is also wrong on its
      own terms: for one frame after typing, the highlighted row is an index into the

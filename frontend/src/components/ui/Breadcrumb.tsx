@@ -10,22 +10,12 @@ export interface Crumb {
 }
 
 /**
- * The path back to the parent (design-research §5.6).
+ * The path back to the parent. The current page is text with `aria-current`, not a
+ * self-link; `on="stage"` for the dark course header.
  *
- * Coursera, Udemy and edX all carry breadcrumbs on detail pages; the audit found
- * Practicable had none anywhere, so `/courses/:slug` and `/store/packs/:slug` offered no
- * way back to their catalogue except the browser's own button.
- *
- * The current page is rendered as text with `aria-current`, not as a link to itself.
- * `on="stage"` for the dark course header.
- *
- * `[FIXED 2026-08-23]` The current-page crumb carried `truncate`, but the box it was in
- * could never be smaller than its text: a flex child defaults to `min-width: auto`, and
- * neither the `<li>` nor this `<span>` opted out. `overflow: hidden` therefore had
- * nothing to hide and the crumb rendered at full intrinsic width. A 140-character
- * template title pushed `document.scrollWidth` to 806px inside a 375px viewport — the
- * whole page scrolled sideways. Every ancestor in the chain now sets `min-w-0`, and the
- * crumb is capped so a long title yields the row rather than owning it.
+ * Every ancestor sets `min-w-0` and the current-page crumb is capped: without it a flex
+ * child's `min-width: auto` means `truncate` has nothing to hide, so a long title
+ * renders at full width and scrolls the page sideways.
  */
 export function Breadcrumb({
   items,

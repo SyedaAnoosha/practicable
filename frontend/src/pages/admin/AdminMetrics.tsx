@@ -77,7 +77,7 @@ const DIMENSION_LABELS: Record<string, string> = {
   leadership_traits: 'Leadership traits',
 }
 
-/** `[ADDED 2026-08-22]` Every section on this page hand-rolled the same
+/** Every section on this page hand-rolled the same
  * `<h3 className="mb-4 text-lg font-semibold">` and nothing else — no explanation of
  * what the group of numbers below it means, and no visual separation between one
  * group and the next, so the page read as one long undifferentiated column of tiles
@@ -157,7 +157,7 @@ export function AdminMetrics() {
     )
   }
 
-  /* `[FIXED 2026-08-22]` `metricsData.metrics.length` threw
+  /* `metricsData.metrics.length` threw
      "Cannot read properties of undefined (reading 'length')" whenever the response
      arrived without a `metrics` array, taking the whole admin metrics page down to an
      error screen. The note below already hardened four *other* fields the same way, but
@@ -180,7 +180,7 @@ export function AdminMetrics() {
 
   const metrics = metricsData.metrics
 
-  /* `[HARDENED 2026-08-22]` These four sections each dereferenced a field the type
+  /* These four sections each dereferenced a field the type
      declares as required, and `AdminMetrics` crashed outright (`Cannot convert
      undefined or null to object`) when one was absent — taking the whole admin page
      down, including the revenue tiles above it that had loaded fine.
@@ -259,11 +259,10 @@ export function AdminMetrics() {
         )}
 
         {/* Revenue Breakdown
-            `[FIXED 2026-08-22]` All three of these printed raw cents. `MetricTile`
-            decided money-ness by testing `name === 'total_revenue'`, and these pass
-            display strings, so A$177.00 rendered as "17700" — and the descriptions
-            said "(cents)" out loud, which documented the leak rather than fixing it.
-            An owner's revenue figure being wrong by 100x, in the overstating
+            These pass display strings, so money-ness cannot be inferred from
+            `name === 'total_revenue'` — it must be declared by the caller, or A$177.00
+            renders as "17700". An owner's revenue figure being wrong by 100x, in the
+            overstating
             direction, is the worst number on this page to get wrong. `money` is now
             declared by the caller, which is the only place that actually knows. */}
         <Section title="Revenue" description="Completed orders, in dollars.">
@@ -338,7 +337,7 @@ export function AdminMetrics() {
           </Section>
         )}
 
-        {/* Course Enrollment Rankings — 8C-2 */}
+        {/* Course Enrollment Rankings */}
         {courseEnrollmentRankings.length > 0 && (
           <Section
             title="Courses by enrolment"
@@ -499,7 +498,7 @@ export function AdminMetrics() {
 
         {/* Trend Chart — Recharts via shadcn chart block.
             §20.7a: revenue (area, --chart-1) and orders (line, --chart-2) over time.
-            Revenue-series endpoint exists and is tested (Phase 8C-4). */}
+            Revenue-series endpoint exists and is tested. */}
         <Section title="Trends" description="Revenue and orders over the last 90 days.">
           <TrendChartWrapper />
         </Section>

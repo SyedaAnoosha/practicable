@@ -7,7 +7,7 @@ import { SUPPORT_MAILTO } from '@/lib/support'
 // money moved — that's the thing they're anxious about when checkout is abandoned
 // or declined.
 
-// get mail from env
+// Get mail from env
 
 export function CheckoutCancel() {
   return (

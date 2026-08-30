@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils/cn'
 
 export type ContentTypeVariant = 'pack' | 'course' | 'template'
 
-// week2_plan.md §20.2 — one component, three variants, because the three content
+// One component, three variants, because the three content
 // types must read as related (same shell) but distinct (own icon/eyebrow/tile).
 const VARIANT_META: Record<ContentTypeVariant, { eyebrow: string; icon: LucideIcon; tileClass: string }> = {
   pack: { eyebrow: 'REFERENCE PACK', icon: Library, tileClass: 'bg-accent/12 text-accent' },
@@ -20,16 +20,16 @@ export interface ContentTypeCardProps {
   variant: ContentTypeVariant
   href: string
   title: string
-  /** e.g. "24 questions · PDF · 38 pages" — the shape line, §20.2's second row. */
+  /** E.g. "24 questions · PDF · 38 pages" — the shape line, §20.2's second row. */
   subLine: string
   /** Formatted, always with currency (`A$99`) or the word `Free` — never a bare number. */
   price: string
   /** True only when `price` is standing in for "not yet buyable" copy rather than a
-   *  real price — renders muted instead of the usual tabular-nums price treatment. */
+   * real price — renders muted instead of the usual tabular-nums price treatment. */
   priceIsPlaceholder?: boolean
   actionLabel: string
   /** Set once the visitor holds this — renders a badge in place of the price and
-   *  swaps the icon tile's implied state, e.g. "In your library" / "Continue — 45%". */
+   * swaps the icon tile's implied state, e.g. "In your library" / "Continue — 45%". */
   ownedBadge?: string
 }
 

@@ -72,16 +72,10 @@ const inputClass =
   'w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
 
 /**
- * `[ADDED 2026-08-25, owner direction: "improve assessment pages in admin pages"]`
- *
- * What makes an assessment safe to publish. Publishing is the moment a quiz starts
- * gating real learners' certificates, and until now the toggle would happily publish
- * a paper with no questions at all — or, worse, one whose questions have no correct
- * option, which `_mark`'s all-or-nothing comparison scores as permanently unanswerable.
- * A learner would burn every attempt on a quiz nobody could pass.
- *
- * These are exactly the conditions the marking code depends on, stated once here so the
- * detail view can show them as a checklist and the publish button can refuse.
+ * What makes an assessment safe to publish — the conditions `_mark` depends on, stated
+ * once so the detail view can show them as a checklist and publish can refuse. Without
+ * this, a paper with no questions (or questions with no correct option, which scores as
+ * unanswerable) could gate real learners' certificates.
  */
 function publishBlockers(a: AssessmentRow): string[] {
   const blockers: string[] = []
@@ -247,7 +241,7 @@ function QuestionEditor({
               </Button>
             </form>
           ) : (
-            // `[FIXED 2026-08-25]` The prompt was `truncate`d on one line beside three
+            // The prompt was `truncate`d on one line beside three
             // other elements, so anything longer than a few words was unreadable — on a
             // page whose entire purpose is reviewing question wording. It now wraps, and
             // the metadata sits on its own line beneath.
@@ -464,7 +458,7 @@ function AssessmentDetail({
   const blockers = publishBlockers(assessment)
 
   return (
-    /* `[FIXED 2026-08-25]` The detail view had no page padding of its own — it rendered
+    /* The detail view had no page padding of its own — it rendered
        flush against the viewport edge, unlike every other admin page and unlike the
        list view it replaces. Same container as AdminAssessments below. */
     <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
@@ -837,7 +831,7 @@ export function AdminAssessments() {
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        {/* `[FIXED 2026-08-25]` Said "One quiz per course", which stopped being true at
+        {/* Said "One quiz per course", which stopped being true at
             migration 038 — assessments have been per-module since. An admin reading
             this would look for a course-level quiz that no longer exists. */}
         <PageTitle
@@ -1003,7 +997,7 @@ export function AdminAssessments() {
                     </Badge>
                   )}
                 </div>
-                {/* `[ADDED 2026-08-25, owner direction]` Where this assessment lives.
+                {/* Where this assessment lives.
                     Every row used to read the literal words "Module assessment", so with
                     several courses each holding a "Final Assessment" the list gave no way
                     to tell them apart. */}

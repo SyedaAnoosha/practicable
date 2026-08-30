@@ -44,7 +44,7 @@ export interface CourseRow {
   publish_state: PublishStateValue
   module_count: number
   lesson_count: number
-  // Found 2026-08-21 (owner-flagged): the list showed no price at all — an admin had
+  // The list showed no price at all — an admin had
   // to open every course to see what it charges. None until "Make purchasable" has
   // been called, same as the detail page's course.price_amount.
   price_amount?: number | null
@@ -63,7 +63,7 @@ export interface AdminLessonBlock {
   sort_order: number
   heading?: string | null
   text_body?: string | null
-  // Found 2026-08-21 (8E editor round-trip bug): the API always returned this, but the
+  // The API always returned this, but the
   // admin type never carried it, so RichTextEditor was initialized from text_body on
   // every open — the plain-text fallback field — even for a block already saved with
   // real formatting. Reopening a formatted block showed the wall-of-text plain
@@ -129,7 +129,7 @@ export interface CourseDetail {
   publish_state: PublishStateValue
   cover_image_url?: string | null
   modules: AdminModule[]
-  // Phase 8 (8A-6): server-derived — never inferred client-side from published/price.
+  // Server-derived — never inferred client-side from published/price.
   readiness: ReadinessState
   readiness_message: string
   product_id: string | null
@@ -228,7 +228,7 @@ function CoverImageUpload({
   if (coverImageUrl) {
     return (
       <div className="relative">
-        {/* `[ADDED 2026-08-22, Redesing_decisions.md K2]` The height is pinned by
+        {/* The height is pinned by
             `h-40`, so this never shifted layout; width/height still go on for the
             decode-time aspect ratio, and `loading="lazy"` keeps an uploaded cover off
             the critical path of a list the editor may not scroll to. */}
@@ -325,7 +325,7 @@ function CoverImageUpload({
 }
 
 /** The ordered content-block list for one `mixed` lesson — add, reorder (up/down
- * buttons, not drag-and-drop, per week2_plan.md Phase 2's explicit choice), edit,
+ * buttons, not drag-and-drop, by design), edit,
  * delete. Every mutation here comes from the parent (`CourseBuilder`), which already
  * owns the course-wide query cache the response refreshes.
  */
@@ -475,18 +475,18 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
     null,
   )
   // Lesson-body and block-text/callout prose editing moved to a full-screen route
-  // (LessonWriteScreen.tsx, week4_plan.md Phase 8 "8E-continued",
-  // `[OWNER INSTRUCTION 2026-08-21]`) — no more bodyDraft/blockTextDraft modal state
+  // (LessonWriteScreen.tsx,
+  // ) — no more bodyDraft/blockTextDraft modal state
   // here; the "Write" buttons below navigate instead.
 
-  // Block-editor drafts — one lesson (mixed-content, week2_plan.md Phase 2) can hold
+  // Block-editor drafts — one lesson (mixed-content) can hold
   // several of each, so these key off the block's own id rather than the lesson's.
   const [blockVideoDraft, setBlockVideoDraft] = useState<{ blockId: string; assetId: string; playbackId: string } | null>(
     null,
   )
   const [blockFileDraft, setBlockFileDraft] = useState<{ blockId: string; templateId: string } | null>(null)
 
-  // week2_plan.md §20.8 / W2-R9 — one small validator per form, matching the fields
+  // One small validator per form, matching the fields
   // that form actually holds. Kept separate rather than one giant shape because these
   // modals are mutually exclusive (only one draft is ever open at a time) and each
   // needs its own touched/error state reset when it opens.
@@ -608,7 +608,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
     ),
   )
 
-  // ── Block editor mutations (week2_plan.md Phase 2) ─────────────────────────────
+  // ── Block editor mutations ─────────────────────────────
   const addBlock = useMutation(
     mutate((v: { lessonId: string; blockType: AdminLessonBlock['block_type'] }) =>
       api.post<CourseDetail>(`/admin/lessons/${v.lessonId}/blocks`, { block_type: v.blockType }),
@@ -643,7 +643,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
   const deleteBlock = useMutation(
     mutate((v: { blockId: string }) => api.delete<CourseDetail>(`/admin/lesson-blocks/${v.blockId}`)),
   )
-  // Phase 9A re-verification (2026-08-21): now takes the admin's own price directly
+  // Now takes the admin's own price directly
   // — "Create Product" as a separate button is gone; the price control below calls
   // this transparently the first time a price is set on a course with no product yet.
   const createCourseProduct = useMutation(
@@ -654,8 +654,8 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
       }),
     ),
   )
-  // Phase 9A: price control — POST /admin/products/{id}/price (one endpoint, three
-  // surfaces). Fixed 2026-08-21: this previously went through the shared `mutate()`
+  // Price control — POST /admin/products/{id}/price (one endpoint, three
+  // surfaces). this previously went through the shared `mutate()`
   // helper, which unconditionally calls `applyCourse(r.data)` on success — but this
   // endpoint returns ProductOut (a flat product record, no `modules`), not
   // CourseDetail. `applyCourse` overwrote the course-detail cache with a ProductOut,
@@ -719,7 +719,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
               onChange={(state) => setCoursePublishState.mutate({ state })}
             />
           </div>
-          {/* Phase 8 (8A-6): server-derived readiness — never inferred client-side,
+          {/* Server-derived readiness — never inferred client-side,
               since only the server knows whether the Stripe price actually resolves. */}
           {course.readiness !== 'ready' && (
             <span className="flex items-center gap-1 text-xs text-amber-600">
@@ -729,7 +729,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
         </div>
       </div>
 
-      {/* Phase 9A re-verification (2026-08-21, owner-flagged): "Create Product" used
+      {/* "Create Product" used
           to be a separate button before a price could be set at all — removed. This
           control now always shows, and creates the product transparently (via
           create-product, passing the admin's own price) the first time a price is
@@ -779,7 +779,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
                 return
               }
 
-              // Phase 8 (8B-7): fat-finger protection — a ±50% swing or a drop to
+              // Fat-finger protection — a ±50% swing or a drop to
               // zero (not reachable via this positive-only field, but the helper
               // covers it) is confirmed before it charges a real card.
               const oldCents = course.price_amount ?? 0
@@ -1043,7 +1043,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
         </Button>
       </form>
 
-      {/* week3_plan.md Phase 5 step 1 — a real upload replaces pasting two ids copied
+      {/* A real upload replaces pasting two ids copied
           from the Mux dashboard. UploadField hands back the finished asset directly;
           this dialog attaches it the moment it's ready, no separate "Attach" click. */}
       {videoDraft && (
@@ -1079,7 +1079,7 @@ function CourseBuilder({ courseId, onBack }: { courseId: string; onBack: () => v
         </div>
       )}
 
-      {/* Lesson-body and block-text/callout "Write" modals removed 2026-08-21 — both
+      {/* Lesson-body and block-text/callout "Write" modals removed — both
           now navigate to LessonWriteScreen.tsx's full-screen route instead (see the
           "Write" button onClick handlers above). Block editor's remaining two modals
           — video, file — keep the modal pattern; a single picked id has nothing to
@@ -1189,7 +1189,7 @@ export function AdminCourses() {
   const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   // LessonWriteScreen.tsx's Back/Cancel/Save all return here as
-  // `/admin/courses?open={courseId}` (week4_plan.md Phase 8 "8E-continued") — course
+  // `/admin/courses?open={courseId}` — course
   // selection itself is otherwise local state, not a URL param, so this is the one
   // place that state needs seeding from the URL rather than always starting at null.
   const [openCourseId, setOpenCourseId] = useState<string | null>(() => searchParams.get('open'))

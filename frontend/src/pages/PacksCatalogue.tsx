@@ -30,12 +30,12 @@ interface PackSummary {
 /**
  * Pack catalogue — editorial divided-columns treatment.
  *
- * `[REDESIGNED 2026-08-22]` Was rounded cards with `border-l-4 border-l-accent` — the
+ * Was rounded cards with `border-l-4 border-l-accent` — the
  * AI card pattern. Now uses the broadsheet grid: border border-border bg-border,
  * each cell bg-card, square corners, title underlines on hover.
  */
 export function PacksCatalogue() {
-  // `[CHANGED 2026-08-22, F3 — P0]` See QuestionsCatalogue: without `isError` a failed
+  // See QuestionsCatalogue: without `isError` a failed
   // fetch rendered nothing at all.
   const { data: packs, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.packs.list(),
@@ -96,7 +96,7 @@ export function PacksCatalogue() {
       {!isLoading && !isError && !!packs?.length && (
       <div className="mt-6 grid gap-px overflow-hidden rounded-md border border-border bg-card sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:bg-card [&>*]:outline [&>*]:outline-1 [&>*]:-outline-offset-[0.5px] [&>*]:outline-border">
         {packs?.map((pack) => (
-          /* `focus-visible:` classes `[FIXED 2026-08-23]`: the grid draws its cell
+          /* `focus-visible:` classes : the grid draws its cell
              dividers as `[&>*]:outline-1` on these links, which beats the global
              `:focus-visible` rule in theme.css and left focus invisible. Same defect
              and same fix as CoursesCatalogue — see the fuller note there. */
@@ -105,7 +105,7 @@ export function PacksCatalogue() {
             to={`/store/packs/${pack.slug}`}
             className="group flex h-full flex-col bg-card transition-colors duration-150 hover:bg-card-2 focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
           >
-            {/* `[ADDED 2026-08-25, owner direction: "no picture"]` Pack cards were
+            {/* Pack cards were
                 text-only while the course catalogue's cards carry `CourseArt`, so a
                 pack grid read as unstyled next to them — and on the home rail the two
                 sat side by side, where the difference was starkest.
@@ -123,7 +123,7 @@ export function PacksCatalogue() {
             />
             <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
               <p className="eyebrow">{pack.domain_name ?? 'Reference'}</p>
-              {/* `[ADDED 2026-08-22, owner direction]` "the card title and description must
+              {/* "the card title and description must
                   never affect the metadata and pricing + view/see-what's-included row".
                   `mt-auto` already pins the metadata+CTA pair to the card's bottom, but cards in
                   a CSS grid row stretch to the tallest, so one two-line title changed the height
@@ -142,7 +142,7 @@ export function PacksCatalogue() {
                 )}
               </div>
 
-              {/* `[FIXED 2026-08-22]` `mt-auto` moved from the footer up to here, so the
+              {/* `mt-auto` moved from the footer up to here, so the
                   metadata and the price/CTA row form one bottom-anchored block and line up
                   across a row of cards regardless of title/description length. See
                   CoursesCatalogue for the full note. */}

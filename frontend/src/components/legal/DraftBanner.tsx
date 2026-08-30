@@ -1,6 +1,6 @@
 import { TriangleAlert } from 'lucide-react'
 
-// week2_plan.md §20.7 — required, verbatim placement, on all three legal pages.
+// Required, verbatim placement, on all three legal pages.
 // `--warning`, not `--destructive`: the page is not broken and the reader has done
 // nothing wrong — it's provisional, which is exactly what `--warning` means in this
 // system (§15.2's locked-state rule, same logic).

@@ -629,22 +629,16 @@ async def mark_lesson_complete(
                     course_progress.completed_at = now
             await session.commit()
 
-            # Issue a certificate on the false→true edge. Called after commit
-            # so the completion is durable before a certificate is minted. The service
-            # uses INSERT ON CONFLICT to be idempotent — a double-click or replay
-            # never creates a second row.
+            # Issue a certificate on the false→true edge, after commit so the completion
+            # is durable. The service is idempotent (INSERT ON CONFLICT).
             #
-            # The assessment gate is checked here as an ADDITIONAL condition, never as a
-            # replacement: `course_assessment_gate_satisfied` returns True for a course
-            # with no assessment or an unpublished one, so the original
-            # "100% lessons = certificate" rule is untouched for every existing course.
-            # Only a *published* assessment adds "and passed it".
-            #
-            # A learner who finishes the lessons before passing the quiz is not stranded:
-            # the completion edge is consumed here without issuing, and the passing
-            # submission in content/assessments.py's counterpart check issues instead.
-            # Both paths call the same idempotent service, so whichever happens second
-            # mints the single certificate and the other is a no-op.
+            # The assessment gate is an ADDITIONAL condition, not a replacement:
+            # `course_assessment_gate_satisfied` is True for a course with no published
+            # assessment, so "100% lessons = certificate" still holds; only a published
+            # assessment adds "and passed it". A learner who finishes lessons before
+            # passing consumes the edge here without issuing, and the passing submission
+            # in content/assessments.py issues instead — same idempotent service, so
+            # whichever is second is a no-op.
             gate_ok = True
             if not was_complete and is_complete:
                 gate_ok = await course_assessment_gate_satisfied(

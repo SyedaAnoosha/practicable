@@ -12,8 +12,8 @@ interface TrendChartProps {
  * §20.7a TrendChart — revenue and orders over time.
  *
  * Two series, one axis pair:
- *   Revenue: Area, --chart-1 at 12% fill, 2px stroke, left Y axis
- *   Orders: Line, --chart-2, 2px, right Y axis
+ * Revenue: Area, --chart-1 at 12% fill, 2px stroke, left Y axis
+ * Orders: Line, --chart-2, 2px, right Y axis
  *
  * States: populated (≥2 points), fewer-than-two-points (sentence), error.
  * §20.7a: "The fewest states this page will genuinely be in on the day it ships."

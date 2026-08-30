@@ -105,7 +105,7 @@ export function AdminAudit() {
             try {
               contextObj = log.context ? JSON.parse(log.context) : null
             } catch {
-              // context is not JSON — display as-is
+              // Context is not JSON — display as-is
             }
             return (
               <li key={log.id} className="py-4">

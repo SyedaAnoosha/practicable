@@ -6,13 +6,13 @@ interface LicenceLineProps {
   className?: string
 }
 
-// week4_plan.md §20.3. "The refusal is the design": a licence tier the owner hasn't
+// "The refusal is the design": a licence tier the owner hasn't
 // written precise terms for renders NOTHING, not the raw enum value — `new_additions.md`
 // §20's own warning is that licence terms are exactly the kind of thing that must never
 // be a casual "commercial use allowed" sentence made up on the spot.
 const SENTENCE: Record<string, string> = {
   standard: 'Use and adapt this inside your own organisation.',
-  // client_delivery / multi_client: [OWNER #25] — not rendered until the decision
+  // Client_delivery / multi_client: [OWNER #25] — not rendered until the decision
   // closes. Deliberately absent from this map rather than mapped to a placeholder.
 }
 

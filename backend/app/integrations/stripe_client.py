@@ -57,25 +57,13 @@ def create_checkout_session(
         },
     }
 
-    # Discount code — the code is *offered*, never force-applied. The alternative,
-    # pre-attaching `discounts=[{'promotion_code': ...}]`, is wrong twice over:
-    #
-    #   1. Stripe rejects `discounts` and `allow_promotion_codes` in the same session,
-    #      so setting a discount REMOVES the "Add promotion code" field from Checkout.
-    #      A buyer with a stale code in localStorage could not enter a different one,
-    #      and a buyer with no code saw the field while a buyer with one did not.
-    #
-    #   2. A pre-attached `discounts[]` entry is applied by fiat — Stripe does NOT
-    #      evaluate the PromotionCode's `restrictions` when the discount is attached
-    #      server-side. A code with `restrictions.first_time_transaction = True` would be
-    #      honoured on a returning buyer's every order; the restriction exists in Stripe
-    #      but is never consulted.
-    #
-    # Leaving `allow_promotion_codes: True` and passing the code as a *prefill* keeps
-    # Stripe as the single authority on whether a code may be redeemed: first-time-only,
-    # minimum amount, max redemptions and expiry are all enforced there, on every order.
-    # A code that fails its restrictions is refused in Checkout with Stripe's own
-    # message, which is the behaviour the admin configured.
+    # Discount code — offered as a Checkout prefill, never pre-attached via
+    # `discounts=[...]`. Pre-attaching is wrong twice: Stripe rejects `discounts` and
+    # `allow_promotion_codes` together (so the "Add promotion code" field vanishes), and
+    # a pre-attached discount is applied by fiat without Stripe evaluating the code's
+    # `restrictions` (first_time_transaction, minimum amount, max redemptions, expiry).
+    # Prefilling keeps Stripe as the single authority on redemption, enforced on every
+    # order with its own refusal message.
     if discount_code:
         try:
             promo_codes = stripe.PromotionCode.list(code=discount_code, active=True, limit=1)
@@ -151,15 +139,10 @@ def create_promotion_in_stripe(
         promo_code_params['restrictions'] = restrictions
 
     if expires_at is not None:
-        # The expiry belongs on the PromotionCode — the thing a buyer types — not on
-        # the Coupon, whose `redeem_by` governs when the discount may first be
-        # attached. Stripe wants a Unix timestamp, so a naive datetime is read as UTC
-        # rather than silently taking the server's local zone.
-        #
-        # Without this the window is enforced in our database only: GET
-        # /promotions/active would stop advertising the code while Stripe kept
-        # honouring it indefinitely for anyone who had already copied it. An expiry
-        # that only one of the two systems knows about is not an expiry.
+        # Expiry goes on the PromotionCode (the thing a buyer types), not the Coupon.
+        # Stripe wants a Unix timestamp; a naive datetime is read as UTC. Without
+        # setting it here the window would be enforced in our DB only, and Stripe would
+        # keep honouring the code for anyone who already copied it.
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=timezone.utc)
         promo_code_params['expires_at'] = int(expires_at.timestamp())

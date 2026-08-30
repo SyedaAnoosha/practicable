@@ -26,7 +26,7 @@ interface FactRow {
   value: string
 }
 
-/** week4_plan.md §20.1 — the ninety seconds before payment. A bare `<section>`, not a
+/** The ninety seconds before payment. A bare `<section>`, not a
  * `Card` (DESIGN.md §36: this is metadata about the item you're already on, not a
  * distinct item). The absence rule is the whole component: a fact whose column is
  * unset does not render its row at all — no `—`, no "Not specified". */

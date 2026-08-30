@@ -2,21 +2,11 @@ import { useMemo } from 'react'
 import { usePrefersReducedMotion } from '@/lib/motion'
 
 /**
- * The hero graphic — 99 nodes in 5 domain clusters, gold connective lines, slow
- * ambient drift, parallax (REDESIGN_SUMMARY.md §6.3).
- *
- * This is the piece that makes the page unmistakably Practicable's rather than a
- * well-executed template. It must be **driven by the real API counts**, degrade to
- * a static SVG under reduced motion, and never render a number the database cannot
- * support.
- *
- * Design references:
- * - Utomic: 3D contour-line sculpture — the force we're borrowing
- * - Galilee: cards floating over a rich background — the register we're keeping
- * - Framer §1.3: ambient loop is the only continuously-moving thing, always background
- *
- * The canvas is purely decorative (`aria-hidden="true"`) — it carries no information
- * that isn't also in the headline, the TrustStrip, and the question cards below it.
+ * The hero graphic — 99 nodes in 5 domain clusters, gold connective lines, slow ambient
+ * drift, parallax. Driven by the real API counts, degrades to a static SVG under
+ * reduced motion, and never renders a number the database can't support. Purely
+ * decorative (`aria-hidden="true"`): everything it shows is also in the headline, the
+ * TrustStrip, and the question cards.
  */
 
 interface QuestionNode {

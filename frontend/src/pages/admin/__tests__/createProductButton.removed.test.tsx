@@ -1,8 +1,7 @@
 /**
- * Phase 9A re-verification (2026-08-21), owner instruction verbatim: "remove this
- * Create product button from everywhere. prices must be setteble while creating a
- * course or template or product. This Create Product button is completely
- * unnecessary."
+ * Owner instruction: "remove this Create product button from everywhere. prices must
+ * be setteble while creating a course or template or product. This Create Product
+ * button is completely unnecessary."
  *
  * Structural assertion, same pattern as AdminLayout.nav.test.tsx (this project's own
  * precedent for "X must not appear" claims that are cheaper and more reliable to

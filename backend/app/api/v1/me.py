@@ -83,8 +83,8 @@ async def get_my_entitlements(
 
 # ─────────────────────────────────────────────────────────────────────────────
 # My Library — purchased items across all content types, with progress and resume.
-# One endpoint rather than three, so the page doesn't have to reassemble (and race)
-# separate fetches. Everything derives from entitlements → products → product_contents.
+# One endpoint, not three, so the page needn't reassemble separate fetches. Derives
+# from entitlements → products → product_contents.
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -643,11 +643,8 @@ async def request_refund(
             detail="Only completed orders can be refunded.",
         )
 
-    # Re-check eligibility server-side, through the SAME resolver the GET uses. These
-    # two endpoints previously carried their own copies of this query and so were wrong
-    # in the same way — a GET saying "eligible" followed by a POST saying "this order
-    # doesn't include a course" is the worst version of that bug, because the buyer is
-    # invited to click and then refused.
+    # Re-check eligibility server-side through the SAME resolver the GET uses, so a GET
+    # saying "eligible" is never followed by a POST refusing it.
     product_ids = [item.product_id for item in order.items]
     course_ids = await _resolve_course_ids(session, product_ids)
     if not course_ids:
@@ -1123,7 +1120,7 @@ async def close_my_account(
     return {"ok": True, "message": "Your account is closed. Contact us any time to restore it."}
 
 
-# ── Certificates (W5-R2) ─────────────────────────────────────────────────────
+# ── Certificates ────────────────────────────────────────────
 
 
 class CertificateOut(BaseModel):

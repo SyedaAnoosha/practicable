@@ -1,10 +1,8 @@
-// Regression coverage for a real gap found during Phase 6C verification
-// (week4_plan.md): step 8 says /admin/settings uses `useAutosave` and
-// `useFieldValidation`, but the page used a hand-rolled dirty/Save-button
-// flow with no validation at all — a required field (frontend_url) could be
-// emptied and saved with no error shown. Fixed by wiring both established
-// hooks in, matching the pattern AdminCourses.tsx/AdminProducts.tsx already
-// use elsewhere in this codebase.
+// Regression coverage: /admin/settings should use `useAutosave` and
+// `useFieldValidation`, but the page used a hand-rolled dirty/Save-button flow with
+// no validation at all — a required field (frontend_url) could be emptied and saved
+// with no error shown. Fixed by wiring both hooks in, matching the pattern
+// AdminCourses.tsx/AdminProducts.tsx already use.
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

@@ -15,12 +15,8 @@ from app.core.deps import require_admin
 
 from . import assessments, audit, contact, courses, freshness, leads, media, metrics, orders, packs, products, promotions, questions, reviews, settings, templates, users
 
-# No hand-rolled OPTIONS handler here. CORSMiddleware in main.py already answers
-# preflight before routing, so an extra `.options("/{path:path}")` route would never
-# be reached — and the one that used to sit here echoed
-# `Access-Control-Allow-Origin: *` together with `Allow-Credentials: true`, a pair
-# browsers reject outright, while also contradicting main.py's deliberately
-# restricted origin list.
+# No hand-rolled OPTIONS handler — CORSMiddleware in main.py answers preflight before
+# routing, so an `.options("/{path:path}")` route would never be reached.
 router = APIRouter(dependencies=[Depends(require_admin)])
 router.include_router(questions.router)
 router.include_router(templates.router)

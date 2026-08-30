@@ -14,11 +14,8 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
-# Same shape as filter_events.py's limiter: an in-memory counter keyed by IP, no IP
-# stored anywhere. This form is public and unauthenticated, so it is the endpoint an
-# abusive caller would hit to pollute the "Ask Practicable" grouping — capped at 10
-# submissions per IP per 60 seconds, tighter than /filter-events' 30 because a contact
-# submission is a deliberate, infrequent action, not a UI tap.
+# In-memory counter keyed by IP (no IP stored). 10 submissions per IP per 60s —
+# tighter than /filter-events because a contact submission is deliberate, not a UI tap.
 _rate_limiter = RateLimiter(window_seconds=60, max_requests=10)
 
 

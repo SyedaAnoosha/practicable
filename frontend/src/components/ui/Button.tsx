@@ -21,8 +21,7 @@ const buttonVariants = cva(
         outline: 'border border-border bg-background hover:border-border-strong hover:bg-muted',
         ghost: 'bg-transparent text-foreground hover:bg-muted',
         destructive: 'bg-destructive text-destructive-foreground hover:opacity-90',
-        /* `[ADDED 2026-08-22]` The dark pill CTA — Parley, Galilee and FintechX all
-           use it (FRAMER_MOTION_REFERENCE.md §1.5). Fully rounded, and paired with
+        /* The dark pill CTA. Fully rounded, and paired with
            `<PillArrow/>` for the circular arrow chip that nudges on hover. The lift is
            the same 1px as `primary` so the two do not feel like different products. */
         pill: 'rounded-full bg-primary text-primary-foreground shadow-sm ring-1 ring-inset ring-primary-edge hover:-translate-y-px hover:shadow-md',

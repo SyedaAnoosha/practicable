@@ -11,15 +11,10 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str
     supabase_jwt_audience: str = "authenticated"
     stripe_secret_key: str
-    # A Stripe *restricted* key (`rk_…`), scoped to a subset of the
-    # API rather than granting full account access. Declared so it is a documented,
-    # typed setting rather than something `extra = "ignore"` silently swallows — an
-    # undeclared credential in .env reads as dead config and eventually gets deleted.
-    #
-    # Optional, and nothing reads it yet: the app authenticates with
-    # `stripe_secret_key`. It is here so a deployment can hold both while migrating
-    # to the narrower key, and so `publish_guard`'s mode detection — which now handles
-    # `rk_test_`/`rk_live_` as well as `sk_` — has a real reason to exist in the config.
+    # A Stripe restricted key (`rk_…`). Optional and unread — the app authenticates with
+    # `stripe_secret_key` — but declared so a deployment can hold both while migrating to
+    # the narrower key, and so `publish_guard`'s `rk_`/`sk_` mode detection has a reason
+    # to exist.
     stripe_restricted_secret_key: str = ""
     stripe_webhook_secret: str
     mux_token_id: str
@@ -37,23 +32,18 @@ class Settings(BaseSettings):
     supabase_storage_secret_access_key: str
     supabase_storage_bucket_name: str
     # ── Email ────────────────────────────────────────────────────────────────────
-    # Mailjet is the only transport. It reaches an arbitrary real recipient over REST
-    # (port 443), which survives
-    # Render's outbound-587 block that kills Gmail/Brevo SMTP outright. Any leftover
-    # GMAIL_*/BREVO_*/RESEND_* variables in a .env or hosting dashboard are inert (see
-    # `extra = "ignore"` below) and should be deleted, not just ignored.
+    # Mailjet is the only transport — REST over 443, which survives Render's
+    # outbound-587 block that kills SMTP. Leftover GMAIL_*/BREVO_*/RESEND_* vars are
+    # inert and should be deleted.
     mailjet_api_key: str = ""
     mailjet_secret_key: str = ""
-    # The address verified as a sender in the Mailjet dashboard (Senders, Domains &
-    # Dedicated IPs → Senders). Sending from an unverified address is rejected by the
-    # API regardless of correct key/secret.
+    # Must be a verified sender in the Mailjet dashboard; an unverified address is
+    # rejected regardless of key/secret.
     mailjet_sender_email: str = ""
     mailjet_sender_name: str = "Practicable"
-    # The owner/admin inbox — sale alerts, and where any send whose intended recipient
-    # cannot be reached is logged against. Never a customer address.
-    #
-    # Deliberately empty — this file is committed, and a hardcoded default would silently
-    # send sale notifications (which quote buyer address and amount) to a stale recipient.
+    # The owner/admin inbox — sale alerts and unreachable-recipient logs. Never a
+    # customer address. Deliberately empty: a hardcoded default would send sale
+    # notifications (which quote buyer address and amount) to a stale recipient.
     owner_notification_email: str = ""
     # The deployed frontend origin, for building absolute links inside emails (a mail
     # client has no notion of a relative URL). Defaults to the local Vite dev server;

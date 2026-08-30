@@ -15,7 +15,7 @@ const badgeVariants = cva('inline-flex items-center rounded-md px-2 py-0.5 text-
       success: 'bg-success text-success-foreground',
       warning: 'bg-warning text-warning-foreground',
       destructive: 'bg-destructive text-destructive-foreground',
-      /* `[ADDED 2026-08-22]` For badges on the stage plane or on glass. Every variant
+      /* For badges on the stage plane or on glass. Every variant
          above is measured against the IVORY planes and several are unreadable on a
          dark scrim — `outline` is `text-primary` (#10213E), which lands at 1.16:1 on
          glass over the aurora. Measured for this variant: stage-foreground on a

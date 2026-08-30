@@ -24,7 +24,7 @@ describe('dollarsToCents', () => {
   })
 
   it('rounds a three-decimal value up rather than truncating it', () => {
-    // parseInt("99.999", 10) * 100 === 9900 — off by 99 cents. The correct answer
+    // ParseInt("99.999", 10) * 100 === 9900 — off by 99 cents. The correct answer
     // rounds the fractional cent instead of discarding everything after the decimal.
     expect(dollarsToCents(99.999)).toBe(10000)
   })

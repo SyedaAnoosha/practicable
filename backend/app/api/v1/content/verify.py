@@ -57,12 +57,9 @@ async def verify_certificate(
     The verification code is ~128 bits of entropy (secrets.token_urlsafe(16)),
     but rate-limiting makes enumeration impractical regardless.
     """
-    # Keyed on the CALLER, not on the code. Keying on `verification_code` would
-    # defeat the limiter it looks like it implements: an enumerator tries a
-    # *different* code every request, so each attempt would land on its own fresh
-    # counter and the limit would never fire — while the counter dict grew one
-    # entry per guess. Keying on the IP is what actually caps guesses per caller,
-    # and it matches how filter_events.py limits its public endpoints.
+    # Keyed on the caller's IP, not the code: an enumerator tries a different code every
+    # request, so a code-keyed limiter would never fire while its counter dict grew one
+    # entry per guess.
     if not _verify_limiter.allow(_get_client_ip(request), action="verify_certificate"):
         raise HTTPException(
             status_code=429,

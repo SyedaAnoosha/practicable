@@ -117,14 +117,9 @@ def compute_freshness(
     )
 
 
-# ── The push half (#16 "automatic warnings") ─────────────────────────────────────
-#
-# Thresholds for find_low_conversion_questions. Both are judgement calls dressed as
-# constants so a future tuning is a one-line diff rather than an archaeology dig:
-#   - MIN_SEARCH_TRAFFIC: below this a question simply hasn't been searched enough for
-#     "high traffic" to be a fair description of anything.
-#   - MAX_RECOMMENDATION_CLICKS: at or below this, a question's routed products are
-#     effectively not being followed despite demonstrated reader interest.
+# Thresholds for find_low_conversion_questions — judgement calls, kept as constants for
+# easy tuning. MIN_SEARCH_TRAFFIC: below this, "high traffic" isn't a fair description.
+# MAX_RECOMMENDATION_CLICKS: at or below this, routed products aren't being followed.
 MIN_SEARCH_TRAFFIC = 10
 MAX_RECOMMENDATION_CLICKS = 2
 

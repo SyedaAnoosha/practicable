@@ -82,7 +82,7 @@ const BlockTextWriteScreen = lazy(() =>
 )
 
 /** Minimal loading indicator for lazy routes. Kept deliberately lightweight:
- *  no skeleton, no animation, just text — the route should arrive in <200ms. */
+ * no skeleton, no animation, just text — the route should arrive in <200ms. */
 function RouteLoading() {
   return (
     <div className="flex min-h-[40vh] items-center justify-center">

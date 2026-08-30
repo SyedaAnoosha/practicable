@@ -1,7 +1,7 @@
 import { Archive, CircleCheck, Eye, PenLine } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
-/** week3_plan.md §20.5 — the four-state editorial workflow (migration 012). Every state
+/** The four-state editorial workflow (migration 012). Every state
  * carries a word, never colour alone (DESIGN.md §42), and the chip never changes size
  * between states: all four labels are padded to the widest so a state change can't
  * jump a table row. A click cycles draft → in_review → published → archived → draft,

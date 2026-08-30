@@ -4,18 +4,10 @@ import { Eye, EyeOff, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 import { springItem } from '@/lib/motion'
 
-/** The auth-08 field: a leading icon inside the input, and — for passwords — a trailing
- * reveal toggle.
- *
- * auth-08 uses @hugeicons/react, which is not a dependency here and would be a new
- * package for four glyphs; lucide-react is already installed and carries equivalents.
- *
- * Two accessibility corrections to the reference:
- *  1. auth-08's toggle is labelled "Toggle password visibility" permanently, so a screen
- *     reader never learns the current state. Here the label says what pressing it will
- *     do, and `aria-pressed` carries the state.
- *  2. Its decorative icon has no `aria-hidden`, so it can surface as an unlabelled
- *     graphic. Hidden here — the visible <label> already names the field.
+/** A field with a leading icon inside the input and — for passwords — a trailing reveal
+ * toggle. The toggle's label says what pressing it will do with `aria-pressed` for
+ * state (not a permanent "Toggle password visibility"), and the decorative icon is
+ * `aria-hidden` since the `<label>` names the field.
  */
 type AuthFieldProps = ComponentPropsWithoutRef<'input'> & {
   label: string

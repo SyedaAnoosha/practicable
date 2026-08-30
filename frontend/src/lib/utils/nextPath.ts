@@ -21,23 +21,14 @@ export const DEFAULT_AFTER_AUTH = '/dashboard'
 /**
  * Validate a candidate return path, returning `null` for anything unsafe.
  *
- * This is a SECURITY boundary, not a convenience check. `next` arrives from the URL, so
- * it is attacker-controlled: without validation, `/sign-in?next=https://evil.example`
- * would turn our own sign-in form into an open redirect — a credible phishing primitive,
- * because the victim really is on the genuine domain reading a genuine form right up to
- * the moment they are thrown off it.
+ * A SECURITY boundary: `next` is attacker-controlled via the URL, so without this
+ * `/sign-in?next=https://evil.example` turns our own sign-in form into an open redirect.
  *
- * Accepted: same-document absolute paths only — one leading slash, then anything.
- * Rejected, each for its own reason:
- *   - `//evil.example`     protocol-relative; browsers treat it as cross-origin
- *   - `https://evil…`      absolute URL
- *   - `http:/\/\evil…`     backslashes, which several browsers normalise to `/`
- *   - `javascript:…`       script URL
- *   - `dashboard`          relative; resolves against the current path, so it cannot be
- *                          reasoned about here and is not worth accepting
- *   - `/sign-in`, `/sign-up`  auth routes themselves — returning to one after a
- *                          successful auth would bounce the visitor straight back to the
- *                          form they just completed
+ * Accepted: same-document absolute paths only (one leading slash, then anything).
+ * Rejected: `//host` (protocol-relative), `https://…` (absolute), backslash variants
+ * browsers normalise to `/`, `javascript:` URLs, bare relative paths, and the
+ * `/sign-in`/`/sign-up` routes themselves (would bounce the visitor back to the form
+ * they just completed).
  */
 export function safeNextPath(candidate: string | null | undefined): string | null {
   if (!candidate) return null
@@ -69,7 +60,7 @@ export function safeNextPath(candidate: string | null | undefined): string | nul
 }
 
 /** Build the sign-in URL that remembers `from`. Falls back to a bare `/sign-in` when
- *  `from` is not somewhere we would return to anyway. */
+ * `from` is not somewhere we would return to anyway. */
 export function signInUrlFor(from: string): string {
   const safe = safeNextPath(from)
   return safe ? `/sign-in?${NEXT_PARAM}=${encodeURIComponent(safe)}` : '/sign-in'

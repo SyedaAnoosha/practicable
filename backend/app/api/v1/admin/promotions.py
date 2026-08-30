@@ -1,19 +1,16 @@
 """Admin CRUD for promotions — create, update, deactivate, delete, with audit.
 
-W5-R1: The admin creates a promotion with message, code, percent, date window,
-and optional Stripe restrictions (first-time-order-only, minimum amount, max
-redemptions), and can sync it to Stripe. Every mutation writes an audit_log row.
+The admin creates a promotion with message, code, percent, date window, and optional
+Stripe restrictions (first-time-order-only, minimum amount, max redemptions), and can
+sync it to Stripe. Every mutation writes an audit_log row.
 
-`[CHANGED 2026-08-27]` The overlap check is gone. It refused a second active
-promotion with a 409, which made a legitimate pairing impossible: WELCOME15 is a
-standing first-order-only offer, and a limited-time sale code has to be able to
-run alongside it. Multiple active promotions are now allowed.
-
-The consequence is that GET /promotions/active — which still returns at most one
-promotion for the banner — picks the most recently started of the live ones. That
-is a display choice about which offer to advertise, not a restriction on which
-codes work: Stripe holds every synced code and validates each on its own
-restrictions at checkout, so a code that is live but unbannered still redeems.
+Multiple active promotions are allowed (no overlap check): a standing first-order-only
+offer and a limited-time sale code have to be able to run alongside each other. GET
+/promotions/active still returns at most one promotion for the banner — the most
+recently started of the live ones. That is a display choice about which offer to
+advertise, not a restriction on which codes work: Stripe holds every synced code and
+validates each on its own restrictions at checkout, so a code that is live but
+unbannered still redeems.
 """
 from __future__ import annotations
 
@@ -251,12 +248,9 @@ async def create_promotion(
         context={"code": promo.code, "percent_off": promo.percent_off},
     )
 
-    # `get_session` never commits and `record_audit` deliberately doesn't either (so an
-    # audit row can't outlive a rolled-back mutation) — the endpoint owns the commit,
-    # exactly as admin/settings.py and admin/products.py do. Without this the row is
-    # discarded when the session closes and the admin sees a 201 for a promotion that
-    # was never written. The test fixture's savepoint wrapper hides the omission, so
-    # this is invisible to the suite and only shows up against a real database.
+    # The endpoint owns the commit — neither `get_session` nor `record_audit` commits,
+    # so without this the row is discarded when the session closes (the test fixture's
+    # savepoint wrapper hides the omission).
     await session.commit()
 
     return _promotion_to_out(promo)
@@ -378,14 +372,10 @@ async def delete_promotion(
     if not promo:
         raise HTTPException(status_code=404, detail="Promotion not found")
         
-    # Prefer the stored ids; fall back to resolving the code in Stripe.
-    #
-    # `[CHANGED 2026-08-27]` This used to run only `if promo.stripe_coupon_id and
-    # promo.stripe_promotion_code_id`, which silently skipped Stripe for any promotion
-    # created by hand in the dashboard. WELCOME15 is exactly that row — NULL ids, but a
-    # live, first-order-restricted code in Stripe. Deleting it removed the banner while
-    # leaving the code redeemable, so the discount outlived the promotion that
-    # advertised it and the admin had no way to tell.
+    # Prefer the stored ids; fall back to resolving the code in Stripe, so a promotion
+    # created by hand in the dashboard (NULL ids, but a live code in Stripe) is still
+    # cleaned up here. Otherwise deleting it would remove the banner while leaving the
+    # code redeemable.
     stripe_ids: tuple[str, str] | None = None
     if promo.stripe_promotion_code_id and promo.stripe_coupon_id:
         stripe_ids = (promo.stripe_promotion_code_id, promo.stripe_coupon_id)

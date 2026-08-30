@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils/cn'
 
 /**
- * Prose truncation with an expander (design-research §4 "best patterns", Udemy/edX).
+ * Prose truncation with an expander.
  *
  * Both Udemy and edX clamp a long description to a few lines behind a "Show more"
  * link — a long description costs four lines of the page instead of forty, and the

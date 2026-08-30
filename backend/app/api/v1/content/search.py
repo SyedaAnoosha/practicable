@@ -107,12 +107,9 @@ async def _search_entity(
     published = model.published.is_(True)
     title = getattr(model, title_col)
 
-    # Build the column list: always id, slug, title, rank, plus the total.
-    #
-    # The total comes from a COUNT(*) OVER () window rather than a second COUNT
-    # query, keeping this to four queries (one per entity type). The window is
-    # computed over the full matching set *before* LIMIT applies, so it still counts
-    # every match, and it rides along on rows already being fetched.
+    # Columns: id, slug, title, rank, plus the total from a COUNT(*) OVER () window
+    # (not a second query) — computed over the full match set before LIMIT, so it still
+    # counts every match.
     rank_expr = func.ts_rank_cd(sv, tsq).label("rank")
     columns = [
         model.id.label("id"),

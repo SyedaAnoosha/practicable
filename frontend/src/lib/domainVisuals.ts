@@ -21,26 +21,19 @@ export const DOMAIN_VISUALS: Record<string, { color: string; icon: LucideIcon }>
 const FALLBACK_VISUAL = { color: '--primary', icon: Sparkles }
 
 /** The first word of each canonical key, in map order — the token every near-miss
- *  vocabulary still agrees on. Built from `DOMAIN_VISUALS` rather than written out, so
- *  adding a sixth domain cannot leave this behind. */
+ * vocabulary still agrees on. Built from `DOMAIN_VISUALS` rather than written out, so
+ * adding a sixth domain cannot leave this behind. */
 const KEYWORD_INDEX: Array<[string, { color: string; icon: LucideIcon }]> = Object.entries(
   DOMAIN_VISUALS,
 ).map(([name, visual]) => [name.split(' ')[0].toLowerCase(), visual])
 
 /**
- * A domain not in the map falls back to the brand primary rather than throwing — the
- * page still works, just without colour differentiation.
+ * A domain not in the map falls back to `--primary` rather than throwing.
  *
- * Courses would otherwise hit that fallback every time: there is a second taxonomy —
- * questions and packs carry `domain.name` (`Risk (Enterprise & op.)`, a key here),
- * while a course carries `section.name` from the separate `sections` table (e.g.
- * `Risk Management`). No key matches, so every course resolves to `--primary` and the
- * "duotone" ramps navy into navy.
- *
- * The match is widened rather than the vocabularies merged (merging is a backend
- * decision about what a section *is*). Widening is exact match first, then the leading
- * keyword, so `Risk Management` → risk and `Cyber Security` → cyber, while an unrelated
- * section still lands on the fallback.
+ * Match is exact first, then the leading keyword (`Risk Management` → risk,
+ * `Cyber Security` → cyber). The keyword step exists because courses carry
+ * `section.name` (`Risk Management`) while questions/packs carry `domain.name`
+ * (`Risk (Enterprise & op.)`, a key here) — without it every course hit the fallback.
  */
 export function domainVisual(domainName: string) {
   const exact = DOMAIN_VISUALS[domainName]

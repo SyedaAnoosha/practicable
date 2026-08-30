@@ -8,8 +8,7 @@ export interface PillEyebrowProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 /**
- * A bordered lozenge section label — present in all nine Framer references
- * (FRAMER_MOTION_REFERENCE.md §1.5).
+ * A bordered lozenge section label.
  *
  * This is the enclosed sibling of the existing `.eyebrow` device in theme.css, not a
  * replacement for it: `.eyebrow` (mono, tracked, with a leading hairline rule) stays

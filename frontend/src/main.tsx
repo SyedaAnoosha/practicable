@@ -5,7 +5,7 @@ import { MotionConfig } from 'motion/react'
 import { queryClient } from '@/lib/query/queryClient'
 import { ToastProvider } from '@/stores/useToastStore'
 import { Toaster } from '@/components/ui/Toast'
-// index.css/App.css were the unmodified create-vite starter boilerplate (its own
+// Index.css/App.css were the unmodified create-vite starter boilerplate (its own
 // --text-h colour system, a raw unlayered `h1 { color: var(--text-h) }` rule that
 // silently beat every Tailwind text-foreground utility in the app — Tailwind v4's
 // utilities live in @layer, and unlayered CSS always wins the cascade regardless of

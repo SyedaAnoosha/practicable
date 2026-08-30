@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button'
 
 /**
  * A scoped error state — three things, in order: what failed, whether the user must
- * act, what to try (Redesing_decisions.md F3 / DESIGN.md §40.3).
+ * act, what to try (DESIGN.md §40.3).
  *
  * Errors explain and instruct; they don't apologise (§6.1). Scoped to what failed —
  * a failed recommendation block doesn't blank the lesson.

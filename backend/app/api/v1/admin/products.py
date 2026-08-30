@@ -1,7 +1,5 @@
 """Admin CRUD for products, including the overlap and bundle-pricing publish guards.
 
-week4_plan.md W4-R5 (admin closes its remaining holes) and W4-R3 (overlap guard wired).
-
 The editor reuses the same patterns as `admin/templates.py`:
   - `useAutosave` on the frontend calls PUT on every field change
   - `PublishStateChip` calls the /publish endpoint
@@ -52,7 +50,7 @@ class ProductWriteIn(BaseModel):
     # price produces a mismatch warning at publish.
     price_amount: int = Field(gt=0)
     currency: str = Field(min_length=3, max_length=3, default="AUD")
-    # Evidence layer (W4-R1)
+    # Evidence layer
     licence: Licence = Licence.STANDARD
     search_title: Optional[str] = Field(default=None, max_length=500)
     version: Optional[str] = Field(default=None, max_length=20)
@@ -61,7 +59,7 @@ class ProductWriteIn(BaseModel):
 
 
 class PriceChangeIn(BaseModel):
-    """Phase 8 (8B-3): Price change request with required reason."""
+    """Price change request with required reason."""
     price_amount: int = Field(gt=0)  # in cents
     currency: str = Field(min_length=3, max_length=3)
     reason: str = Field(min_length=1, max_length=500)  # Required for audit trail
@@ -83,7 +81,7 @@ class ProductOut(BaseModel):
     last_reviewed_at: Optional[datetime] = None
     is_bundle: bool
     content_count: int  # how many ProductContent rows this product has
-    # Phase 8 (8A-6): Server-derived readiness state
+    # Server-derived readiness state
     readiness: Literal["no_product", "price_unset", "stripe_price_unresolved", "unpublished", "ready"]
     readiness_message: str  # Human-readable description of the readiness state
 
@@ -94,7 +92,7 @@ class ProductPublishOut(ProductOut):
 
 
 def _to_out(p: Product, content_count: int = 0) -> ProductOut:
-    """Phase 8 (8A-6): Server-derived readiness state.
+    """Server-derived readiness state.
 
     The readiness state is calculated server-side because the client cannot
     know whether a Stripe price ID actually resolves at Stripe.
@@ -124,7 +122,7 @@ def _to_out(p: Product, content_count: int = 0) -> ProductOut:
         last_reviewed_at=p.last_reviewed_at,
         is_bundle=p.is_bundle,
         content_count=content_count,
-        readiness=readiness,  # Phase 8 (8A-6)
+        readiness=readiness,
         readiness_message=readiness_message,
     )
 
@@ -209,7 +207,7 @@ async def update_product(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """Phase 8 (8B-9): price and stripe_price_id are deliberately NOT written from this
+    """price and stripe_price_id are deliberately NOT written from this
     payload. They used to be — silently re-writing price_amount here, with no Stripe
     call, no audit reason and no archived-old-Price bookkeeping, was a second write
     path for the exact bug POST /admin/products/{id}/price exists to prevent. A price
@@ -241,7 +239,7 @@ async def change_product_price(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """Phase 8 (8B-3): Change the price of a product.
+    """Change the price of a product.
 
     Follows the specified order of operations:
     a. Retrieve the current Price — confirms mode and yields the Stripe Product id
@@ -272,7 +270,7 @@ async def change_product_price(
             },
         )
 
-    # Currency change on a published product is refused (8B-3)
+    # Currency change on a published product is refused
     if product.published and payload.currency != product.currency:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -284,23 +282,12 @@ async def change_product_price(
             },
         )
 
-    # `[FIXED 2026-08-22]` Setting a price used to dead-end here.
-    #
-    # The flow is "look up the existing Price to find its Stripe Product, then add a new
-    # Price under that same Product" — which is right when the Price exists. When it does
-    # not, this raised 409 and the admin got "Something went wrong. Please try again.",
-    # with the price unchanged no matter how many times they tried. Retrying cannot
-    # possibly help: the stored id will never start resolving.
-    #
-    # It happens for a real and unremarkable reason: the `price_…` ids in the database
-    # were issued by a *different* Stripe account (or a since-cleared test account), so
-    # every one of them 404s against the current keys. The owner's report — "price is not
-    # updating, after setting price still Not yet for sale" — is exactly this.
-    #
-    # A missing Price is recoverable: create a fresh Stripe Product and Price and adopt
-    # them. The database is the source of truth for what a thing costs; the Stripe
-    # objects are how it gets charged, and re-minting them is the correct repair. The
-    # old id is already gone, so there is nothing to archive and nothing to lose.
+    # The normal flow looks up the existing Price to find its Stripe Product, then adds
+    # a new Price under it. When the stored `price_…` id doesn't resolve (issued by a
+    # different or since-cleared Stripe account), that lookup 404s — and retrying can
+    # never help. A missing Price is recoverable: mint a fresh Stripe Product and Price
+    # and adopt them. The database is the source of truth for what a thing costs; the old
+    # id is already gone, so there is nothing to archive.
     stripe_product_id: str | None = None
     try:
         old_price = stripe.Price.retrieve(old_price_id)
@@ -386,7 +373,7 @@ async def publish_product(
     warning: Optional[str] = None
 
     if payload.published:
-        # ── Stripe price guard (Phase 8 8A-7) ───────────────────────────────
+        # ── Stripe price guard ──────────────────────────────────────
         stripe_check = check_stripe_price(
             stripe_price_id=product.stripe_price_id,
             price_amount=product.price_amount,
@@ -403,7 +390,7 @@ async def publish_product(
                 },
             )
 
-        # ── Overlap guard (W4-R3) ──────────────────────────────────────────────
+        # ── Overlap guard ──────────────────────────────────────────────
         overlap = await check_content_overlap(
             product_id, session, is_bundle=product.is_bundle
         )
@@ -428,7 +415,7 @@ async def publish_product(
                 },
             )
 
-        # ── Bundle pricing guard (W4-R3) ───────────────────────────────────────
+        # ── Bundle pricing guard ───────────────────────────────────────
         if product.is_bundle:
             pricing = await check_bundle_pricing(product_id, session)
             if pricing.is_overpriced:

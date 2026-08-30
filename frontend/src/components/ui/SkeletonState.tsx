@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils/cn'
 
 /**
  * A loading skeleton that matches the real layout's dimensions so nothing shifts when
- * data arrives (DESIGN.md §40.2 / Redesing_decisions.md F2).
+ * data arrives (DESIGN.md §40.2).
  *
  * Delay rule: if a load resolves in under 200ms, show nothing. Consumers handle this
  * by conditionally rendering SkeletonState only after a timeout — the component itself
@@ -16,7 +16,7 @@ export function SkeletonState({ className, rows = 3, variant = 'card' }: {
   /** Number of skeleton rows/cards to render. */
   rows?: number
   /** The shape of the skeleton — 'card' for catalogue items, 'text' for prose,
-   *  'stat' for a stat row, 'row' for a list row. */
+   * 'stat' for a stat row, 'row' for a list row. */
   variant?: 'card' | 'text' | 'stat' | 'row'
 }) {
   return (

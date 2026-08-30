@@ -2,21 +2,12 @@ import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils/cn'
 
 /**
- * The progress track — extracted from Library.tsx so the dashboard, the library and the
- * course pages cannot drift apart (design-research §7 finding 7).
+ * The progress track — shared by the dashboard, the library and the course pages so
+ * they can't drift apart.
  *
- * The audit found Library.tsx had a genuinely good progress bar — animated fill,
- * `role="progressbar"` with real values, a live "N of M" line — and that the Dashboard,
- * the page a member sees most, imported neither it nor anything like it. Every
- * competitor's signed-in home leads with resume state; Practicable's led with a search
- * box.
- *
- * The fill animates from 0 on mount rather than snapping to its value: unknown progress
- * becoming known progress. Plays once per mount, and collapses to an instant state
- * change under prefers-reduced-motion via theme.css's global rule.
- *
- * `role="progressbar"` with aria-valuenow is not optional here — the percentage is
- * meaning-bearing, and the visual bar alone carries it for nobody using a screen reader.
+ * The fill animates from 0 on mount (once per mount; instant under
+ * prefers-reduced-motion). `role="progressbar"` with `aria-valuenow` is required — the
+ * percentage is meaning-bearing and the visual bar alone doesn't carry it.
  */
 export function ProgressBar({
   value,

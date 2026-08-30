@@ -36,12 +36,9 @@ async def capture_lead(body: LeadIn, session: AsyncSession = Depends(get_session
         session.add(Lead(email=body.email, source=body.source))
         await session.commit()
 
-        # Only on a genuinely new capture — a repeat submission of the same address
-        # already has the link, and re-sending it on every resubmit reads as spam.
-        # The free entry point is the 100 free questions (W3-R3); the gate itself
-        # (frontend/src/lib/emailGate.ts) only unlocks them in this browser's
-        # localStorage, so a durable link mailed to the address is what makes the
-        # unlock reach a buyer on a second device.
+        # Only on a genuinely new capture — resending on every resubmit reads as spam.
+        # The client gate (emailGate.ts) unlocks the free questions in this browser's
+        # localStorage only; the mailed link is what reaches a second device.
         primary_link = f"{settings.frontend_url.rstrip('/')}/questions"
         sent = await send_free_entry_point_email(to_email=body.email, primary_link=primary_link)
         if not sent:

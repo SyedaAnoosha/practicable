@@ -1,21 +1,13 @@
 import { useCallback, useState } from 'react'
 
-/** Inline validation on blur, not on submit, and a valid field is never cleared
- * because another failed.
- *
- * Deliberately dependency-free rather than reaching for `react-hook-form`/`zod`
- * (both installed, neither used anywhere in the codebase yet): every admin editor
- * here already owns its field values as its own `useState`, and introducing a form
- * library's value-ownership model for the first time, on three different editors, in
- * one pass, is a bigger and riskier change than the gap it would close. This hook
- * owns only validity — never the values themselves — which is what actually
- * guarantees the "never cleared" half of the requirement: a rule here has no value to
- * clear even if it wanted to.
+/** Inline validation on blur, not on submit; a valid field is never cleared because
+ * another failed. Deliberately dependency-free — it owns only validity, never the field
+ * values (each editor keeps those in its own `useState`), which is what guarantees the
+ * "never cleared" behaviour.
  *
  * Usage:
- *   const v = useFieldValidation<{ title: string; domainId: string }>({
+ *   const v = useFieldValidation<{ title: string }>({
  *     title: (val) => (val.trim() ? null : 'Title is required.'),
- *     domainId: (val) => (val ? null : 'Choose a domain.'),
  *   })
  *   <Input onBlur={() => v.onBlur('title', draft.title)} />
  *   <FieldError message={v.errorFor('title')} />

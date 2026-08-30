@@ -25,13 +25,9 @@ from app.db.session import get_session
 router = APIRouter()
 
 
-# Below this many approved reviews an item ships `rating: null` and the card renders
-# no rating element at all (not "no reviews yet", which reads worse than silence).
-# The threshold lives here rather than only in the client because a rating the
-# backend sends and the frontend hides is still a rating on the wire: any other
-# consumer would show it, and the number would leak through the API to anyone
-# reading it directly. `frontend/src/lib/reviews.ts` mirrors this value for its own
-# rendering decision; if one moves, move both.
+# Below this many approved reviews an item ships `rating: null` and the card renders no
+# rating element. Enforced on the backend so the number never goes out on the wire.
+# `frontend/src/lib/reviews.ts` mirrors this value — if one moves, move both.
 MIN_REVIEWS_FOR_AGGREGATE = 8
 
 
@@ -296,8 +292,7 @@ async def submit_review(
     # also flattens any markup in a hostile body, so nothing can be injected through
     # this field whichever way it is later rendered.
     body = strip_tags(req.body).strip() if req.body else None
-    # A body of nothing but markup strips to an empty string; store NULL rather than ""
-    # so "has a written review" stays a single check for every reader of this column.
+    # Markup-only body strips to "" — store NULL so "has a written review" is one check.
     body = body or None
 
     # 4. Derive display_name if not provided
@@ -337,14 +332,9 @@ async def submit_review(
             detail={"error": {"code": "already_reviewed", "message": "You have already reviewed this item."}},
         )
 
-    # The denormalised counters used to be advanced only by the admin moderation
-    # endpoint, on the pending→approved transition. Now that a review is approved on
-    # write that transition never happens, so the increment has to happen here — without
-    # it `review_count`/`rating_sum` would stay at zero forever and every card would sit
-    # below MIN_REVIEWS_FOR_AGGREGATE showing no rating at all.
-    #
-    # Same transaction as the insert, so a review and the counters it contributes to can
-    # never disagree.
+    # Reviews are approved on write, so the denormalised counters are incremented here
+    # (not on a pending→approved transition that no longer happens), in the same
+    # transaction as the insert.
     counter_model = _COUNTER_MODEL.get(req.content_type)
     if counter_model:
         content = await session.get(counter_model, content_id)

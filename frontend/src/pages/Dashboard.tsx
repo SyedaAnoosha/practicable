@@ -39,9 +39,9 @@ const FINDER_CHIPS = [
 ] as const
 
 /** Routed entry points into the taxonomy, keyed to the constraint a practitioner
- *  actually arrives with. Each `param`/`value` pair is a real QuestionsCatalogue filter
- *  (matching FILTER_PARAMS and the seeded tag vocabulary), so every row lands on a
- *  populated result set rather than an empty one. */
+ * actually arrives with. Each `param`/`value` pair is a real QuestionsCatalogue filter
+ * (matching FILTER_PARAMS and the seeded tag vocabulary), so every row lands on a
+ * populated result set rather than an empty one. */
 const ROUTED_STEPS = [
   { label: 'Something I can finish in a fortnight', hint: 'Duration: 2-6 weeks', param: 'duration', value: 'S', icon: Clock },
   { label: 'Something that costs almost nothing', hint: 'Cost: low investment', param: 'cost', value: '$', icon: Banknote },
@@ -113,22 +113,11 @@ interface LibraryData {
 // Card rules live in lib/tags.ts (TAG_VARIANT + cardTags), so Home's featured question
 // and this one render identical tags — one source of truth.
 
-// The signed-in home page, split out from the public landing page (Home.tsx), which
-// exists only to get someone to create an account or log in.
+// The signed-in home page, split out from the public landing page (Home.tsx).
 //
-// `[REBUILT 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md §9 P0 item 4]`
-// The audit named this the blandest page in the product and the one a paying member sees
-// most: four stacked full-width blocks carrying one item each (search, one question, one
-// product, one sentence), with no progress, no resume, no stats and no recommendations —
-// while Library.tsx already had an excellent animated ContinueRail this page never
-// imported. Every competitor's signed-in home leads with resume state; §6 of the research
-// found progress shown far from the next action does not move behaviour.
-//
-// Restructured to: resume first (the verb), then a compact stat row, then a two-column
-// grid for discovery. Same content, roughly 40% of the previous height.
-// `downloadCertificate` now lives in `@/lib/utils/downloadCertificate` — CourseDetail
-// needs the same behaviour for its completed-course certificate link, and two copies
-// of a presigned-URL flow would be two places to fix when the endpoint changes.
+// Structure: resume first (the verb), then a compact stat row, then a two-column
+// discovery grid. `downloadCertificate` lives in `@/lib/utils/downloadCertificate`
+// because CourseDetail needs the same presigned-URL flow.
 
 function CertificatesSection() {
   // Via the shared hook rather than an inline useQuery. Both existed, with *different*
@@ -206,7 +195,7 @@ export function Dashboard() {
 
   // The one course to resume: furthest along without being finished. A member with
   // nothing in progress gets no panel rather than an empty one.
-  /* `[HARDENED 2026-08-22]` `library?.courses` guards `library` being absent but not
+  /* `library?.courses` guards `library` being absent but not
      a `library` that arrived without its arrays — `?.courses.filter(...)` then throws
      on `undefined.filter`. Same class as the Purchases `flatMap` fix: the optional
      chain stops one level too early. A member's whole dashboard should not depend on
@@ -220,8 +209,8 @@ export function Dashboard() {
    *
    * The rule is that the REASON must be true and checkable, not that the pick must be
    * clever. In order of confidence:
-   *   1. A course already started but not finished — the strongest signal there is.
-   *   2. A question in the same domain as a course the member owns.
+   * 1. A course already started but not finished — the strongest signal there is.
+   * 2. A question in the same domain as a course the member owns.
    * With neither, this returns null and the panel says so, rather than degrading to
    * "most popular" — an unverifiable claim is worse than an honest absence
    * (principle 7).
@@ -296,7 +285,7 @@ export function Dashboard() {
           specific next lesson rather than saying "Continue", because §6 of the research
           found a resume point that names the next thing is what makes the action
           concrete. On the stage plane so it reads as the page's one anchor. */}
-      {/* `[ADDED 2026-08-22, E6.1]` The first-run state.
+      {/* The first-run state.
           Both this panel and the library grid below were conditional, so a NEW ACCOUNT
           saw neither — the emptiest screen in the product, and precisely where the
           Phase 0 buy-flow fix now delivers people intentionally after they sign up to
@@ -532,7 +521,7 @@ export function Dashboard() {
         </section>
       </div>
 
-      {/* `[ADDED 2026-08-22, E6.1]` The library block also rendered nothing when empty.
+      {/* The library block also rendered nothing when empty.
           Every panel on this page now has a designed state — F1: name what would be
           here, and the one action that puts something here. Never a blank region. */}
       {library && library.is_empty && (

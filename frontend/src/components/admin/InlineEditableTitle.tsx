@@ -3,16 +3,10 @@ import { Check, Loader2, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 /**
- * Phase 8 (8E, extended): click-to-edit for course/module/lesson titles, which
- * previously rendered as static text with no admin-facing edit path anywhere —
- * the only way to change one was a raw API call. Matches the codebase's existing
- * inline-editor idiom (bodyDraft/blockTextDraft in AdminCourses.tsx) but scaled
- * down: a single field doesn't need a modal or the interval-based useAutosave,
- * just save-on-blur/Enter and revert-on-Escape.
- *
- * Deliberately stays uncontrolled between renders while editing — typing updates
- * only local state, so a parent re-render from an unrelated mutation elsewhere on
- * the page (any sibling lesson/module save) can't stomp on a title mid-edit.
+ * Click-to-edit for course/module/lesson titles: save-on-blur/Enter, revert-on-Escape.
+ * A single field needs no modal or interval-based autosave. Stays uncontrolled while
+ * editing (typing updates only local state) so a parent re-render from an unrelated
+ * mutation can't stomp on a title mid-edit.
  */
 interface InlineEditableTitleProps {
   value: string
@@ -44,7 +38,7 @@ export function InlineEditableTitle({
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  /* `[FIXED 2026-08-22]` The draft used to be reset from an effect
+  /* The draft used to be reset from an effect
    * (`useEffect(() => { if (!editing) setDraft(value) })`), which is a render-then-
    * correct: for one commit after `value` changed, the field still held the previous
    * title. It was also the repo's last outstanding lint error.

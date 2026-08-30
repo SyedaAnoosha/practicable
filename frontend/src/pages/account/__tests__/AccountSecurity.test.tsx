@@ -1,6 +1,6 @@
 /**
- * Phase 10 (§10B re-verification, 2026-08-22): the backend audit hook
- * (POST /me/account/password-change) already had one test, but every DoD line that
+ * the backend audit hook
+ * (POST /me/account/password-change) already had one test, but every requirement that
  * is actually enforced client-side — confirm-mismatch blocking submit, wrong current
  * password being refused, the minimum-length rule, new === current being refused,
  * and the session surviving a successful change — had zero coverage anywhere. This

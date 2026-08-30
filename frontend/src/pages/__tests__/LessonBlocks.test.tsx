@@ -1,6 +1,6 @@
-// week4_plan.md Phase 8 (8E-1): "every existing plain-text body renders byte-identically
-// to before — the regression test says so." Found during the 8D/8E re-verification pass
-// (2026-08-21) that no such test actually existed — sanitize_html()'s own
+// "every existing plain-text body renders byte-identically
+// to before — the regression test says so."
+// () that no such test actually existed — sanitize_html()'s own
 // test_plain_text_survives_unchanged tests the sanitizer function in isolation, never
 // Learn.tsx's actual `block.prose_sanitized ? <RichText/> : <p>` branch a real lesson
 // takes. This is that missing test, covering the branch directly rather than through a

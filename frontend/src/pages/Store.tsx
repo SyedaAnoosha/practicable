@@ -22,7 +22,7 @@ interface ProductOut {
   currency: string
 }
 
-// Owner direction 2026-08-16: no standalone /pricing page — one-time prices for every
+// Owner direction: no standalone /pricing page — one-time prices for every
 // product live here instead. The bundle is the one thing that needs its own real
 // arithmetic (§20.2's "the saving is a real dollar amount, never hard-coded"), so it
 // gets a dedicated card; every other product already shows its own price on its own
@@ -71,8 +71,10 @@ interface TemplateSummary {
   is_free: boolean
 }
 
-// week2_plan.md Phase 4 / §20.1. Order is fixed — Reference packs · Courses · Templates, the Product Spec's own order — and the three types are never merged
-// into one grid: a store that renders them identically teaches the visitor they're the same thing (§36 — sections are not cards; the products inside them are).
+// Order is fixed — Reference packs · Courses · Templates, the Product Spec's own order
+// — and the three types are never merged into one grid: a store that renders them
+// identically teaches the visitor they're the same thing (§36 — sections are not
+// cards; the products inside them are).
 
 function StoreSection({ title, explainer, children }: { title: string; explainer: string; children: ReactNode }) {
   return (
@@ -172,9 +174,9 @@ export function Store() {
 
       <div className="mt-10 flex flex-col gap-10 sm:gap-10">
         {/* ── Reference packs ─────────────────────────────────────────────────
-            week2_plan.md W2-R6. Driven by GET /packs, which returns only *published* packs — so this still renders the honest empty state
-            until a pack has both a real PDF in Storage and a real Stripe price (db/seed/014 refuses to publish without one). No "coming soon" tile
-            that looks like a product, in either state. */}
+            Driven by GET /packs, which returns only *published* packs — so this
+            renders the honest empty state until a pack has both a real PDF in Storage
+            and a real Stripe price. No "coming soon" tile that looks like a product. */}
         <StoreSection
           title="Reference packs"
           explainer="Look something up. All 100 questions are free to read; a pack is the formatted artefact and the working order."
@@ -327,7 +329,7 @@ export function Store() {
 
       {/* Was /pricing's closing block — the same two sentences, word for word, stated
           once before any checkout rather than repeated per-product. Owner direction
-          2026-08-16: this is now the one place they render on a browsing page. */}
+: this is now the one place they render on a browsing page. */}
       <div className="mt-6 flex flex-col gap-2 border-t border-border pt-6 text-sm text-muted-foreground">
         <p>{TAX_STATEMENT_TEXT}</p>
         <p>

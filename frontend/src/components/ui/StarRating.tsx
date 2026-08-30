@@ -1,17 +1,10 @@
 /**
- * StarRating (W5-R4 Stage B) — the read-only aggregate shown on catalogue cards and
- * product pages.
+ * The read-only rating aggregate on catalogue cards and product pages. Renders nothing
+ * when `rating` is null — the API returns null below `MIN_REVIEWS_FOR_AGGREGATE`, so
+ * "a handful of reviews" and "no reviews" look the same to a visitor.
  *
- * Renders nothing when `rating` is null. That is the whole Stage B gate: the API
- * returns null below `MIN_REVIEWS_FOR_AGGREGATE`, and "a handful of reviews" and "no
- * reviews" are deliberately indistinguishable to a visitor — a 5.0 from two people is
- * not evidence, and showing it would be the kind of thin social proof §2.4 exists to
- * avoid. Callers pass the field straight through and do not need the threshold.
- *
- * Not to be confused with the interactive picker inside `ReviewForm` — that one is a
- * group of buttons that sets a value. This is a static readout, so it renders as a
- * single labelled element rather than five focusable things a keyboard user must tab
- * through on every card.
+ * A static readout (one labelled element), not the interactive button-group picker in
+ * `ReviewForm`.
  */
 import { Star } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
@@ -34,7 +27,7 @@ export function StarRating({ rating, reviewCount, size = 'sm', className }: Star
 
   // One accessible name for the whole control. Five separate star nodes would be read
   // out as five things, and a partially-filled star has no meaning read aloud at all.
-  // `toFixed(1)` here too: the label must say what the eye sees. A raw `5` spoken
+  // `toFixed` here too: the label must say what the eye sees. A raw `5` spoken
   // against a visible "5.0" is the same value described two ways, and the mismatch is
   // exactly what makes an accessible name feel like a separate, less-maintained string.
   const shownRating = rating.toFixed(1)

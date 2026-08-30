@@ -56,8 +56,8 @@ const DOMAINS = [
 const DIMENSIONS = ['effort', 'duration', 'cost', 'roi_horizon', 'tier', 'regulator_pressure', 'leadership_traits'] as const
 
 /** Short human labels for the seven tag dimensions, for the card metadata block. A
- *  value ("L (3-6 months)") is only meaningful once you know which question it answers,
- *  and the dimension name is what turns a badge into data. */
+ * value ("L (3-6 months)") is only meaningful once you know which question it answers,
+ * and the dimension name is what turns a badge into data. */
 const DIMENSION_LABEL: Record<string, string> = {
   effort: 'Effort',
   duration: 'Duration',
@@ -69,7 +69,7 @@ const DIMENSION_LABEL: Record<string, string> = {
 }
 
 /** The hero headline, split for the word stagger. Kept as data next to the other hero
- *  copy so the visual split and the announced string cannot drift apart. */
+ * copy so the visual split and the announced string cannot drift apart. */
 const HERO_HEADLINE = 'Have a difficult risk question? Start there.'
 const HERO_WORDS = HERO_HEADLINE.split(' ')
 /** Index from which the headline turns gold ("Start there."). */
@@ -126,28 +126,15 @@ interface TemplateSummary { id: string; slug: string; title: string; description
 interface PackSummary { slug: string; name: string; description: string; domain_name: string | null; question_count: number; price_amount: number; currency: string; owned: boolean }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Home — 6 sections, richness front-loaded
+// Home — richness front-loaded: a maximal hero, then the page goes calm. Six sections:
+//   1. Hero — dark stage (aurora + parallax + ambient drift), word-staggered H1,
+//      search, TrustStrip (the three live counts, no separate stats band), outline word
+//   2. Questions — featured question cards      4. How it works — 4-step grid
+//   3. Explore — finder chips + domains         5. Products — courses/templates/packs
+//   6. Final CTA — search + email
 //
-// `[RESTRUCTURED 2026-08-22, REDESIGN_SUMMARY.md §7.1]` Was 7 sections of roughly
-// uniform richness. The Framer reference set front-loads instead: a maximal hero, then
-// the page goes calm (FRAMER_MOTION_REFERENCE.md §1.4, principle 8). Uniform richness
-// is why every section read with the same weight as every other.
-//
-// The separate stats band is gone — its three live counts are now the hero's
-// TrustStrip, which is where the references put them and costs no extra plane.
-//
-// Section plan:
-//   1. Hero        — dark stage: aurora + parallax + ambient drift, 93px
-//                    word-staggered H1, search, TrustStrip, outline word
-//   2. Questions   — light, featured question cards
-//   3. Explore     — band, finder chips + domains merged
-//   4. How it works — light, 4-step grid
-//   5. Products    — band, courses/templates/packs
-//   6. Final CTA   — light, search + email
-//
-// Motion below the hero stays entrance-only. The ambient loop and the parallax are
-// hero-exclusive: atmosphere is for the first viewport, not for a reader who is now
-// trying to read.
+// Motion below the hero is entrance-only; the ambient loop and parallax are
+// hero-exclusive.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function Home() {
@@ -201,17 +188,12 @@ export function Home() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * `[ADDED 2026-08-25, owner direction]` "allow featured reviews to show as a section
- * on testimonial on Landing/home page."
+ * The featured-reviews section on the landing page. Renders nothing when there are no
+ * featured reviews — an empty testimonial section advertises the absence of customers.
  *
- * Renders nothing at all when there are no featured reviews — not a heading over an
- * empty grid, and not a "no reviews yet" placeholder. An empty testimonial section on a
- * landing page is worse than no section: it advertises the absence of customers.
- *
- * Star ratings are deliberately shown per quote here, unlike the detail-page
- * `TestimonialSection`, which suppresses them behind the Stage B aggregate gate. That
- * gate exists to stop a averaged score being computed from too few reviews; an
- * individual reviewer's own score is not an average and needs no threshold.
+ * Star ratings are shown per quote here (unlike the detail-page `TestimonialSection`,
+ * which suppresses them behind the aggregate gate) — an individual reviewer's score
+ * isn't an average and needs no threshold.
  */
 function TestimonialsSection() {
   const { data: reviews } = useSiteFeaturedReviews(12)
@@ -220,17 +202,13 @@ function TestimonialsSection() {
   // also reversible-by-accident: the admin list features and unfeatures with one
   // toggle, and a 3-star "I was expecting more depth" quote reaching the landing page
   // is a marketing failure, not a moderation one. 4+ only, so the section can never
-  // argue against the product it sits above. Over-fetch (12) so the floor still leaves
+  // argue against the product it sits above. Over-fetch so the floor still leaves
   // enough to fill the grid.
   const withBody = (reviews ?? []).filter((r) => r.body && r.rating >= 4).slice(0, 6)
   if (withBody.length === 0) return null
 
   return (
-    <motion.section
-      variants={staggerContainer}
-      initial="hidden"
-      whileInView="visible"
-      viewport={inViewOnce}
+    <section
       className="py-10 sm:py-12"
       aria-label="What learners say"
     >
@@ -240,7 +218,7 @@ function TestimonialsSection() {
           title="What people do with it once they have it."
           lead="From risk leads who bought the thing and used it the same week."
         />
-        {/* `[RESTYLED 2026-08-25, owner direction]` Built in the QuestionCard language
+        {/* Built in the QuestionCard language
             rather than as generic quote boxes: full-bleed coloured top rule, a mono
             eyebrow row with an index numeral, the quote as the card's body, and a ruled
             mono metadata block pinned to the bottom by `mt-auto`. One card grammar
@@ -251,9 +229,8 @@ function TestimonialsSection() {
             HowItWorks uses. */}
         <div className="mt-6 grid items-stretch gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
           {withBody.map((review, index) => (
-            <motion.figure
+            <figure
               key={review.id}
-              variants={riseItemSm}
               className="group relative flex h-full flex-col bg-card px-5 pb-5 pt-4 transition-colors duration-150 hover:bg-card-2"
             >
               {/* Gold rather than a domain tone: a testimonial has no domain, and gold
@@ -312,11 +289,11 @@ function TestimonialsSection() {
                   </dd>
                 </div>
               </dl>
-            </motion.figure>
+            </figure>
           ))}
         </div>
       </div>
-    </motion.section>
+    </section>
   )
 }
 
@@ -326,7 +303,7 @@ function TestimonialsSection() {
 
 function SectionOpener({ eyebrow, title, lead, className, onStage = false }: { eyebrow: string; title: string; lead?: string; className?: string; onStage?: boolean }) {
   return (
-    <motion.div variants={riseItem} className={cn('max-w-2xl', className)}>
+    <div className={cn('max-w-2xl', className)}>
       {/* On the stage the hairline-ruled `.eyebrow` loses its rule against the aurora,
           so the enclosed pill carries the label instead. */}
       {onStage ? (
@@ -336,7 +313,7 @@ function SectionOpener({ eyebrow, title, lead, className, onStage = false }: { e
       )}
       <h2 className={cn('mt-4 text-balance text-h2 font-semibold', onStage ? 'text-stage-foreground' : 'text-foreground')}>{title}</h2>
       {lead && <p className={cn('mt-4 font-serif text-read', onStage ? 'text-stage-foreground/75' : 'text-muted-foreground')}>{lead}</p>}
-    </motion.div>
+    </div>
   )
 }
 
@@ -389,7 +366,7 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
           whole layer at 8% of scroll (depth). Both stop dead under
           prefers-reduced-motion — the drift via its own CSS guard, the parallax
           because useParallax returns a static 0. Neither is covered by MotionConfig. */}
-      <motion.div
+      <div
         aria-hidden="true"
         style={{ y: auroraY }}
         initial={{ opacity: 0, scale: 1.06 }}
@@ -399,7 +376,7 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
       />
 
       {/* The TaxonomyCanvas — the hero graphic that makes this page unmistakably
-          Practicable's (REDESIGN_SUMMARY.md §6.3). 99 nodes in 5 domain clusters,
+          Practicable's. 99 nodes in 5 domain clusters,
           gold connective lines, ambient drift. Driven by the real API count, never
           hardcoded. Degrades to a static SVG under reduced motion.
 
@@ -414,7 +391,7 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
       {/* Utomic's outline word, bottom-left where the copy column has already ended.
           Decorative and aria-hidden: "RISK" is stated in the headline, the eyebrow and
           the trust strip, so nothing is lost when it is not announced. */}
-      {/* `[REMOVED 2026-08-22]` The `OutlineWord` device (Utomic's oversized outline
+      {/* The `OutlineWord` device (Utomic's oversized outline
           word) was built and placed here, then taken out after looking at the rendered
           hero rather than the plan.
 
@@ -530,7 +507,7 @@ function Hero({ questions }: { questions: QuestionSummary[] | undefined }) {
         </motion.div>
 
         {/* The trust strip, absorbing the separate stats band that used to be section 2
-            (REDESIGN_SUMMARY.md §7.1 — 7 sections down to 6). Same facts, no extra
+            (7 sections down to 6). Same facts, no extra
             plane, and they now sit directly under the CTA where the reference set puts
             them rather than in a strip the reader has to scroll to.
 
@@ -582,7 +559,7 @@ function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefi
       })()
 
   return (
-    /* `[CHANGED 2026-08-22, owner direction]` This section used to continue the dark
+    /* This section used to continue the dark
        stage under the hero and float glass cards over it (the Galilee device). Rejected
        on sight of the rendered page: two dark planes stacked read as one indistinct
        dark mass, the hero's aurora bled straight into the section, and the boundary
@@ -593,11 +570,7 @@ function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefi
        ivory/band planes below, so the page reads as four distinct surfaces rather than
        two. The hero keeps the atmosphere; this section gets legibility, which is what
        a grid of four questions actually needs. */
-    <motion.section
-      variants={staggerContainer}
-      initial="hidden"
-      whileInView="visible"
-      viewport={inViewOnce}
+    <section
       className="band-cool relative isolate pb-12 pt-10 sm:pb-14 sm:pt-12"
     >
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
@@ -609,58 +582,33 @@ function QuestionShowcase({ questions }: { questions: QuestionSummary[] | undefi
 
         {/* 4 across at xl, not 2. The research audit measured ~600px per card in the
             old `sm:grid-cols-2` inside max-w-7xl — content that needs ~340px, so the
-            cards read empty (PLATFORM_UI_UX_RESEARCH.md §7.1 #2). */}
+            cards read empty. */}
         {/* Divided columns, not floating boxes: one hairline between adjacent cards
             rather than a gap plus four borders. This is how a broadsheet sets parallel
             columns, and it removes 8 visible edges from the composition. */}
         <div className="mt-6 grid overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 xl:grid-cols-4 [&>*]:bg-card gap-px">
           {featured.map((question, i) => (
-            <motion.div key={question.slug} variants={riseItemSm}>
+            <div key={question.slug}>
               <QuestionCard question={question} index={i} />
-            </motion.div>
+            </div>
           ))}
         </div>
 
-        <motion.div variants={riseItemSm} className="mt-8">
+        <div className="mt-8">
           <Link to="/questions" className="inline-flex items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline">
             See all {questions.length} questions <ArrowRight className="size-3.5" aria-hidden="true" />
           </Link>
-        </motion.div>
+        </div>
       </div>
-    </motion.section>
+    </section>
   )
 }
 
 /**
- * The question card, as an editorial index entry.
- *
- * `[REDESIGNED 2026-08-22, owner direction: "these cards look too much AI designed"]`
- * The previous card was the generic pattern — rounded box, coloured left bar, a row of
- * grey pill badges, "Read the answer ->". Every AI-generated dashboard produces it, and
- * it fought the brand this product actually claims ("private bank meets editorial
- * publisher").
- *
- * What changed, and why each one:
- *
- *   Left rule -> top rule. A 4px coloured bar down the left edge is the single most
- *   recognisable AI-card tell. A hairline rule ACROSS THE TOP is how a printed index or
- *   a broadsheet column head is set, and it gives the domain colour more presence, not
- *   less.
- *
- *   Rounded box -> square-cornered column. `rounded-xl` on everything is what makes a
- *   page read as a template. These are set as columns divided by rules, which is the
- *   reference-document register.
- *
- *   Pill badges -> a metadata line. Three grey lozenges is decoration pretending to be
- *   data. The same three facts set as mono text, separated by middots, read as a
- *   catalogue entry — denser, quieter, and they stop competing with the title.
- *
- *   Numbered. An index entry has a position. The mono numeral gives the eye an anchor
- *   and signals "this is one of a hundred", which is the actual proposition.
- *
- *   The arrow link is gone. The whole card is one link (§36 — a card with a separate
- *   link inside is two tab stops for one destination), so a fake inline "button" was
- *   never real. The title underlines on hover, which is what a link does.
+ * The question card, as an editorial index entry: a domain-coloured hairline across the
+ * top (not a left bar), square corners, a mono metadata line instead of pill badges,
+ * and a mono index numeral. The whole card is one link (§36) — no inline arrow button —
+ * and the title underlines on hover.
  */
 function QuestionCard({ question, index }: { question: QuestionSummary; index: number }) {
   const color = domainColorVar(question.domain)
@@ -756,7 +704,7 @@ function ExploreSection({ questions }: { questions: QuestionSummary[] | undefine
   const href = active.length > 0 ? `/questions?${new URLSearchParams(selection)}` : '/questions'
 
   return (
-    <motion.section variants={staggerContainer} initial="hidden" whileInView="visible" viewport={inViewOnce} className="band py-10 sm:py-12">
+    <section className="band py-10 sm:py-12">
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener
           eyebrow="Find something you can actually do"
@@ -765,7 +713,7 @@ function ExploreSection({ questions }: { questions: QuestionSummary[] | undefine
         />
 
         {/* Finder chips */}
-        <motion.div variants={riseItem} className="mt-6 grid items-start gap-8 rounded-xl border border-border bg-card p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:gap-12">
+        <div className="mt-6 grid items-start gap-8 rounded-xl border border-border bg-card p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:gap-12">
           <div className="flex flex-col gap-6">
             {FINDER_GROUPS.map((group) => (
               <div key={group.prompt}>
@@ -798,7 +746,7 @@ function ExploreSection({ questions }: { questions: QuestionSummary[] | undefine
               <Link to={href}><Button>See the matches<ArrowRight className="size-4" aria-hidden="true" /></Button></Link>
             )}
           </div>
-        </motion.div>
+        </div>
 
         {/* Domain cards — compact grid below the finder */}
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -808,7 +756,7 @@ function ExploreSection({ questions }: { questions: QuestionSummary[] | undefine
             const Icon = domainVisual(domain.name).icon
             const sample = inDomain[0]
             return (
-              <motion.div key={domain.name} variants={riseItemSm}>
+              <div key={domain.name}>
                 <Link
                   to={sample ? `/questions?domain=${encodeURIComponent(sample.domain_slug)}` : '/questions'}
                   className="group flex flex-col rounded-xl border border-border bg-card p-4 transition-[border-color,transform] duration-150 hover:-translate-y-0.5 hover:border-[var(--domain-color)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -823,12 +771,12 @@ function ExploreSection({ questions }: { questions: QuestionSummary[] | undefine
                     {questions ? inDomain.length : '—'} {inDomain.length === 1 ? 'question' : 'questions'}
                   </p>
                 </Link>
-              </motion.div>
+              </div>
             )
           })}
         </div>
       </div>
-    </motion.section>
+    </section>
   )
 }
 
@@ -838,20 +786,20 @@ function ExploreSection({ questions }: { questions: QuestionSummary[] | undefine
 
 function HowItWorks() {
   return (
-    <motion.section variants={staggerContainer} initial="hidden" whileInView="visible" viewport={inViewOnce} className="py-10 sm:py-12">
+    <section className="py-10 sm:py-12">
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener eyebrow="How it works" title="From the problem to the thing you hand over." />
         <ol className="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
           {STEPS.map((item, i) => (
-            <motion.li key={item.step} variants={riseItemSm} className="flex flex-col bg-card p-6">
+            <li key={item.step} className="flex flex-col bg-card p-6">
               <span className="font-mono text-xs font-medium tabular-nums text-gold-strong">{String(i + 1).padStart(2, '0')}</span>
               <h3 className="mt-3 text-h4 font-semibold text-foreground">{item.step}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{item.body}</p>
-            </motion.li>
+            </li>
           ))}
         </ol>
       </div>
-    </motion.section>
+    </section>
   )
 }
 
@@ -864,23 +812,11 @@ function HowItWorks() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * `[REBUILT 2026-08-22, owner direction]` "for slider on home/landing page:
- * https://splidejs.com/. make the sliding beautiful."
- *
- * This was a hand-rolled `overflow-x-auto` track with snap points, two fade masks and a
- * pair of chevrons wired to `scrollBy`. It worked, but it was a scroll area pretending
- * to be a carousel: no real paging, no keyboard model beyond native scroll, no drag on
- * desktop, no accessible announcement of position, and arrow state derived from
- * scroll-offset arithmetic that had to be recomputed on every scroll and resize.
- *
- * Splide replaces all of that with a real carousel: pointer/touch drag, proper paging,
- * arrow-key and Home/End support, focus management, and ARIA wiring maintained by the
- * library. `perMove: 1` with a per-breakpoint `perPage` keeps one card of travel per
- * press, which is what makes it feel considered rather than jumpy.
- *
- * Motion: a longer `speed` with an ease-out curve, so slides settle rather than snap —
- * matching the app's own `--ease-standard` feel. `reducedMotion` is honoured by turning
- * the transition off entirely rather than merely shortening it.
+ * The product carousel, on Splide — a real carousel (pointer/touch drag, paging,
+ * arrow/Home/End keys, focus management, ARIA) replacing a hand-rolled `overflow-x-auto`
+ * track. `perMove: 1` with a per-breakpoint `perPage` gives one card of travel per
+ * press. Longer `speed` with an ease-out so slides settle; `reducedMotion` turns the
+ * transition off entirely.
  */
 function ProductScrollRow({ children, label }: { children: ReactNode; label: string }) {
   const slides = Children.toArray(children)
@@ -914,7 +850,7 @@ function ProductScrollRow({ children, label }: { children: ReactNode; label: str
            attributes are stripped after mount (see `onMounted` below) rather than via
            a `role` option, which targets the carousel ROOT and not the slides. */
         slideFocus: false,
-        /* `[FIXED 2026-08-23]` Every carousel used to declare `label: 'Products'`,
+        /* Every carousel used to declare `label: 'Products'`,
            so the three of them landed as three identically-named landmarks — axe's
            `landmark-is-unique`, and for a screen-reader user a landmark list reading
            "Products, Products, Products" with no way to tell which is which. Each now
@@ -991,7 +927,7 @@ function MiniPackCard({ pack }: { pack: PackSummary }) {
       to={`/store/packs/${pack.slug}`}
       className="group snap-start shrink-0 w-48 sm:w-56 rounded-lg border border-border bg-background transition-colors hover:bg-card-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      {/* `[FIXED 2026-08-25, owner direction: "no picture"]` This was a flat
+      {/* This was a flat
           `accent/12 → accent/4` wash behind a `text-accent/30` icon — at those opacities
           on the ivory plane it rendered as an empty grey box, so a row of pack cards
           looked like unloaded images sitting next to fully-illustrated course cards.
@@ -1060,8 +996,8 @@ function MiniTemplateCard({ template }: { template: TemplateSummary }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** A single product row — editorial treatment, not a card.
- *  Large type label on the left, description, scrollable items, see-all link.
- *  Each row is separated by a hairline, not a box boundary. */
+ * Large type label on the left, description, scrollable items, see-all link.
+ * Each row is separated by a hairline, not a box boundary. */
 function ProductRow({
   icon: Icon,
   label,
@@ -1080,7 +1016,7 @@ function ProductRow({
   children: ReactNode
 }) {
   return (
-    <motion.div variants={riseItemSm} className="border-t border-border pt-6">
+    <div className="border-t border-border pt-6">
       <div className="flex items-baseline justify-between gap-4">
         <div className="flex items-center gap-2.5">
           <span
@@ -1114,7 +1050,7 @@ function ProductRow({
         {seeAllLabel}
         <ArrowRight className="size-3.5" aria-hidden="true" />
       </Link>
-    </motion.div>
+    </div>
   )
 }
 
@@ -1127,7 +1063,7 @@ function ProductSection({ courses, templates, packs }: { courses: CourseSummary[
   const freeTemplate = templates?.find((t) => t.is_free)
 
   return (
-    <motion.section variants={staggerContainer} initial="hidden" whileInView="visible" viewport={inViewOnce} className="band py-10 sm:py-12">
+    <section className="band py-10 sm:py-12">
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <SectionOpener
           eyebrow="When the answer isn't enough"
@@ -1185,7 +1121,7 @@ function ProductSection({ courses, templates, packs }: { courses: CourseSummary[
 
         {/* Free template CTA */}
         {freeTemplate && (
-          <motion.div variants={riseItemSm} className="mt-6 border-t border-border pt-6">
+          <div className="mt-6 border-t border-border pt-6">
             <Link
               to={`/templates/${freeTemplate.id}`}
               className="group flex items-center gap-4 rounded-xl border border-gold/30 bg-gold/5 px-5 py-4 transition-colors hover:bg-gold/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold sm:items-center sm:gap-5 sm:px-6 sm:py-5"
@@ -1209,10 +1145,10 @@ function ProductSection({ courses, templates, packs }: { courses: CourseSummary[
               </span>
               <ArrowRight className="size-4 shrink-0 text-gold-strong transition-transform duration-150 group-hover:translate-x-0.5 sm:hidden" aria-hidden="true" />
             </Link>
-          </motion.div>
+          </div>
         )}
       </div>
-    </motion.section>
+    </section>
   )
 }
 
@@ -1238,16 +1174,16 @@ function FinalCta() {
   }
 
   return (
-    <motion.section variants={staggerContainer} initial="hidden" whileInView="visible" viewport={inViewOnce} id="free-pack" className="scroll-mt-24 py-10 sm:py-12">
+    <section id="free-pack" className="scroll-mt-24 py-10 sm:py-12">
       <div className="mx-auto w-full max-w-4xl px-5 text-center sm:px-8">
-        <motion.h2 variants={riseItem} className="text-balance text-h2 font-semibold text-foreground">
+        <h2 className="text-balance text-h2 font-semibold text-foreground">
           What risk problem are you dealing with?
-        </motion.h2>
-        <motion.p variants={riseItem} className="mx-auto mt-4 max-w-xl font-serif text-read text-muted-foreground">
+        </h2>
+        <p className="mx-auto mt-4 max-w-xl font-serif text-read text-muted-foreground">
           All of the questions and answers are free to read. Start with the one that sounds like your week.
-        </motion.p>
+        </p>
 
-        <motion.form variants={riseItem} onSubmit={handleSearch} className="mx-auto mt-8 max-w-xl">
+        <form onSubmit={handleSearch} className="mx-auto mt-8 max-w-xl">
           <div className="flex flex-col gap-3 sm:relative sm:gap-0">
             <div className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-primary/70" aria-hidden="true" />
@@ -1256,9 +1192,9 @@ function FinalCta() {
             </div>
             <Button type="submit" size="lg" className="w-full sm:absolute sm:right-2 sm:top-2 sm:h-10 sm:w-auto sm:px-4 sm:text-sm">Find an answer</Button>
           </div>
-        </motion.form>
+        </form>
 
-        <motion.div variants={riseItemSm} className="mt-6 border-t border-border pt-8">
+        <div className="mt-6 border-t border-border pt-8">
           {submitted ? (
             <p className="text-sm text-foreground" role="status">You're on the list.</p>
           ) : (
@@ -1273,8 +1209,8 @@ function FinalCta() {
             </>
           )}
           {isError && <p role="alert" className="mt-3 text-sm text-destructive">Something went wrong — please try again.</p>}
-        </motion.div>
+        </div>
       </div>
-    </motion.section>
+    </section>
   )
 }

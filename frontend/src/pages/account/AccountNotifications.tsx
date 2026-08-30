@@ -122,7 +122,7 @@ function NotificationItem({
               Read
             </span>
           )}
-          {/* `[FIXED 2026-08-25]` Was a bare `<a href>`, which does a full document
+          {/* Was a bare `<a href>`, which does a full document
               reload for what is always an in-app path — losing the SPA's auth session
               bootstrap and every warm query. `action_url` is produced by
               notification_service as an app-relative path, so it routes. */}
@@ -176,7 +176,7 @@ function EmailPreferences() {
   const currentSound = sound ?? prefs?.notify_sound ?? true
 
   return (
-    /* `[FIXED 2026-08-25]` This whole card used to `return null` while the preferences
+    /* This whole card used to `return null` while the preferences
        request was in flight or if it failed — so on a slow connection the notifications
        page rendered with no preferences section at all and no indication one was coming,
        and on an error it silently rendered nothing forever. The heading and description

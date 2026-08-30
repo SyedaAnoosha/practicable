@@ -1,15 +1,11 @@
-"""Mux direct-upload for lesson video (week3_plan.md Phase 5 step 1).
+"""Mux direct-upload for lesson video.
 
-Today an editor pastes a Mux asset id/playback id copied from the Mux dashboard
-(`PUT /admin/lessons/{lesson_id}/video`, `courses.py`) — that endpoint's own docstring
-already names this as "isolated" precisely so it could be swapped for a real upload
-flow later. This file is that swap: `POST /admin/media/upload-url` hands the browser a
-Mux direct-upload URL (no Mux secret ever reaches the frontend), and `GET
-/admin/media/{upload_id}` polls Mux for the honest `Uploading -> Processing -> Ready`
-state `UploadField` (§20.4) renders. Once ready, the admin still calls the existing
-`PUT /admin/lessons/{lesson_id}/video` to attach it to a lesson — that endpoint's
-contract (mux_asset_id + mux_playback_id) doesn't change, so nothing downstream of it
-needed to move.
+`POST /admin/media/upload-url` hands the browser a Mux direct-upload URL (no Mux secret
+ever reaches the frontend), and `GET /admin/media/{upload_id}` polls Mux for the
+`Uploading -> Processing -> Ready` state `UploadField` renders. Once ready, the admin
+calls the existing `PUT /admin/lessons/{lesson_id}/video` (`courses.py`) to attach it to
+a lesson — that endpoint's contract (mux_asset_id + mux_playback_id) doesn't change.
+An editor can also still paste an asset/playback id copied from the Mux dashboard.
 """
 import asyncio
 
@@ -54,24 +50,23 @@ class MediaStatusOut(BaseModel):
 
 
 class PlaybackTokenIn(BaseModel):
-    """Phase 8 (8D-1): Request for a signed playback token.
+    """Request for a signed playback token.
 
-    Phase 8 (8D-3/8D-5): `asset_id` is optional so existing callers keep working, but
-    every real call site now sends it — it's what lets this endpoint tell the four
-    admin-preview failure modes apart (8D-5) instead of returning a bare token and
-    leaving Mux's own player to fail silently on whichever one actually happened.
+    `asset_id` is optional so existing callers keep working, but every real call site
+    sends it — it's what lets this endpoint tell the four admin-preview failure modes
+    apart instead of returning a bare token and leaving Mux's own player to fail
+    silently on whichever one actually happened.
     """
     playback_id: str
     asset_id: str | None = None
 
 
 class PlaybackTokenOut(BaseModel):
-    """Phase 8 (8D-1/8D-3/8D-5): Signed JWT plus the live Mux asset state.
+    """Signed JWT plus the live Mux asset state.
 
-    `state` is one of "ready" | "encoding" | "asset_error" | "asset_unknown" — the
-    four admin-preview states 8D-3/8D-5 name, distinct from a token-request failure
-    (which this endpoint reports as a 4xx/5xx, not a 200 with a state field, since
-    that failure happens before any asset is even looked up).
+    `state` is one of "ready" | "encoding" | "asset_error" | "asset_unknown", distinct
+    from a token-request failure (which this endpoint reports as a 4xx/5xx, not a 200
+    with a state field, since that failure happens before any asset is even looked up).
     """
     token: str
     state: str
@@ -83,17 +78,17 @@ async def get_playback_token(
     payload: PlaybackTokenIn,
     admin: User = Depends(require_admin),
 ):
-    """Phase 8 (8D-1): Generate a signed playback token for admin video playback.
+    """Generate a signed playback token for admin video playback.
 
     Admin users need to preview videos in the admin panel without purchasing them.
     This endpoint generates a short-lived signed JWT that Mux accepts for playback.
 
-    Phase 8 (8D-3/8D-5): also checks the asset's live Mux status when `asset_id` is
-    given, so the preview can distinguish "still encoding" from "ready" from "Mux
-    lost the asset" — `Media.status` in the database is set optimistically at attach
-    time (see `set_lesson_video`) and is not kept in sync with Mux afterward, so it
-    cannot answer this on its own; the legacy paste-a-playback-id flow in particular
-    never confirms the asset finished encoding before attaching it.
+    Also checks the asset's live Mux status when `asset_id` is given, so the preview
+    can distinguish "still encoding" from "ready" from "Mux lost the asset" —
+    `Media.status` in the database is set optimistically at attach time (see
+    `set_lesson_video`) and is not kept in sync with Mux afterward, so it cannot answer
+    this on its own; the paste-a-playback-id flow in particular never confirms the
+    asset finished encoding before attaching it.
     """
     try:
         token = await asyncio.to_thread(generate_mux_playback_token, payload.playback_id)
@@ -107,7 +102,7 @@ async def get_playback_token(
         asset = await asyncio.to_thread(get_asset, payload.asset_id)
     except requests.RequestException:
         # Asset id unknown to Mux (deleted, or never a real asset — a fat-fingered
-        # legacy paste). Distinct from the token itself failing, which is a 5xx above.
+        # paste). Distinct from the token itself failing, which is a 5xx above.
         return PlaybackTokenOut(
             token=token, state="asset_unknown",
             message="Mux doesn't recognize this asset id. It may have been deleted.",
@@ -129,7 +124,7 @@ async def get_playback_token(
 
 @router.get("/admin/media/{upload_id}", response_model=MediaStatusOut)
 async def get_media_status(upload_id: str, admin: User = Depends(require_admin)):
-    """Polled by `UploadField` every 5s (§20.4) until `ready` or `error`. Two Mux
+    """Polled by `UploadField` every 5s until `ready` or `error`. Two Mux
     resources, checked in sequence: the upload (has the asset been CREATED yet) then
     the asset (has it finished ENCODING) — a video is not playable the moment Mux
     acknowledges the upload, only once the asset itself reports ready.
@@ -173,7 +168,7 @@ async def get_media_status(upload_id: str, admin: User = Depends(require_admin))
 
 
 class MediaLibraryRowOut(BaseModel):
-    """Phase 8 (8D-4): one uploaded video, wherever it's used (or not yet used)."""
+    """One uploaded video, wherever it's used (or not yet used)."""
     id: str
     mux_asset_id: str | None
     mux_playback_id: str | None
@@ -187,12 +182,11 @@ class MediaLibraryRowOut(BaseModel):
 
 @router.get("/admin/media", response_model=list[MediaLibraryRowOut])
 async def list_media(session: AsyncSession = Depends(get_session)):
-    """Phase 8 (8D-4): the third `TokenizedVideoPreview` placement — every uploaded
-    video in one place, including one attached via the legacy paste-a-playback-id
-    flow (`PUT /admin/lessons/{lesson_id}/video`) where `status` was set to `ready`
-    without Mux ever confirming the asset finished encoding, which is exactly the case
-    the playback-token endpoint's live Mux check (8D-3) exists to catch when this row
-    is actually previewed.
+    """Every uploaded video in one place, including one attached via the
+    paste-a-playback-id flow (`PUT /admin/lessons/{lesson_id}/video`) where `status`
+    was set to `ready` without Mux ever confirming the asset finished encoding — the
+    case the playback-token endpoint's live Mux check exists to catch when this row is
+    actually previewed.
 
     No live Mux call per row here — a list of N videos doing N Mux round trips would
     be slow and is not what this view needs; each row's live encoding state is

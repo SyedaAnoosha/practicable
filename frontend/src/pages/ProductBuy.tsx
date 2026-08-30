@@ -53,10 +53,10 @@ interface ProductData {
 }
 
 // DESIGN.md §29.1: the pre-redirect summary. Stripe owns the actual card form (C2) —
-// this is the moment right before the handoff, not a catalogue page to browse through
-// (week1_plan.md Phase 4 step 9: the buy surface routes straight here, one click).
+// this is the moment right before the handoff, not a catalogue page to browse through.
+// The buy surface routes straight here in one click.
 //
-// week4_plan.md Phase 3 step 4: `lg:grid-cols-[1fr_380px]` — the description and
+// `lg:grid-cols-[1fr_380px]` — the description and
 // contents list on the left, the evidence + price + buy surface sticky on the right
 // from `lg`, and a mobile sticky buy bar below it (respecting the home-indicator safe
 // area on iOS) so the primary action is always one thumb-reach away on a long page.
@@ -91,7 +91,7 @@ export function ProductBuy() {
     setIsRedirecting(true)
     setError('')
     try {
-      // week3_plan.md W3-R11 — `product_ids` is always a list; a direct "Buy" here is
+      // `product_ids` is always a list; a direct "Buy" here is
       // just the one-item case of the same cart checkout the drawer uses.
       const { data } = await api.post<{ checkout_url: string }>('/checkout/session', {
         product_ids: [product.id],
@@ -164,7 +164,7 @@ export function ProductBuy() {
         Continue to secure checkout
       </Button>
       {/* Sits alongside, not instead of, Buy — a buyer who wants one thing still gets
-          the one-click path (week3_plan.md W3-R11). */}
+          the one-click path. */}
       <Button
         onClick={handleAddToCart}
         variant="outline"
@@ -216,7 +216,7 @@ export function ProductBuy() {
             view on a long description. Hidden below `lg` in favour of the fixed
             mobile bar so the primary action never appears twice on screen at once. */}
         <div className="mt-8 hidden flex-col gap-5 lg:sticky lg:top-24 lg:mt-0 lg:flex">
-          {/* CTA ladder (8F-3): Buy is the only primary. See sample pages scrolls to
+          {/* CTA ladder: Buy is the only primary. See sample pages scrolls to
               PreviewGallery inside EvidencePanel. Start with a free one is tertiary. */}
           <div className="flex flex-col gap-3">
             {alreadyOwned ? (
@@ -266,7 +266,7 @@ export function ProductBuy() {
 
           <WhyThis />
 
-          {/* Objection block (8F-4) — five things, four of which are columns. */}
+          {/* Objection block — five things, four of which are columns. */}
           <div className="rounded-lg border border-border bg-card p-5 sm:p-6">
             <p className="eyebrow">Before you decide</p>
             <ul className="mt-4 flex flex-col gap-3">

@@ -1,6 +1,6 @@
 /**
- * Phase 10 (§10F re-verification, 2026-08-22): "no Delete Account button hard-deletes
- * anything" — the DoD's own required test. A UI *absence* claim can't be proven by
+ * "no Delete Account button hard-deletes
+ * anything" — the required test. A UI *absence* claim can't be proven by
  * mounting the component (there's nothing to assert away), so this follows this
  * project's own established precedent for that shape of claim (AdminLayout.nav.test.tsx,
  * createProductButton.removed.test.tsx): read the real source and grep for it.

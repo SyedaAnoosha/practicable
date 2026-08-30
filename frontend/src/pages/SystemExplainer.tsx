@@ -1,11 +1,9 @@
 import { useState } from 'react'
-import { motion } from 'motion/react'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router'
 import { Button } from '@/components/ui/Button'
 import { StatusDot } from '@/components/ui/StatusDot'
 import { cn } from '@/lib/utils/cn'
-import { staggerContainer, riseItem, riseItemSm, inViewOnce } from '@/lib/motion'
 
 /**
  * System explainer page: a three-part walkthrough of Practicable's architecture,
@@ -25,52 +23,35 @@ export function SystemExplainer() {
     <div className="w-full">
       {/* ── Hero ────────────────────────────────────────────────────────────── */}
       <section className="w-full py-14 sm:py-24">
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-          className="mx-auto flex max-w-2xl flex-col items-center px-5 text-center sm:px-8"
-        >
+        <div className="mx-auto flex max-w-2xl flex-col items-center px-5 text-center sm:px-8">
           <StatusDot label="System walkthrough" />
-          <motion.h1 variants={riseItem} className="mt-5 text-h1 font-semibold text-foreground">
+          <h1 className="mt-5 text-h1 font-semibold text-foreground">
             How Practicable works
-          </motion.h1>
-          <motion.p variants={riseItem} className="mt-4 max-w-xl font-serif text-lead text-muted-foreground">
+          </h1>
+          <p className="mt-4 max-w-xl font-serif text-lead text-muted-foreground">
             A three-part explanation of the platform — from visitor to buyer to admin.
             Architecture decisions, the core loop, and what was built versus what was
             deliberately left out.
-          </motion.p>
+          </p>
           {/* Facts, not adjectives — the third one is the honest part most writeups omit. */}
-          <motion.p
-            variants={riseItemSm}
-            className="mt-6 text-xs font-medium uppercase tracking-wide text-muted-foreground/70"
-          >
+          <p className="mt-6 text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
             32 sections · 3 parts · real bugs included
-          </motion.p>
-        </motion.div>
+          </p>
+        </div>
       </section>
 
       {/* ── Core loop ──────────────────────────────────────────────────────────
           A sequence, so it renders as one — arrows between words rather than words
           inside boxes, which turned six nouns into six buttons. */}
       <section className="band-cool w-full py-12 sm:py-14">
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          whileInView="visible"
-          viewport={inViewOnce}
-          className="mx-auto max-w-3xl px-5 text-center sm:px-8"
-        >
-          <motion.h2 variants={riseItem} className="text-h2 font-semibold text-foreground">
+        <div className="mx-auto max-w-3xl px-5 text-center sm:px-8">
+          <h2 className="text-h2 font-semibold text-foreground">
             The core loop
-          </motion.h2>
-          <motion.p variants={riseItemSm} className="mt-3 text-sm text-muted-foreground">
+          </h2>
+          <p className="mt-3 text-sm text-muted-foreground">
             Every screen in the product exists to serve one journey:
-          </motion.p>
-          <motion.ol
-            variants={riseItemSm}
-            className="mt-6 flex flex-wrap items-center justify-center gap-x-2 gap-y-2 text-sm font-medium text-foreground"
-          >
+          </p>
+          <ol className="mt-6 flex flex-wrap items-center justify-center gap-x-2 gap-y-2 text-sm font-medium text-foreground">
             {CORE_LOOP.map((step, i) => (
               <li key={step} className="flex items-center gap-2">
                 <span>{step}</span>
@@ -79,8 +60,8 @@ export function SystemExplainer() {
                 )}
               </li>
             ))}
-          </motion.ol>
-        </motion.div>
+          </ol>
+        </div>
       </section>
 
       {/* ── Parts 1–3 ──────────────────────────────────────────────────────────
@@ -91,14 +72,8 @@ export function SystemExplainer() {
           key={part.title}
           className="mx-auto w-full max-w-5xl px-5 py-12 sm:px-8 sm:py-16"
         >
-          <motion.div
-            variants={staggerContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={inViewOnce}
-            className="grid gap-x-10 gap-y-4 md:grid-cols-[minmax(0,15rem)_1fr]"
-          >
-            <motion.div variants={riseItem}>
+          <div className="grid gap-x-10 gap-y-4 md:grid-cols-[minmax(0,15rem)_1fr]">
+            <div>
               <span
                 className="text-sm font-medium tabular-nums text-primary"
                 aria-hidden="true"
@@ -109,36 +84,30 @@ export function SystemExplainer() {
               <p className="mt-2 hidden text-sm leading-relaxed text-muted-foreground/80 md:block">
                 {part.note}
               </p>
-            </motion.div>
-            <motion.div variants={riseItem} className="border-t border-border md:border-t-0">
+            </div>
+            <div className="border-t border-border md:border-t-0">
               {part.sections.map((s) => (
                 <SectionRow key={s.id} section={s} />
               ))}
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </section>
       ))}
 
       {/* ── Architecture at a glance ─────────────────────────────────────────── */}
       <section className="band band-dotgrid w-full py-12 sm:py-16">
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          whileInView="visible"
-          viewport={inViewOnce}
-          className="mx-auto max-w-5xl px-5 sm:px-8"
-        >
-          <motion.h2 variants={riseItem} className="text-h2 font-semibold text-foreground">
+        <div className="mx-auto max-w-5xl px-5 sm:px-8">
+          <h2 className="text-h2 font-semibold text-foreground">
             Architecture at a glance
-          </motion.h2>
-          <motion.p variants={riseItemSm} className="mt-3 max-w-xl text-sm text-muted-foreground">
+          </h2>
+          <p className="mt-3 max-w-xl text-sm text-muted-foreground">
             Buy, don&apos;t build: auth, payments, video, and email are all third-party.
             Only the risk-domain logic is ours.
-          </motion.p>
+          </p>
           {/* A definition list is the honest markup — each row genuinely defines a term.
               Rows, not cards: eight near-identical tiles was the grid the design brief
               calls repetitive geometry. */}
-          <motion.dl variants={riseItem} className="mt-8">
+          <dl className="mt-8">
             {STACK.map((item) => (
               <div
                 key={item.label}
@@ -150,26 +119,22 @@ export function SystemExplainer() {
                 </dd>
               </div>
             ))}
-          </motion.dl>
-        </motion.div>
+          </dl>
+        </div>
       </section>
 
       {/* ── Bugs ─────────────────────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-5xl px-5 py-12 sm:px-8 sm:py-16">
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          whileInView="visible"
-          viewport={inViewOnce}
+        <div
         >
-          <motion.h2 variants={riseItem} className="text-h2 font-semibold text-foreground">
+          <h2 className="text-h2 font-semibold text-foreground">
             Bugs that taught something
-          </motion.h2>
-          <motion.p variants={riseItemSm} className="mt-3 max-w-xl text-sm text-muted-foreground">
+          </h2>
+          <p className="mt-3 max-w-xl text-sm text-muted-foreground">
             The most useful part of the build was finding where the system could pass every
             test while the actual feature still failed for a person.
-          </motion.p>
-          <motion.ol variants={riseItem} className="mt-8">
+          </p>
+          <ol className="mt-8">
             {BUGS.map((bug, i) => (
               <li
                 key={bug.title}
@@ -187,26 +152,20 @@ export function SystemExplainer() {
                 </p>
               </li>
             ))}
-          </motion.ol>
-        </motion.div>
+          </ol>
+        </div>
       </section>
 
       {/* ── Deliberately not built ───────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-5xl px-5 pb-12 pt-4 sm:px-8 sm:pb-20">
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          whileInView="visible"
-          viewport={inViewOnce}
-          className="grid gap-x-10 gap-y-4 md:grid-cols-[minmax(0,15rem)_1fr]"
-        >
-          <motion.div variants={riseItem}>
+        <div className="grid gap-x-10 gap-y-4 md:grid-cols-[minmax(0,15rem)_1fr]">
+          <div>
             <h2 className="text-h3 font-semibold text-foreground">Deliberately not built</h2>
             <p className="mt-2 hidden text-sm leading-relaxed text-muted-foreground/80 md:block">
               Scope is a decision, not an omission.
             </p>
-          </motion.div>
-          <motion.div variants={riseItem}>
+          </div>
+          <div>
             <ul className="space-y-3">
               {NOT_BUILT.map((item) => (
                 <li key={item} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
@@ -222,19 +181,13 @@ export function SystemExplainer() {
               The reason: those features should not come at the cost of the core path — finding
               content, purchasing it, and learning from it.
             </p>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       </section>
 
       {/* ── CTA ──────────────────────────────────────────────────────────────── */}
       <section className="w-full border-t border-border py-12 sm:py-16">
-        <motion.div
-          variants={riseItemSm}
-          initial="hidden"
-          whileInView="visible"
-          viewport={inViewOnce}
-          className="mx-auto flex max-w-3xl flex-col items-center justify-center gap-3 px-5 sm:flex-row sm:gap-4 sm:px-8"
-        >
+        <div className="mx-auto flex max-w-3xl flex-col items-center justify-center gap-3 px-5 sm:flex-row sm:gap-4 sm:px-8">
           <Link to="/store" className="w-full sm:w-auto">
             <Button size="lg" className="w-full gap-2 sm:w-auto">
               Browse the library
@@ -246,7 +199,7 @@ export function SystemExplainer() {
               About Practicable
             </Button>
           </Link>
-        </motion.div>
+        </div>
       </section>
     </div>
   )

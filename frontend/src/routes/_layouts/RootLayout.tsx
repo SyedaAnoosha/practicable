@@ -5,27 +5,17 @@ import { useAuthStore } from '@/stores/useAuthStore'
 import { CartDrawer } from '@/components/cart/CartDrawer'
 import { api } from '@/lib/api/client'
 
-/** Announces the new page on every route change for screen-reader users, who
- * otherwise get told nothing when a SPA navigates.
+/** Announces the new page on every route change for screen-reader users, who otherwise
+ * get told nothing when a SPA navigates.
  *
- * An aria-live region only announces when its text actually changes, so this must not
- * derive the message from `document.title` — nothing in this application sets it
- * per-route, so the text would be identical on every route and the region would never
- * announce.
+ * Reads the page's real `<h1>` (via `PageTitle`, the single `<h1>` per route) rather
+ * than `document.title` — nothing sets the title per-route, so an aria-live region
+ * keyed off it would never change and never announce. `document.title` is then updated
+ * from the same string so the tab and the announcement agree.
  *
- * It reads the page's real `<h1>` instead, which is the one string guaranteed to exist
- * and to differ per route: `PageTitle` is the single `<h1>` for every route by design
- * ("One <h1> per page — every route's title goes through this component so that rule
- * can't be violated by accident"). Deriving from it rather than adding titles to 45
- * page components keeps one source of truth instead of two that can drift.
- *
- * `document.title` is updated from the same string, so the browser tab and the
- * announcement cannot disagree — and the tab now says where the reader is too.
- *
- * A `MutationObserver` rather than a render-time read: the `<h1>` belongs to the route
- * component, which mounts AFTER this one renders, and most pages fetch their title
- * before they can show it. Reading during render would catch the previous page's
- * heading, or nothing at all. */
+ * A `MutationObserver`, not a render-time read: the route component's `<h1>` mounts
+ * after this one and most pages fetch their title before showing it, so a render-time
+ * read would catch the previous page's heading or nothing. */
 function RouteAnnouncer() {
   const { pathname } = useLocation()
   const [message, setMessage] = useState('')

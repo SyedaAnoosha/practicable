@@ -215,7 +215,7 @@ export function NotificationBell({
   useEffect(() => {
     if (!open || !buttonRef.current) return
 
-    // `[CHANGED 2026-08-25]` Prefer opening downward. The bell now lives in AppHeader
+    // Prefer opening downward. The bell now lives in AppHeader
     // at the top of the viewport, where there is almost never 384px above it — the old
     // "upward unless it doesn't fit" preference was written for the bell's previous
     // home at the bottom of the member sidebar, and in the header it made the panel

@@ -1,9 +1,7 @@
-// Regression coverage for a real bug found during Phase 6B verification
-// (week4_plan.md): non-negotiable #15 says "unknown is null, zero is 0, and
-// the two are different", but MetricTile always rendered a bare number —
-// there was no branch that ever rendered an empty sentence, so a metric with
-// nothing to compute from (denominator 0) looked identical to a metric that
-// was genuinely, meaningfully zero.
+// Regression coverage: "unknown is null, zero is 0, and the two are different",
+// but MetricTile always rendered a bare number — there was no branch that rendered
+// an empty sentence, so a metric with nothing to compute from (denominator 0) looked
+// identical to a metric that was genuinely, meaningfully zero.
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MetricTile } from '../MetricTile'
@@ -32,7 +30,7 @@ describe('MetricTile', () => {
       />,
     )
     expect(screen.getByText('0.0%')).toBeInTheDocument()
-    // `[UPDATED 2026-08-22]` Was `'(0 / 5)'`. The redesign drops the parentheses — the
+    // Was `'(0 / 5)'`. The redesign drops the parentheses — the
     // counts now sit beside the percentage as their own muted element rather than as a
     // parenthetical. What this test is actually for is that a genuine 0-of-5 shows the
     // underlying counts and is not confused with "no data", and that still holds.
@@ -60,7 +58,7 @@ describe('MetricTile', () => {
   })
 
   it('renders any money-flagged tile in dollars, whatever its label', () => {
-    /* `[ADDED 2026-08-22]` The regression this guards is the one the owner actually
+    /* The regression this guards is the one the owner actually
        hit: money-ness was inferred from `name === 'total_revenue'`, so the Revenue
        Breakdown tiles — which pass display strings like "Gross revenue" — fell through
        to the integer branch and printed raw cents. A$177.00 showed as "17700" under a

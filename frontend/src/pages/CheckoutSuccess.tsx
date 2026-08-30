@@ -48,7 +48,7 @@ const POLL_TIMEOUT_MS = 45_000
 // entitlement necessarily arrives, so this page polls rather than assuming access
 // exists, and never shows a locked screen or bare spinner to someone who already paid.
 //
-// week3_plan.md W3-R11 — `product_slugs` (plural, comma-joined) replaces the old
+// `product_slugs` (plural, comma-joined) replaces the old
 // singular `product_slug`; a direct "Buy" is just the one-slug case of the same param,
 // not a second code path (checkout.py builds this same query string either way).
 export function CheckoutSuccess() {
@@ -93,7 +93,7 @@ export function CheckoutSuccess() {
           return
         }
       } catch {
-        // transient failure — the interval below just tries again
+        // Transient failure — the interval below just tries again
       }
       if (Date.now() - (startedAt.current ?? Date.now()) >= POLL_TIMEOUT_MS) {
         if (!cancelled) setTimedOut(true)

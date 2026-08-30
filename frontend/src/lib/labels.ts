@@ -11,7 +11,7 @@
 export const REFUND_POSITION_TEXT =
   "You're covered by your consumer-guarantee rights, regardless of anything else stated here."
 
-// ── Refunded access, said out loud (W4-R20, ledger row 92) ──────────────────────
+// ── Refunded access, said out loud ──────────────────────
 // Before this, a refunded buyer opening a course they used to own saw an ordinary buy
 // page: the entitlement gate had correctly removed access, and nothing on the page
 // acknowledged it. That reads as the site losing their purchase, which is worse than
@@ -72,21 +72,12 @@ export const WHY_BUY_CLAIMS = [
   },
 ] as const
 
-// The objection block — five things, placed below WhyThis on product pages.
+// The objection block — five things, below WhyThis on product pages.
 //
-// The refund policy differs by product type. A single shared array would promise a
-// template buyer "refunds up to 15% course completion" for a file with no completion to
-// measure, and the self-serve refund endpoint (`POST /me/orders/{id}/refund`) refuses
-// any order that resolves to no course at all ("This order doesn't include a course").
-//
-// The other four entries are genuinely shared, so they stay in one place and only
-// `Refund policy` — plus `What it opens in`, which had the same courses-and-templates
-// hedge — varies by type. Each variant is written from what the code actually enforces:
-//   • eligibility  = max course progress ≤ 15%  (me.py `max_progress > 15`)
-//   • amount       = 85% refunded, buyer keeps 15%  (me.py `REFUND_KEEP_PERCENT`)
-//   • no course in the order → no self-serve refund, contact support instead
-// Consumer-guarantee rights are stated in every variant because they are not waivable
-// and do not depend on the product type.
+// `Refund policy` and `What it opens in` vary by product type (the other three are
+// shared). The refund variants match what the code enforces: eligibility = max course
+// progress ≤ 15%, amount = 85% refunded, and an order with no course has no self-serve
+// refund at all. Consumer-guarantee rights appear in every variant — not waivable.
 
 type ObjectionItem = {
   readonly label: string

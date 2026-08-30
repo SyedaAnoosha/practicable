@@ -86,7 +86,7 @@ export function AdminProducts() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      // Phase 8 (8B-9): price is deliberately NOT sent from this form when editing —
+      // Price is deliberately NOT sent from this form when editing —
       // it goes through the dedicated "Change price" control below, via the one
       // /price endpoint, from all three surfaces. stripe_price_id/price_amount are
       // still required by the schema (it also serves create), so the existing values
@@ -119,7 +119,7 @@ export function AdminProducts() {
     onError: (e) => setError(readError(e)),
   })
 
-  // Phase 8 (8B-3/8B-9): the one price-change endpoint, third surface (AdminCourses
+  // The one price-change endpoint, third surface (AdminCourses
   // and AdminTemplates already use it against a course's/template's linked product).
   const [changePriceId, setChangePriceId] = useState<string | null>(null)
   const [newPriceAmount, setNewPriceAmount] = useState('')
@@ -330,7 +330,7 @@ export function AdminProducts() {
                         {p.licence && <span>Licence: {p.licence}</span>}
                         {p.version && <span>v{p.version}</span>}
                       </div>
-                      {/* Phase 8 (8B-3/8B-9): price change — one endpoint, third surface. */}
+                      {/* Price change — one endpoint, third surface. */}
                       {changePriceId === p.id ? (
                         <div className="mt-3 flex items-end gap-2">
                           <label className="block">

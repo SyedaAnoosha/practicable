@@ -1,7 +1,7 @@
 /**
  * The editor pane must be styled by the SAME class the reading page uses.
  *
- * Owner report 2026-08-22: *"if i am selecting h2, bullets, bold nothing is shown in the
+ * Owner report: *"if i am selecting h2, bullets, bold nothing is shown in the
  * actual reading lesson."* The main fault was server-side (see
  * `backend/tests/test_lesson_prose_round_trip.py`), but tracing it surfaced a second,
  * quieter problem in the editor itself: the pane carried `prose prose-sm` alongside

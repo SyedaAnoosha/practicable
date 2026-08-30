@@ -68,26 +68,13 @@ ALLOWED_PROTOCOLS: frozenset[str] = frozenset({"http", "https", "mailto"})
 # ── Public API ────────────────────────────────────────────────────────────────
 
 # ── Plain text arriving where HTML was expected ───────────────────────────────
-# `prose_sanitized` is rendered with `dangerouslySetInnerHTML`, and `Learn.tsx` switches
-# to that path the moment the column is non-null. So a body that reaches this function as
-# **plain text** — pasted straight in, or written before the editor existed — is stored
-# verbatim, and the browser then collapses every newline into a single space. The reader
-# gets one undifferentiated wall of text, and the plain-text fallback that would have
-# rendered it correctly (`whitespace-pre-line`) is skipped precisely because the column
-# is set.
-#
-# `frontend/src/lib/utils/plainTextToEditorHtml.ts` already solved this shape for the
-# editor's LOAD path. It was never applied on save, so the bad value still reached the
-# database. This is the server-side twin, and it deliberately matches that file's rules:
-#
-#   * one `<p>` per blank-line-separated paragraph, single newlines becoming `<br>`
-#   * HTML-escaped first, so a literal `<` or `&` in old prose renders as that character
-#   * **no guessing of structure** — a line starting "1." does NOT become an `<li>`, and
-#     a short line does NOT become a heading. Silently restructuring content the author
-#     never asked to have restructured is a worse failure than a flat paragraph.
-#
-# Applied only when the input contains no block-level markup at all, so it can never
-# touch real editor output.
+# `prose_sanitized` is rendered with `dangerouslySetInnerHTML`, so a body that reaches
+# this function as plain text (pasted in, or pre-editor) would be stored verbatim and
+# rendered as one wall of collapsed newlines. This is the server-side twin of
+# `frontend/src/lib/utils/plainTextToEditorHtml.ts` (which only ran on load): one `<p>`
+# per blank-line-separated paragraph, single newlines to `<br>`, HTML-escaped first, and
+# NO guessing of structure ("1." does not become an `<li>`). Applied only when the input
+# has no block-level markup, so it never touches real editor output.
 
 # Any HTML tag at all. Deliberately NOT a list of block-level tags: a body whose only
 # markup is `<img>` or `<body onload=...>` has no block tag, and treating it as plain

@@ -1,16 +1,16 @@
 /**
- * W4-R4 item 6 (ledger row 29) and W4-R4 acceptance 2, on the client side.
+ * On the client side.
  *
  * Two properties that are easy to break silently and impossible to notice by looking:
  *
- *  1. **Both routes to the product record the click.** Each panel renders the product
- *     name as a link AND a "View" button pointing at the same place. A reader who taps
- *     the name followed the same recommendation as one who taps the button; wiring only
- *     the button would undercount by however many people prefer the title.
- *  2. **The question titles are links, not `<strong>`.** W4-R4's acceptance says "by
- *     title, as a link", and the link is what makes the explanation checkable — a reader
- *     who doubts the recommendation can open the question and judge for themselves.
- *     Both panels rendered inert `<strong>` before 2026-08-22.
+ * 1. **Both routes to the product record the click.** Each panel renders the product
+ * name as a link AND a "View" button pointing at the same place. A reader who taps
+ * the name followed the same recommendation as one who taps the button; wiring only
+ * the button would undercount by however many people prefer the title.
+ * 2. **The question titles are links, not `<strong>`.** W4-R4's acceptance says "by
+ * title, as a link", and the link is what makes the explanation checkable — a reader
+ * who doubts the recommendation can open the question and judge for themselves.
+ * Both panels rendered inert `<strong>` before.
  *
  * The event contract is fire-and-forget, so the assertions are about what was SENT.
  * Nothing here should ever assert that a failed post surfaces to the reader — the

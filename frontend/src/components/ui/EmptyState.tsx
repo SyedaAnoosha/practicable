@@ -6,7 +6,7 @@ export interface EmptyStateProps {
   title: string
   description?: string
   /** Icon rendered in a quiet tile above the title — the visual hook that makes the
-   * empty state feel like an invitation, not an error (§36). Fixed §14.1 icons only. */
+   * empty state feel like an invitation, not an error. Fixed §14.1 icons only. */
   icon?: LucideIcon
   action?: ReactNode
   className?: string

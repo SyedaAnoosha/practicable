@@ -133,10 +133,10 @@ export function AdminPacks() {
     onError: (e) => setError(readError(e)),
   })
 
-  // Phase 9A re-verification (2026-08-21): the create form set a price, but nothing
+  // The create form set a price, but nothing
   // let an existing pack's price be *changed* afterward — courses and templates both
   // had this via POST /admin/products/{id}/price (one endpoint, three surfaces per
-  // §9A step 3); packs was the one editor missing it. Same endpoint, same pattern.
+  // packs was the one editor missing it. Same endpoint, same pattern.
   const [changePriceId, setChangePriceId] = useState<string | null>(null)
   const [changePriceAmount, setChangePriceAmount] = useState('')
   const changePrice = useMutation({
@@ -246,7 +246,7 @@ export function AdminPacks() {
             {/* Questions */}
             <div>
               <p className="text-sm font-medium">Questions</p>
-              {/* `[CHANGED 2026-08-22, owner direction]` Was "Select at least 1 question set." Questions are no longer required to create or publish a pack — the reference document is what it sells — so the copy no longer states a rule the API does not enforce. */}
+              {/* Was "Select at least 1 question set." Questions are no longer required to create or publish a pack — the reference document is what it sells — so the copy no longer states a rule the API does not enforce. */}
               <p className="mt-0.5 text-xs text-muted-foreground">Optional — attach the questions this document covers.</p>
               <div className="mt-2 max-h-60 flex flex-col gap-1.5 overflow-y-auto">
                 {availableQuestions?.map((q) => {
@@ -300,7 +300,7 @@ export function AdminPacks() {
                           </span>
                         )}
                       </div>
-                      {/* Phase 9A: price control — stripe_price_id stays read-only
+                      {/* Price control — stripe_price_id stays read-only
                           everywhere; this is the one endpoint that writes it. */}
                       {changePriceId === p.id && (
                         <div className="mt-2 flex items-end gap-2">
@@ -319,7 +319,7 @@ export function AdminPacks() {
                             onClick={() => {
                               const cents = dollarsToCents(changePriceAmount)
                               if (!Number.isFinite(cents) || cents <= 0) return
-                              // Phase 8 (8B-7): fat-finger protection — a ±50% swing
+                              // Fat-finger protection — a ±50% swing
                               // is confirmed before it charges a real card.
                               if (
                                 priceChangeNeedsConfirm(p.price_amount, cents) &&

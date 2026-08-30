@@ -1,9 +1,7 @@
 /**
- * Phase 9A DoD: Questions editor has no commerce controls, asserted by test.
- *
- * week4_plan.md §30A.5: "Questions carry no commerce controls. Every question is
- * free to read and always will be. A price field on a question editor would be a
- * control that must never be used, which is worse than no control."
+ * Questions editor has no commerce controls, asserted by test. Every question is
+ * free to read and always will be — a price field on a question editor would be a
+ * control that must never be used, which is worse than no control.
  *
  * This test verifies the component doesn't render price, Stripe, or create-product
  * elements. It's a structural assertion — if someone adds a price field to the

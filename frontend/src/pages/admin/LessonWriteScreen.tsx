@@ -1,19 +1,11 @@
 /**
- * LessonWriteScreen — full-screen lesson/block prose editor (week4_plan.md Phase 8,
- * "8E-continued", `[OWNER INSTRUCTION 2026-08-21]`).
+ * LessonWriteScreen — full-screen lesson/block prose editor, a real route (own screen,
+ * own Back control) replacing the cramped, non-addressable modal AdminCourses.tsx used
+ * to render for the "Write" buttons.
  *
- * Replaces the centred `max-w-2xl` modal AdminCourses.tsx used to render for both the
- * lesson-body "Write" button and the block text/callout "Write" button — cramped for
- * sustained writing, and not addressable by its own URL (no Back button semantics, no
- * refresh-safety, no direct link). This is a real route instead: its own screen, its
- * own Back control, Save and Cancel both return to the course editor.
- *
- * Deliberately reuses `admin.course(courseId)` — the same query AdminCourses.tsx's
- * CourseBuilder already populates — rather than fetching a lesson/block individually.
- * There is no single-lesson or single-block admin GET endpoint; the course detail
- * response is the only place either one lives, and it's already cached from the course
- * list flow the admin came from, so this loads instantly rather than showing a second
- * spinner for data already in memory.
+ * Reuses the cached `admin.course(courseId)` query rather than fetching a lesson/block
+ * individually — there is no single-lesson/block admin GET endpoint, and the course
+ * detail response the admin already loaded is the only place either lives.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'

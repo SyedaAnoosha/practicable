@@ -11,17 +11,9 @@ export interface MetaItem {
 }
 
 /**
- * The icon-metadata row (design-research §5.4 M5, "metadata richness").
- *
- * The research finding was that valuable-feeling cards answer the decision question on
- * the card — DataCamp fits seven facts in ~150px, Udemy eight in ~330px — while
- * Practicable's course and template cards carried two or three, styled identically to
- * the body text around them. This is the row that fixes that.
- *
- * Numbers set in the mono face by default. theme.css chose Azeret Mono because it
- * "reads as data because it was chosen, not because it was the default mono", and then
- * used it only for the eyebrow. Spending it on counts and durations is the cheapest
- * visual differentiation available in the system — no layout change, no new colour.
+ * The icon-metadata row — the decision facts (counts, durations, level) packed onto a
+ * card. Numbers set in the mono face by default (the cheapest visual differentiation in
+ * the system: no layout change, no new colour).
  */
 export function Meta({
   items,
@@ -33,29 +25,12 @@ export function Meta({
   className?: string
   /** Optional CSS colour for the icons (a domain colour). */
   tone?: string
-  /** `[ADDED 2026-08-23]` Lay the row out as a single non-wrapping line whose cells
-   *  size to their content, instead of a wrapping flex line.
-   *
-   *  The default flex row is right for a variable-length list, but wrong wherever the
-   *  same facts appear on every card in a grid. Course cards carry modules / lessons /
-   *  level / duration, and `level` is a word of unpredictable width ("beginner" vs
-   *  "intermediate") sitting between two short figures. The row therefore wrapped at a
-   *  different item on each card, and the wrapped item kept the `index > 0` left
-   *  hairline — which then read as a stray leading rule at the start of line two,
-   *  aligned to nothing.
-   *
-   *  `[CORRECTED 2026-08-23]` The first attempt at this made every cell an equal
-   *  `1fr` grid column. That aligned the separators and then truncated the values to
-   *  fit them — "beginner" rendered as "be…", "2h 20m" as "2…". Alignment bought by
-   *  hiding the data is a worse card than the ragged one: the row exists to answer
-   *  "is this course for me and how long is it", and neither question survives an
-   *  ellipsis.
-   *
-   *  So the cells size to their content and the row never wraps. The two short counts
-   *  take the space they need, level and duration take theirs, and every value stays
-   *  legible in full. What this guarantees is a single clean line with evenly-spaced
-   *  separators on every card — not identical x-positions across cards, which is not
-   *  worth truncating real values to achieve. */
+  /** Lay the row out as a single non-wrapping line whose cells size to their content,
+   * instead of a wrapping flex line. Use where the same facts appear on every card in a
+   * grid: a wrapping row breaks at a different item per card and leaves a stray leading
+   * hairline on line two. Cells size to content (not equal `1fr` columns, which would
+   * truncate "beginner" to "be…"); separators stay evenly spaced without forcing
+   * identical x-positions across cards. */
   singleLine?: boolean
 }) {
   // Callers build these lists inline with && guards, so falsy entries are expected

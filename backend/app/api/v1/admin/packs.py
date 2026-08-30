@@ -1,4 +1,4 @@
-"""Phase 9A (W4-R19): Admin CRUD for packs (reference packs and domain packs).
+"""Admin CRUD for packs (reference packs and domain packs).
 
 A pack is a Product whose product_contents include >= 1 `template` row and >= 1
 `question_set` row. This module creates and manages such products, selecting which
@@ -74,12 +74,6 @@ class PackOut(BaseModel):
 
 
 async def _count_content_types(product_id: uuid.UUID, session: AsyncSession) -> dict[str, int]:
-    # Found 2026-08-21 (Phase 9A re-verification): this was a plain `def` calling
-    # `session.execute(...)` unawaited on an AsyncSession — every caller (list, create,
-    # update, publish) got back a bare coroutine object and crashed with
-    # `AttributeError: 'coroutine' object has no attribute 'all'` the moment it actually
-    # ran. No existing test exercised /admin/packs create/list/publish, which is why
-    # this had never been caught — the whole pack purchasability path was unreachable.
     result = await session.execute(
         select(ProductContent.content_type, func.count(ProductContent.id))
         .where(ProductContent.product_id == product_id)
@@ -131,11 +125,10 @@ async def _pack_to_out(product: Product, session: AsyncSession) -> PackOut:
         and product.stripe_price_id != STRIPE_PRICE_UNSET
     )
 
-    # `[CHANGED 2026-08-22, owner direction]` A pack no longer has to carry questions.
-    # The thing a buyer pays for is the reference document, and a perfectly legitimate
-    # pack is a standalone PDF with no curated question list attached — blocking publish
-    # on that made an entire product shape unshippable.
-    # The template requirement stays: a pack with no file is genuinely nothing to sell.
+    # A pack does not have to carry questions: the thing a buyer pays for is the
+    # reference document, and a standalone PDF with no curated question list is a
+    # legitimate pack. The template requirement stays: a pack with no file is nothing
+    # to sell.
     if not has_template:
         readiness = "no_template"
         readiness_message = "Needs at least 1 template (the PDF)"
@@ -203,9 +196,9 @@ async def create_pack(
     # Validate contents
     template_count = sum(1 for c in payload.contents if c.content_type == "template")
     question_count = sum(1 for c in payload.contents if c.content_type == "question_set")
-    # `[CHANGED 2026-08-22, owner direction]` Questions are no longer required — see the
-    # readiness note in `_pack_to_out`. A pack sells a reference document; a curated
-    # question list is a common addition, not part of the definition. The template is
+    # Questions are not required — see the readiness note in `_pack_to_out`. A pack
+    # sells a reference document; a curated question list is a common addition, not part
+    # of the definition. The template is
     # still required, because a pack with no file is nothing.
     if template_count < 1:
         raise HTTPException(
@@ -330,10 +323,9 @@ async def set_pack_published(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={"error": {"code": "no_template", "message": "A pack needs at least 1 template (the PDF)."}},
             )
-        # `[REMOVED 2026-08-22, owner direction]` The "a pack needs at least 1 question
-        # set" gate used to live here. See the readiness note above: a pack whose value
-        # is the reference document alone is a real product, and this refused to publish
-        # it. The template gate above is the one that still matters.
+        # No "at least 1 question set" gate: a pack whose value is the reference
+        # document alone is a real product. The template gate above is the one that
+        # matters.
         # Price check
         price_check = check_stripe_price(
             stripe_price_id=product.stripe_price_id,

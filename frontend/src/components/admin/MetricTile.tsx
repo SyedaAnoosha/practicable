@@ -10,7 +10,7 @@ interface MetricTileProps {
   denominator: number | null | undefined
   description: string
   className?: string
-  /** `[ADDED 2026-08-22]` Money-ness used to be inferred from `name === 'total_revenue'`,
+  /** Money-ness used to be inferred from `name === 'total_revenue'`,
    * which only ever worked for the one tile whose name happened to match. The Revenue
    * Breakdown section passes display strings ("Gross revenue", "Refunded", "Net
    * revenue"), so all three fell through to the integer branch and printed raw cents —
@@ -20,7 +20,7 @@ interface MetricTileProps {
   money?: boolean
 }
 
-/** `[ADDED 2026-08-22]` The API sends a metric's machine name (`second_purchase_rate`)
+/** The API sends a metric's machine name (`second_purchase_rate`)
  * and the tile printed it verbatim, so the admin read as a database dump —
  * `signup_to_purchase_days`, `download_links_issued`, `free_to_paid`. Nothing else in
  * the product shows a raw identifier to a person.
@@ -54,7 +54,7 @@ export function MetricTile({
   className,
   money,
 }: MetricTileProps) {
-  /* `[FIXED 2026-08-22]` Was `!== null`, which `undefined` walks straight past — and
+  /* Was `!== null`, which `undefined` walks straight past — and
      an absent field from a partial API response arrives as `undefined`, not `null`.
      The tile then called `.toLocaleString()` on it and threw, crashing the entire
      admin metrics page rather than rendering one tile as unknown.
@@ -65,7 +65,7 @@ export function MetricTile({
   const isRatio = hasData && denominator > 1
   const percentage = isRatio && denominator > 0 ? ((numerator / denominator) * 100).toFixed(1) : null
 
-  /* `[FIXED 2026-08-22]` `total_revenue` is stored in cents, and the tile printed the
+  /* `total_revenue` is stored in cents, and the tile printed the
    * integer — so A$177.00 of takings displayed as a bold "17,700" under the heading
    * "Orders & Revenue". Every plausible misreading of that is a large overstatement of
    * the business, which is the worst direction for a number on an owner's dashboard to
@@ -81,7 +81,7 @@ export function MetricTile({
 
   const showsPercentage = !isMoney && isRatio && percentage !== null
 
-  /* `[REDESIGNED 2026-08-22]` The tile was a default Card with a `pb-2` header and a
+  /* The tile was a default Card with a `pb-2` header and a
    * `text-2xl` number — the label read at the same weight as the figure, and the
    * description sat 4px under the value with no separation, so a grid of these was a
    * wall of undifferentiated grey text. The number is the reason the tile exists, so

@@ -68,12 +68,9 @@ class AssessmentOut(BaseModel):
     id: str
     module_id: str
     course_id: Optional[str] = None
-    # `[ADDED 2026-08-25, owner direction]` "show which assessment belongs to which
-    # course and module." The ids were already resolved here and then thrown away, so
-    # the admin list could only print the literal words "Module assessment" against
-    # every row — with several courses each having a "Final Assessment", nothing on the
-    # page said which was which. The titles cost no extra query: the module lookup that
-    # produces `course_id` already loads both rows.
+    # Titles so the admin list can show which assessment belongs to which course and
+    # module (several courses each have a "Final Assessment"). No extra query: the
+    # module lookup that produces `course_id` already loads both rows.
     module_title: Optional[str] = None
     course_title: Optional[str] = None
     title: str

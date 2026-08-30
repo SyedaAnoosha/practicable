@@ -7,7 +7,7 @@ interface VersionStampProps {
   className?: string
 }
 
-// week4_plan.md §20.4 — `v1.2 · reviewed 17 Aug 2026`. Unset version renders nothing;
+// `v1.2 · reviewed 17 Aug 2026`. Unset version renders nothing;
 // unset lastReviewedAt with a set version renders `v1.2` alone (the absence rule).
 export const VersionStamp = ({ version, lastReviewedAt, className }: VersionStampProps) => {
   if (!version && !lastReviewedAt) return null

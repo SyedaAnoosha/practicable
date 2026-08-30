@@ -1,20 +1,18 @@
 /**
- * Phase 8 (8G-11): Render test for ProductsMenu.
- *
- * week4_plan.md §8G-11: "a render test asserting menu items are <a href> elements,
- * which is the regression that would otherwise ship silently."
+ * Render test for ProductsMenu: menu items must be `<a href>` elements — the
+ * regression that would otherwise ship silently.
  *
  * Every item must be a real anchor — cmd-click, middle-click and "copy link address"
- * must all still work. This is the DoD line because it is exactly what a hand-rolled
+ * must all still work. This matters because it is exactly what a hand-rolled
  * menu breaks.
  *
- * The DoD line previously claimed this suite asserted <a href> elements when it never
- * actually opened the menu — found and fixed 2026-08-21. `userEvent.click` genuinely
+ * This suite previously claimed this suite asserted <a href> elements when it never
+ * actually opened the menu — found and fixed. `userEvent.click` genuinely
  * cannot open the menu in jsdom (confirmed directly): its click sequence fires its own
  * `mousedown` first, which the outside-click listener (`mousedown` on `document`) sees
  * and closes the menu on, before the `click` handler that would open it ever runs.
  * `fireEvent.click` fires only the `click` event and sidesteps that race — used below
- * for exactly the open-state assertions the DoD line claimed already existed.
+ * for exactly the open-state assertions the suite claimed already existed.
  */
 import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'

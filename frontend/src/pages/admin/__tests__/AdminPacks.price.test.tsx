@@ -1,5 +1,5 @@
 /**
- * Phase 9A re-verification (2026-08-21): "Price editable from the course, template
+ * "Price editable from the course, template
  * and pack editors, through one endpoint" — but AdminPacks.tsx only ever let a price
  * be set at pack *creation*; there was no control to change an existing pack's price
  * afterward (courses and templates both had one, via POST /admin/products/{id}/price).

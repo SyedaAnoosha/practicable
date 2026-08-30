@@ -117,7 +117,7 @@ interface CourseDetailData {
   modules: ModuleOut[]
   related_products: RelatedProduct[]
   /** ISO timestamp when a refund ended this reader's access to this course. Null in
-   *  every other case, including a course they never bought (W4-R20, ledger row 92). */
+   * every other case, including a course they never bought. */
   access_ended_at?: string | null
   /** W5-R2: whether this reader has completed every lesson in the course. */
   completed: boolean
@@ -142,8 +142,8 @@ function formatDuration(seconds: number | null): string | null {
 }
 
 /** Total runtime across a module's lessons, as "1h 12m" / "37 min". Returns null when
- *  no lesson in the module carries a duration — an absent total is better than "0 min",
- *  which would read as a claim that the module is empty. */
+ * no lesson in the module carries a duration — an absent total is better than "0 min",
+ * which would read as a claim that the module is empty. */
 function moduleDuration(module: ModuleOut): string | null {
   const total = module.lessons.reduce((sum, l) => sum + (l.duration_seconds ?? 0), 0)
   if (!total) return null
@@ -157,7 +157,7 @@ function moduleDuration(module: ModuleOut): string | null {
 // DESIGN.md §23.3's course product page — the public syllabus a stranger reads before
 // buying.
 //
-// `[REBUILT 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md §9 P0 items 1/5/6]`
+// 
 // The previous version was a max-w-4xl single column: title, a run-on muted metadata
 // line, a flat fully-expanded syllabus, and `related_products` fetched but never
 // rendered. The research capture found every comparable page in the market uses a dark
@@ -332,7 +332,7 @@ export function CourseDetail() {
                     {row}
                   </Link>
                 ) : (
-                  /* `[FIXED 2026-08-22, Redesing_decisions.md F4 — P0]` This was
+                  /* This was
                    * `opacity-60`, which is precisely the treatment F4 forbids: "never a
                    * greyed-out, disabled-looking title — the user should read clearly
                    * what they're missing; that's the persuasive mechanism."
@@ -440,7 +440,7 @@ export function CourseDetail() {
                   of the "Continue the course" CTA. A completed course with no certificate
                   is an edge case (certificate generation failed) — show Continue so the
                   learner can re-trigger completion. */}
-              {/* `[FIXED 2026-08-25]` "View certificate" used to link to
+              {/* "View certificate" used to link to
                   `/verify/:code` — the PUBLIC verification page, which shows a stranger
                   checking someone's credential a name/course/date record and no
                   certificate at all. A learner clicking it on their own completed course
@@ -485,7 +485,7 @@ export function CourseDetail() {
                   target this page could link to. Each module's assessment is linked
                   from its own row in Learn.tsx, which knows the specific module id. */}
 
-              {/* W4-R20 / ledger row 92 — the fourth state. Without this a refunded
+              {/* The fourth state. Without this a refunded
                   buyer saw an ordinary buy page and was never told what happened.
                   `muted`, never `destructive`: a refund they asked for is a completed
                   transaction, not an error. The buy rail below stays exactly as it is,
@@ -576,7 +576,7 @@ export function CourseDetail() {
               />
             )}
 
-            {/* `[ADDED 2026-08-22, Redesing_decisions.md B5 — P1]` The hero already
+            {/* The hero already
                 names the author on the stage plane, but a name alone is an assertion.
                 The credential is what makes it evidence, and `AuthorCard` — built for
                 exactly this and until now used on no page at all — carries it.
@@ -628,7 +628,7 @@ export function CourseDetail() {
               which the audit noted was the best-built page in the app while this one had
               no rail at all. Hidden entirely once owned, per §23.2's "never show a price
               on something the user already owns". */}
-          {/* `[ADDED 2026-08-22]` A published course with no published product rendered
+          {/* A published course with no published product rendered
               *nothing* here — no price, no CTA, no explanation — and the mobile buy bar
               disappeared with it. A visitor reached a full syllabus and had no way to
               tell whether they had missed a button, whether the page was broken, or

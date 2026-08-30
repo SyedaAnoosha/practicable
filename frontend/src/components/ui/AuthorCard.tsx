@@ -11,16 +11,9 @@ interface AuthorCardProps {
 }
 
 /**
- * Author information card. Shows name and bio with a consistent visual treatment.
- *
- * Used on course detail pages and template detail pages where the author's identity
- * adds credibility. The research audit found Practicable had no author presentation
- * anywhere — courses and templates carried an author FK but the public pages never
- * showed who wrote them.
- *
- * Design: uses the existing panel-tone pattern for the avatar area, with the brand
- * primary as the default tone. No domain colour — the author is not scoped to one
- * domain.
+ * Author name + bio card, on course and template detail pages. Panel-tone avatar area
+ * with the brand primary as default tone; no domain colour — the author isn't scoped to
+ * one domain.
  */
 export function AuthorCard({
   name,
@@ -84,7 +77,7 @@ function Avatar({
   const textColor = `hsl(${hue}, 45%, 35%)`
 
   if (url) {
-    // `[ADDED 2026-08-22, Redesigning_decisions.md K2]` Intrinsic width/height, not just
+    // Intrinsic width/height, not just
     // the Tailwind size class. The class already reserves the box, so this is not about
     // CLS here — it is so the browser knows the aspect ratio before the bytes arrive and
     // does not have to re-rasterise once they do. 36px / 48px match `size-9` / `size-12`.

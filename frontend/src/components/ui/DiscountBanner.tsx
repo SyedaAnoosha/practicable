@@ -4,16 +4,10 @@ import { useActivePromotion } from '@/hooks/useActivePromotion'
 import { setActivePromoCode } from '@/lib/promo'
 
 /**
- * A site-wide promotional banner offering a discount code at checkout.
- *
- * Fetches the active promotion from GET /promotions/active. When loading,
- * rendering nothing (not a skeleton) to avoid a CLS regression against the
- * DESIGN.md §43 budget of 0.05. When there is no promotion or the fetch
- * fails, the banner is absent and the page layout does not shift.
- *
- * Dismissible — once closed, stays closed for this browser (localStorage).
- * The dismissal key is keyed on the promotion code so a *new* offer is not
- * pre-dismissed for everyone who closed the old one.
+ * A site-wide promotional banner from GET /promotions/active. Renders nothing while
+ * loading or when there's no promotion (not a skeleton — avoids CLS). Dismissible per
+ * browser via localStorage, keyed on the promotion code so a new offer isn't
+ * pre-dismissed.
  */
 export function DiscountBanner() {
   const { data: promotion, isLoading } = useActivePromotion()

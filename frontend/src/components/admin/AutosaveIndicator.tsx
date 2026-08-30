@@ -3,13 +3,13 @@ import { cn } from '@/lib/utils/cn'
 
 export type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
-/** week2_plan.md §20.8 — "the highest-value gap in §31.8." Sticky in the editor
+/** "the highest-value gap in §31.8." Sticky in the editor
  * header, never a floating toast that covers a field.
  *
  * ```
- * ✓ Saved 14:22        idle, after a successful save
- *   Saving…            in flight
- * ⚠ Not saved — retrying          on failure
+ * ✓ Saved 14:22 idle, after a successful save
+ * Saving… in flight
+ * ⚠ Not saved — retrying on failure
  * ```
  */
 export function AutosaveIndicator({ status, savedAt }: { status: AutosaveStatus; savedAt: Date | null }) {

@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/Input'
 import { FieldError } from '@/components/ui/FieldError'
 import { useFieldValidation } from '@/lib/useFieldValidation'
 
-/** Phase 10B: Security — password change.
- *  Client-side: verify with signInWithPassword, then updateUser({ password }).
- *  After success: write an audit row via POST /me/account/password-change. */
+/** Security — password change.
+ * Client-side: verify with signInWithPassword, then updateUser({ password }).
+ * After success: write an audit row via POST /me/account/password-change. */
 
 const MIN_PASSWORD_LENGTH = 8
 

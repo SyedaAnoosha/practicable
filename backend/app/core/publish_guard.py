@@ -90,12 +90,9 @@ async def check_content_overlap(
     if not this_rows:
         return OverlapResult()
 
-    # Find OTHER published products that grant any of the same content. Grouped by
-    # content_type into one bulk query per type (at most 3 today: template/lesson/
-    # question_set) rather than one query per content row — the loop this replaced was
-    # a real N+1: a product with 20 content rows issued 20 round trips despite this
-    # function's own docstring claiming a fixed query count. Matches the bulk-resolve
-    # idiom `resolve_granted_content_ids` and `_resolve_contents_bulk` establish elsewhere.
+    # Find OTHER published products granting any of the same content — one bulk query
+    # per content_type (at most 3: template/lesson/question_set), not one per content
+    # row. Matches the bulk-resolve idiom used elsewhere.
     ids_by_type: dict[str, list[uuid.UUID]] = {}
     for content_type, content_id in this_rows:
         ids_by_type.setdefault(content_type, []).append(content_id)
@@ -284,12 +281,9 @@ def check_stripe_price(
             message="Stripe price is inactive. Reactivate it in Stripe or create a new price.",
         )
 
-    # Check 4: Cross-mode (test key against live price or vice versa)
-    #
-    # Mode is taken from the `_test_` / `_live_` infix, which is present on every
-    # Stripe key form (sk_, rk_, pk_) and is the only part that actually encodes mode.
-    # A `startswith("sk_test_")` check would miss restricted keys (`rk_test_…` /
-    # `rk_live_…`), which this project uses, and produce a false mode-mismatch alarm.
+    # Check 4: cross-mode (test key against live price or vice versa). Mode comes from
+    # the `_test_`/`_live_` infix, present on every key form (sk_, rk_, pk_) — a
+    # `startswith("sk_test_")` check would miss the restricted keys this project uses.
     key = settings.stripe_secret_key or ""
     if "_test_" in key:
         key_is_live = False

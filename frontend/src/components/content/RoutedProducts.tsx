@@ -18,7 +18,7 @@ interface RelatedProduct {
 interface RoutedProductsProps {
   questionSlug: string
   /** The question's title — rendered in the panel explanation so the recommendation
-   *  names a real question, per week4_plan.md Phase 4 DoD item 1. */
+   * names a real question. */
   questionTitle: string
 }
 

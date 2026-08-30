@@ -8,10 +8,10 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { TokenizedVideoPreview } from '@/components/admin/TokenizedVideoPreview'
 
-// Phase 8 (8D-4): the third TokenizedVideoPreview placement — "the lesson editor,
+// The third TokenizedVideoPreview placement — "the lesson editor,
 // the block editor, and the media library." Every uploaded video in one place,
 // including ones attached via the legacy paste-a-playback-id flow, which is exactly
-// where a still-encoding or Mux-lost asset is most likely to surface (8D-3/8D-5).
+// where a still-encoding or Mux-lost asset is most likely to surface.
 
 interface MediaLibraryRow {
   id: string

@@ -2,12 +2,11 @@ import { LegalLayout, LegalSection } from '@/components/legal/LegalLayout'
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support'
 import { REFUND_POSITION_TEXT } from '@/lib/labels'
 
-// week2_plan.md W2-R7 / RS 11.3 — the ACCC's published position (tested in
-// ACCC v Valve) is that "no refunds", "all sales final" or "store credit only" are
-// THEMSELVES misleading conduct under the ACL, regardless of the product being
-// digital. This page states the statutory guarantees as applying independently of
-// anything below, per RS 11.3's explicit instruction — a clause purporting to
-// exclude them is void and risks being read as further misleading conduct.
+// The ACCC's published position (tested in ACCC v Valve) is that "no refunds", "all
+// sales final" or "store credit only" are THEMSELVES misleading conduct under the ACL,
+// regardless of the product being digital. This page states the statutory guarantees as
+// applying independently of anything below — a clause purporting to exclude them is void
+// and risks being read as further misleading conduct.
 export function Refunds() {
   return (
     <LegalLayout
@@ -15,7 +14,7 @@ export function Refunds() {
       description="Your consumer guarantees, and our policy on top of them — in plain language."
     >
       <LegalSection heading="Your consumer guarantees come first">
-        {/* week3_plan.md Phase 4 step 1 — the same sentence as /store's footer and the
+        {/* The same sentence as /store's footer and the
             receipt email, defined once in lib/labels.ts (and its byte-identical Python
             twin in backend/app/core/labels.py, since Jinja2 can't import a TS module). */}
         <p className="font-medium text-foreground">{REFUND_POSITION_TEXT}</p>

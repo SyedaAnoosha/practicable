@@ -57,8 +57,8 @@ function formatCurrency(cents: number, currency: string): string {
 }
 
 /** Pull the backend's error envelope message, matching AdminQuestions/AdminTemplates.
- *  Falls back to pydantic's array-shaped 422 body before the generic message, so a
- *  validation failure (a malformed email) says what was wrong instead of "try again". */
+ * Falls back to pydantic's array-shaped 422 body before the generic message, so a
+ * validation failure (a malformed email) says what was wrong instead of "try again". */
 function readError(err: unknown, fallback: string): string {
   const detail = (
     err as { response?: { data?: { detail?: unknown } } }

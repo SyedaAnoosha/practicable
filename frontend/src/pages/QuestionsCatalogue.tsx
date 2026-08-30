@@ -264,26 +264,16 @@ function FilterPanel({
     return map
   }, [questions])
   /**
-   * `[ADDED 2026-08-22, Redesing_decisions.md A1 — P0]` Per-value counts.
+   * Per-value counts: how many questions each filter option admits, shown before the
+   * user clicks. Counted from the already-cached question index, so no extra request and
+   * the numbers can't disagree with the results below.
    *
-   * Every filter option shows how many questions it admits BEFORE the user commits to
-   * a click. This is the taxonomy proving it is real, and it is the difference between
-   * a filter rail you explore and one you probe blindly until something returns
-   * nothing.
+   * UNCONDITIONAL counts (how many questions carry this value at all), not conditioned
+   * on the other active filters — conditional counts would change on every tap, so the
+   * number a user just read would be stale by the next one.
    *
-   * Counted from the already-cached question index (~40 KB at 100 questions), so there
-   * is no extra request and the numbers cannot disagree with the results below them.
-   *
-   * ⚠ Scaling threshold, per A1's caveat: this is O(questions x tags) on every render
-   * of the panel. At 100 questions that is ~700 operations and free. Past roughly 500
-   * questions / 250 KB the index stops being worth shipping to the client at all and
-   * the counting moves server-side behind a debounced endpoint — the UI does not
-   * change, the data source does.
-   *
-   * These are UNCONDITIONAL counts (how many questions carry this value at all), not
-   * counts conditioned on the other active filters. Conditional counts sound better and
-   * behave worse: every count in the rail changes on every tap, so the numbers a user
-   * just read are wrong by the time they reach for the next one.
+   * ⚠ O(questions x tags) per panel render. Fine at 100 questions; past ~500 the index
+   * isn't worth shipping to the client and the counting moves server-side.
    */
   const valueCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -446,7 +436,7 @@ function FilterPanel({
 
 const CLOSE_PREVIEW_COUNT = 3
 
-/* `[ADDED 2026-08-22]` How many exact results render before "Show more".
+/* How many exact results render before "Show more".
  *
  * The unfiltered page rendered all 100 questions at once: 100 rows x 138px =
  * **14,846px, 16.5 viewports** — measured against the live API, and by a wide margin
@@ -490,7 +480,7 @@ function QuestionRow({
       <Link
         to={`/questions/${question.slug}`}
         className={cn(
-          /* `[TIGHTENED 2026-08-22]` py-6 -> py-4. At py-6 with a trailing "Read the
+          /* py-6 -> py-4. At py-6 with a trailing "Read the
              answer" line each row cost ~135px and only four results fitted a 1440x1000
              viewport — the low-density failure the research names (§4: "more
              information in the same or less vertical space"). The row now carries MORE
@@ -531,7 +521,7 @@ function QuestionRow({
           </ul>
         )}
 
-        {/* `[CHANGED 2026-08-22]` Was "Read the answer →" on every row — a fake inline
+        {/* Was "Read the answer →" on every row — a fake inline
             button inside a link that is already the whole row, costing ~28px per result
             to repeat what the row already affords. Replaced with the row's actual
             decision facts (duration / cost / regulator pressure), which is the same
@@ -590,7 +580,7 @@ export function QuestionsCatalogue() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery])
 
-  /* `[CHANGED 2026-08-22, Redesing_decisions.md F3 — P0]` `isError`/`refetch` were not
+  /* `isError`/`refetch` were not
    * destructured, so a failed index fetch left `questions` undefined and every render
    * branch below false: the flagship discovery screen rendered its filter rail over a
    * silently blank column with no error, no retry and no explanation. */
@@ -707,7 +697,7 @@ export function QuestionsCatalogue() {
         description="Real questions from risk leaders, each tagged by effort, cost, duration and more."
       />
 
-      {/* week3_plan.md Phase 6 step 7 / DESIGN.md §42's "headings in order, no skipped
+      {/* DESIGN.md's "headings in order, no skipped
           levels" — see CoursesCatalogue.tsx for the full rationale; same fix, same
           reason (each QuestionRow's title below is h3). */}
       <h2 className="sr-only">Question results</h2>

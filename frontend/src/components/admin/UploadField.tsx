@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils/cn'
 import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
 
-/** week3_plan.md §20.4 — one component, two configurations, so a second upload widget
+/** One component, two configurations, so a second upload widget
  * (and a second upload bug) never has to happen. `kind` picks which admin endpoints it
  * talks to and which finished-state fields it hands back; everything else — the drop
  * zone, the progress bar, the honest `Uploading -> Processing -> Ready` states — is

@@ -10,7 +10,7 @@ import { resolveNextPath, signInUrlFor } from '@/lib/utils/nextPath'
 
 export function SignUp() {
   const navigate = useNavigate()
-  // `[CHANGED 2026-08-21, USER_FLOW_AUDIT.md §2]` See SignIn for why this is a query
+  // See SignIn for why this is a query
   // parameter. Sign-up is the COMMON path for a first purchase, so losing the
   // destination here is the more expensive of the two cases.
   const { search } = useLocation()

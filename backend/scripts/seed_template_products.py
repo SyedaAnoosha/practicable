@@ -4,10 +4,8 @@
 OWNER RULE: a TEMPLATE may be sold as a single file — that is what a template is. A PACK
 is what must hold more than one template, and a pack may only be a single file when what
 it sells is a questions PDF (as `risk-enterprise-op-question-pack` does).
-`delete_single_file_products.py` applies the file-count rule to every product regardless
-of type, which also removes single-file TEMPLATE products; this restores them.
 
-This restores a product per template. It does NOT recreate the deleted packs.
+This restores a product per unsold template. It does NOT recreate any deleted packs.
 
 WHY THESE PRICES.
   Taken from the products that previously sold these same files, so nothing is invented

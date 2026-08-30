@@ -1,20 +1,10 @@
 /**
- * Saved items (W5-R5).
+ * Saved items — the read side of the bookmarks feature.
  *
- * Closes the second half of the bookmarks feature. `BookmarkButton` let a learner save
- * an item, but nothing let them see what they had saved — the list endpoint existed and
- * no route rendered it, so saving was a write-only gesture. A "save" that cannot be
- * revisited is not a feature, it is a button.
- *
- * Two decisions worth naming:
- *
- *  * **Unavailable items are shown, not hidden.** An item can be unpublished or deleted
- *    after it was saved. Filtering those out would make things disappear from the list
- *    with no explanation, which reads as data loss. They are listed as plain text with
- *    a note and a Remove control instead — visible, honest, and clearable.
- *  * **Grouped by type, newest first within each group.** The API already returns
- *    newest-first; grouping is presentation only, so the order a learner saved things
- *    in is still legible inside each section.
+ * - Unavailable items (unpublished or deleted after saving) are shown, not filtered:
+ *   listed as plain text with a Remove control, so nothing silently disappears.
+ * - Grouped by type, newest-first within each group (the API returns newest-first;
+ *   grouping is presentation only).
  */
 import { useMemo } from 'react'
 import { Link } from 'react-router'

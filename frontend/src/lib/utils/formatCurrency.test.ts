@@ -1,4 +1,4 @@
-// formatCurrency is a pure function with real logic and no DOM. Assertions strip
+// FormatCurrency is a pure function with real logic and no DOM. Assertions strip
 // locale-dependent symbol/grouping (Intl.NumberFormat's
 // output varies by the test runner's default locale) and check the digit string it
 // produced instead — that's the part this function is actually responsible for
@@ -37,7 +37,7 @@ describe('formatCurrency', () => {
   })
 
   it('rounds a fractional cent rather than dropping it silently', () => {
-    // price_amount_cents is documented as always integer, but a caller passing a
+    // Price_amount_cents is documented as always integer, but a caller passing a
     // fractional value should still get a sane two-decimal result, not NaN.
     expect(digits(formatCurrency(4950.4, 'AUD'))).toBe('49.50')
   })

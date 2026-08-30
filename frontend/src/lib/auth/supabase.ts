@@ -10,6 +10,6 @@ if (!url || !anonKey) {
 }
 
 // The only Supabase client in the app, and the only place sign-up/sign-in/sign-out
-// are called — FastAPI only ever verifies the JWT this produces (RS 6.3), it never
+// are called — FastAPI only ever verifies the JWT this produces, it never
 // issues sessions itself.
 export const supabase = createClient(url, anonKey)

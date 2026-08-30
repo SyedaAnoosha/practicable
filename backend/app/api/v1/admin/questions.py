@@ -366,7 +366,7 @@ async def set_featured(
     session: AsyncSession = Depends(get_session),
     admin: User = Depends(require_admin),
 ):
-    """The homepage's curated picks (week3_plan.md §20.6). Unfeaturing always clears
+    """The homepage's curated picks. Unfeaturing always clears
     `featured_sort` — a stale sort value on an unfeatured row is a landmine for whoever
     features it again later and inherits an order they never chose."""
     question = await get_or_404(session, Question, question_id, "Question")

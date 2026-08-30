@@ -28,7 +28,7 @@ interface ReviewFormProps {
   contentType: 'course' | 'template' | 'pack'
   contentId: string
   /** Names the thing being reviewed in the heading, so the control is unambiguous
-   *  on a page that has several other actions on it. */
+   * on a page that has several other actions on it. */
   contentTitle: string
   className?: string
 }
@@ -68,8 +68,8 @@ export function ReviewForm({
   })
 
   /** 409 is a duplicate, not a failure of the form — the reader already reviewed
-   *  this item. Saying "something went wrong" there would be a lie, and would invite
-   *  a retry that can never succeed. */
+   * this item. Saying "something went wrong" there would be a lie, and would invite
+   * a retry that can never succeed. */
   const status = axios.isAxiosError(submit.error) ? submit.error.response?.status : undefined
   const alreadyReviewed = status === 409
 
@@ -86,7 +86,7 @@ export function ReviewForm({
           <Check className="size-6 text-success" aria-hidden="true" />
         </span>
         <h3 className="mt-4 text-h4 font-semibold text-foreground">Thanks for the review</h3>
-        {/* `[CHANGED 2026-08-27]` This used to read "Reviews are read before they go
+        {/* This used to read "Reviews are read before they go
             up, so it won't appear on the page straight away." That described the old
             pending-queue behaviour and has been wrong since reviews began publishing on
             submit — the reviewer saw their review live on the page while this message

@@ -1,4 +1,4 @@
-// week4_plan.md Phase 8 (8D-5): "Failure text says which failure it is — no token,
+// "Failure text says which failure it is — no token,
 // asset not ready, asset id unknown to Mux, player script failed to load." Four
 // distinct messages, previously one generic "Failed to load video player" covering
 // all of them (and no-token/not-ready/unknown-asset weren't detected at all).

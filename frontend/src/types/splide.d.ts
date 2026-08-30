@@ -4,7 +4,7 @@
  * The package DOES ship declarations (`dist/types/index.d.ts`, referenced by its
  * top-level `"types"` field), but its `"exports"` map has no `types` condition:
  *
- *     "exports": { ".": { "require": …cjs.js, "import": …esm.js, "default": …esm.js } }
+ * "exports": { ".": { "require": …cjs.js, "import": …esm.js, "default": …esm.js } }
  *
  * Under `moduleResolution: "bundler"` the exports map wins and the `"types"` field is
  * never consulted, so `tsc` reports the module as implicitly `any` (TS7016) and the

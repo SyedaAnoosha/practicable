@@ -8,8 +8,7 @@ export interface OutlineWordProps {
 }
 
 /**
- * An oversized outlined word sitting BEHIND real content — Utomic's device
- * (FRAMER_MOTION_REFERENCE.md §1.2, ~180px).
+ * An oversized outlined word sitting BEHIND real content.
  *
  * Purely decorative and always `aria-hidden`. It must never be the only place a word
  * appears on the page: a screen reader will not read it, and neither will anyone who

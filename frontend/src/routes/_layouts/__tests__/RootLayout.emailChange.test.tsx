@@ -1,5 +1,5 @@
 /**
- * Phase 10 (§10A re-verification, 2026-08-22): POST /me/account/email-changed exists
+ * POST /me/account/email-changed exists
  * on the backend and its own docstring says "After Supabase confirms the new email,
  * the frontend calls this" — but nothing did. AccountProfile.tsx's
  * `updateUser({ email })` only *requests* the change; the email does not actually

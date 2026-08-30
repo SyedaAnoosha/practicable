@@ -1,28 +1,13 @@
-"""Editor formatting survives all the way to the reading page (owner report 2026-08-22).
+"""Editor formatting survives from admin save to the reading page, end to end.
 
-The report: *"if i am selecting h2, bullets, bold nothing is shown in the actual reading
-lesson."*
+The chain: admin save -> `sanitize_html` -> `lessons.prose_sanitized` ->
+`GET /lessons/{id}` -> `RichText` -> `.rich-text` CSS. Two faults are pinned here:
 
-The chain under test is admin save -> `sanitize_html` -> `lessons.prose_sanitized` ->
-`GET /lessons/{id}` -> `RichText` -> `.rich-text` CSS. Each link had its own coverage;
-nothing asserted the chain end to end, which is how a break in the middle went unnoticed.
-
-Two distinct faults sat behind the report, and both are pinned here:
-
-1. **Plain text stored in an HTML column.** `sanitize_html` passed tag-free text through
-   unchanged, so a pasted body was stored raw. `Learn.tsx` switches to the
-   `dangerouslySetInnerHTML` path the moment `prose_sanitized` is non-null, so the
-   browser collapsed every newline into a space — one wall of text — and the
-   `whitespace-pre-line` fallback that renders plain text correctly was skipped precisely
-   *because* the column was set. Found live on
-   `asset-inventory-what-you-don-t-know-can-hurt-you` (15,060 characters, zero tags) and
-   repaired by `scripts/repair_plaintext_prose.py`.
-
-2. **A detector that matched nothing.** The tag test's `\\b` had been mangled into a
-   literal backspace, so it matched no input at all and classified *real editor HTML* as
-   plain text — which would have escaped every heading and bullet into visible angle
-   brackets. Caught before shipping; `test_real_editor_html_survives_untouched` is what
-   would have caught it in CI.
+1. Plain text stored in an HTML column. `sanitize_html` now promotes tag-free text to
+   real paragraphs, so a pasted body is no longer stored raw and rendered as one wall
+   of text via `dangerouslySetInnerHTML`.
+2. A tag detector whose `\\b` had been mangled into a literal backspace, so it matched
+   nothing and classified real editor HTML as plain text.
 """
 import uuid
 

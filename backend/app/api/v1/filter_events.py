@@ -108,16 +108,11 @@ async def record_filter_event(
     return FilterEventOut()
 
 
-# ── Recommendation clicks (W4-R4 item 6, ledger row 29) ──────────────────────────────
-# The routing twin of the filter counter above, and it lives in this module for one
-# reason: it is the same contract end to end — public, anonymous, fire-and-forget,
-# rate-limited per IP without storing an IP, and a write that must never fail the
-# navigation the reader actually asked for. A second module would duplicate all five
-# properties and let them drift.
-
-# Deliberately separate from _rate_limiter: a reader who filters heavily should not
-# spend the budget that records their one recommendation click, and vice versa.
-# Recommendation clicks are rarer by nature, so the ceiling is lower.
+# ── Recommendation clicks ────────────────────────────────────────
+# The routing twin of the filter counter above — same contract (public, anonymous,
+# fire-and-forget, per-IP rate-limited without storing an IP), kept in this module so
+# the two can't drift. Its own limiter so heavy filtering doesn't spend the click
+# budget; clicks are rarer, so the ceiling is lower.
 _recommendation_limiter = RateLimiter(window_seconds=60, max_requests=15)
 
 # The two valid routing surfaces. Anything else is a client bug and is refused rather

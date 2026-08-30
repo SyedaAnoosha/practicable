@@ -1,7 +1,7 @@
 /**
- * week4_plan.md Phase 8 "8E-continued" (`[OWNER INSTRUCTION 2026-08-21]`) — the
- * lesson-body and block-text/callout "Write" editors moved from a centred modal to a
- * full-screen route. This covers the route's own contract, which the old modal never
+ * The lesson-body and block-text/callout "Write" editors moved from a centred modal
+ * to a full-screen route. This covers the route's own contract, which the old modal
+ * never
  * needed a test for (it was inline JSX inside AdminCourses.tsx, not independently
  * reachable by URL): the right lesson/block loads from the cached course query, Save
  * calls the same PUT the old modal called and then navigates back to

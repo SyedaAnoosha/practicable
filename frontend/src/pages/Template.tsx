@@ -172,7 +172,7 @@ export function Template() {
     )
   }
 
-  /* `[CHANGED 2026-08-22, F3 — P0]` This was `if (!template) return null` — a failed
+  /* This was `if (!template) return null` — a failed
    * fetch rendered a literally blank page: no message, no retry, no way to tell a dead
    * link from a dropped request. A 404 keeps the honest not-found copy; everything else
    * gets a retry. */
@@ -228,7 +228,7 @@ export function Template() {
     </>
   )
 
-  /* `[REDESIGNED 2026-08-22, D6]` This page used to be a single `max-w-2xl` column
+  /* This page used to be a single `max-w-2xl` column
    * with everything — fact strip, evidence, why-this, objections, download — stacked
    * inside one Card. Measured at 1440px it ran to 3,213px: 3.6 viewports for a product
    * whose entire purchase decision is "what is it, and what does it cost". Every other
@@ -284,7 +284,7 @@ export function Template() {
           <h2 className="text-h3 font-semibold text-foreground">Why this template</h2>
           <WhyThis className="mt-4" />
 
-          {/* Objection block (8F-4) — the things a buyer wants settled before they
+          {/* Objection block — the things a buyer wants settled before they
               commit. Left column, because it is read once, not referred back to. */}
           <div className="mt-6 rounded-lg border border-border bg-card p-5 sm:p-6">
             <p className="eyebrow">Before you decide</p>

@@ -59,7 +59,7 @@ const INELIGIBLE_MESSAGES: Record<string, string> = {
 
 /** The refusal, with the buyer's real number in it where we have one.
  *
- * `[CHANGED 2026-08-22]` The eligible branch already said "You've completed 33% of this
+ * The eligible branch already said "You've completed 33% of this
  * course"; the INELIGIBLE branch — the one place a buyer actually wants to check the
  * figure — said only "more than 15%". A refusal a reader cannot check against their own
  * progress is a refusal they can only accept or dispute, never verify. The server
@@ -78,8 +78,8 @@ function ineligibleMessage(reasonCode: string | null, progressPercent: number | 
   return INELIGIBLE_MESSAGES[reasonCode ?? ''] ?? 'Not eligible for a self-serve refund.'
 }
 
-/** Phase 9B (W4-R20): Purchases page — shows order history and lets eligible orders start a refund. */
-/** `[ADDED 2026-08-22]` This component serves two mounts: the standalone `/purchases`
+/** Purchases page — shows order history and lets eligible orders start a refund. */
+/** This component serves two mounts: the standalone `/purchases`
  * route, and the Account shell's Purchases section. Rendering the page version inside
  * the shell put a full `PageTitle` — an `<h1>` at the page rung — underneath the
  * shell's own "Account" `<h1>`. That is two `<h1>`s on one page (a WCAG heading-order
@@ -144,7 +144,7 @@ function PurchasesBody({ Shell }: { Shell: (p: { children: React.ReactNode }) =>
         reason_text: reasonText || null,
       }),
     onSuccess: () => {
-      // Phase 10 (§10D re-verification, 2026-08-22): this used to also call
+      // This used to also call
       // setRefundingOrderId(null) here, which collapses the whole panel — including
       // the "Your refund has been processed" message it's meant to show — in the
       // same tick the mutation resolves. The confirmation was never actually
@@ -178,7 +178,7 @@ function PurchasesBody({ Shell }: { Shell: (p: { children: React.ReactNode }) =>
     )
   }
 
-  /* `[HARDENED 2026-08-22]` `flatMap((page) => page.orders)` on a page object without
+  /* `flatMap((page) => page.orders)` on a page object without
      an `orders` key yields `[undefined]`, not `[]` — so the list below then rendered a
      row for a non-existent order and threw on `order.status`, taking the whole page to
      the error boundary. The `?? []` on the outer expression looks like it covers this

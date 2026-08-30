@@ -18,7 +18,7 @@ interface RelatedProduct {
 interface SituationProductsProps {
   questionIds: string[]
   /** The questions the reader filtered to, named and linked in the explanation so the
-   *  recommendation is checkable rather than asserted (W4-R4 acceptance 2). */
+   * recommendation is checkable rather than asserted (W4-R4 acceptance 2). */
   questions: RoutedQuestion[]
 }
 

@@ -1,6 +1,6 @@
 /**
- * Phase 10 (§10C re-verification, 2026-08-22): zero test coverage existed for this
- * page despite the DoD explicitly requiring "pagination at 0/1/2/many · a refunded
+ * zero test coverage existed for this
+ * page despite the spec requiring "pagination at 0/1/2/many · a refunded
  * order shows amount and date · a multi-item order lists each item · both routes
  * render the same component." This closes that gap, plus the loading/error states
  * §40 requires and the receipt regenerated from order data (the `[GAP]` the plan
@@ -208,14 +208,14 @@ describe('Purchases — list, pagination, receipts', () => {
 })
 
 /**
- * Phase 10 (§10D re-verification, 2026-08-22): "§10D adds placement, nothing else" —
+ * placement only, nothing else —
  * eligibility, amounts and reason codes all come from 9B's endpoints untouched. This
  * proves the placement itself: the control shows for a completed order, an
  * ineligible order states its reason (not a blank), an unknown reason code degrades
  * to the fallback sentence rather than nothing, and a submitted request updates the
  * row without a full reload.
  */
-describe('Purchases — refund request placement (§10D)', () => {
+describe('Purchases — refund request placement', () => {
   beforeEach(() => {
     vi.mocked(api.get).mockReset()
     vi.mocked(api.post).mockReset()
@@ -247,7 +247,7 @@ describe('Purchases — refund request placement (§10D)', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'Request a refund' }))
 
-    // `[CHANGED 2026-08-22]` Asserts the buyer's ACTUAL figure, not "more than 15%".
+    // Asserts the buyer's ACTUAL figure, not "more than 15%".
     // The server sends `progress_percent`, and a refusal a reader can check against
     // their own progress is one they can act on rather than only dispute.
     expect(await screen.findByText(/You've completed 40% of this course/)).toBeInTheDocument()

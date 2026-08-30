@@ -14,11 +14,9 @@ class VerifiedToken:
     user_id: str
     email: str | None
     name: str | None
-    # Supabase re-signs the JWT — a fresh `iat` — every time `signInWithPassword`
-    # succeeds, since that call opens a new session. This is the one server-checkable
-    # proof that a client actually just reauthenticated: the claim is inside the
-    # cryptographically-signed token, so a stolen stale token cannot forge a recent
-    # `iat` without the real password. Used by `require_recent_reauth`.
+    # Supabase writes a fresh `iat` every time `signInWithPassword` succeeds. Since the
+    # claim is signed, a stale token can't forge a recent one — the one server-checkable
+    # proof of a recent reauth. Used by `require_recent_reauth`.
     issued_at: int | None
 
 # auto_error=False so a missing Authorization header 401s below rather than HTTPBearer's

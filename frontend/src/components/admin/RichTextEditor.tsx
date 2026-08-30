@@ -1,16 +1,10 @@
 /**
  * RichTextEditor — Tiptap-based editor for lesson prose and block text.
  *
- * week4_plan.md Phase 8 (8E-4): Heading levels are capped at h2-h4.
- * A lesson body's <h1> would compete with the page's own PageTitle <h1>,
- * which §22 forbids and axe will flag.  The toolbar still presents three
- * heading levels labelled "Heading 1/2/3" — matching how an author thinks
- * about a document's own outline — but they emit <h2>/<h3>/<h4> under the
- * hood, so the page never ends up with two real <h1>s. Three visible levels
- * — h2/h3/h4 — styled at the §13.1 rungs the design already defines.
- *
- * week4_plan.md Phase 8 (8E-8): Link and Underline extensions installed
- * per W4-R13.
+ * Heading levels capped at h2-h4: the toolbar labels them "Heading 1/2/3" (how an
+ * author thinks about an outline) but they emit `<h2>`/`<h3>`/`<h4>`, so a lesson body
+ * never adds a second `<h1>` competing with `PageTitle`. Link and Underline extensions
+ * are installed.
  */
 import { useEffect } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
@@ -42,7 +36,7 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
       StarterKit.configure({
         // Heading is already in StarterKit; we keep the default heading extension
         // but only allow h2-h4 via the toolbar below.
-        // Found 2026-08-21: Tiptap v3's StarterKit bundles `link` and `underline` by
+        // Tiptap v3's StarterKit bundles `link` and `underline` by
         // default (a change from v2, which this file's own extension list was
         // apparently written against) — both were being registered twice, once by
         // StarterKit and once by this file's own separate imports below, which need
@@ -74,9 +68,9 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
     editorProps: {
       attributes: {
         // `.rich-text` is the real styling and is the SAME class the reading page uses
-        // (theme.css §8E-6), so what the author sees here is what the reader gets.
+        // (theme.css), so what the author sees here is what the reader gets.
         //
-        // `prose prose-sm` used to sit here too and were removed 2026-08-22: they come
+        // `prose prose-sm` used to sit here too and removed: they come
         // from @tailwindcss/typography, which this project deliberately does not use
         // (its defaults would introduce a second type scale beside §13.1's) and which
         // is not installed. They were dead classes that read as if the editor pane
@@ -86,7 +80,7 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
     },
   })
 
-  /* `[ADDED 2026-08-22]` Tiptap reads `content` ONCE, when the editor instance is
+  /* Tiptap reads `content` ONCE, when the editor instance is
    * created. Any later value is ignored — so whenever the prop arrives or changes
    * after mount (a query resolving, switching between two lessons without unmounting
    * the shell, an autosave round-trip returning canonicalised markup), the editor kept
@@ -128,7 +122,7 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
     <div className={cn('border border-border rounded-lg', className)}>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1 border-b border-border p-2 bg-muted/50">
-        {/* Heading buttons — toolbar "H1" emits <h2> (§8E-4) */}
+        {/* Heading buttons — toolbar "H1" emits <h2> */}
         <Button
           type="button"
           size="sm"
@@ -163,7 +157,7 @@ export function RichTextEditor({ content, onChange, className }: RichTextEditorP
           <Heading4 className="size-4" aria-hidden="true" />
         </Button>
         <div className="w-px h-6 bg-border mx-1" />
-        {/* Found 2026-08-21 (8E accessibility gap): every button below rendered with
+        {/* Every button below rendered with
             no accessible name at all — a bare icon SVG with no aria-label/title, so a
             screen reader announced each as unlabeled "button." Only the three heading
             buttons above had one. Fixed by giving every toolbar control both a title

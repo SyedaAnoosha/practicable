@@ -1,7 +1,7 @@
 import { LegalLayout, LegalSection } from '@/components/legal/LegalLayout'
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support'
 
-// week2_plan.md W2-R7 / RS 11.1. Draft, footer-linked, marked per §20.7 — a starting
+// Draft, footer-linked, marked as draft — a starting
 // point for a lawyer, not a substitute for one (stated here and repeated in the
 // handover pack per the plan's own instruction).
 export function Terms() {

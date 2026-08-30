@@ -64,7 +64,7 @@ interface LessonNav {
 // populated too, for backfilled single-block lessons, but a new mixed lesson exists
 // only here, as a sequence. The backend has already applied entitlement/free-template
 // filtering to this list — whatever appears here is what this viewer is allowed to see.
-// Exported (Phase 8, 8E test-coverage pass, 2026-08-21): LessonBlockData and
+// Exported for tests: LessonBlockData and
 // LessonBlocks were file-local, which is why the prose_sanitized/plain-text branch
 // choice below had no direct test — a full Learn.tsx render test would need routing,
 // React Query and auth-store mocking just to reach code that itself needs none of
@@ -76,7 +76,7 @@ export interface LessonBlockData {
   sort_order: number
   heading: string | null
   text_body: string | null
-  prose_sanitized: string | null  // Phase 8 (8E): sanitized HTML, null for plain text
+  prose_sanitized: string | null // sanitized HTML, null for plain text
   video_ready: boolean | null
   file_name: string | null
   file_size_bytes: number | null
@@ -90,7 +90,7 @@ interface LessonDetail {
   description: string | null
   lesson_type: LessonType
   body: string | null
-  prose_sanitized: string | null  // Phase 8 (8E): sanitized HTML, null for plain-text lessons
+  prose_sanitized: string | null // sanitized HTML, null for plain-text lessons
   download: { file_name: string; file_size_bytes: number; is_free: boolean } | null
   blocks: LessonBlockData[]
   has_video: boolean
@@ -151,7 +151,7 @@ function VideoBlock({ tokenUrl, queryKey }: { tokenUrl: string; queryKey: readon
   // C4: Token-expiry handler — when the mux playback token expires mid-playback,
   // the player fires an error. We detect this, preserve the current position, refetch
   // a fresh token, and resume. Losing someone's place in a paid 40-minute lesson is
-  // a refund-generator (Redesigning_decisions.md §C4).
+  // a refund-generator.
   const handleTokenError = useCallback(() => {
     const position = playerRef.current?.currentTime ?? 0
     setTokenExpired(true)
@@ -347,7 +347,7 @@ export function LessonBlocks({ blocks }: { blocks: LessonBlockData[] }) {
   )
 }
 
-/** The completion moment (Redesigning_decisions.md C3): Mark complete → ✓ Completed,
+/** The completion moment: Mark complete → ✓ Completed,
  * the outline item ticks, the progress bar animates its width, and focus moves to
  * Next lesson. This is the psychological payoff that replaces certificates — it
  * needs to FEEL like something landed.
@@ -417,7 +417,7 @@ function CompletionBar({
 }
 
 function OutlineList({ lesson, onNavigate }: { lesson: LessonDetail; onNavigate?: () => void }) {
-  /* `[ADDED 2026-08-22, Redesing_decisions.md C2 — P1]` Scroll the current lesson into
+  /* Scroll the current lesson into
    * view on load. The outline is independently scrollable and a long course pushes the
    * current lesson below the fold, so someone resuming lesson 22 of 30 opens the page
    * with the outline showing lesson 1 and no indication of where they are.
@@ -456,7 +456,7 @@ function OutlineList({ lesson, onNavigate }: { lesson: LessonDetail; onNavigate?
                       ? 'bg-primary/10 font-medium text-foreground'
                       : reachable
                         ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        /* `[FIXED 2026-08-22, F4 — P0]` Was `text-muted-foreground/50`.
+                        /* Was `text-muted-foreground/50`.
                          * Halving the alpha on a locked row puts it around 2.3:1 on the
                          * rail — below the 4.5:1 floor — and F4 is explicit that locked
                          * is "not broken and not an error": the title must stay legible,
@@ -504,7 +504,7 @@ function OutlineList({ lesson, onNavigate }: { lesson: LessonDetail; onNavigate?
                 </Link>
               </li>
             ))}
-            {/* `[FIXED 2026-08-25]` The comment here said "shown for each module that
+            {/* The comment here said "shown for each module that
                 has an assessment" but there was no condition — every module got the row,
                 and following it on a module without one lands on the assessment page's
                 `no_assessment` 404. `has_assessment` now comes from the course outline,
@@ -591,7 +591,7 @@ export function Learn() {
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
       {/* Sticky top bar: back to the course, plus progress (DESIGN.md §24.1's
-          "← Course  45% · 6 of 14"). */}
+          "← Course 45% · 6 of 14"). */}
       <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/90 px-5 py-3 backdrop-blur-sm lg:hidden">
         <button
           type="button"

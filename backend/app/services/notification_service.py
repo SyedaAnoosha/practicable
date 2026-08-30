@@ -48,14 +48,9 @@ async def create_template_version_notification(
     if not template:
         return 0
 
-    # The owners of this template: an active (never-revoked) entitlement to any product
-    # carrying it. Selecting the User rows rather than bare ids because the opt-out gate
-    # below needs each owner's own preference, and a second query per user to fetch it
-    # would be one round trip per owner on what is already a fan-out.
-    #
-    # `revoked_at IS NULL` is what "active" means here (entitlement.py's own rule: a
-    # refund revokes rather than deletes). A refunded buyer no longer owns the template
-    # and must not be told its version moved.
+    # Owners = an active (`revoked_at IS NULL`) entitlement to any product carrying this
+    # template. A refunded buyer no longer owns it. Full User rows, not ids, because the
+    # opt-out gate below needs each owner's preference.
     owners = (
         await session.execute(
             select(User)
@@ -69,12 +64,9 @@ async def create_template_version_notification(
     if not owners:
         return 0
 
-    # A version bump is a product update, NOT transactional mail — nothing has happened
-    # to this reader's money or account, so the product-updates preference gates it.
-    # The gate is applied to the *notification row itself*, not just the email:
-    # writing an in-app row for a reader who asked not to hear about product updates
-    # would honour the opt-out only on the channel that is easiest to check, which is
-    # the dishonest half of an opt-out.
+    # A version bump is a product update, not transactional mail, so the
+    # product-updates preference gates it — and it gates the notification row itself,
+    # not just the email.
     notifications_created = 0
     for user in owners:
         if not user.notify_product_updates:

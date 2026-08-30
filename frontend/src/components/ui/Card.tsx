@@ -12,7 +12,7 @@ export const CardHeader = ({ className, ...props }: HTMLAttributes<HTMLDivElemen
   <div className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />
 )
 
-// text-h3 carries the §10 size, line-height (1.25) and tracking from theme.css — the
+// `text-h3` carries the §10 size, line-height (1.25) and tracking from theme.css — the
 // inline fontSize + leading-none this used before made multi-line titles cramped and
 // ignored the spec's type rhythm.
 export const CardTitle = ({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) => (

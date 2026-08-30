@@ -76,12 +76,12 @@ function formatBytes(bytes: number): string {
 }
 
 /** How many of the pack's questions to render before the expander. Enough to show the
- *  shape and range of what's inside — a reader can tell a foundations-heavy pack from a
- *  regulator-heavy one well inside twelve rows — without turning a product page into a
- *  directory listing. */
+ * shape and range of what's inside — a reader can tell a foundations-heavy pack from a
+ * regulator-heavy one well inside twelve rows — without turning a product page into a
+ * directory listing. */
 const QUESTION_PAGE_SIZE = 12
 
-/** The domain-pack product page (week2_plan.md W2-R6, §20.6).
+/** The domain-pack product page.
  *
  * The load-bearing decision on this page is the honesty notice, and it is deliberately
  * the FIRST thing under the title rather than a footnote. §20.6 and the risk watchlist
@@ -172,7 +172,7 @@ export function PackDetail() {
     )
   }
 
-  /* `[ADDED 2026-08-22, F3 — P0]` A network failure is not a missing pack. Without
+  /* A network failure is not a missing pack. Without
    * this branch a timeout fell through to "That pack doesn't exist" — telling someone
    * the thing they were about to buy has been withdrawn, when the truth is a dropped
    * request and a retry would fix it. A 404 still lands on the not-found copy below. */
@@ -285,7 +285,7 @@ export function PackDetail() {
         <section>
           <h2 className="text-h3 font-semibold text-foreground">What’s inside</h2>
           <p className="mt-2 max-w-[68ch] text-sm text-muted-foreground">
-            {/* `[CHANGED 2026-08-22]` Said "All {question_count} questions" while the
+            {/* Said "All {question_count} questions" while the
                 list below now renders the first {QUESTION_PAGE_SIZE} until expanded.
                 This page's whole argument is that it does not hide what it is selling,
                 so the sentence has to match what is actually on screen — a collapsed
@@ -298,7 +298,7 @@ export function PackDetail() {
             the formatted PDF and the working order.
           </p>
 
-          {/* `[FIXED 2026-08-22]` Every question in the pack rendered as its own
+          {/* Every question in the pack rendered as its own
               accordion row, all at once. The 61-question pack measured 6,345px — seven
               full viewports at 1440x900, of which ~4,900px was this list — so the buy
               rail scrolled away long before a reader reached the end, and the page read
@@ -327,7 +327,7 @@ export function PackDetail() {
             </Button>
           )}
 
-          {/* `[MOVED 2026-08-22]` These two panels used to sit inside the buy rail,
+          {/* These two panels used to sit inside the buy rail,
               between the evidence panel and the button. Measured, they were 815px and
               612px, which pushed "Buy the pack" roughly 2,000px down a sticky column —
               so the one control the rail exists to present was below the fold on every
@@ -338,7 +338,7 @@ export function PackDetail() {
               order a reader meets them. */}
           <WhyThis className="mt-10" />
 
-          {/* Objection block (8F-4) */}
+          {/* Objection block */}
           <div className="mt-6 rounded-lg border border-border bg-card p-5 sm:p-6">
             <p className="eyebrow">Before you decide</p>
             <ul className="mt-4 flex flex-col gap-3">

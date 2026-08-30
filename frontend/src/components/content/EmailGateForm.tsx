@@ -18,16 +18,10 @@ interface EmailGateFormProps {
 }
 
 /**
- * The email capture shared by every free entry point.
- *
- * `[REDESIGNED 2026-08-22, Redesigning_decisions.md B3]` The previous version was a
- * bordered card — it read as a wall, not an invitation. The gradient fade from readable
- * text into the form makes the gate feel like the content continues, you just need to
- * say where to send it.
- *
- * Copy differs per placement but the shape, the gold treatment and the reassurance line
- * are fixed, so a visitor meets the same object wherever they hit it. Gold rather than
- * blue throughout: this is a warm invitation, not a system action.
+ * The email capture shared by every free entry point. A gradient fade from readable
+ * text into the form (not a bordered card) so the gate reads as the content continuing.
+ * Copy differs per placement; the shape, gold treatment and reassurance line are fixed.
+ * Gold, not blue — a warm invitation, not a system action.
  */
 export function EmailGateForm({
   heading,

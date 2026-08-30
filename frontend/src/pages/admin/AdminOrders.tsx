@@ -53,9 +53,9 @@ function StripeRefCell({ value }: { value: string }) {
   )
 }
 
-// week2_plan.md Phase 6 / W2-R9's §20.8 `/admin/orders`: date, customer email,
-// product, amount + currency, Stripe reference, entitlement status, CSV export, and
-// the manual-grant escape hatch for a `missing` row.
+// `/admin/orders`: date, customer email, product, amount + currency, Stripe
+// reference, entitlement status, CSV export, and the manual-grant escape hatch for a
+// `missing` row.
 export function AdminOrders() {
   const queryClient = useQueryClient()
   const [grantTarget, setGrantTarget] = useState<ManualGrantTarget | null>(null)
@@ -86,11 +86,11 @@ export function AdminOrders() {
     },
   })
 
-  // week3_plan.md W3-R5 — the refund itself is idempotent server-side (order_status
-  // already `refunded` 409s before touching Stripe again), so this mutation only
-  // needs to handle the happy path plus a declined-refund error the dialog renders
-  // inline; it deliberately does NOT close the dialog on error (§20.3: the failure
-  // state stays in the dialog with a [Try again], never a toast).
+  // The refund itself is idempotent server-side (order_status already `refunded` 409s
+  // before touching Stripe again), so this mutation only needs to handle the happy path
+  // plus a declined-refund error the dialog renders inline; it deliberately does NOT
+  // close the dialog on error — the failure state stays in the dialog with a
+  // [Try again], never a toast.
   const refundMutation = useMutation({
     mutationFn: (reason: string) => {
       if (!refundTarget) throw new Error('No refund target selected')

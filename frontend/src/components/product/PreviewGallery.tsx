@@ -12,7 +12,7 @@ interface PreviewGalleryProps {
   title: string
 }
 
-/** week4_plan.md §20.2 — two real preview images, lightboxable. The lightbox is
+/** Two real preview images, lightboxable. The lightbox is
  * hand-rolled to `RefundDialog`'s existing accessible-overlay pattern (no Radix
  * dependency in this project): focus trapped, Escape closes, focus returns to the
  * thumbnail that opened it. Arrow keys move between images, which RefundDialog has no

@@ -45,13 +45,13 @@ function fileKind(fileName: string): string | null {
 /**
  * Template catalogue — editorial divided-columns treatment.
  *
- * `[REDESIGNED 2026-08-22]` Was rounded cards with `hover-lift` — the AI card pattern.
+ * Was rounded cards with `hover-lift` — the AI card pattern.
  * Now uses the same broadsheet grid as the home QuestionCard and CoursesCatalogue:
  * border border-border bg-border gap-px, each cell bg-card, square corners, mono
  * format badge, title underlines on hover.
  */
 export function TemplatesCatalogue() {
-  // `[CHANGED 2026-08-22, F3 — P0]` See QuestionsCatalogue: without `isError` a failed
+  // See QuestionsCatalogue: without `isError` a failed
   // fetch rendered nothing at all.
   const { data: templates, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.templates.list(),
@@ -111,7 +111,7 @@ export function TemplatesCatalogue() {
         {templates?.map((template) => {
           const kind = fileKind(template.file_name)
           return (
-            /* `focus-visible:` classes `[FIXED 2026-08-23]`: the grid draws its cell
+            /* `focus-visible:` classes : the grid draws its cell
                dividers as `[&>*]:outline-1` on these links, which beats the global
                `:focus-visible` rule in theme.css and left focus invisible. Same defect
                and same fix as CoursesCatalogue — see the fuller note there. */
@@ -134,7 +134,7 @@ export function TemplatesCatalogue() {
                   )}
                 </div>
 
-                {/* `[ADDED 2026-08-22, owner direction]` "the card title and description must
+                {/* "the card title and description must
                     never affect the metadata and pricing + view/see-what's-included row".
                     `mt-auto` already pins the metadata+CTA pair to the card's bottom, but cards in
                     a CSS grid row stretch to the tallest, so one two-line title changed the height
@@ -149,7 +149,7 @@ export function TemplatesCatalogue() {
                   <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{template.description}</p>
                 </div>
 
-                {/* `[FIXED 2026-08-22]` `mt-auto` moved from the footer up to here, so the
+                {/* `mt-auto` moved from the footer up to here, so the
                     metadata and the price/CTA row form one bottom-anchored block and line up
                     across a row of cards regardless of title/description length. See
                     CoursesCatalogue for the full note. */}

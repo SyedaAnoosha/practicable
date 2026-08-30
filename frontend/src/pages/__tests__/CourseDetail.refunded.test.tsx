@@ -1,5 +1,5 @@
 /**
- * The refunded state on course detail — W4-R20 step 7, ledger row 92.
+ * The refunded state on course detail.
  *
  * `/library` and the dashboard already handled a refund correctly, because both read
  * through the entitlement gate and a refunded course simply stops appearing. Course
@@ -9,14 +9,14 @@
  *
  * Three things are pinned here, and each is a way the fix could regress into being wrong:
  *
- *  1. The notice appears ONLY when access actually ended. A stranger who never bought the
- *     course must learn nothing about refunds from this page.
- *  2. It never appears for someone who currently owns the course — `owned` is the state
- *     being communicated there, and showing a refund notice alongside it would be alarming
- *     and false.
- *  3. The treatment stays `muted`, never `destructive` (week4_plan.md 9B step 7). A refund
- *     the buyer asked for is a completed transaction, not an error; colouring it red tells
- *     them something went wrong when nothing did.
+ * 1. The notice appears ONLY when access actually ended. A stranger who never bought the
+ * course must learn nothing about refunds from this page.
+ * 2. It never appears for someone who currently owns the course — `owned` is the state
+ * being communicated there, and showing a refund notice alongside it would be alarming
+ * and false.
+ * 3. The treatment stays `muted`, never `destructive`. A refund
+ * the buyer asked for is a completed transaction, not an error; colouring it red tells
+ * them something went wrong when nothing did.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'

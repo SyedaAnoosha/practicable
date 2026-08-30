@@ -383,10 +383,8 @@ async def grant_course_lessons(
     `product_contents` rows, since there is no unique constraint on
     `(product_id, content_type, content_id)` to rely on for that instead.
 
-    `dry_run=True` (backfill_lesson_entitlements.py's dry-run mode) runs the exact same
-    lookup and returns the same count, but skips the `session.add()` calls — so the
-    reported number is guaranteed to match what --apply would actually create, rather
-    than a second, separately-maintained query that could drift from this one.
+    `dry_run=True` runs the same lookup and returns the same count but skips the
+    `session.add()` calls, so the reported number matches what an apply would create.
 
     Returns the number of new grants actually created (0 on a repeat call, or always
     in dry-run mode).

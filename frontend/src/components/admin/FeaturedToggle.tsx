@@ -1,7 +1,7 @@
 import { Star } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
-/** week3_plan.md §20.6 — a star toggle plus a sort-order number, in the admin question
+/** A star toggle plus a sort-order number, in the admin question
  * list. `onChange` hands back the pair together (never a lone `featured: true` with no
  * order) so the caller can't end up with a featured row whose sort silently falls back
  * to whatever `NULL` sorts as. */

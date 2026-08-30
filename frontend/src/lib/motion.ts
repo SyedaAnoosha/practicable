@@ -33,7 +33,7 @@ export const riseItem: Variants = {
 }
 
 /** A shorter rise for dense content (form fields, footer columns) where 24px of travel
- *  on every row reads as restless rather than considered. */
+ * on every row reads as restless rather than considered. */
 export const riseItemSm: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: {
@@ -44,9 +44,9 @@ export const riseItemSm: Variants = {
 }
 
 /** A form field entrance: a spring rather than a duration, with a shorter 15px rise.
- *  Springs settle at slightly different times per item, which stops a stack of
- *  identical form rows from looking like one block sliding up. Pair with
- *  `authStagger` rather than the wider stagger used for page-level content. */
+ * Springs settle at slightly different times per item, which stops a stack of
+ * identical form rows from looking like one block sliding up. Pair with
+ * `authStagger` rather than the wider stagger used for page-level content. */
 export const springItem: Variants = {
   hidden: { opacity: 0, y: 15 },
   visible: {
@@ -66,32 +66,27 @@ export const authStagger: Variants = {
 }
 
 /** Standard `whileInView` config. `once: true` so a section never re-animates every
- *  time it scrolls back into view. `amount: 0.15` fires early enough that the
- *  animation is finishing as the section arrives. */
+ * time it scrolls back into view. `amount: 0.15` fires early enough that the
+ * animation is finishing as the section arrives. */
 export const inViewOnce = { once: true, amount: 0.15 } as const
 
 /** The header's own entrance — top-level chrome drops in rather than rising, so it
- *  reads as arriving from off-canvas instead of competing with the content below. */
+ * reads as arriving from off-canvas instead of competing with the content below. */
 export const headerEnter: Transition = { duration: 0.6, ease: 'easeOut' }
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Everything above is an ENTRANCE. What follows keeps something slowly moving in the
- * background once a section has revealed, so the page is never fully static.
+ * background once a section has revealed.
  *
- * ⚠ The reduced-motion contract changes for what follows. `<MotionConfig
- * reducedMotion="user">` neutralises TRANSFORMS on Motion components, which is
- * sufficient for an entrance (it simply arrives already in place). It does NOT stop:
- *   - a CSS `@keyframes` loop, and
- *   - a scroll-linked `useTransform`, which recomputes from scroll rather than from
- *     an animation Motion controls.
- * A continuously-moving background is a vestibular trigger, so each of those needs its
- * own explicit guard. `usePrefersReducedMotion` below is that guard, and the ambient
- * loop additionally guards itself in CSS.
+ * ⚠ `<MotionConfig reducedMotion="user">` neutralises transforms on Motion components
+ * (enough for an entrance) but does NOT stop a CSS `@keyframes` loop or a scroll-linked
+ * `useTransform`. Each of those needs its own guard — `usePrefersReducedMotion` below,
+ * plus the ambient loop's own CSS guard.
  * ──────────────────────────────────────────────────────────────────────────── */
 
 /** Reads the media query and keeps listening — a user can change the OS setting while
- *  the tab is open, and a parallax that only checked at mount would keep running.
- *  Returns `true` during SSR/tests so the safe branch is the default. */
+ * the tab is open, and a parallax that only checked at mount would keep running.
+ * Returns `true` during SSR/tests so the safe branch is the default. */
 export function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return true
@@ -123,29 +118,29 @@ export function usePrefersReducedMotion(): boolean {
 }
 
 /** Headline words rise and fade ~45ms apart (all nine Framer references open this way;
- *  ours faded whole blocks). Pair with `wordChild` on each word.
+ * ours faded whole blocks). Pair with `wordChild` on each word.
  *
- *  Under reduced motion Motion renders the settled state, so the headline is simply
- *  there — which is the correct behaviour, not a degradation. */
+ * Under reduced motion Motion renders the settled state, so the headline is simply
+ * there — which is the correct behaviour, not a degradation. */
 export const wordStagger: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.045, delayChildren: 0.05 } },
 }
 
 /** The child of `wordStagger`. Shorter travel than `riseItem` — a word rising 24px
- *  inside a 93px headline reads as the letters coming apart. */
+ * inside a 93px headline reads as the letters coming apart. */
 export const wordChild: Variants = {
   hidden: { opacity: 0, y: '0.35em' },
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE_OUT_EXPO } },
 }
 
 /** Scroll-linked parallax for a BACKGROUND layer. Returns a ref to attach to the
- *  scroll container and a `y` motion value for the layer inside it.
+ * scroll container and a `y` motion value for the layer inside it.
  *
- *  `speed` is the fraction of the element's own travel, capped at 12% (D1.3) — beyond
- *  that the background visibly detaches from the content and reads as a broken sticky.
- *  Returns a static `0` under reduced motion: `useTransform` is driven by scroll
- *  position, which `MotionConfig` has no control over. */
+ * `speed` is the fraction of the element's own travel, capped at 12% (D1.3) — beyond
+ * that the background visibly detaches from the content and reads as a broken sticky.
+ * Returns a static `0` under reduced motion: `useTransform` is driven by scroll
+ * position, which `MotionConfig` has no control over. */
 export function useParallax(speed = 0.08) {
   const ref = useRef<HTMLElement | null>(null)
   const reduced = usePrefersReducedMotion()
@@ -159,9 +154,9 @@ export function useParallax(speed = 0.08) {
 }
 
 /** Hover: 2px lift, no scale — a card that grows 4% pushes its neighbours and reads
- *  consumer-app. The CSS `.hover-lift` utility in theme.css is the same
- *  movement for non-Motion elements; this is the variant for Motion components so a
- *  single card never stacks both mechanisms. */
+ * consumer-app. The CSS `.hover-lift` utility in theme.css is the same
+ * movement for non-Motion elements; this is the variant for Motion components so a
+ * single card never stacks both mechanisms. */
 export const hoverLift = {
   rest: { y: 0 },
   hover: { y: -2, transition: { duration: 0.15, ease: EASE_OUT_EXPO } },

@@ -6,8 +6,8 @@ export interface AccordionItemData {
   id: string
   title: string
   /** The right-hand summary on the closed row — "9 lessons · 37 min". This is what
-   *  makes a collapsed accordion useful rather than merely short: the reader still
-   *  knows the shape of what's inside without opening it (Udemy's pattern). */
+   * makes a collapsed accordion useful rather than merely short: the reader still
+   * knows the shape of what's inside without opening it (Udemy's pattern). */
   summary?: string
   /** Optional line under the title, shown open or closed. */
   description?: string | null
@@ -15,17 +15,11 @@ export interface AccordionItemData {
 }
 
 /**
- * Collapsible sections with a count in the header row (design-research §1 pattern 3,
- * §4 "best patterns").
+ * Collapsible sections with a count in the header row, so a ten-module syllabus shows
+ * its shape rather than rendering as a wall.
  *
- * The research measured Udemy fitting 374 lectures across 45 sections into ~700px by
- * collapsing every section to a row carrying its own counts ("9 lectures • 37min"), with
- * one section open and an "Expand all" control. Practicable's syllabus rendered every
- * module and every lesson expanded, with no per-module counts — so a ten-module course
- * was a wall, and the reader could not see the course's shape at all.
- *
- * Multiple sections may be open at once: this is a syllabus a buyer scans and compares
- * across, not a FAQ where one-at-a-time keeps the page short.
+ * Multiple sections may be open at once — this is a syllabus to scan and compare, not a
+ * one-at-a-time FAQ.
  *
  * Native <button> headers, `aria-expanded`/`aria-controls` wired to the region, and the
  * panel kept in the DOM only while open — a closed panel's links must not be reachable

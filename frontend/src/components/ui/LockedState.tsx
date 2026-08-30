@@ -3,7 +3,7 @@ import { Lock } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
 /**
- * A locked/paywall state — Redesing_decisions.md F4 / DESIGN.md §40.4.
+ * A locked/paywall state (DESIGN.md §40.4).
  *
  * Locked is not broken and not an error. Muted surface, dashed border, lock icon,
  * the name of what unlocks it, and its price — **never** a greyed-out, disabled-

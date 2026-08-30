@@ -1,4 +1,4 @@
-"""Admin reviews moderation endpoint (W5-R4).
+"""Admin reviews moderation endpoint.
 
 GET    /admin/reviews          — list reviews (filterable by state)
 PATCH  /admin/reviews/{id}     — approve/reject/feature a review
@@ -226,8 +226,7 @@ async def delete_review(
 ):
     """Remove a review outright.
 
-    `[ADDED 2026-08-25, owner direction]` "give the admin hold to delete the reviews."
-    Reviews are approved on submission now (see content/reviews.py), so moderation is
+    Reviews are approved on submission (see content/reviews.py), so moderation is
     reactive: this is the control that takes a bad one down.
 
     Deleting is not the same as rejecting. A rejected review stays on file — the

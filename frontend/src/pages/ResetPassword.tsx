@@ -16,7 +16,7 @@ import { springItem } from '@/lib/motion'
  *
  * A session present means the link was valid; `updateUser` is what actually changes
  * the password, called directly against Supabase like sign-in/sign-up already are
- * (RS 6.3 — FastAPI never issues or mutates sessions, only verifies the JWT).
+ * (FastAPI never issues or mutates sessions, only verifies the JWT).
  */
 export function ResetPassword() {
   const navigate = useNavigate()

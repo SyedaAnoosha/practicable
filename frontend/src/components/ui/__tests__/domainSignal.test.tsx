@@ -1,6 +1,6 @@
 // The domain signal is an accessibility contract, not a style preference.
 //
-// Measured 2026-08-22: across protanopia/deuteranopia/tritanopia, the worst pair of
+// Measured: across protanopia/deuteranopia/tritanopia, the worst pair of
 // the five domain colours separates at 1.04:1 — indistinguishable. An exhaustive
 // search over ~81,000 contrast-legal five-hue combinations could not beat 1.08:1.
 // Colour therefore cannot be the sole carrier of domain identity, and these tests

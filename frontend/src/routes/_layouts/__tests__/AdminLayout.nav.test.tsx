@@ -1,9 +1,7 @@
 /**
- * Phase 9A DoD: No `/admin/products` nav entry in AdminLayout.
- *
- * week4_plan.md §9A step 4: "Delete `/admin/products` from `App.tsx`, the
- * `AdminProducts` import, and the `ADMIN_NAV` entry in `AdminLayout.tsx`.
- * Keep `admin/products.py` and its router registration — the editors call it."
+ * No `/admin/products` nav entry in AdminLayout: `/admin/products`, the `AdminProducts`
+ * import, and the `ADMIN_NAV` entry are all gone from the frontend. `admin/products.py`
+ * and its router registration stay — the editors call it.
  */
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'

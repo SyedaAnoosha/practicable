@@ -4,20 +4,13 @@ import { ChevronDown, FileText, GraduationCap, Layers, Package, Tags } from 'luc
 import { cn } from '@/lib/utils/cn'
 
 /**
- * The Products dropdown menu in the marketing header.
+ * The Products dropdown in the marketing header: a disclosure button over a list of
+ * links, NOT a `role="menu"` menubar (that pattern is for application commands and
+ * strips the affordances that make a link a link — every item stays an `<a>`).
  *
- * A disclosure button controlling a list of links — NOT a role="menu" menubar.
- * ARIA's menu pattern is for application commands; it demands arrow-key semantics
- * and role="menuitem" strips the affordances that make a link a link.
- * Every item stays an <a> — cmd-click, middle-click and "copy link address" must
- * all still work.
- *
- * Interaction: opens on click AND on hover-with-intent (but click is the contract).
- * Escape closes and returns focus to the trigger. Tab moves through items and closes
- * on exit. Outside click closes. Active state when any child route is active.
- *
- * Motion: opacity + 4px rise, 150ms --ease-standard.
- * Under prefers-reduced-motion: opacity only, no transform.
+ * Opens on click and on hover-with-intent; Escape closes and returns focus to the
+ * trigger; outside click and Tab-out close it. Motion: opacity + 4px rise, opacity-only
+ * under prefers-reduced-motion.
  */
 
 const PRODUCT_ITEMS = [

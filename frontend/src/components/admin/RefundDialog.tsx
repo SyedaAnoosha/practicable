@@ -12,11 +12,11 @@ export interface RefundTarget {
   amount: number
   currency: string
   /** Real product names on this order, resolved from the same rows the table already
-   * has — never a generic "your purchase" sentence (week3_plan.md §20.3). */
+   * has — never a generic "your purchase" sentence. */
   productNames: string[]
 }
 
-/** week3_plan.md §20.3 — admin, destructive. Same hand-rolled accessible-overlay
+/** Admin, destructive. Same hand-rolled accessible-overlay
  * pattern as `ManualGrantDialog` (no Radix dependency in this project), with the
  * differences the spec calls out for a money-destructive action specifically: Cancel
  * is the default focus (not the first field), the confirm button is `--destructive`,

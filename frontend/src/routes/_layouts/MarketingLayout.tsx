@@ -78,7 +78,7 @@ export default function MarketingLayout() {
         {/* The gilt edge: a 2px navy-to-blue hairline along the very top of the
             page — the one decorative device the marketing surfaces get. */}
         <div aria-hidden="true" className="h-0.5 w-full bg-linear-to-r from-primary via-primary/70 to-accent" />
-        {/* py-3.5/gap-5 — a tighter rhythm than a typical marketing-site header. */}
+        {/* Py-3.5/gap-5 — a tighter rhythm than a typical marketing-site header. */}
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-5 px-5 py-3.5 sm:px-8">
           <Link to="/" className="flex items-center gap-2.5 font-sans text-base font-semibold tracking-tight">
             <span className="size-2.5 rounded-[3px] bg-primary ring-1 ring-inset ring-primary-edge" aria-hidden="true" />
@@ -168,7 +168,7 @@ export default function MarketingLayout() {
             </button>
             </div>
             <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Mobile">
-              {/* 8G-7: Mobile has no dropdown — the Products group is expanded under a heading */}
+              {/* Mobile has no dropdown — the Products group is expanded under a heading */}
               <p className="px-3 pt-3 pb-1 font-mono text-[0.6875rem] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 Products
               </p>

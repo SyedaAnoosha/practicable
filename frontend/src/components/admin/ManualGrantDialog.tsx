@@ -10,7 +10,7 @@ export interface ManualGrantTarget {
   productName: string
 }
 
-/** week2_plan.md §20.8 — the escape hatch for "the payment succeeded but the webhook
+/** The escape hatch for "the payment succeeded but the webhook
  * failed." No Radix in this project (no `@radix-ui/*` dependency exists), so this
  * follows the same hand-rolled accessible-overlay pattern already used for
  * MarketingLayout's and MemberLayout's mobile menu sheets — a real `role="dialog"`,

@@ -39,9 +39,8 @@ class AdminOrderRowOut(BaseModel):
     stripe_reference: str
     entitlement_status: str  # "granted" | "missing"
     user_id: str
-    # week3_plan.md W3-R5 — needed so the table can show a `Refunded` chip and the
-    # refund action can know the order's real total (not one item's price) without a
-    # second request.
+    # Needed so the table can show a `Refunded` chip and the refund action can know the
+    # order's real total (not one item's price) without a second request.
     order_status: str  # "pending" | "completed" | "failed" | "refunded"
     order_total_amount_cents: int
     # Keyset pagination cursor — the created_at timestamp for this row
@@ -62,22 +61,11 @@ async def _order_rows(session: AsyncSession, cursor: Optional[str] = None, limit
     )
     
     if cursor:
-        # `[FIXED]` This used to assign `cursor_date = cursor` inside the try block —
-        # a bare assignment that can never raise ValueError, so a malformed cursor
-        # skipped the "ignore and return from start" the comment promised and instead
-        # reached asyncpg as a raw string compared against a timestamptz column,
-        # crashing with an unhandled 500 (`operator does not exist: timestamp with
-        # time zone < character varying`). Parsing the cursor here, before it ever
-        # reaches the query, is what actually makes the except clause reachable.
-        #
-        # Phase 10 (§10C re-verification, 2026-08-22): that fix only addressed the
-        # crash, not DESIGN.md §26.3's own documented rule — a created_at-only
-        # cursor silently drops rows tied on the same timestamp, rather than
-        # skipping or repeating cleanly, because `<` excludes the whole tied batch.
-        # Proven live on /me/orders (test_purchases_receipt.py) using the identical
-        # query shape. `OrderItem.id` is this endpoint's real tiebreak — the page is
-        # one row per (order, item), so `Order.id` alone can still tie when an order
-        # has more than one item.
+        # Parse the cursor before it reaches the query so a malformed one falls back to
+        # "return from start" rather than 500ing against a timestamptz column. The cursor
+        # is (created_at, OrderItem.id): OrderItem.id is the tiebreak, since the page is
+        # one row per (order, item) and a created_at-only cursor drops rows tied on the
+        # timestamp.
         cursor_created_at, _, cursor_item_id = cursor.partition("|")
         try:
             cursor_date = datetime.fromisoformat(cursor_created_at)
@@ -231,8 +219,7 @@ async def grant_entitlement_manually(
 
 class RefundIn(BaseModel):
     # Required, not a formality — same non-empty-after-strip contract as the manual
-    # grant above, and RefundDialog's spec (week3_plan.md §20.3) makes it a required
-    # field in the UI too.
+    # grant above; RefundDialog makes it a required field in the UI too.
     reason: str
 
 
@@ -249,9 +236,9 @@ async def refund_order(
     session: AsyncSession = Depends(get_session),
 ):
     """Issue a real Stripe refund and revoke every entitlement it granted, in one
-    audited operation (week3_plan.md W3-R5). The Stripe call happens BEFORE any local
-    state changes — if Stripe declines it, nothing here has changed yet, matching
-    RefundDialog's §20.3 failure contract ("Nothing has changed.").
+    audited operation. The Stripe call happens BEFORE any local state changes — if
+    Stripe declines it, nothing here has changed yet, matching RefundDialog's failure
+    contract ("Nothing has changed.").
 
     The actual revocation/audit logic lives in `refund_service.apply_refund`, shared
     with the `charge.refunded` webhook handler, so a refund issued from the Stripe

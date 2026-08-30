@@ -1,12 +1,10 @@
 import { LegalLayout, LegalSection } from '@/components/legal/LegalLayout'
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '@/lib/support'
 
-// week2_plan.md W2-R7 / RS 11.2. Sub-processors listed below are the ones actually
-// integrated in this codebase as of 2026-08-14 — Cloudflare R2 (named in RS 11.2 and
-// the plan's own §20.7 table) was superseded by Supabase Storage during Week 1 (see
-// week1_plan.md's "R2 → Supabase Storage" decision) and is deliberately not listed,
+// Sub-processors listed below are the ones actually integrated in this codebase.
+// Cloudflare R2 was superseded by Supabase Storage and is deliberately not listed,
 // since naming a processor that isn't actually used would be inaccurate the day this
-// ships (this section's own governing rule, stated in week2_plan.md W2-R7).
+// ships — this section's own governing rule.
 export function Privacy() {
   return (
     <LegalLayout title="Privacy policy" description="What we collect, why, and how you can see or remove it.">
@@ -47,7 +45,7 @@ export function Privacy() {
         </p>
       </LegalSection>
 
-      {/* `[ADDED 2026-08-22]` The cookie notice links here for detail, and there was no
+      {/* The cookie notice links here for detail, and there was no
           section to link to. Written from the actual storage keys in the codebase
           (grep `practicable:` under frontend/src) rather than from a template, so it
           can be re-verified the same way when it drifts. */}

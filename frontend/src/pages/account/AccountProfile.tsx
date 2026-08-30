@@ -9,9 +9,9 @@ import { Input } from '@/components/ui/Input'
 import { FieldError } from '@/components/ui/FieldError'
 import { useFieldValidation } from '@/lib/useFieldValidation'
 
-/** Phase 10A: Profile — name and email editing.
- *  Email change goes through Supabase's confirm-new-address flow;
- *  the user must enter their current password first. */
+/** Profile — name and email editing.
+ * Email change goes through Supabase's confirm-new-address flow;
+ * the user must enter their current password first. */
 
 interface Profile {
   id: string

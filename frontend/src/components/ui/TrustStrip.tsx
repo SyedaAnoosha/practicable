@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils/cn'
 export interface TrustFact {
   icon: LucideIcon
   /** The number or short value. Pass `null`/`undefined` when unknown — the fact is
-   *  then dropped entirely rather than rendered as a zero or a dash. */
+   * then dropped entirely rather than rendered as a zero or a dash. */
   value: string | number | null | undefined
   /** The word that makes the value mean something ("questions", "domains"). */
   label: string
@@ -17,14 +17,12 @@ export interface TrustStripProps {
 }
 
 /**
- * Honest facts under the hero CTA — Parley's logo row and FintechX's trust strip
- * (FRAMER_MOTION_REFERENCE.md §1.5), with FintechX's fabricated `4.9/5` deliberately
- * absent.
+ * Honest facts under the hero CTA, with any fabricated rating deliberately absent.
  *
  * The absence rule is enforced HERE rather than left to each call site: a fact whose
  * value is null is filtered out, so it is not possible to render "0 questions" or
- * "— reviews" because an API field was empty. Principle 7 ("never invent credibility")
- * and the same reasoning that declined product ratings (REDESIGN_SUMMARY.md §9).
+ * "— reviews" because an API field was empty — never invent credibility, the same
+ * reasoning that declined product ratings.
  *
  * If every fact is absent the component renders nothing at all, rather than an empty
  * bordered rail — a strip of nothing is worse than no strip.

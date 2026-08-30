@@ -15,25 +15,11 @@ interface RelatedRailProps {
 }
 
 /**
- * A horizontal scrolling rail for related content (design-research §8.3).
- *
- * The research audit found that Coursera, Udemy, and Skillshare all use horizontal
- * scroll rails for "Related courses", "Students also bought", and similar sections.
- * Practicable's detail pages listed related items in a vertical stack that was
- * indistinguishable from the rest of the page — no visual grouping, no scroll
- * affordance, no density change.
- *
- * This rail:
- * - Scrolls horizontally with overflow-x-auto
- * - Shows left/right scroll buttons when content overflows
- * - Hides the scrollbar (webkit-scrollbar: none) for a cleaner look
- * - Has snap points so items align cleanly on scroll
- * - Shows "see all" link when there are more items
- *
- * The buttons are positioned absolutely over the rail edges, with a gradient
- * fade behind them so they remain legible over card content. Under
- * prefers-reduced-motion, the scroll is instant (the global rule already
- * collapses transition-duration, but the scrollIntoView smooth is separate).
+ * A horizontal scrolling rail for related content: overflow-x-auto with snap points,
+ * a hidden scrollbar, left/right scroll buttons that appear on overflow (absolutely
+ * positioned over the edges with a gradient fade behind them), and a "see all" link
+ * when there are more items. Scroll is instant under prefers-reduced-motion (the
+ * scrollIntoView `smooth` is separate from the global transition-duration rule).
  */
 export function RelatedRail({
   title,

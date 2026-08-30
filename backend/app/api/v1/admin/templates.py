@@ -290,16 +290,9 @@ async def update_template(
         target_id=template.id, context={"title": template.title, "is_free": template.is_free},
     )
 
-    # ── Notify owners when the version actually moves ─────────────────────────
-    # `new_version and new_version != old_version` is the whole trigger, and both
-    # halves matter. A PUT that leaves `version` alone (None) must not notify, and
-    # neither must one that re-saves the same string — the editor sends every field on
-    # every save, so an unguarded check would email every owner each time an admin
-    # fixed a typo in the description.
-    #
-    # The rows are written INSIDE this transaction, before the commit below, so they
-    # roll back with the version change if anything here fails. The emails go out
-    # after, since a sent email cannot be rolled back.
+    # Notify owners only when `version` actually changes (not on None, not on a re-save
+    # of the same string — the editor sends every field on every save). Notification
+    # rows are written inside this transaction; emails go out after commit.
     notifications_created = 0
     if new_version and new_version != old_version:
         notifications_created = await create_template_version_notification(

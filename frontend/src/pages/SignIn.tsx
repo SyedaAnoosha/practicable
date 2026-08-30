@@ -19,7 +19,7 @@ import { Lock, Mail } from 'lucide-react'
  */
 export function SignIn() {
   const navigate = useNavigate()
-  // `[CHANGED 2026-08-21, USER_FLOW_AUDIT.md §2]` Return to whatever sent them here.
+  // Return to whatever sent them here.
   // Read from the query string rather than router state because CartDrawer arrives via
   // window.location.assign (a full document load) and SignUp's confirmation email routes
   // back through /sign-in — router state survives neither. Validated in nextPath.ts.

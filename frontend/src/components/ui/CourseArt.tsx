@@ -3,8 +3,8 @@ import { domainColorVar, domainVisual } from '@/lib/domainVisuals'
 import { cn } from '@/lib/utils/cn'
 
 /** A stable 0–100 hash of the slug, used as the artwork's horizontal anchor. Two
- *  courses in the same domain get different compositions; the same course always gets
- *  the same one, in every session and on every device, with no stored state. */
+ * courses in the same domain get different compositions; the same course always gets
+ * the same one, in every session and on every device, with no stored state. */
 function shiftFromSlug(slug: string): number {
   let hash = 0
   for (let i = 0; i < slug.length; i += 1) {
@@ -17,18 +17,12 @@ function shiftFromSlug(slug: string): number {
 }
 
 /**
- * Generative course/pack artwork (design-research §8.2b M3, owner direction 2026-08-20).
+ * Generative course/pack artwork: a duotone ramp from the item's domain tone into the
+ * stage plane, with a concentric-arc motif anchored bottom-right like `.stage-aurora`.
  *
- * Replaces the flat provisional `--primary` panel the audit flagged: a duotone ramp from
- * the item's own domain tone into the stage plane, with the concentric-arc "signal
- * found" motif anchored off-canvas bottom-right — the same corner-anchored composition
- * as `.stage-aurora`, so hero, rail, footer and artwork all read as one family.
- *
- * Why generative rather than uploaded-only: the catalogue looks complete from day one,
- * there is no broken-image state, no image request, and it follows a theme swap because
- * every stop is a token. An uploaded `cover_image_url` still wins wherever one exists —
- * this is the floor, not the ceiling. All paint, so `aria-hidden`; the caller supplies
- * the accessible name via the surrounding link or heading.
+ * Generative rather than uploaded-only so the catalogue looks complete from day one,
+ * with no broken-image state and no image request, and it follows a theme swap. An
+ * uploaded `cover_image_url` still wins where one exists. All paint, so `aria-hidden`.
  */
 export function CourseArt({
   slug,
@@ -40,7 +34,7 @@ export function CourseArt({
 }: {
   slug: string
   /** Full domain name as the API returns it ("Risk (Enterprise & op.)"). Unknown or
-   *  absent domains fall back to the brand primary via domainVisual(). */
+   * absent domains fall back to the brand primary via domainVisual(). */
   domain?: string | null
   /** An uploaded cover image, when one exists — it wins over the generative art. */
   src?: string | null
@@ -50,7 +44,7 @@ export function CourseArt({
 }) {
   if (src) {
     return (
-      /* `[CHANGED 2026-08-22, K2]` The generative branch below is a <div> that takes its
+      /* The generative branch below is a <div> that takes its
          height from the caller's aspect class; this <img> took its height from the
          DECODED IMAGE, so a course with an uploaded cover reserved no space and the card
          grew when the bytes landed — the layout-shift failure K2 names, and only on the

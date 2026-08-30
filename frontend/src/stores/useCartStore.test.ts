@@ -71,7 +71,7 @@ describe('useCartStore', () => {
   })
 
   it('persists only items to localStorage, never isOpen', () => {
-    // partialize: (state) => ({ items: state.items }) — a drawer that snaps open on
+    // Partialize: (state) => ({ items: state.items }) — a drawer that snaps open on
     // every page reload is the bug this guards against.
     useCartStore.getState().addItem(itemA)
     useCartStore.getState().open()

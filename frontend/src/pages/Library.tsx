@@ -95,7 +95,7 @@ function ProgressBar({ course }: { course: LibraryCourse }) {
         </span>
         <span className="tabular-nums">{course.percentage_complete}%</span>
       </div>
-      {/* role="progressbar" rather than a bare div: the percentage is meaning-bearing,
+      {/* Role="progressbar" rather than a bare div: the percentage is meaning-bearing,
           and the visual bar alone carries it for nobody using a screen reader. */}
       <div
         className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-secondary"

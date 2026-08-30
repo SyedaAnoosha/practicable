@@ -17,11 +17,10 @@ def _asyncpg_url(database_url: str) -> str:
     raise ValueError(f"DATABASE_URL does not look like a Postgres connection string: {database_url!r}")
 
 
-# Built from DATABASE_URL (the Postgres DSN), never supabase_url. That points at
-# Supabase's pgbouncer pooler on 6543, which doesn't support named prepared statements —
-# hence DuplicatePreparedStatementError. Both caches must be disabled: asyncpg's own
-# (statement_cache_size) and SQLAlchemy's dialect-level one
-# (prepared_statement_cache_size). Missing either still reproduces the error.
+# Built from DATABASE_URL (the Postgres DSN). Supabase's pgbouncer pooler doesn't
+# support named prepared statements, so both caches must be off — asyncpg's
+# `statement_cache_size` and SQLAlchemy's `prepared_statement_cache_size`; missing
+# either reproduces DuplicatePreparedStatementError.
 engine = create_async_engine(
     _asyncpg_url(settings.database_url),
     echo=False,

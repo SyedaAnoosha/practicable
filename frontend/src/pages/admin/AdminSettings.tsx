@@ -139,15 +139,15 @@ function SettingField({
 
   const label = FIELD_LABELS[setting.key] ?? setting.key
 
-  // week2_plan.md §20.8 — "Inline validation on blur, not on submit, and a valid field
-  // is never cleared because another failed." Only the required field carries a rule;
+  // Inline validation on blur, not on submit, and a valid field is never cleared
+  // because another failed. Only the required field carries a rule;
   // an optional field has nothing to validate.
   const v = useFieldValidation<{ value: string }>(
     isRequired ? { value: required(label) } : {},
   )
 
-  // week2_plan.md §20.8's autosave — the same "losing what was typed" failure mode
-  // AdminCourses.tsx's rich-text drafts close, applied here to operational config.
+  // Autosave — the same "losing what was typed" failure mode AdminCourses.tsx's
+  // rich-text drafts close, applied here to operational config.
   const autosave = useAutosave({
     value: localValue,
     onSave: async () => {

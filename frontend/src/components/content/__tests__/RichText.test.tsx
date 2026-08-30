@@ -1,4 +1,4 @@
-// week4_plan.md Phase 8 (8E-9): "Round trip — h2/h3/h4, bullets, a numbered list, a
+// "Round trip — h2/h3/h4, bullets, a numbered list, a
 // table and a link saved in admin and rendered on the member lesson page ... the
 // lesson page still has exactly one h1." This file is the piece of that claim that
 // is actually testable as a unit: RichText is the one component gated on

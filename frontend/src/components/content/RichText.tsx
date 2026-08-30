@@ -5,7 +5,7 @@
  * config — no user or admin input reaches it — a different risk category, not
  * an exception to the "no unsanitized user content" rule this file exists to hold.)
  *
- * week4_plan.md Phase 8 (8E-5): Renders sanitized HTML from the lesson editor.
+ * Renders sanitized HTML from the lesson editor.
  * Gated on `prose_sanitized` being non-null (Learn.tsx's own ternary); a null
  * `prose_sanitized` means the lesson/block predates this feature and keeps
  * rendering through the original whitespace-pre-line plain-text path untouched.

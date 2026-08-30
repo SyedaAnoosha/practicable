@@ -113,11 +113,8 @@ def _hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
     )
 
 
-# Characters that are common in real names and course titles but have no latin-1
-# code point, mapped to the closest ASCII form. Without this they encode to "?" -
-# so a course actually called "Deciding in the Dark - Risk" would print with a
-# literal question mark where its dash belongs. Accented letters are NOT in this
-# table: latin-1 has them, so they survive intact and should.
+# Common name/title characters with no latin-1 code point, mapped to ASCII so they
+# don't encode to "?". Accented letters are excluded — latin-1 has them.
 _TRANSLITERATE = str.maketrans({
     "‘": "'", "’": "'", "‚": "'", "‛": "'",   # single quotes
     "“": '"', "”": '"', "„": '"',                   # double quotes

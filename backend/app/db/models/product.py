@@ -35,11 +35,9 @@ class Product(Base, IdMixin, TimestampMixin, PublishStateMixin):
     price_amount: Mapped[int] = mapped_column(Integer, nullable=False)  # in cents
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="AUD")
 
-    # `publish_state` (migration 012) comes from PublishStateMixin, kept in sync with
-    # this column automatically — see that mixin's docstring. No admin endpoint writes
-    # either field yet (products are seeded, not edited in `/admin`); they exist so the
-    # column shape matches the other four tables and a future admin product editor
-    # doesn't need its own migration.
+    # `publish_state` (migration 012) comes from PublishStateMixin and stays in sync
+    # with this column. Neither is written by an admin endpoint yet — they exist so the
+    # column shape matches the other four tables.
     published: Mapped[bool] = mapped_column(default=False)
 
     # ── Pre-purchase evidence layer (migration 013) ────────────────────────────

@@ -1,4 +1,4 @@
-// Phase 8 (8E, extended): course/module/lesson titles had no admin-facing edit path
+// Course/module/lesson titles had no admin-facing edit path
 // at all before this component — this suite proves the click-to-edit/save/cancel
 // contract it now provides.
 import { describe, expect, it, vi } from 'vitest'

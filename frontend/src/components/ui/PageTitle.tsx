@@ -29,7 +29,7 @@ export const PageTitle = ({ eyebrow, eyebrowColor, title, description, action, c
           {eyebrow}
         </p>
       )}
-      {/* text-h1 carries the size, line-height and tracking from theme.css. */}
+      {/* `text-h1` carries the size, line-height and tracking from theme.css. */}
       <h1
         tabIndex={-1}
         className={cn(

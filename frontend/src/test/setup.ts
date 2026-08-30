@@ -14,7 +14,7 @@ afterEach(() => {
   cleanup()
 })
 
-// jsdom 30 under this Node/Vitest combination leaves `window.localStorage` undefined
+// Jsdom 30 under this Node/Vitest combination leaves `window.localStorage` undefined
 // even with a real (non-opaque) origin — confirmed by direct inspection, not assumed.
 // Node 22+'s own experimental global `localStorage` (a no-op unless
 // --localstorage-file is passed) appears to make jsdom skip installing its usual
@@ -46,7 +46,7 @@ if (typeof window !== 'undefined' && !window.localStorage) {
   }
 }
 
-// jsdom has no matchMedia; `<MotionConfig reducedMotion="user">` in main.tsx and
+// Jsdom has no matchMedia; `<MotionConfig reducedMotion="user">` in main.tsx and
 // useThemeStore both read it on mount, so any component test that renders through
 // either would throw with no shim.
 if (!window.matchMedia) {
@@ -62,7 +62,7 @@ if (!window.matchMedia) {
   }) as unknown as MediaQueryList
 }
 
-// jsdom implements no IntersectionObserver, and Motion's `useInView` (used by
+// Jsdom implements no IntersectionObserver, and Motion's `useInView` (used by
 // StatTiles' countUp, and by anything else that reveals on scroll) constructs one
 // during its mount effect. Without this, any test that renders such a component dies
 // with "IntersectionObserver is not defined" — a crash in the TEST environment for a

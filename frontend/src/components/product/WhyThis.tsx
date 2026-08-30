@@ -7,9 +7,9 @@ interface WhyThisProps {
 }
 
 /** The argument for why this product is worth the price.
- *  Placed below EvidencePanel on /buy/:slug, /templates/:templateId and
- *  /store/packs/:slug. Every claim traces to a column or a guard; the copy
- *  deck in labels.ts is the permitted vocabulary. Zero social-proof claims. */
+ * Placed below EvidencePanel on /buy/:slug, /templates/:templateId and
+ * /store/packs/:slug. Every claim traces to a column or a guard; the copy
+ * deck in labels.ts is the permitted vocabulary. Zero social-proof claims. */
 export const WhyThis = ({ className }: WhyThisProps) => {
   return (
     <section

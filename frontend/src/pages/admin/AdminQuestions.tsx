@@ -103,7 +103,7 @@ function QuestionEditor({
 }) {
   const traits = options.tag_dimensions['leadership_traits'] ?? []
 
-  // week2_plan.md §20.8 / W2-R9 — validated on blur, not on submit; `validateAll`
+  // Validated on blur, not on submit; `validateAll`
   // still runs at submit time so a field the admin never tabbed into (paste + click
   // Save) is still caught rather than posted empty.
   const v = useFieldValidation<{ title: string; domain_id: string; body: string }>({

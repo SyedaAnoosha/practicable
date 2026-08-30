@@ -14,8 +14,8 @@ export function StatusDot({
   label: string
   tone?: 'accent' | 'gold' | 'success'
   /** Which plane this sits on. Only affects the gold tone: `--gold-strong` is dark
-   *  antique in the light theme and nearly invisible as a dot on the dark `stage`
-   *  plane, so stage uses the bright `--gold` instead. */
+   * antique in the light theme and nearly invisible as a dot on the dark `stage`
+   * plane, so stage uses the bright `--gold` instead. */
   on?: 'surface' | 'stage'
   className?: string
 }) {

@@ -45,7 +45,7 @@ interface TemplateRow {
   publish_state: PublishStateValue
   is_free: boolean
   has_file: boolean
-  // Phase 8 (8A-6): server-derived — never inferred client-side from published/price.
+  // Server-derived — never inferred client-side from published/price.
   // Free templates have no product and no readiness concept; the field is still
   // present (backend always returns it) but the row never renders it when is_free.
   readiness: ReadinessState
@@ -95,7 +95,7 @@ export function AdminTemplates() {
   const [isFree, setIsFree] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Which row's UploadField is expanded — one at a time, collapsed back to the
-  // compact row view once a file lands (week3_plan.md Phase 5 step 2/3).
+  // compact row view once a file lands.
   const [uploadRowId, setUploadRowId] = useState<string | null>(null)
   // Same one-at-a-time pattern as uploadRowId, for the preview-images manager.
   const [previewsRowId, setPreviewsRowId] = useState<string | null>(null)
@@ -109,7 +109,7 @@ export function AdminTemplates() {
   const [version, setVersion] = useState('')
   const [lastReviewedAt, setLastReviewedAt] = useState('')
 
-  // week2_plan.md §20.8 / W2-R9 — blur, not submit.
+  // Validated on blur, not on submit.
   const v = useFieldValidation<{ title: string; description: string }>({
     title: required('Title'),
     description: required('Description'),
@@ -197,8 +197,8 @@ export function AdminTemplates() {
     onError: (e) => setError(readError(e)),
   })
 
-  // Phase 8 (8A-5): the same "make purchasable" path courses have.
-  // Phase 9A re-verification (2026-08-21, owner-flagged): "Create Product" as a
+  // The same "make purchasable" path courses have.
+  // "Create Product" as a
   // separate button is gone — this now takes the admin's own price and is called
   // transparently by the price control below, the first time a price is set on a
   // template with no product yet.
@@ -212,8 +212,8 @@ export function AdminTemplates() {
     onError: (e) => setError(readError(e)),
   })
 
-  // Phase 9A: price control — POST /admin/products/{id}/price (one endpoint, three surfaces)
-  /* `[FIXED 2026-08-22]` One `priceAmount` string was shared by every row in the list,
+  // Price control — POST /admin/products/{id}/price (one endpoint, three surfaces)
+  /* One `priceAmount` string was shared by every row in the list,
      so the price input is rendered once per template but backed by a single piece of
      state: typing 22 into any one row filled the field on all of them, and the
      disabled/loading states moved together too. The owner's screenshot shows exactly
@@ -340,7 +340,7 @@ export function AdminTemplates() {
               <div className="rounded-lg border border-border bg-secondary/40 p-4">
                 <p className="text-sm font-medium text-foreground">What the buyer sees before paying</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Open the file and read these off it — don't guess (week4_plan.md §32). Leave a field
+                  Open the file and read these off it — don't guess. Leave a field
                   blank and its row just doesn't show; no fact is claimed unless it's set here.
                 </p>
                 <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -479,7 +479,7 @@ export function AdminTemplates() {
                         No file uploaded yet
                       </p>
                     )}
-                    {/* Phase 8 (8A-6): server-derived readiness. Free templates have no
+                    {/* Server-derived readiness. Free templates have no
                         product and no price to be ready about, so the line never shows
                         for them. */}
                     {!t.is_free && t.readiness !== 'ready' && (
@@ -505,7 +505,7 @@ export function AdminTemplates() {
                         </button>
                       </p>
                     )}
-                    {/* Phase 9A re-verification (2026-08-21, owner-flagged): "Create
+                    {/* "Create
                         Product" as a separate button is gone. This control now
                         always shows for a paid template, and creates the product
                         transparently (via create-product, passing the admin's own
@@ -544,7 +544,7 @@ export function AdminTemplates() {
                                 return
                               }
 
-                              // Phase 8 (8B-7): fat-finger protection — a ±50% swing
+                              // Fat-finger protection — a ±50% swing
                               // is confirmed before it charges a real card.
                               const oldCents = t.price_amount ?? 0
                               if (
@@ -647,7 +647,7 @@ export function AdminTemplates() {
                       <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
                         {t.preview_images.map((p) => (
                           <li key={p.storage_key} className="relative">
-                            {/* `[ADDED 2026-08-22, K2]` `aspect-[3/4]` already reserves
+                            {/* `aspect-[3/4]` already reserves
                                 the box, so there is no shift; lazy/async keeps a long
                                 template list from decoding every preview at once. */}
                             <img

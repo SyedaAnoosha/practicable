@@ -440,7 +440,7 @@ async def get_course(
         ):
             assessment_by_module[row[0]] = row[1]
 
-    # Ledger row 92: distinguish "never owned" from "owned, then refunded". The gate
+    # Distinguish "never owned" from "owned, then refunded". The gate
     # itself is untouched — `resolve_product_ids` already excludes revoked entitlements,
     # so this is purely about what the page is allowed to SAY, never about access.
     # One query, and only for a signed-in reader who does not currently own the course.
@@ -508,7 +508,7 @@ async def get_course(
             for p in related_result.scalars().all()
         ]
 
-    # Ledger row 92 — "owned, then refunded", resolved only when it can possibly apply:
+    # "owned, then refunded", resolved only when it can possibly apply:
     # a signed-in reader who does NOT currently own the course. One query, skipped
     # entirely for anonymous readers and for readers who still have access.
     if user_id and not owned and all_lesson_ids:

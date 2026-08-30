@@ -43,7 +43,7 @@ interface CourseSummary {
 // The course catalogue (DESIGN.md §41's /courses route). §23.1's card shape (eyebrow,
 // title, outcome line, module/lesson count, access state) drives this grid.
 //
-// `[REBUILT 2026-08-20, design-research/PLATFORM_UI_UX_RESEARCH.md §9 P0 items 2/3]`
+// 
 // Two changes, both from the audit. First, the grid was `sm:grid-cols-2` inside a
 // max-w-7xl container — roughly 600px per card for content needing about 340, which is
 // what made these cards read empty. Second, the cards carried no domain colour, no
@@ -60,10 +60,10 @@ const DURATION_BUCKETS = [
 
 /** Three letters, title case — "beginner" → "Beg", "intermediate" → "Int".
  *
- *  Only for the catalogue card's four-fact row, where the full word is what pushed
- *  `duration` onto a second line. Every other surface (filter chips, course detail,
- *  the API itself) keeps the whole word, and the whole word is still what a screen
- *  reader announces here — see the `label` passed alongside this value. */
+ * Only for the catalogue card's four-fact row, where the full word is what pushed
+ * `duration` onto a second line. Every other surface (filter chips, course detail,
+ * the API itself) keeps the whole word, and the whole word is still what a screen
+ * reader announces here — see the `label` passed alongside this value. */
 function abbreviateLevel(level: string): string {
   const trimmed = level.trim()
   if (!trimmed) return '—'
@@ -96,7 +96,7 @@ export function CoursesCatalogue() {
   const qs = new URLSearchParams(queryParams).toString()
   const url = `/courses${qs ? `?${qs}` : ''}`
 
-  // `[CHANGED 2026-08-22, F3 — P0]` See QuestionsCatalogue: without `isError` a failed
+  // See QuestionsCatalogue: without `isError` a failed
   // fetch rendered nothing at all — `courses?.length === 0` is falsy when undefined.
   const { data: courses, isLoading, isError, refetch } = useQuery({
     queryKey: [...queryKeys.courses.list(), queryParams],
@@ -234,15 +234,15 @@ export function CoursesCatalogue() {
 
       {/* Divided-columns grid: broadsheet treatment, not rounded cards.
        *
-       * `[FIXED 2026-08-22]` Two defects, both visible with a short catalogue:
+       * Two defects, both visible with a short catalogue:
        *
        * 1. The container painted `bg-border` and relied on `[&>*]:bg-card` to cover it,
-       *    so every UNFILLED track in the last row stayed border-coloured — two courses
-       *    in a four-column grid rendered a large beige slab beside them. The divider
-       *    is now drawn with `gap-px` over a `bg-border` that only shows THROUGH the
-       *    gaps, so unfilled tracks show the page, not the rule.
+       * so every UNFILLED track in the last row stayed border-coloured — two courses
+       * in a four-column grid rendered a large beige slab beside them. The divider
+       * is now drawn with `gap-px` over a `bg-border` that only shows THROUGH the
+       * gaps, so unfilled tracks show the page, not the rule.
        * 2. It rendered unconditionally, so the empty grid frame appeared during loading
-       *    and underneath the error and empty states. */}
+       * and underneath the error and empty states. */}
       {!isLoading && !isError && !!courses?.length && (
       <div className="mt-6 grid gap-px overflow-hidden rounded-md border border-border bg-card sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:bg-card [&>*]:outline [&>*]:outline-1 [&>*]:-outline-offset-[0.5px] [&>*]:outline-border">
         {courses?.map((course) => {
@@ -256,7 +256,7 @@ export function CoursesCatalogue() {
                so the footers formed a ragged edge across the row. The footer is now
                pinned to the bottom of every card with `mt-auto`, independent of how
                long the title and subtitle run. */
-            /* `[FIXED 2026-08-23]` WCAG 2.4.7 — focus was invisible on every card.
+            /* WCAG 2.4.7 — focus was invisible on every card.
                The grid draws its cell dividers as `[&>*]:outline-1 outline-border` on
                these very links, and a utility class on the element beats the global
                `:focus-visible { outline: 2px }` rule in theme.css. Focused and unfocused
@@ -292,7 +292,7 @@ export function CoursesCatalogue() {
                   <p className="eyebrow" style={{ '--eyebrow-rule-color': tone } as CSSProperties}>
                     {course.section}
                   </p>
-                  {/* `[ADDED 2026-08-22, owner direction]` "the card title and description must
+                  {/* "the card title and description must
                       never affect the metadata and pricing + view/see-what's-included row".
                       `mt-auto` already pins the metadata+CTA pair to the card's bottom, but cards in
                       a CSS grid row stretch to the tallest, so one two-line title changed the height
@@ -310,7 +310,7 @@ export function CoursesCatalogue() {
                       </p>
                     )}
                   </div>
-                  {/* `[FIXED 2026-08-22]` The metadata row sat directly under the
+                  {/* The metadata row sat directly under the
                       description with the `mt-auto` on the footer below it, so on a
                       card with a short title the metadata floated in the middle of the
                       card while the price row sat at the bottom — the two halves of the
@@ -319,7 +319,7 @@ export function CoursesCatalogue() {
                       card. Moving `mt-auto` up to the metadata makes those two a single
                       bottom-anchored block, so they line up across a row of cards
                       whatever the title and description lengths are. */}
-                  {/* `[FIXED 2026-08-23]` Four facts on one line that never wraps, and
+                  {/* Four facts on one line that never wraps, and
                       all four always rendered.
 
                       Two separate things made this row ragged. The layout was a
@@ -372,7 +372,7 @@ export function CoursesCatalogue() {
                         {formatCurrency(course.product.price_amount, course.product.currency)}
                       </span>
                     ) : (
-                      /* `[ADDED 2026-08-22]` This was a bare `<span />`: a card for a
+                      /* This was a bare `<span />`: a card for a
                          course with no published product showed a blank where every
                          other card shows a price, which reads as a rendering fault
                          rather than a fact about the course. Saying it plainly costs

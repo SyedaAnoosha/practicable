@@ -54,23 +54,11 @@ const NAV_SECTIONS = [
 ] as const
 
 /**
- * One rail row.
- *
- * Collapsed, the rail shows icons only and the label appears on hover. Two details that
- * make that safe rather than merely smaller:
- *
- *  1. **The label is always in the DOM**, hidden with `sr-only` when collapsed rather
- *     than removed. An icon-only nav whose labels do not exist is unusable with a
- *     screen reader, and `title` alone does not reliably produce an accessible name.
- *     So the link is always properly named; only the VISUAL label is conditional.
- *
- *  2. **The flyout is CSS-only** (`group-hover` / `group-focus-visible`), so it appears
- *     on keyboard focus as well as pointer hover. A hover-only affordance would put the
- *     collapsed rail out of reach of the keyboard entirely.
- *
- * Clicking the icon navigates — it does not expand the rail first. The owner asked for
- * both behaviours on one control; navigating is the one that matches every other link
- * in the product, and the chevron is the dedicated, discoverable way to expand.
+ * One rail row. Collapsed, it shows icons only with the label on hover. The label is
+ * always in the DOM (`sr-only` when collapsed) so the link stays named for screen
+ * readers, and the flyout is CSS-only (`group-hover`/`group-focus-visible`) so it
+ * appears on keyboard focus too. Clicking the icon navigates rather than expanding the
+ * rail — the chevron is the dedicated expand control.
  */
 function RailLink({
   to,
@@ -113,11 +101,11 @@ function RailLink({
 }
 
 /** The rail's section label. Same typographic device as `.eyebrow` (mono, xs, uppercase,
- *  tracked) minus the 24px hairline rule — in a 256px column the rule eats a third of
- *  the line and reads as a divider rather than as part of the label.
+ * tracked) minus the 24px hairline rule — in a 256px column the rule eats a third of
+ * the line and reads as a divider rather than as part of the label.
  *
- *  Every other string in this product is sentence case; the eyebrow is the one
- *  deliberate exception, and this is that device. */
+ * Every other string in this product is sentence case; the eyebrow is the one
+ * deliberate exception, and this is that device. */
 function RailSectionHeading({ children, collapsed }: { children: React.ReactNode; collapsed?: boolean }) {
   // Collapsed, the heading becomes a rule: a 64px column cannot hold "Your work" at
   // 0.16em tracking, and truncating it to "You…" is worse than a divider. The text

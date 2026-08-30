@@ -340,14 +340,10 @@ async def submit_attempt(
     await session.commit()
     await session.refresh(attempt)
 
-    # The other half of the certificate gate. `lessons.py` issues when the last lesson is
-    # completed AND the assessment is already passed; this issues when the assessment is
-    # passed AND the lessons are already complete. Without this branch a learner who
-    # finished every lesson before sitting the quiz would never receive a certificate at
-    # all: the false→true completion edge that path watches for has already been spent.
-    #
-    # `issue_certificate_if_newly_complete` is idempotent by UNIQUE(user_id, course_id),
-    # so the two paths racing or both firing produces one row, not two.
+    # The other half of the certificate gate: lessons.py issues when the last lesson
+    # completes with the assessment already passed; this issues when the assessment
+    # passes with the lessons already complete. The service is idempotent by
+    # UNIQUE(user_id, course_id), so both firing produces one row.
     if passed:
         # Get the course from the module
         course = (await session.execute(
@@ -360,12 +356,9 @@ async def submit_attempt(
                     CourseProgress.course_id == course.id,
                 )
             )).scalar_one_or_none()
-            # Passing *this* module's quiz is not enough: since migration 038 a course
-            # can have a published assessment on every module, and the certificate gate
-            # in lessons.py requires all of them. Re-checking the whole course gate here
-            # keeps the two issue paths agreeing — otherwise this path would mint a
-            # certificate on the first module passed while lessons.py, asked the same
-            # question, would still say no.
+            # Passing this module's quiz is not enough — a course can have a published
+            # assessment on every module, and the gate requires all of them. Re-check the
+            # whole course gate so the two issue paths agree.
             gate_ok = await course_assessment_gate_satisfied(
                 session=session, user_id=user.id, course_id=course.id
             )
